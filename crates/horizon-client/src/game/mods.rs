@@ -20,12 +20,57 @@ use {
     horizon_client::{
         extras::Corner,
         extras_hud,
+        items::ItemStack,
         mod_list::Installed,
         text::{self, Text},
     },
-    horizon_mods::{Clock, Mods, Output, Player, Snapshot, Status},
-    std::time::Instant,
+    horizon_mods::{
+        BlockEntityView, BlockHit, Clock, CookingKind, CookingRecipe, ItemFacts, Mods, Output,
+        Player, ServerAction, Snapshot, Stack, StackView, Status,
+    },
+    std::{collections::HashMap, sync::Arc, time::Instant},
 };
+
+#[cfg(feature = "mods")]
+struct GameFacts(Arc<super::Resources>);
+#[cfg(feature = "mods")]
+impl ItemFacts for GameFacts {
+    fn max_stack_size(&self, id: &str) -> u32 {
+        self.0
+            .rest
+            .get()
+            .and_then(|r| r.items.get(id))
+            .map_or(0, |i| i.max_stack)
+    }
+    fn burn_time(&self, id: &str) -> u32 {
+        let Some(r) = self.0.rest.get() else {
+            return 0;
+        };
+        let stack = ItemStack::new(id, 1);
+        r.providers.burn_time(&r.items, &stack, false).max(0) as u32
+    }
+    fn remainder(&self, id: &str) -> Option<String> {
+        self.0.rest.get()?.items.get(id)?.crafting_remainder.clone()
+    }
+    fn cooking_recipe(&self, kind: CookingKind, input: &str) -> Option<CookingRecipe> {
+        let r = self.0.rest.get()?;
+        let kind = match kind {
+            CookingKind::Smelting => "minecraft:smelting",
+            CookingKind::Blasting => "minecraft:blasting",
+            CookingKind::Smoking => "minecraft:smoking",
+            CookingKind::Campfire => "minecraft:campfire_cooking",
+        };
+        let c = r.recipes.cook(kind, &ItemStack::new(input, 1))?;
+        Some(CookingRecipe {
+            output: Stack {
+                id: c.result.item.to_string(),
+                count: c.result.count,
+            },
+            cooking_time: c.time,
+            experience: c.experience,
+        })
+    }
+}
 
 #[derive(Default)]
 pub(super) struct ModsState {
@@ -39,6 +84,9 @@ pub(super) struct ModsState {
     /// The chat's command tree while a running mod owns commands.
     #[cfg(feature = "mods")]
     tree: Option<Dispatcher>,
+    /// Active mod block entities in the loaded world, keyed by `[x, y, z]`.
+    #[cfg(feature = "mods")]
+    block_entities: HashMap<[i32; 3], BlockEntityView>,
 }
 impl ModsState {
     /// The chat's command tree: vanilla's, plus the running mods' commands.
@@ -185,8 +233,10 @@ impl Game<'_> {
             .collect();
         let enabled = &self.settings.mods.enabled;
         let on = |id: &str| enabled.contains(id) || dev_ids.iter().any(|d| d == id);
-        let mods = Mods::load(&paths, on, vanilla_command);
+        let mut mods = Mods::load(&paths, on, vanilla_command);
+        mods.set_item_facts(Arc::new(GameFacts(self.res.clone())));
         self.mods.mods = mods;
+        self.mods.block_entities.clear();
         self.list_mods();
         self.sync_mod_commands();
         self.show_mod_output();
@@ -288,7 +338,79 @@ impl Game<'_> {
         }
         let snapshot = self.mod_snapshot();
         self.mods.mods.set_snapshot(snapshot);
+        let block_hit = self.pick().map(|hit| {
+            let state_id = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
+            let name = self.res.facts().get(state_id).name.to_string();
+            let owner = name
+                .split_once(':')
+                .map_or("minecraft", |(ns, _)| ns)
+                .to_owned();
+            let face = match hit.face {
+                [0, -1, 0] => "down",
+                [0, 1, 0] => "up",
+                [0, 0, -1] => "north",
+                [0, 0, 1] => "south",
+                [-1, 0, 0] => "west",
+                [1, 0, 0] => "east",
+                _ => "up",
+            }
+            .to_owned();
+            BlockHit {
+                x: hit.pos[0],
+                y: hit.pos[1],
+                z: hit.pos[2],
+                state: name,
+                face,
+                owner,
+            }
+        });
+        self.mods.mods.set_target(block_hit, None);
+        if self.res.rest.get().is_some() {
+            let to_view = |slot: usize, s: &ItemStack| {
+                let max_damage = self.res.items().get(&s.item).map_or(0, |i| i.max_damage);
+                StackView {
+                    slot: slot as u32,
+                    id: s.item.to_string(),
+                    count: s.count,
+                    damage: s.damage,
+                    max_damage,
+                }
+            };
+            let main_hand = self
+                .inventory
+                .get(self.selected)
+                .and_then(|s| s.as_ref())
+                .map(|s| to_view(self.selected, s));
+            let off_hand = self.offhand.as_ref().map(|s| to_view(40, s));
+            let mut inv = Vec::new();
+            for (i, slot) in self.inventory.iter().enumerate() {
+                if let Some(s) = slot {
+                    inv.push(to_view(i, s));
+                }
+            }
+            for (i, slot) in self.armor.iter().enumerate() {
+                if let Some(s) = slot {
+                    inv.push(to_view(36 + i, s));
+                }
+            }
+            if let Some(ref s) = off_hand {
+                inv.push(s.clone());
+            }
+            self.mods
+                .mods
+                .set_inventory(main_hand, off_hand, inv, Vec::new());
+        }
         self.mods.mods.tick(self.ticks);
+        if !self.mods.block_entities.is_empty() {
+            let mut entries: Vec<([i32; 3], BlockEntityView)> =
+                self.mods.block_entities.drain().collect();
+            let mut views: Vec<BlockEntityView> =
+                entries.iter_mut().map(|(_, v)| std::mem::take(v)).collect();
+            self.mods.mods.tick_block_entities(&mut views);
+            for ((pos, _), view) in entries.into_iter().zip(views) {
+                self.mods.block_entities.insert(pos, view);
+            }
+        }
         self.show_mod_output();
     }
     /// Once per frame: the frame hook, and dev mods' rebuilds.
@@ -347,6 +469,76 @@ impl Game<'_> {
                     self.sync_mod_commands();
                     Text::literal(format!("Mod {name} stopped: {reason}")).with_color(text::RED)
                 }
+                Output::Server(action) => {
+                    match action {
+                        ServerAction::SetBlock {
+                            dimension,
+                            x,
+                            y,
+                            z,
+                            state,
+                        } => {
+                            if dimension == self.dim.id() {
+                                let name = state.split_once('[').map_or(state.as_str(), |(n, _)| n);
+                                if let Some(id) = self.pack.assets.registry.default_state(name) {
+                                    let _ = self.world.set(x, y, z, id);
+                                }
+                            }
+                        }
+                        ServerAction::SpawnDrop {
+                            dimension,
+                            x,
+                            y,
+                            z,
+                            id,
+                            count,
+                        } => {
+                            if dimension == self.dim.id() {
+                                self.pop_resource([x, y, z], ItemStack::new(&id, count));
+                            }
+                        }
+                        ServerAction::PlaySound {
+                            dimension,
+                            x,
+                            y,
+                            z,
+                            sound,
+                            volume,
+                            pitch,
+                        } => {
+                            if dimension == self.dim.id() {
+                                self.audio.play(
+                                    &sound,
+                                    Some([
+                                        f64::from(x) + 0.5,
+                                        f64::from(y) + 0.5,
+                                        f64::from(z) + 0.5,
+                                    ]),
+                                    volume,
+                                    pitch,
+                                );
+                            }
+                        }
+                        ServerAction::ScheduleTick { .. } | ServerAction::SetRule { .. } => {}
+                    }
+                    continue;
+                }
+                Output::Teleported {
+                    dimension, x, y, z, ..
+                } => {
+                    if dimension == self.dim.id()
+                        && let Some(p) = self.player.as_mut()
+                    {
+                        p.position.x = x;
+                        p.position.y = y;
+                        p.position.z = z;
+                    }
+                    continue;
+                }
+                Output::ScreenOpened { .. }
+                | Output::ScreenClosed { .. }
+                | Output::PacketToServer { .. }
+                | Output::PacketToClient { .. } => continue,
             };
             // Not through system_message: a mod must not hear its own lines.
             let focused = self.screen == Screen::Chat;
