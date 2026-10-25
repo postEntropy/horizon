@@ -119,3 +119,845 @@ world horizon-mod {
     import storage;
     export events;
 }
+
+/// Capability `block-entities` (API 0.4): what the code of a mod's block
+/// entities may read and change while the game ticks them. A handle names one
+/// block entity and is valid only during the `block-entities` call it was
+/// passed to; slots and block state belong to the game (hoppers, menus, drops
+/// and saves see them), the mod keeps the rest of its state itself.
+interface machine {
+    /// An item and how many. Item components are not carried yet.
+    record item-stack {
+        /// `minecraft:coal`, `<mod>:<path>`, ...
+        id: string,
+        count: u32,
+    }
+    enum cooking-kind {
+        smelting,
+        blasting,
+        smoking,
+        campfire,
+    }
+    record cooking-recipe {
+        output: item-stack,
+        /// Ticks the recipe takes in its vanilla block.
+        cooking-time: u32,
+        experience: f32,
+    }
+    /// The block entity's slot, none when empty or out of range.
+    get-slot: func(handle: u32, slot: u32) -> option<item-stack>;
+    /// Empties the slot with none; a stack over the item's maximum is cut to it.
+    /// False for a slot out of range, an unknown item or a handle not in this call.
+    set-slot: func(handle: u32, slot: u32, stack: option<item-stack>) -> bool;
+    /// A property of the block entity's block state (`lit` -> `true`).
+    get-property: func(handle: u32, name: string) -> option<string>;
+    /// False when the block has no such property or value.
+    set-property: func(handle: u32, name: string, value: string) -> bool;
+    /// The most of `id` one slot holds; 0 for an unknown item.
+    max-stack-size: func(id: string) -> u32;
+    /// Ticks `id` burns as a furnace's fuel (the game's fuel values), 0 if it
+    /// is no fuel.
+    burn-time: func(id: string) -> u32;
+    /// What is left of `id` once used up as fuel or an ingredient (a bucket
+    /// from a lava bucket).
+    remainder: func(id: string) -> option<string>;
+    /// The data pack's cooking recipe of `kind` for `input`.
+    cooking: func(kind: cooking-kind, input: string) -> option<cooking-recipe>;
+}
+
+/// What the game calls on a mod's block entities (API 0.4). Only for the
+/// blocks `types` names, which must be the mod's own.
+interface block-entities {
+    record block-entity-type {
+        /// The mod's block, `<mod>:<path>`.
+        block: string,
+        /// Slots the game keeps for each of its block entities.
+        slots: u32,
+        /// Call `tick` every server tick while it is loaded.
+        ticks: bool,
+    }
+    /// Once, after `init`.
+    types: func() -> list<block-entity-type>;
+    /// A block entity was placed or loaded: `saved` is what `save` returned
+    /// for it, empty for a new one.
+    create: func(handle: u32, block: string, saved: list<u8>);
+    /// One server tick of every loaded ticking block entity of this mod.
+    tick: func(handles: list<u32>);
+    /// Its state for the save, beside the slots the game saves itself.
+    save: func(handle: u32) -> list<u8>;
+    /// Broken or unloaded: forget it.
+    remove: func(handle: u32);
+    /// The values its menu shows (vanilla's `ContainerData`: progress
+    /// bars, fuel left).
+    data: func(handle: u32) -> list<s32>;
+}
+
+/// Capability `config` (API 0.3): typed settings from `horizon-mod.toml`'s
+/// `[config.<key>]` table and player overrides.
+interface config {
+    /// Reads a boolean setting, or none if unknown or of another type.
+    get-bool: func(key: string) -> option<bool>;
+    /// Reads an integer setting, or none if unknown or of another type.
+    get-int: func(key: string) -> option<s64>;
+    /// Reads a float setting, or none if unknown or of another type.
+    get-float: func(key: string) -> option<f64>;
+    /// Reads a string setting, or none if unknown or of another type.
+    get-string: func(key: string) -> option<string>;
+    /// Updates a boolean setting within its declared schema.
+    set-bool: func(key: string, value: bool) -> result<_, string>;
+    /// Updates an integer setting within its declared range.
+    set-int: func(key: string, value: s64) -> result<_, string>;
+    /// Updates a float setting within its declared range.
+    set-float: func(key: string, value: f64) -> result<_, string>;
+    /// Updates a string setting within its declared choices.
+    set-string: func(key: string, value: string) -> result<_, string>;
+}
+
+/// Capability `server` (API 0.3): server-side world queries and mutations
+/// during block, item, command and server-event hooks.
+interface server {
+    record block-pos {
+        /// Block X coordinate.
+        x: s32,
+        /// Block Y coordinate.
+        y: s32,
+        /// Block Z coordinate.
+        z: s32,
+    }
+    record item-drop {
+        /// Item identifier (`minecraft:diamond`, `<mod>:<item>`).
+        id: string,
+        /// Stack count (1 to 99).
+        count: u32,
+    }
+    /// Block state string at `pos` in `dimension`, or none if unloaded.
+    get-block: func(dimension: string, pos: block-pos) -> option<string>;
+    /// Replaces the block at `pos` in `dimension` with `state`.
+    set-block: func(dimension: string, pos: block-pos, state: string) -> result<_, string>;
+    /// Schedules a block tick for `block` at `pos` after `delay` ticks.
+    schedule-tick: func(dimension: string, pos: block-pos, block: string, delay: u32);
+    /// Spawns an item stack drop at `pos` in `dimension`.
+    spawn-drop: func(dimension: string, pos: block-pos, drop: item-drop);
+    /// Plays sound `sound` at `pos` in `dimension`.
+    play-sound: func(dimension: string, pos: block-pos, sound: string, volume: f32, pitch: f32);
+    /// Reads a game rule value as text (`true`, `false`, or integer).
+    get-rule: func(name: string) -> option<string>;
+    /// Sets a game rule value as text.
+    set-rule: func(name: string, value: string) -> result<_, string>;
+}
+
+/// Capability `keys` (API 0.3): mod keybindings shown in the Controls screen.
+interface keys {
+    record key-binding {
+        /// Action identifier (`[a-z0-9_.-]{1,64}`).
+        id: string,
+        /// Label shown in Controls.
+        label: string,
+        /// Default key code (`KeyM`, `KeyR`, `Digit1`, ...).
+        default-key: string,
+    }
+    /// Registers a keybinding for the mod.
+    register: func(binding: key-binding) -> result<_, string>;
+    /// True while the player holds the key down (outside menus/chat).
+    is-down: func(id: string) -> bool;
+    /// True once per press since the last tick.
+    was-pressed: func(id: string) -> bool;
+}
+
+/// Capability `target` (API 0.3): what the local player's crosshair points at.
+interface target {
+    record block-hit {
+        /// Block X coordinate.
+        x: s32,
+        /// Block Y coordinate.
+        y: s32,
+        /// Block Z coordinate.
+        z: s32,
+        /// Block state string (`minecraft:chest[facing=north]`).
+        state: string,
+        /// Hit face (`down`, `up`, `north`, `south`, `west`, `east`).
+        face: string,
+        /// Mod id or `minecraft`.
+        owner: string,
+    }
+    record entity-hit {
+        /// Entity type (`minecraft:villager`, `<mod>:<entity>`).
+        kind: string,
+        /// Current health.
+        health: f32,
+        /// Maximum health.
+        max-health: f32,
+        /// Custom or translated display name.
+        name: string,
+    }
+    /// The block in the player's crosshair, if any.
+    get-block: func() -> option<block-hit>;
+    /// The entity in the player's crosshair, if any.
+    get-entity: func() -> option<entity-hit>;
+}
+
+/// Capability `inventory-read` (API 0.3): read-only view of the player's
+/// inventory and open container slots.
+interface inventory {
+    record stack-view {
+        /// Slot index.
+        slot: u32,
+        /// Item identifier (`minecraft:iron_pickaxe`).
+        id: string,
+        /// Stack count.
+        count: u32,
+        /// Current damage (0 when undamaged).
+        damage: u32,
+        /// Maximum durability (0 when not damageable).
+        max-damage: u32,
+    }
+    /// The item in the player's main hand, if any.
+    get-main-hand: func() -> option<stack-view>;
+    /// The item in the player's off hand, if any.
+    get-off-hand: func() -> option<stack-view>;
+    /// Non-empty slots in the player's inventory (0..36 hotbar+main, 36..40 armor, 40 offhand).
+    get-player-inventory: func() -> list<stack-view>;
+    /// Non-empty slots in the currently open container menu, if any.
+    get-open-container: func() -> list<stack-view>;
+}
+
+/// Capability `capabilities` (API 0.4): standard Forge Energy (FE), fluid
+/// tanks, item handlers, data attachments and Curios accessory slots.
+interface capabilities {
+    record energy-view {
+        /// Stored Forge Energy (FE).
+        stored: u64,
+        /// Capacity in FE.
+        capacity: u64,
+        /// Max FE received per tick.
+        max-receive: u64,
+        /// Max FE extracted per tick.
+        max-extract: u64,
+    }
+    record fluid-view {
+        /// Fluid id (`minecraft:water`, `minecraft:lava`, `<mod>:<fluid>`), or empty.
+        fluid: string,
+        /// Amount in millibuckets (mB).
+        amount: u64,
+        /// Tank capacity in mB.
+        capacity: u64,
+    }
+    record item-slot {
+        /// Slot index.
+        slot: u32,
+        /// Item id (`minecraft:iron_ingot`).
+        id: string,
+        /// Item count.
+        count: u32,
+    }
+    /// Declares or updates the energy buffer at `pos` (`dimension:x,y,z`).
+    set-energy-buffer: func(pos: string, view: energy-view);
+    /// Queries the energy buffer at `pos` (`dimension:x,y,z`).
+    get-energy: func(pos: string) -> option<energy-view>;
+    /// Pushes up to `amount` FE into `pos`; returns FE accepted.
+    receive-energy: func(pos: string, amount: u64, simulate: bool) -> u64;
+    /// Pulls up to `amount` FE from `pos`; returns FE extracted.
+    extract-energy: func(pos: string, amount: u64, simulate: bool) -> u64;
+    /// Declares or updates tank `tank` at `pos`.
+    set-fluid-tank: func(pos: string, tank: u32, view: fluid-view);
+    /// Queries fluid tank `tank` at `pos`.
+    get-fluid: func(pos: string, tank: u32) -> option<fluid-view>;
+    /// Fills up to `amount` mB of `fluid` into `pos`; returns mB accepted.
+    fill-fluid: func(pos: string, fluid: string, amount: u64, simulate: bool) -> u64;
+    /// Drains up to `amount` mB of `fluid` from `pos`; returns mB drained.
+    drain-fluid: func(pos: string, fluid: string, amount: u64, simulate: bool) -> u64;
+    /// Sets item slot `slot` at `pos` (count 0 clears).
+    set-item-slot: func(pos: string, slot: u32, id: string, count: u32);
+    /// Lists non-empty item slots at `pos`.
+    get-item-slots: func(pos: string) -> list<item-slot>;
+    /// Reads a mod data attachment on `target` (`entity:<id>`, `chunk:<dim>:<x>,<z>`, `level:<dim>`) under `key`.
+    get-attachment: func(target: string, key: string) -> option<list<u8>>;
+    /// Writes a mod data attachment on `target` under `key`.
+    set-attachment: func(target: string, key: string, value: list<u8>) -> result<_, string>;
+    /// Deletes a mod data attachment on `target` under `key`.
+    delete-attachment: func(target: string, key: string);
+    /// Reads a Curios-style accessory slot (`ring`, `belt`, `charm`, `back`, ...) on `entity`.
+    get-accessory: func(entity: string, slot-kind: string, index: u32) -> option<item-slot>;
+    /// Writes a Curios-style accessory slot on `entity`.
+    set-accessory: func(entity: string, slot-kind: string, index: u32, id: string, count: u32) -> result<_, string>;
+}
+
+/// Capability `ui` (API 0.4): declarative container menus and screens.
+interface ui {
+    enum widget-kind {
+        slot,
+        progress-arrow,
+        flame,
+        energy-bar,
+        fluid-gauge,
+        label,
+        button,
+    }
+    record widget {
+        /// Widget id within the screen.
+        id: u32,
+        /// Visual/interactive role.
+        kind: widget-kind,
+        /// X offset in screen pixels.
+        x: s32,
+        /// Y offset in screen pixels.
+        y: s32,
+        /// Width in pixels.
+        width: u32,
+        /// Height in pixels.
+        height: u32,
+        /// Label or tooltip text.
+        text: string,
+        /// Current value (progress, energy, fluid amount).
+        value: u64,
+        /// Maximum value (capacity or max progress).
+        max-value: u64,
+    }
+    record screen-spec {
+        /// Screen type id (`<mod>:<menu>`).
+        id: string,
+        /// Title shown at the top of the screen.
+        title: string,
+        /// Width in pixels.
+        width: u32,
+        /// Height in pixels.
+        height: u32,
+        /// Widgets drawn by the game.
+        widgets: list<widget>,
+    }
+    /// Opens or updates a declarative container screen for the player.
+    open-screen: func(spec: screen-spec) -> result<_, string>;
+    /// Closes the mod's open screen, if any.
+    close-screen: func();
+    /// Updates slot `slot` in the open screen with `id` and `count`.
+    set-slot: func(screen-id: string, slot: u32, id: string, count: u32);
+    /// Updates widget `widget-id`'s value/max-value/text in the open screen.
+    set-gauge: func(screen-id: string, widget-id: u32, value: u64, max-value: u64, text: string);
+}
+
+/// Capability `net` (API 0.4): bounded mod packets between client and server
+/// on the mod's own channels.
+interface net {
+    /// Sends `payload` (at most 32 KiB) on `channel` from client to server.
+    send-to-server: func(channel: string, payload: list<u8>) -> result<_, string>;
+    /// Sends `payload` (at most 32 KiB) on `channel` from server to `player` (`*` for all).
+    send-to-client: func(player: string, channel: string, payload: list<u8>) -> result<_, string>;
+}
+
+/// Capability `recipes` (API 0.4): read the loaded recipe graph and register
+/// custom machine recipe types (`<mod>:<type>`).
+interface recipes {
+    record ingredient-slot {
+        /// Accepted item ids or `#tag` strings.
+        items: list<string>,
+        /// Required count.
+        count: u32,
+    }
+    record recipe-entry {
+        /// Recipe id (`minecraft:iron_ingot_from_smelting_raw_iron`, `<mod>:<name>`).
+        id: string,
+        /// Recipe type (`minecraft:crafting_shaped`, `minecraft:smelting`, `<mod>:<machine>`).
+        kind: string,
+        /// Input ingredients.
+        inputs: list<ingredient-slot>,
+        /// Output item ids and counts (`id*count`).
+        outputs: list<string>,
+        /// Processing time in ticks (0 for instant crafting).
+        ticks: u32,
+        /// Energy cost in FE (0 when none).
+        energy: u64,
+    }
+    /// Looks up a recipe by id.
+    get: func(id: string) -> option<recipe-entry>;
+    /// Lists recipes of a given type (`minecraft:smelting`, `<mod>:crusher`, ...).
+    by-type: func(kind: string) -> list<recipe-entry>;
+    /// Lists recipes that consume `item-id`.
+    for-input: func(item-id: string) -> list<recipe-entry>;
+    /// Lists recipes that produce `item-id`.
+    for-output: func(item-id: string) -> list<recipe-entry>;
+    /// Registers a custom machine recipe entry under the mod's namespace.
+    register: func(entry: recipe-entry) -> result<_, string>;
+}
+
+/// Capability `world-read` (API 0.4): read-only block, biome and light queries
+/// around the player for maps, jade/wthit overlays and guide previews.
+interface world-read {
+    /// Block state string at `(x, y, z)` in the current world, if loaded.
+    get-block: func(x: s32, y: s32, z: s32) -> option<string>;
+    /// Biome identifier at `(x, y, z)`, if loaded.
+    get-biome: func(x: s32, y: s32, z: s32) -> option<string>;
+    /// Packed block and sky light (`(sky << 4) | block`) at `(x, y, z)`, if loaded.
+    get-light: func(x: s32, y: s32, z: s32) -> option<u8>;
+}
+
+/// Capability `render` (API 0.4): declarative 3D overlays (wireframe boxes,
+/// lines and translucent ghost blocks) drawn by the game's renderer.
+interface render {
+    record box-shape {
+        /// Minimum X in world coordinates.
+        min-x: f64,
+        /// Minimum Y in world coordinates.
+        min-y: f64,
+        /// Minimum Z in world coordinates.
+        min-z: f64,
+        /// Maximum X in world coordinates.
+        max-x: f64,
+        /// Maximum Y in world coordinates.
+        max-y: f64,
+        /// Maximum Z in world coordinates.
+        max-z: f64,
+        /// 0xAARRGGBB color.
+        color: u32,
+    }
+    record ghost-block {
+        /// Block X coordinate.
+        x: s32,
+        /// Block Y coordinate.
+        y: s32,
+        /// Block Z coordinate.
+        z: s32,
+        /// Block state string to preview.
+        state: string,
+        /// Opacity (0.0 to 1.0).
+        alpha: f32,
+    }
+    /// Replaces the mod's 3D wireframe boxes (up to 256).
+    set-shapes: func(boxes: list<box-shape>);
+    /// Replaces the mod's translucent ghost-block preview (up to 512 blocks).
+    set-ghost-blocks: func(blocks: list<ghost-block>);
+    /// Clears all 3D shapes and ghost blocks for this mod.
+    clear: func();
+}
+
+/// What the game calls for API 0.3 and 0.4 block, item, server, UI and
+/// network hooks. Only the hooks `hooks` asks for are ever called.
+interface logic {
+    enum block-action {
+        use-without-item,
+        use-item-on,
+        place,
+        broken,
+        attack,
+        random-tick,
+        scheduled-tick,
+        neighbor-changed,
+        entity-inside,
+    }
+    record block-event {
+        /// Which block callback fired.
+        action: block-action,
+        /// Dimension (`minecraft:overworld`, ...).
+        dimension: string,
+        /// Block X coordinate.
+        x: s32,
+        /// Block Y coordinate.
+        y: s32,
+        /// Block Z coordinate.
+        z: s32,
+        /// Block state string (`<mod>:<block>[...]`).
+        state: string,
+        /// Player name or entity id, if triggered by one.
+        actor: string,
+        /// Held item id, if any.
+        held-item: string,
+    }
+    enum item-action {
+        use-in-air,
+        use-on-block,
+        attack-entity,
+        finish-using,
+    }
+    record item-event {
+        /// Which item callback fired.
+        action: item-action,
+        /// Item identifier (`<mod>:<item>`).
+        item: string,
+        /// Player name.
+        player: string,
+        /// Dimension (`minecraft:overworld`, ...).
+        dimension: string,
+        /// Target X coordinate (block or entity).
+        x: s32,
+        /// Target Y coordinate.
+        y: s32,
+        /// Target Z coordinate.
+        z: s32,
+        /// Target entity or block state, if any.
+        target: string,
+    }
+    enum server-event-kind {
+        player-join,
+        player-leave,
+        entity-spawn,
+        entity-death,
+        block-break,
+        block-place,
+    }
+    record server-event {
+        /// Which server event fired.
+        kind: server-event-kind,
+        /// Subject (player name or entity id).
+        subject: string,
+        /// Dimension (`minecraft:overworld`, ...).
+        dimension: string,
+        /// X coordinate.
+        x: s32,
+        /// Y coordinate.
+        y: s32,
+        /// Z coordinate.
+        z: s32,
+        /// Extra context (block state, damage source, ...).
+        detail: string,
+    }
+    enum event-outcome {
+        /// Let vanilla or default behaviour continue.
+        pass,
+        /// Handled by the mod; swing hand and stop default handling.
+        consume,
+        /// Cancel the action.
+        cancel,
+    }
+    enum vanilla-hook-kind {
+        /// Modify block or entity loot drops before they spawn.
+        loot-drop,
+        /// Modify incoming or outgoing entity damage.
+        entity-damage,
+        /// Modify experience orb or level gains.
+        xp-gain,
+        /// Modify or accelerate crop and plant random-tick growth.
+        crop-grow,
+        /// Filter or modify blocks affected by an explosion.
+        explosion-detonate,
+        /// Modify effective enchantment levels on an item or entity.
+        enchantment-level,
+    }
+    record vanilla-hook-event {
+        /// Which named vanilla hook fired.
+        kind: vanilla-hook-kind,
+        /// Subject identifier (block state, entity id, or player name).
+        subject: string,
+        /// Dimension (`minecraft:overworld`, ...).
+        dimension: string,
+        /// X coordinate.
+        x: s32,
+        /// Y coordinate.
+        y: s32,
+        /// Z coordinate.
+        z: s32,
+        /// Numeric value associated with the event (damage amount, XP, growth stage).
+        value: f32,
+        /// Secondary context (attacker id, tool id, enchantment id).
+        context: string,
+    }
+    record logic-hooks {
+        /// Owned block ids (`<mod>:<block>`) that receive `on-block`.
+        blocks: list<string>,
+        /// Owned item ids (`<mod>:<item>`) that receive `on-item`.
+        items: list<string>,
+        /// Server events (`on-server`) the mod subscribes to.
+        server-events: list<server-event-kind>,
+        /// Packet channels (`on-packet`) the mod listens on.
+        channels: list<string>,
+    }
+    /// Once, after `init`: which blocks, items, server events and channels the mod handles.
+    hooks: func() -> logic-hooks;
+    /// A block callback on one of the mod's registered `blocks`.
+    on-block: func(event: block-event) -> event-outcome;
+    /// An item callback on one of the mod's registered `items`.
+    on-item: func(event: item-event) -> event-outcome;
+    /// A server lifecycle or world event the mod subscribed to.
+    on-server: func(event: server-event) -> event-outcome;
+    /// A slot click in a screen opened by the mod via `ui.open-screen`.
+    on-menu-click: func(screen-id: string, slot: u32, button: u8);
+    /// A button click in a screen opened by the mod via `ui.open-screen`.
+    on-menu-button: func(screen-id: string, button: u8);
+    /// A packet received on `channel` from `net.send-to-server` or `net.send-to-client`.
+    on-packet: func(channel: string, payload: list<u8>, from-player: option<string>);
+    /// A named vanilla hook (`vanilla-hooks` capability, API 0.5).
+    on-vanilla-hook: func(event: vanilla-hook-event) -> event-outcome;
+}
+
+/// Capability `entities` (API 0.5): spawn, query and steer custom and world entities.
+interface entities {
+    record entity-state {
+        /// Runtime handle of the entity.
+        handle: u32,
+        /// Entity type identifier (`<mod>:<entity>` or `minecraft:<entity>`).
+        kind: string,
+        /// Dimension (`minecraft:overworld`, ...).
+        dimension: string,
+        /// X position in blocks.
+        x: f64,
+        /// Y position in blocks.
+        y: f64,
+        /// Z position in blocks.
+        z: f64,
+        /// X velocity in blocks per tick.
+        vx: f64,
+        /// Y velocity in blocks per tick.
+        vy: f64,
+        /// Z velocity in blocks per tick.
+        vz: f64,
+        /// Yaw in degrees.
+        yaw: f32,
+        /// Pitch in degrees.
+        pitch: f32,
+        /// Current health points.
+        health: f32,
+        /// Maximum health points.
+        max-health: f32,
+    }
+    /// Spawns an entity of `kind` at `(x, y, z)` in `dimension`; returns its runtime handle.
+    spawn: func(dimension: string, kind: string, x: f64, y: f64, z: f64) -> result<u32, string>;
+    /// Removes an entity owned by the mod.
+    despawn: func(handle: u32) -> bool;
+    /// Reads the current state of an entity by handle.
+    get-state: func(handle: u32) -> option<entity-state>;
+    /// Moves an entity to `(x, y, z)` with `(yaw, pitch)`.
+    set-position: func(handle: u32, x: f64, y: f64, z: f64, yaw: f32, pitch: f32) -> bool;
+    /// Sets the velocity `(vx, vy, vz)` of an entity.
+    set-velocity: func(handle: u32, vx: f64, vy: f64, vz: f64) -> bool;
+    /// Sets the current health of an entity.
+    set-health: func(handle: u32, health: f32) -> bool;
+    /// Instructs a mob entity to pathfind toward `(x, y, z)` at `speed`.
+    navigate-to: func(handle: u32, x: f64, y: f64, z: f64, speed: f32) -> bool;
+    /// Lists entity handles within `radius` blocks of `(x, y, z)` in `dimension`.
+    nearby: func(dimension: string, x: f64, y: f64, z: f64, radius: f64) -> list<entity-state>;
+}
+
+/// Exported by a mod with capability `entities` (API 0.5): custom entity types,
+/// reusable vanilla AI goals and batched entity ticks.
+interface mod-entities {
+    enum spawn-category {
+        monster,
+        creature,
+        ambient,
+        water-creature,
+        misc,
+    }
+    enum ai-goal {
+        float-in-water,
+        melee-attack,
+        random-stroll,
+        look-at-player,
+        hurt-by-target,
+        nearest-attackable-player,
+        follow-owner,
+        tempt,
+        fly-wander,
+    }
+    record entity-type {
+        /// Entity identifier in one of the mod's namespaces (`<mod>:<name>`).
+        id: string,
+        /// Spawn category (`monster`, `creature`, `misc`, ...).
+        category: spawn-category,
+        /// Bounding-box width in blocks.
+        width: f32,
+        /// Bounding-box height in blocks.
+        height: f32,
+        /// Base maximum health points.
+        max-health: f32,
+        /// Base movement speed.
+        move-speed: f32,
+        /// Base attack damage.
+        attack-damage: f32,
+        /// Whether the entity is immune to fire and lava.
+        fire-immune: bool,
+        /// Reusable vanilla AI goals run by the engine between mod ticks.
+        goals: list<ai-goal>,
+    }
+    /// The mod's custom entity types, called once after `init`.
+    types: func() -> list<entity-type>;
+    /// An entity of one of `types` was spawned (`saved` empty) or loaded from disk.
+    create: func(handle: u32, kind: string, saved: list<u8>);
+    /// One server tick of all loaded custom entities of this mod.
+    tick: func(handles: list<u32>);
+    /// Serializes the mod's private state for `handle` when saving the chunk/world.
+    save: func(handle: u32) -> list<u8>;
+    /// Called when `handle` is despawned or unloaded.
+    remove: func(handle: u32);
+    /// A player interacted (right-clicked) with `handle` holding `held-item`.
+    on-interact: func(handle: u32, player: string, held-item: string) -> bool;
+    /// `handle` took `amount` damage from `source`; returns true to allow the damage.
+    on-hurt: func(handle: u32, amount: f32, source: string) -> bool;
+}
+
+/// Capability `models` (API 0.5): animated models (GeckoLib / Bedrock bones)
+/// and budgeted declarative draw lists for block entities, entities and items.
+interface models {
+    record bone-pose {
+        /// Bone name in the geometry file (`assets/<mod>/geo/*.json`).
+        bone: string,
+        /// Rotation around X, Y, Z in degrees.
+        rot-x: f32,
+        rot-y: f32,
+        rot-z: f32,
+        /// Pivot translation offset in model units (1/16th block).
+        pos-x: f32,
+        pos-y: f32,
+        pos-z: f32,
+        /// Scale factors along X, Y, Z (1.0 is identity).
+        scale-x: f32,
+        scale-y: f32,
+        scale-z: f32,
+    }
+    enum draw-part-kind {
+        /// Renders an item stack at a local offset and rotation (pedestals, belts).
+        item-display,
+        /// Renders a fluid cuboid with a fill level and tint (tanks, pipes).
+        fluid-cuboid,
+        /// Renders a baked sub-model with rotation (shafts, cogwheels, contraptions).
+        model-part,
+        /// Renders a camera-facing text label above the block or entity (Waystones, monitors).
+        floating-text,
+    }
+    record draw-part {
+        /// What kind of declarative attachment to draw.
+        kind: draw-part-kind,
+        /// Asset id (item id, fluid id, model id) or text string for `floating-text`.
+        asset: string,
+        /// Local translation offset from the target origin in blocks.
+        x: f32,
+        y: f32,
+        z: f32,
+        /// Rotation around X, Y, Z in degrees.
+        rot-x: f32,
+        rot-y: f32,
+        rot-z: f32,
+        /// Scale or cuboid dimensions along X, Y, Z.
+        scale-x: f32,
+        scale-y: f32,
+        scale-z: f32,
+        /// RGBA tint colour (`0xFFFFFFFF` for un-tinted).
+        color: u32,
+    }
+    /// Triggers a named animation from `assets/<mod>/animations/*.json` on `target` (`block:x,y,z` or `entity:handle`).
+    set-animation: func(target: string, animation: string, looping: bool, speed: f32);
+    /// Overrides individual bone poses on `target` (`block:x,y,z` or `entity:handle`), up to 64 bones.
+    set-bone-poses: func(target: string, poses: list<bone-pose>);
+    /// Replaces the declarative draw list on `target` (`block:x,y,z` or `entity:handle`), up to 32 parts.
+    set-draw-list: func(target: string, parts: list<draw-part>);
+}
+
+/// Capability `dimensions` (API 0.5): custom dimensions, portals and cross-dimension travel.
+interface dimensions {
+    enum generator-kind {
+        /// Standard 3D noise terrain using worldgen JSON settings.
+        noise,
+        /// Flat layered terrain.
+        flat,
+        /// Empty void world (compact machines, skyblock).
+        void-world,
+        /// Driven by the mod's surface/column rules.
+        custom,
+    }
+    record dimension-spec {
+        /// Dimension identifier (`<mod>:<name>`).
+        id: string,
+        /// Whether water evaporates and lava flows faster (like the Nether).
+        ultrawarm: bool,
+        /// Whether compasses spin randomly (`false`) or point to spawn (`true`).
+        natural: bool,
+        /// Coordinate ratio relative to the Overworld (8.0 for the Nether, 1.0 default).
+        coordinate-scale: f64,
+        /// Whether the dimension has sky light.
+        has-skylight: bool,
+        /// Whether the dimension has a bedrock ceiling.
+        has-ceiling: bool,
+        /// Minimum build Y coordinate (multiple of 16, e.g. -64).
+        min-y: s32,
+        /// Total build height in blocks (multiple of 16, e.g. 384).
+        height: u32,
+        /// Ambient light level (0.0 to 1.0).
+        ambient-light: f32,
+        /// Fixed day-time ticks, if time does not advance.
+        fixed-time: option<u64>,
+        /// Which chunk generator drives the dimension.
+        generator: generator-kind,
+        /// Default surface block state for `flat` or `custom` generators.
+        surface-block: string,
+    }
+    record portal-spec {
+        /// Portal identifier (`<mod>:<name>`).
+        id: string,
+        /// Block id forming the portal frame (`minecraft:reinforced_deepslate`, `<mod>:frame`, ...).
+        frame-block: string,
+        /// Item id that activates the portal (`minecraft:flint_and_steel`, `<mod>:key`, ...).
+        activation-item: string,
+        /// Target dimension id (`<mod>:<dimension>`).
+        target-dimension: string,
+        /// RGB tint colour of the portal interior (`0xRRGGBB`).
+        tint-color: u32,
+    }
+    /// Registers a custom dimension in one of the mod's namespaces.
+    register-dimension: func(spec: dimension-spec) -> result<_, string>;
+    /// Registers a custom portal linking to `spec.target-dimension`.
+    register-portal: func(spec: portal-spec) -> result<_, string>;
+    /// Teleports a player or entity to `(x, y, z)` in `dimension`.
+    teleport: func(subject: string, dimension: string, x: f64, y: f64, z: f64) -> result<_, string>;
+    /// Lists all registered dimension ids (vanilla and mod-added).
+    list-dimensions: func() -> list<string>;
+}
+
+/// Capability `vanilla-hooks` (API 0.5): named hooks into vanilla behaviour
+/// (what Mixins do on NeoForge/Fabric, exposed as safe, budgeted callbacks).
+interface vanilla-hooks {
+    /// Subscribes the mod to a named vanilla hook (`loot-drop`, `entity-damage`, `xp-gain`, `crop-grow`, `explosion-detonate`, `enchantment-level`).
+    subscribe: func(hook: string) -> result<_, string>;
+    /// During an `entity-damage` hook: scales the final damage by `factor`.
+    set-damage-multiplier: func(factor: f32);
+    /// During a `loot-drop` hook: appends `count` of `item` to the loot output.
+    add-loot-drop: func(item: string, count: u32);
+    /// During an `xp-gain` hook: scales the experience value by `factor`.
+    set-xp-multiplier: func(factor: f32);
+    /// During an `enchantment-level` hook: adds `bonus` levels to the queried enchantment.
+    add-enchantment-bonus: func(bonus: s32);
+}
+
+/// A mod with API 0.3 logic, API 0.4 machines and API 0.5 deep systems: the SDK
+/// builds every mod against this world. Mods built for `horizon-mod` alone still load.
+world horizon-machine-mod {
+    include horizon-mod;
+    import config;
+    import server;
+    import keys;
+    import target;
+    import inventory;
+    import machine;
+    import capabilities;
+    import ui;
+    import net;
+    import recipes;
+    import world-read;
+    import render;
+    import entities;
+    import models;
+    import dimensions;
+    import vanilla-hooks;
+    export block-entities;
+    export logic;
+    export mod-entities;
+}
+
+/// The game's side of `horizon-machine-mod` beyond `horizon-mod`.
+world machine-host {
+    import config;
+    import server;
+    import keys;
+    import target;
+    import inventory;
+    import machine;
+    import capabilities;
+    import ui;
+    import net;
+    import recipes;
+    import world-read;
+    import render;
+    import entities;
+    import models;
+    import dimensions;
+    import vanilla-hooks;
+    export block-entities;
+    export logic;
+    export mod-entities;
+}
