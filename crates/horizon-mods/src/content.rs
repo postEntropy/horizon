@@ -129,6 +129,33 @@ pub struct Item {
     pub rarity: Option<Rarity>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RecipeTypeFile {
+    #[serde(default = "one")]
+    inputs: u8,
+    #[serde(default = "one")]
+    outputs: u8,
+    #[serde(default)]
+    default_ticks: u32,
+    #[serde(default)]
+    default_energy: u64,
+}
+fn one() -> u8 {
+    1
+}
+
+/// A custom machine recipe type the mod adds (`data/<id>/horizon/recipe_type/*.json`, API 0.4).
+#[derive(Clone, Debug, PartialEq)]
+pub struct RecipeType {
+    /// `<mod id>:<path>`.
+    pub id: String,
+    pub inputs: u8,
+    pub outputs: u8,
+    pub default_ticks: u32,
+    pub default_energy: u64,
+}
+
 #[derive(Debug)]
 enum Source {
     Dir(PathBuf),
@@ -143,6 +170,7 @@ pub struct Content {
     pub files: Vec<String>,
     pub blocks: Vec<Block>,
     pub items: Vec<Item>,
+    pub recipe_types: Vec<RecipeType>,
     /// The namespaces it owns: the mod id, then the manifest's `namespaces`.
     pub namespaces: Vec<String>,
 }
@@ -229,6 +257,7 @@ impl Content {
             files,
             blocks: Vec::new(),
             items: Vec::new(),
+            recipe_types: Vec::new(),
             namespaces: manifest.owned_namespaces().map(str::to_owned).collect(),
         };
         content.check(manifest)?;
@@ -271,6 +300,7 @@ impl Content {
         }
         let mut blocks = Vec::new();
         let mut items = Vec::new();
+        let mut recipe_types = Vec::new();
         for name in &self.files {
             let mut parts = name.splitn(3, '/');
             let (top, namespace, rest) = (
@@ -311,9 +341,11 @@ impl Content {
                 blocks.push((block, name.clone()));
             } else if let Some(item) = parse("item") {
                 items.push((item, name.clone()));
+            } else if let Some(recipe_type) = parse("recipe_type") {
+                recipe_types.push((recipe_type, name.clone()));
             } else {
                 return Err(format!(
-                    "{name}: data/{id}/horizon/ holds block/*.json and item/*.json only"
+                    "{name}: data/{id}/horizon/ holds block/*.json, item/*.json and recipe_type/*.json only"
                 ));
             }
         }
@@ -352,6 +384,20 @@ impl Content {
                 template: file.template,
                 max_stack_size: file.max_stack_size,
                 rarity: file.rarity,
+            });
+        }
+        for (rt, name) in recipe_types {
+            let file: RecipeTypeFile =
+                serde_json::from_slice(&self.file(&name)?).map_err(|e| format!("{name}: {e}"))?;
+            if file.inputs == 0 || file.outputs == 0 {
+                return Err(format!("{name}: inputs and outputs must be at least 1"));
+            }
+            self.recipe_types.push(RecipeType {
+                id: rt,
+                inputs: file.inputs,
+                outputs: file.outputs,
+                default_ticks: file.default_ticks,
+                default_energy: file.default_energy,
             });
         }
         Ok(())

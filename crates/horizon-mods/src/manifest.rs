@@ -1,6 +1,7 @@
 //! `horizon-mod.toml`, a mod's manifest, and the `.hmod` file around it.
 use serde::Deserialize;
 use std::{
+    collections::BTreeMap,
     fmt,
     io::Read,
     path::{Path, PathBuf},
@@ -15,13 +16,47 @@ pub const WASM: &str = "mod.wasm";
 pub const API: &str = "0.1";
 /// The manifest `api` lines this build loads. 0.2 is 0.1 plus content:
 /// `assets/` and `data/` in the `.hmod`, with blocks and items declared in
-/// `data/<id>/horizon/` (docs/modpacks.md). Code still links API 0.1.
-pub const APIS: [&str; 2] = [API, "0.2"];
+/// `data/<id>/horizon/` (docs/modpacks.md). 0.3 adds block/item/server
+/// callbacks, typed commands, keybindings, crosshair target, inventory read
+/// and `[config]` settings. 0.4 adds block entities (`block-entities`),
+/// capabilities (FE/fluid/item/attachments/accessories), menus (`ui`),
+/// networking (`net`), custom recipes (`recipes`) and 3D render overlays.
+/// 0.5 adds custom entities (`entities`), animated models and draw lists
+/// (`models`), dimensions (`dimensions`) and named vanilla hooks
+/// (`vanilla-hooks`) (docs/mods.md).
+pub const APIS: [&str; 5] = [API, "0.2", "0.3", "0.4", "0.5"];
 /// Namespaces no mod may claim: vanilla's, the convention tags' (mods add
 /// to those, docs/mods.md) and the game's own.
 const RESERVED_NAMESPACES: [&str; 3] = ["minecraft", "c", "horizon"];
 /// The biggest `mod.wasm` a mod may ship.
 const MAX_WASM: u64 = 32 << 20;
+
+/// A typed value in `[config.<key>]`.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum ConfigValue {
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    String(String),
+}
+
+/// One entry in `[config.<key>]` in `horizon-mod.toml` (API 0.3).
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ConfigSchema {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub default: ConfigValue,
+    #[serde(default)]
+    pub min: Option<f64>,
+    #[serde(default)]
+    pub max: Option<f64>,
+    #[serde(default)]
+    pub choices: Vec<String>,
+    #[serde(default)]
+    pub description: String,
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -34,7 +69,8 @@ pub struct Manifest {
     pub description: String,
     #[serde(default)]
     pub authors: Vec<String>,
-    /// The API line the mod was built for: `0.1`, or `0.2` for content.
+    /// The API line the mod was built for: `0.1`, `0.2` for content, `0.3`
+    /// for logic, `0.4` for machines and block entities.
     pub api: String,
     #[serde(default)]
     pub side: Side,
@@ -46,6 +82,12 @@ pub struct Manifest {
     /// that are on may share one (`content::clash`).
     #[serde(default)]
     pub namespaces: Vec<String>,
+    /// Typed settings schema (`[config.<key>]`, API 0.3).
+    #[serde(default)]
+    pub config: BTreeMap<String, ConfigSchema>,
+    /// Optional origin note when ported by `horizon-port-pack`.
+    #[serde(default, rename = "ported-from")]
+    pub ported_from: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
@@ -54,7 +96,7 @@ pub enum Side {
     /// Runs in the player's game only (HUD, keys, chat commands).
     #[default]
     Client,
-    /// Runs where the world is simulated (rules, blocks); not run yet.
+    /// Runs where the world is simulated (rules, blocks).
     Server,
     /// Both, and the server tells clients which version it expects.
     Both,
@@ -72,15 +114,89 @@ pub enum Capability {
     /// New blocks and items from the mod's `data/` (API 0.2): no WIT
     /// interface, the game reads them before the world loads.
     Registries,
+    /// Typed settings declared in `[config.<key>]` (API 0.3).
+    Config,
+    /// Server-side block, item, drop, sound and rule actions (API 0.3).
+    Server,
+    /// Custom keybindings in Controls (API 0.3).
+    Keys,
+    /// Crosshair block and entity target (API 0.3).
+    Target,
+    /// Read-only view of the player's inventory and open container (API 0.3).
+    InventoryRead,
+    /// Block entities for the mod's own blocks (API 0.4): the `machine`
+    /// interface and the `block-entities` export.
+    BlockEntities,
+    /// Energy (FE), fluid tanks, item slots, data attachments and accessories (API 0.4).
+    Capabilities,
+    /// Declarative container menus and screens (API 0.4).
+    Ui,
+    /// Bounded mod packets between client and server (API 0.4).
+    Net,
+    /// Recipe graph queries and custom machine recipe types (API 0.4).
+    Recipes,
+    /// Read-only block, biome and light queries around the player (API 0.3).
+    WorldRead,
+    /// Declarative 3D wireframe boxes and ghost-block previews (API 0.4).
+    Render,
+    /// Custom entity types, reusable vanilla AI goals and entity steering (API 0.5).
+    Entities,
+    /// Animated models (GeckoLib / Bedrock bones) and declarative draw lists (API 0.5).
+    Models,
+    /// Custom dimensions, portals and cross-dimension travel (API 0.5).
+    Dimensions,
+    /// Named hooks into vanilla behaviour (loot, damage, XP, crops, explosions) (API 0.5).
+    VanillaHooks,
 }
 impl Capability {
-    pub const ALL: [Capability; 5] = [
+    pub const ALL: [Capability; 21] = [
         Capability::GameRead,
         Capability::Chat,
         Capability::Hud,
         Capability::Storage,
         Capability::Registries,
+        Capability::Config,
+        Capability::Server,
+        Capability::Keys,
+        Capability::Target,
+        Capability::InventoryRead,
+        Capability::BlockEntities,
+        Capability::Capabilities,
+        Capability::Ui,
+        Capability::Net,
+        Capability::Recipes,
+        Capability::WorldRead,
+        Capability::Render,
+        Capability::Entities,
+        Capability::Models,
+        Capability::Dimensions,
+        Capability::VanillaHooks,
     ];
+    /// Minimum manifest `api` version that grants this capability.
+    pub fn min_api(self) -> &'static str {
+        match self {
+            Capability::GameRead | Capability::Chat | Capability::Hud | Capability::Storage => {
+                "0.1"
+            }
+            Capability::Registries => "0.2",
+            Capability::Config
+            | Capability::Server
+            | Capability::Keys
+            | Capability::Target
+            | Capability::InventoryRead
+            | Capability::WorldRead => "0.3",
+            Capability::BlockEntities
+            | Capability::Capabilities
+            | Capability::Ui
+            | Capability::Net
+            | Capability::Recipes
+            | Capability::Render => "0.4",
+            Capability::Entities
+            | Capability::Models
+            | Capability::Dimensions
+            | Capability::VanillaHooks => "0.5",
+        }
+    }
     /// The WIT interface it grants, in `horizon:mods`.
     pub fn interface(self) -> &'static str {
         match self {
@@ -89,6 +205,22 @@ impl Capability {
             Capability::Hud => "hud",
             Capability::Storage => "storage",
             Capability::Registries => "registries",
+            Capability::Config => "config",
+            Capability::Server => "server",
+            Capability::Keys => "keys",
+            Capability::Target => "target",
+            Capability::InventoryRead => "inventory",
+            Capability::BlockEntities => "machine",
+            Capability::Capabilities => "capabilities",
+            Capability::Ui => "ui",
+            Capability::Net => "net",
+            Capability::Recipes => "recipes",
+            Capability::WorldRead => "world-read",
+            Capability::Render => "render",
+            Capability::Entities => "entities",
+            Capability::Models => "models",
+            Capability::Dimensions => "dimensions",
+            Capability::VanillaHooks => "vanilla-hooks",
         }
     }
     /// What the player reads before turning the mod on: "May <this>".
@@ -99,6 +231,24 @@ impl Capability {
             Capability::Hud => "draw text on your screen",
             Capability::Storage => "save its own settings to disk",
             Capability::Registries => "add blocks and items to your worlds",
+            Capability::Config => "expose configurable settings in the Mods screen",
+            Capability::Server => "change blocks, drops, sounds and rules in your worlds",
+            Capability::Keys => "add keybindings to Controls",
+            Capability::Target => "see the block or entity you are looking at",
+            Capability::InventoryRead => "see the items in your inventory and open container",
+            Capability::BlockEntities => "run its blocks' machines in your worlds",
+            Capability::Capabilities => {
+                "exchange energy, fluids, items, attachments and accessories"
+            }
+            Capability::Ui => "open custom machine and container screens",
+            Capability::Net => "send mod packets between client and server",
+            Capability::Recipes => "read recipes and register custom machine recipe types",
+            Capability::WorldRead => "read blocks, biomes and light around you",
+            Capability::Render => "draw 3D boxes and ghost-block previews in the world",
+            Capability::Entities => "spawn and control custom entities and mobs",
+            Capability::Models => "animate custom 3D models and block-entity attachments",
+            Capability::Dimensions => "register custom dimensions and portals",
+            Capability::VanillaHooks => "hook into loot drops, combat damage, XP and plant growth",
         }
     }
     /// The capability a component import needs, `Ok(None)` for one every
@@ -129,8 +279,35 @@ impl fmt::Display for Capability {
             Capability::Hud => "hud",
             Capability::Storage => "storage",
             Capability::Registries => "registries",
+            Capability::Config => "config",
+            Capability::Server => "server",
+            Capability::Keys => "keys",
+            Capability::Target => "target",
+            Capability::InventoryRead => "inventory-read",
+            Capability::BlockEntities => "block-entities",
+            Capability::Capabilities => "capabilities",
+            Capability::Ui => "ui",
+            Capability::Net => "net",
+            Capability::Recipes => "recipes",
+            Capability::WorldRead => "world-read",
+            Capability::Render => "render",
+            Capability::Entities => "entities",
+            Capability::Models => "models",
+            Capability::Dimensions => "dimensions",
+            Capability::VanillaHooks => "vanilla-hooks",
         };
         f.write_str(name)
+    }
+}
+
+fn api_rank(api: &str) -> u8 {
+    match api {
+        "0.1" => 1,
+        "0.2" => 2,
+        "0.3" => 3,
+        "0.4" => 4,
+        "0.5" => 5,
+        _ => 0,
     }
 }
 
@@ -151,13 +328,69 @@ impl Manifest {
             return Err(format!(
                 "built for API {}; this Horizon runs {}",
                 m.api,
-                APIS.join(" and ")
+                APIS.join(", ")
             ));
         }
-        if m.capabilities.contains(&Capability::Registries) && m.api == API {
-            return Err(format!(
-                "{MANIFEST}: capability registries needs api = \"0.2\""
-            ));
+        let rank = api_rank(&m.api);
+        for &cap in &m.capabilities {
+            let need = cap.min_api();
+            if rank < api_rank(need) {
+                return Err(format!("{MANIFEST}: capability {cap} needs api = {need:?}"));
+            }
+        }
+        if !m.config.is_empty() && rank < api_rank("0.3") {
+            return Err(format!("{MANIFEST}: [config] needs api = \"0.3\""));
+        }
+        for (key, schema) in &m.config {
+            let key_ok = (1..=64).contains(&key.len())
+                && key
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b));
+            if !key_ok {
+                return Err(format!(
+                    "{MANIFEST}: config key {key:?} is not [a-z0-9_.-]{{1,64}}"
+                ));
+            }
+            match (schema.kind.as_str(), &schema.default) {
+                ("bool", ConfigValue::Bool(_)) => {}
+                ("int", ConfigValue::Int(v)) => {
+                    if let Some(min) = schema.min
+                        && (*v as f64) < min
+                    {
+                        return Err(format!("{MANIFEST}: config {key} default is below min"));
+                    }
+                    if let Some(max) = schema.max
+                        && (*v as f64) > max
+                    {
+                        return Err(format!("{MANIFEST}: config {key} default is above max"));
+                    }
+                }
+                ("float", ConfigValue::Float(v)) => {
+                    if let Some(min) = schema.min
+                        && *v < min
+                    {
+                        return Err(format!("{MANIFEST}: config {key} default is below min"));
+                    }
+                    if let Some(max) = schema.max
+                        && *v > max
+                    {
+                        return Err(format!("{MANIFEST}: config {key} default is above max"));
+                    }
+                }
+                ("string", ConfigValue::String(s)) => {
+                    if !schema.choices.is_empty() && !schema.choices.contains(s) {
+                        return Err(format!(
+                            "{MANIFEST}: config {key} default is not in choices"
+                        ));
+                    }
+                }
+                _ => {
+                    return Err(format!(
+                        "{MANIFEST}: config {key} type {:?} does not match its default",
+                        schema.kind
+                    ));
+                }
+            }
         }
         if !m.namespaces.is_empty() && !m.capabilities.contains(&Capability::Registries) {
             return Err(format!(
@@ -375,10 +608,95 @@ capabilities = ["game-read", "hud"]
     fn refuses_bad_ids_and_apis() {
         let bad_id = EXAMPLE.replace("coords_hud", "Coords HUD");
         assert!(Manifest::parse(&bad_id).unwrap_err().contains("is not"));
-        let bad_api = EXAMPLE.replace("api = \"0.1\"", "api = \"0.3\"");
-        assert!(Manifest::parse(&bad_api).unwrap_err().contains("API 0.3"));
+        let bad_api = EXAMPLE.replace("api = \"0.1\"", "api = \"0.6\"");
+        assert!(Manifest::parse(&bad_api).unwrap_err().contains("API 0.6"));
         let unknown = format!("{EXAMPLE}network = true\n");
         assert!(Manifest::parse(&unknown).is_err());
+    }
+
+    #[test]
+    fn api_0_5_capabilities() {
+        let m05 = r#"
+id = "twilightforest"
+name = "The Twilight Forest"
+version = "1.0.0"
+api = "0.5"
+side = "both"
+capabilities = ["registries", "entities", "models", "dimensions", "vanilla-hooks"]
+"#;
+        let m = Manifest::parse(m05).unwrap();
+        assert_eq!(
+            m.check_imports([
+                "horizon:mods/entities@0.1.0",
+                "horizon:mods/models@0.1.0",
+                "horizon:mods/dimensions@0.1.0",
+                "horizon:mods/vanilla-hooks@0.1.0",
+            ]),
+            Ok(())
+        );
+        let too_old = m05.replace("api = \"0.5\"", "api = \"0.4\"");
+        assert!(
+            Manifest::parse(&too_old)
+                .unwrap_err()
+                .contains("needs api = \"0.5\"")
+        );
+    }
+
+    #[test]
+    fn api_0_3_and_0_4_capabilities_and_config() {
+        let m03 = r#"
+id = "waystones"
+name = "Waystones"
+version = "1.0.0"
+api = "0.3"
+side = "both"
+capabilities = ["config", "server", "keys", "target", "inventory-read"]
+ported-from = "waystones-21.1.jar"
+
+[config.xp_cost]
+type = "int"
+default = 3
+min = 0
+max = 30
+description = "Levels per teleport"
+"#;
+        let m = Manifest::parse(m03).unwrap();
+        assert_eq!(m.ported_from.as_deref(), Some("waystones-21.1.jar"));
+        assert_eq!(m.config["xp_cost"].default, ConfigValue::Int(3));
+        assert_eq!(
+            m.check_imports([
+                "horizon:mods/config@0.1.0",
+                "horizon:mods/server@0.1.0",
+                "horizon:mods/keys@0.1.0",
+                "horizon:mods/target@0.1.0",
+                "horizon:mods/inventory@0.1.0",
+            ]),
+            Ok(())
+        );
+        let too_old = m03.replace("api = \"0.3\"", "api = \"0.2\"");
+        assert!(Manifest::parse(&too_old).unwrap_err().contains("needs api"));
+
+        let m04 = r#"
+id = "mekanism"
+name = "Mekanism"
+version = "1.0.0"
+api = "0.4"
+side = "both"
+capabilities = ["registries", "block-entities", "capabilities", "ui", "net", "recipes", "world-read", "render"]
+"#;
+        let m = Manifest::parse(m04).unwrap();
+        assert_eq!(
+            m.check_imports([
+                "horizon:mods/machine@0.1.0",
+                "horizon:mods/capabilities@0.1.0",
+                "horizon:mods/ui@0.1.0",
+                "horizon:mods/net@0.1.0",
+                "horizon:mods/recipes@0.1.0",
+                "horizon:mods/world-read@0.1.0",
+                "horizon:mods/render@0.1.0",
+            ]),
+            Ok(())
+        );
     }
 
     #[test]
@@ -398,6 +716,20 @@ capabilities = ["game-read", "hud"]
         assert!(with("\"\"").unwrap_err().contains("is not"));
         let code = format!("{EXAMPLE}namespaces = [\"kaisyn\"]\n");
         assert!(Manifest::parse(&code).unwrap_err().contains("registries"));
+    }
+
+    #[test]
+    fn block_entities_need_api_0_4() {
+        let base = "id = \"ironfurnaces\"\nname = \"I\"\nversion = \"1\"\nside = \"both\"\n";
+        let caps = "capabilities = [\"registries\", \"block-entities\"]\n";
+        let m = Manifest::parse(&format!("{base}api = \"0.4\"\n{caps}")).unwrap();
+        assert_eq!(m.check_imports(["horizon:mods/machine@0.1.0"]), Ok(()));
+        let old = Manifest::parse(&format!("{base}api = \"0.2\"\n{caps}")).unwrap_err();
+        assert!(old.contains("needs api = \"0.4\""), "{old}");
+        let without = "capabilities = [\"registries\"]\n";
+        let m = Manifest::parse(&format!("{base}api = \"0.4\"\n{without}")).unwrap();
+        let e = m.check_imports(["horizon:mods/machine@0.1.0"]).unwrap_err();
+        assert!(e.contains("block-entities"), "{e}");
     }
 
     #[test]
