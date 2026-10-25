@@ -713,6 +713,10 @@ pub fn carry(
     let file = fs::File::open(jar).map_err(|e| format!("{}: {e}", jar.display()))?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("{}: {e}", jar.display()))?;
     let (inside, outside) = (out.join("carry"), out.join("outside"));
+    let existing_wasm = fs::read(inside.join("mod.wasm")).ok();
+    let existing_manifest = existing_wasm
+        .as_ref()
+        .and_then(|_| fs::read(inside.join("horizon-mod.toml")).ok());
     let _ = fs::remove_dir_all(&inside);
     let _ = fs::remove_dir_all(&outside);
     let mut report = Report::default();
@@ -1120,7 +1124,14 @@ pub fn carry(
         let list: Vec<String> = report.namespaces.iter().map(|n| q(n)).collect();
         manifest.push_str(&format!("namespaces = [{}]\n", list.join(", ")));
     }
-    write(&inside.join("horizon-mod.toml"), manifest.as_bytes())?;
+    if let Some(wasm) = &existing_wasm {
+        write(&inside.join("mod.wasm"), wasm)?;
+    }
+    if let Some(manifest_bytes) = existing_manifest {
+        write(&inside.join("horizon-mod.toml"), &manifest_bytes)?;
+    } else {
+        write(&inside.join("horizon-mod.toml"), manifest.as_bytes())?;
+    }
     write(
         &out.join("carry-report.json"),
         &serde_json::to_vec_pretty(&report).unwrap_or_default(),

@@ -85,13 +85,17 @@ fn not_yet(tier: &str) -> &'static str {
     match tier {
         "data" => "data tier: carry-over only, no agent; its jar is not here yet (fetch gets it)",
         "logic" => {
-            "needs mod API 0.3: behaviour callbacks (use, place, break, ticks) and server events"
+            "mod API 0.3 ready: behaviour callbacks (use, place, break, ticks) and server events; jar not carried yet"
         }
-        "machines" => "needs mod API 0.4: block entities, menus, capabilities and mod networking",
+        "machines" => {
+            "mod API 0.4 ready: block entities, menus, capabilities and mod networking; jar not carried yet"
+        }
         "deep" => {
-            "needs mod API 0.5: entities, custom renderers and models, dimensions, new vanilla hooks"
+            "mod API 0.5 ready: entities, custom renderers and models, dimensions, named vanilla hooks; jar not carried yet"
         }
-        "client" => "needs the client interfaces (keys, target, inventory-read, ui, render)",
+        "client" => {
+            "client interfaces ready (keys, target, inventory-read, ui, render); not carried yet"
+        }
         _ => "not classified",
     }
 }
@@ -110,8 +114,39 @@ fn not_needed(class: &str) -> &'static str {
 /// out and nothing the templates miss; else partial, with what is missing.
 fn carried(work: &Path, key: &str) -> Option<(Status, String)> {
     let dir = work.join("mods").join(key);
-    let carry: Value =
-        serde_json::from_slice(&std::fs::read(dir.join("carry-report.json")).ok()?).ok()?;
+    let has_wasm = dir.join("carry/mod.wasm").is_file();
+    let harness: Option<Value> = std::fs::read(dir.join("harness/result.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok());
+    let carry: Value = match std::fs::read(dir.join("carry-report.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+    {
+        Some(c) => c,
+        None if has_wasm && dir.join("carry/horizon-mod.toml").is_file() => {
+            let mut gaps = Vec::new();
+            match &harness {
+                Some(h) => {
+                    for (name, c) in h["checks"].as_object().into_iter().flatten() {
+                        let (p, f) = (
+                            c["passed"].as_u64().unwrap_or(0),
+                            c["failed"].as_u64().unwrap_or(0),
+                        );
+                        if f > 0 {
+                            gaps.push(format!("{name} {p}/{}", p + f));
+                        }
+                    }
+                }
+                None => gaps.push("harness not run".into()),
+            }
+            return if gaps.is_empty() {
+                Some((Status::Ported, "mod.wasm; harness green".into()))
+            } else {
+                Some((Status::Partial, format!("mod.wasm; {}", gaps.join("; "))))
+            };
+        }
+        None => return None,
+    };
     let count = |k: &str| carry[k].as_object().map_or(0, |o| o.len());
     let (blocks, items) = (count("blocks"), carry["items"].as_u64().unwrap_or(0));
     let (left_blocks, left_items) = (count("blocks_unknown"), count("items_unknown"));
@@ -152,9 +187,6 @@ fn carried(work: &Path, key: &str) -> Option<(Status, String)> {
             "{differences} blocks or items differ from their templates"
         ));
     }
-    let harness: Option<Value> = std::fs::read(dir.join("harness/result.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok());
     let mut checked = 0;
     match &harness {
         Some(h) => {
@@ -172,7 +204,7 @@ fn carried(work: &Path, key: &str) -> Option<(Status, String)> {
         None => gaps.push("harness not run".into()),
     }
     let worldgen = carry["worldgen"].as_u64().unwrap_or(0);
-    if blocks == 0 && items == 0 && checked == 0 {
+    if blocks == 0 && items == 0 && checked == 0 && !has_wasm {
         let what = if worldgen > 0 {
             format!("{worldgen} worldgen files carried, not compared yet")
         } else {
@@ -181,7 +213,9 @@ fn carried(work: &Path, key: &str) -> Option<(Status, String)> {
         return Some((Status::Partial, what));
     }
     let mut summary = format!("{blocks} blocks, {items} items");
-    if own_code > 0 {
+    if has_wasm {
+        summary.push_str(", mod.wasm");
+    } else if own_code > 0 {
         let _ = write!(
             summary,
             " ({own_code} with code of their own, not compared)"

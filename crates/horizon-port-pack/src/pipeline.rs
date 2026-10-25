@@ -308,10 +308,10 @@ pub fn report(work: &Path, log: Log) -> Result<Vec<report::Row>, String> {
     Ok(rows)
 }
 
-/// What a player's machine can port today without an agent: content mods
-/// of the data tier (carry-over only).
+/// What a player's machine can port today: content mods of the tiers
+/// Horizon's mod API supports (`data` 0.2, `logic` 0.3, `machines` 0.4, `deep` 0.5).
 pub fn portable(r: &inventory::Record) -> bool {
-    r.class == "content" && r.tier == "data"
+    r.class == "content" && matches!(r.tier.as_str(), "data" | "logic" | "machines" | "deep")
 }
 
 /// Everything after the import, for the portable mods: their jars (`fetch`,
