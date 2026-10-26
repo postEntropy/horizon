@@ -29,30 +29,46 @@ impl Ingredient {
     }
     fn parse(v: &Value, items: &Items) -> Option<Self> {
         let mut list: Vec<String> = Vec::new();
-        let mut add = |s: &str| {
-            let more: Vec<String> = match s.strip_prefix('#') {
-                Some(tag) => items.item_tag_order.get(tag).cloned().unwrap_or_default(),
-                None => vec![s.to_owned()],
+        fn collect(v: &Value, items: &Items, list: &mut Vec<String>) {
+            let mut add = |s: &str| {
+                let more: Vec<String> = match s.strip_prefix('#') {
+                    Some(tag) => items.item_tag_order.get(tag).cloned().unwrap_or_default(),
+                    None => vec![s.to_owned()],
+                };
+                for i in more {
+                    if !list.contains(&i) {
+                        list.push(i);
+                    }
+                }
             };
-            for i in more {
-                if !list.contains(&i) {
-                    list.push(i);
+            match v {
+                Value::String(s) => add(s),
+                Value::Array(a) => {
+                    for elem in a {
+                        collect(elem, items, list);
+                    }
                 }
+                Value::Object(o) => {
+                    if let Some(s) = o.get("item").and_then(Value::as_str) {
+                        add(s);
+                    }
+                    if let Some(t) = o.get("tag").and_then(Value::as_str) {
+                        add(&format!("#{t}"));
+                    }
+                    if let Some(inner) = o.get("items") {
+                        collect(inner, items, list);
+                    }
+                    if let Some(inner) = o.get("children") {
+                        collect(inner, items, list);
+                    }
+                    if let Some(inner) = o.get("base") {
+                        collect(inner, items, list);
+                    }
+                }
+                _ => {}
             }
-        };
-        match v {
-            Value::String(s) => add(s),
-            Value::Array(a) => a.iter().filter_map(Value::as_str).for_each(&mut add),
-            Value::Object(o) => {
-                if let Some(s) = o.get("item").and_then(Value::as_str) {
-                    add(s);
-                }
-                if let Some(t) = o.get("tag").and_then(Value::as_str) {
-                    add(&format!("#{t}"));
-                }
-            }
-            _ => return None,
         }
+        collect(v, items, &mut list);
         (!list.is_empty()).then(|| Self::of(list))
     }
     pub fn test(&self, stack: &ItemStack) -> bool {
@@ -103,12 +119,23 @@ pub struct Template {
 }
 impl Template {
     fn parse(v: &Value) -> Option<Self> {
+        if let Some(s) = v.as_str() {
+            return Some(Self {
+                item: Some(Arc::from(s)),
+                count: 1,
+                damage: 0,
+                extra: None,
+            });
+        }
         let (damage, extra) = match v.get("components") {
             Some(c) => crate::item_data::decode_components(Some(&json_tag(c))),
             None => (0, None),
         };
         Some(Self {
-            item: v["id"].as_str().map(Arc::from),
+            item: v["id"]
+                .as_str()
+                .or_else(|| v["item"].as_str())
+                .map(Arc::from),
             count: v["count"].as_u64().unwrap_or(1) as u32,
             damage,
             extra,
@@ -1181,31 +1208,46 @@ impl Recipes {
         let mut cooking = Vec::new();
         let mut meta = HashMap::new();
         let json_files = |dir: &Path| -> Result<Vec<PathBuf>> {
-            let mut files: Vec<_> = fs::read_dir(dir)?
-                .flatten()
-                .map(|e| e.path())
-                .filter(|p| p.extension().is_some_and(|e| e == "json"))
-                .collect();
+            fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+                for entry in fs::read_dir(dir)?.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        let _ = walk(&path, out);
+                    } else if path.extension().is_some_and(|e| e == "json") {
+                        out.push(path);
+                    }
+                }
+                Ok(())
+            }
+            let mut files = Vec::new();
+            walk(dir, &mut files)?;
             files.sort();
             Ok(files)
         };
         // Vanilla's recipes by bare name, then content mods' as `<ns>:<name>`.
-        let mut files: Vec<(String, PathBuf)> = json_files(&root.join("data/minecraft/recipe"))?
+        let mc_dir = root.join("data/minecraft/recipe");
+        let mut files: Vec<(String, PathBuf, PathBuf)> = json_files(&mc_dir)?
             .into_iter()
-            .map(|p| (String::new(), p))
+            .map(|p| (String::new(), mc_dir.clone(), p))
             .collect();
         for namespace in crate::mod_content::namespaces(root) {
-            let dir = root.join(format!("data/{namespace}/recipe"));
-            if dir.is_dir() {
-                files.extend(
-                    json_files(&dir)?
-                        .into_iter()
-                        .map(|p| (format!("{namespace}:"), p)),
-                );
+            for sub in ["recipe", "recipes"] {
+                let dir = root.join(format!("data/{namespace}/{sub}"));
+                if dir.is_dir() {
+                    files.extend(
+                        json_files(&dir)?
+                            .into_iter()
+                            .map(|p| (format!("{namespace}:"), dir.clone(), p)),
+                    );
+                }
             }
         }
-        for (prefix, path) in files {
-            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        for (prefix, base_dir, path) in files {
+            let rel = path
+                .strip_prefix(&base_dir)
+                .unwrap_or(&path)
+                .with_extension("");
+            let stem = rel.to_string_lossy().replace('\\', "/");
             let name = format!("{prefix}{stem}");
             // Vanilla's RecipeManager logs a file that does not parse and
             // goes on ("Couldn't parse data file").
@@ -1221,8 +1263,11 @@ impl Recipes {
             let ing = |k: &str| Ingredient::parse(&v[k], items);
             let result = || Template::parse(&v["result"]);
             let special = |recipe: Option<Special>| recipe.map(Recipe::Special);
-            let parsed: Option<Recipe> = match v["type"].as_str().unwrap_or("") {
-                "minecraft:crafting_shaped" => {
+            let rtype = v["type"].as_str().unwrap_or("");
+            let parsed: Option<Recipe> = match rtype {
+                "minecraft:crafting_shaped" | "crafting_shaped" | "mekanism:mek_data"
+                    if v.get("pattern").is_some() && v.get("key").is_some() =>
+                {
                     let pattern: Vec<Vec<char>> = v["pattern"]
                         .as_array()
                         .into_iter()
@@ -1256,7 +1301,9 @@ impl Recipes {
                         _ => None,
                     }
                 }
-                "minecraft:crafting_shapeless" => {
+                "minecraft:crafting_shapeless" | "crafting_shapeless"
+                    if v.get("ingredients").is_some() =>
+                {
                     let ingredients: Option<Vec<_>> = v["ingredients"]
                         .as_array()
                         .into_iter()
@@ -1268,6 +1315,63 @@ impl Recipes {
                             ingredients,
                             result,
                         }),
+                        _ => None,
+                    }
+                }
+                _ if v.get("pattern").is_some()
+                    && v.get("key").is_some()
+                    && v.get("result").is_some() =>
+                {
+                    let pattern: Vec<Vec<char>> = v["pattern"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|r| r.as_str().map(|s| s.chars().collect()))
+                        .collect();
+                    let pattern = shrink(&pattern);
+                    let height = pattern.len();
+                    let width = pattern.first().map_or(0, Vec::len);
+                    let mut cells = Vec::with_capacity(width * height);
+                    let mut ok = height > 0 && width <= 3 && height <= 3;
+                    for row in &pattern {
+                        for c in row {
+                            if *c == ' ' {
+                                cells.push(None);
+                            } else {
+                                match Ingredient::parse(&v["key"][c.to_string()], items) {
+                                    Some(i) => cells.push(Some(i)),
+                                    None => ok = false,
+                                }
+                            }
+                        }
+                    }
+                    match (ok, result()) {
+                        (true, Some(result)) => Some(Recipe::Shaped {
+                            width,
+                            height,
+                            cells,
+                            result,
+                        }),
+                        _ => None,
+                    }
+                }
+                _ if rtype.contains("shapeless")
+                    && v.get("ingredients").is_some()
+                    && v.get("result").is_some() =>
+                {
+                    let ingredients: Option<Vec<_>> = v["ingredients"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .map(|i| Ingredient::parse(i, items))
+                        .collect();
+                    match (ingredients, result()) {
+                        (Some(ingredients), Some(result)) if ingredients.len() <= 9 => {
+                            Some(Recipe::Shapeless {
+                                ingredients,
+                                result,
+                            })
+                        }
                         _ => None,
                     }
                 }
