@@ -213,25 +213,52 @@ impl StateModels {
         };
         let mut baked = BTreeMap::new();
         for (name, turns, lock) in variants {
-            let model = library.resolve(&name)?;
+            let model = match library.resolve(&name) {
+                Ok(model) => model,
+                Err(e) => {
+                    log::warn!(
+                        "Horizon: block model {name} did not resolve ({e}); using missing model"
+                    );
+                    library.resolve(horizon_assets::resolve::MISSING_MODEL)?
+                }
+            };
             let particle = model
-                .material("particle")?
-                .map(|material| sprites.insert(root, &material.sprite))
-                .transpose()?;
-            let faces: Vec<BakedFace> =
-                bake_block_model(&model, BlockModelTransform::new(turns, lock))?
-                    .into_iter()
-                    .map(|quad| {
-                        let layer = sprites.insert(root, &quad.material.sprite)?;
-                        Ok(BakedFace {
-                            translucent: quad.material.force_translucent
-                                || sprites.translucent[layer as usize],
-                            quad,
-                            layer,
-                            opaque: sprites.opaque[layer as usize],
-                        })
+                .material("particle")
+                .ok()
+                .flatten()
+                .and_then(|material| sprites.insert(root, &material.sprite).ok());
+            let quads = match bake_block_model(&model, BlockModelTransform::new(turns, lock)) {
+                Ok(quads) => quads,
+                Err(e) => {
+                    log::warn!(
+                        "Horizon: block model {name} failed to bake ({e}); using missing model"
+                    );
+                    let missing = library.resolve(horizon_assets::resolve::MISSING_MODEL)?;
+                    bake_block_model(&missing, BlockModelTransform::new(turns, lock))?
+                }
+            };
+            let faces: Vec<BakedFace> = quads
+                .into_iter()
+                .filter_map(|quad| {
+                    let layer = match sprites.insert(root, &quad.material.sprite) {
+                        Ok(layer) => layer,
+                        Err(e) => {
+                            log::warn!(
+                                "Horizon: sprite {} in {name} failed to load ({e})",
+                                quad.material.sprite
+                            );
+                            return None;
+                        }
+                    };
+                    Some(BakedFace {
+                        translucent: quad.material.force_translucent
+                            || sprites.translucent[layer as usize],
+                        quad,
+                        layer,
+                        opaque: sprites.opaque[layer as usize],
                     })
-                    .collect::<Result<_>>()?;
+                })
+                .collect();
             let cube = super::cube::cube_styles(&faces);
             baked.insert(
                 (name, turns, lock),

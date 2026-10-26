@@ -38,7 +38,16 @@ impl ParsedModels {
                         && let Ok(rel) = path.strip_prefix(&base)
                     {
                         let rel = rel.with_extension("").to_string_lossy().replace('\\', "/");
-                        files.push((format!("{namespace}:{rel}"), path));
+                        let valid = |c: u8| {
+                            c.is_ascii_lowercase() || c.is_ascii_digit() || b"_.-".contains(&c)
+                        };
+                        if !namespace.is_empty()
+                            && !rel.is_empty()
+                            && namespace.bytes().all(valid)
+                            && rel.bytes().all(|c| valid(c) || c == b'/')
+                        {
+                            files.push((format!("{namespace}:{rel}"), path));
+                        }
                     }
                 }
             }
