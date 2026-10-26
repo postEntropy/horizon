@@ -193,6 +193,45 @@ pub(super) fn content_root(
     }
 }
 
+/// The Mods page's rows while [`StartupMenu`] shows before [`Game::start_mods`] runs.
+pub(super) fn list_installed_early(dev: &[PathBuf]) -> Vec<horizon_client::mod_list::Installed> {
+    let dir = Game::options_path().with_file_name(mod_list::DIR);
+    let mut paths = horizon_mods::find(&dir);
+    paths.retain(|p| !dev.contains(p));
+    paths.extend(dev.iter().cloned());
+    paths
+        .iter()
+        .map(|path| {
+            let file = path.file_name().unwrap_or_default().to_string_lossy();
+            match horizon_mods::Package::read(path) {
+                Ok(pkg) => {
+                    let m = pkg.manifest;
+                    let may: Vec<&str> = m.capabilities.iter().map(|c| c.describe()).collect();
+                    let may = if may.is_empty() {
+                        "Asks for nothing.".to_owned()
+                    } else {
+                        format!("May {}.", may.join(", "))
+                    };
+                    horizon_client::mod_list::Installed {
+                        id: m.id,
+                        title: format!("{} {}", m.name, m.version),
+                        description: format!("{may} {}", m.description).trim().to_owned(),
+                        problem: None,
+                        dev: dev.contains(path),
+                    }
+                }
+                Err(e) => horizon_client::mod_list::Installed {
+                    id: String::new(),
+                    title: file.into_owned(),
+                    description: String::new(),
+                    problem: Some(format!("Stopped: {e}")),
+                    dev: false,
+                },
+            }
+        })
+        .collect()
+}
+
 /// A build without the `mods` feature: no mod runs.
 #[cfg(not(feature = "mods"))]
 impl Game<'_> {

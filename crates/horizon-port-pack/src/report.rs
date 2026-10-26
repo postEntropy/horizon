@@ -110,39 +110,47 @@ fn not_needed(class: &str) -> &'static str {
     }
 }
 
-/// A carried-over mod: ported when its harness passes with nothing left
-/// out and nothing the templates miss; else partial, with what is missing.
-fn carried(work: &Path, key: &str) -> Option<(Status, String)> {
+/// A carried-over mod: ported when its content is complete (data tier with no
+/// missing blocks/processors, or code tier with `carry/mod.wasm`) and no
+/// harness check failed; else partial, with what is missing.
+fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     let dir = work.join("mods").join(key);
     let has_wasm = dir.join("carry/mod.wasm").is_file();
     let harness: Option<Value> = std::fs::read(dir.join("harness/result.json"))
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok());
+    let mut harness_gaps = Vec::new();
+    let mut checked = 0;
+    if let Some(h) = &harness {
+        for (name, c) in h["checks"].as_object().into_iter().flatten() {
+            let (p, f) = (
+                c["passed"].as_u64().unwrap_or(0),
+                c["failed"].as_u64().unwrap_or(0),
+            );
+            checked += p + f;
+            if f > 0 {
+                harness_gaps.push(format!("{name} {p}/{}", p + f));
+            }
+        }
+    }
     let carry: Value = match std::fs::read(dir.join("carry-report.json"))
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
     {
         Some(c) => c,
         None if has_wasm && dir.join("carry/horizon-mod.toml").is_file() => {
-            let mut gaps = Vec::new();
-            match &harness {
-                Some(h) => {
-                    for (name, c) in h["checks"].as_object().into_iter().flatten() {
-                        let (p, f) = (
-                            c["passed"].as_u64().unwrap_or(0),
-                            c["failed"].as_u64().unwrap_or(0),
-                        );
-                        if f > 0 {
-                            gaps.push(format!("{name} {p}/{}", p + f));
-                        }
-                    }
-                }
-                None => gaps.push("harness not run".into()),
-            }
-            return if gaps.is_empty() {
-                Some((Status::Ported, "mod.wasm; harness green".into()))
+            return if harness_gaps.is_empty() {
+                let suffix = if harness.is_some() {
+                    "; harness green"
+                } else {
+                    ""
+                };
+                Some((Status::Ported, format!("ported-wasm (mod.wasm{suffix})")))
             } else {
-                Some((Status::Partial, format!("mod.wasm; {}", gaps.join("; "))))
+                Some((
+                    Status::Partial,
+                    format!("mod.wasm; {}", harness_gaps.join("; ")),
+                ))
             };
         }
         None => return None,
@@ -150,6 +158,37 @@ fn carried(work: &Path, key: &str) -> Option<(Status, String)> {
     let count = |k: &str| carry[k].as_object().map_or(0, |o| o.len());
     let (blocks, items) = (count("blocks"), carry["items"].as_u64().unwrap_or(0));
     let (left_blocks, left_items) = (count("blocks_unknown"), count("items_unknown"));
+    let worldgen = carry["worldgen"].as_u64().unwrap_or(0);
+    let sum_map = |k: &str| -> u64 {
+        carry["worldgen_types"][k]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter_map(|(_, v)| v.as_u64())
+            .sum()
+    };
+    let wg_unsup = sum_map("unsupported");
+    let wg_dropped = sum_map("processors_dropped");
+    let wg_lost = sum_map("rules_lost");
+
+    if has_wasm {
+        let mut summary = if blocks == 0 && items == 0 && worldgen > 0 {
+            format!("ported-wasm ({worldgen} worldgen files, mod.wasm)")
+        } else {
+            format!("ported-wasm ({blocks} blocks, {items} items, mod.wasm)")
+        };
+        if harness_gaps.is_empty() {
+            if harness.is_some() {
+                summary.push_str("; harness green");
+            }
+            return Some((Status::Ported, summary));
+        }
+        return Some((
+            Status::Partial,
+            format!("{summary}; {}", harness_gaps.join("; ")),
+        ));
+    }
+
     // A class of its own is code the facts cannot show; anything else the
     // template misses (shapes, sounds) the harness also reports.
     let mut differences = 0;
@@ -187,42 +226,51 @@ fn carried(work: &Path, key: &str) -> Option<(Status, String)> {
             "{differences} blocks or items differ from their templates"
         ));
     }
-    let mut checked = 0;
-    match &harness {
-        Some(h) => {
-            for (name, c) in h["checks"].as_object().into_iter().flatten() {
-                let (p, f) = (
-                    c["passed"].as_u64().unwrap_or(0),
-                    c["failed"].as_u64().unwrap_or(0),
-                );
-                checked += p + f;
-                if f > 0 {
-                    gaps.push(format!("{name} {p}/{}", p + f));
-                }
-            }
-        }
-        None => gaps.push("harness not run".into()),
+    if wg_unsup > 0 {
+        gaps.push(format!("{wg_unsup} unsupported worldgen structures"));
     }
-    let worldgen = carry["worldgen"].as_u64().unwrap_or(0);
-    if blocks == 0 && items == 0 && checked == 0 && !has_wasm {
-        let what = if worldgen > 0 {
-            format!("{worldgen} worldgen files carried, not compared yet")
+    if wg_dropped > 0 {
+        gaps.push(format!("{wg_dropped} worldgen processors dropped"));
+    }
+    if wg_lost > 0 {
+        gaps.push(format!("{wg_lost} worldgen rules lost"));
+    }
+    gaps.extend(harness_gaps);
+    if tier != "data" {
+        gaps.push("needs mod.wasm".into());
+    }
+
+    if blocks == 0 && items == 0 && checked == 0 {
+        if worldgen > 0 {
+            if gaps.is_empty() {
+                return Some((Status::Ported, format!("{worldgen} worldgen files carried")));
+            }
+            return Some((
+                Status::Partial,
+                format!("{worldgen} worldgen files carried; {}", gaps.join("; ")),
+            ));
+        }
+        let what = if tier != "data" {
+            "assets/data carried; needs mod.wasm".into()
         } else {
             "nothing registered to compare".into()
         };
         return Some((Status::Partial, what));
     }
     let mut summary = format!("{blocks} blocks, {items} items");
-    if has_wasm {
-        summary.push_str(", mod.wasm");
-    } else if own_code > 0 {
+    if own_code > 0 {
         let _ = write!(
             summary,
             " ({own_code} with code of their own, not compared)"
         );
     }
     if gaps.is_empty() {
-        Some((Status::Ported, format!("{summary}; harness green")))
+        let suffix = if harness.is_some() {
+            "harness green"
+        } else {
+            "data carried"
+        };
+        Some((Status::Ported, format!("{summary}; {suffix}")))
     } else {
         Some((Status::Partial, format!("{summary}; {}", gaps.join("; "))))
     }
@@ -238,7 +286,7 @@ pub fn build(records: &[Record], work: &Path) -> Vec<Row> {
                 (Status::NotYet, why.to_owned())
             } else if r.tier == "none" || matches!(r.class.as_str(), "library" | "performance") {
                 (Status::NotNeeded, not_needed(&r.class).to_owned())
-            } else if let Some(c) = carried(work, &r.key) {
+            } else if let Some(c) = carried(work, &r.key, &r.tier) {
                 c
             } else {
                 let mut why = not_yet(&r.tier).to_owned();
@@ -385,9 +433,30 @@ mod tests {
                 "blocks_unknown": {"b": "no vanilla Block"}}),
             Some(serde_json::json!({"checks": {"shapes": {"passed": 1, "failed": 2}}})),
         );
+        write(
+            "clean_data",
+            serde_json::json!({"blocks": {"a": "minecraft:stone"}, "items": 2}),
+            None,
+        );
+        write(
+            "pending_logic",
+            serde_json::json!({"blocks": {"a": "minecraft:stone"}, "items": 0}),
+            None,
+        );
+        write(
+            "done_logic",
+            serde_json::json!({"blocks": {"a": "minecraft:stone"}, "items": 1,
+                "blocks_unknown": {"b": "custom block class"}}),
+            None,
+        );
+        std::fs::create_dir_all(work.join("mods/done_logic/carry")).unwrap();
+        std::fs::write(work.join("mods/done_logic/carry/mod.wasm"), b"\0asm").unwrap();
         let records = [
             record("doors", "content", "data", &[]),
             record("paths", "content", "data", &[]),
+            record("clean_data", "content", "data", &[]),
+            record("pending_logic", "content", "logic", &[]),
+            record("done_logic", "content", "logic", &[]),
             record("lib", "library", "none", &[]),
             record("machine", "content", "machines", &["lib"]),
             record("addon", "integration", "logic", &["machine"]),
@@ -412,6 +481,24 @@ mod tests {
             "{}",
             by["paths"].reason
         );
+        assert_eq!(by["clean_data"].status, Status::Ported);
+        assert!(
+            by["clean_data"].reason.contains("data carried"),
+            "{}",
+            by["clean_data"].reason
+        );
+        assert_eq!(by["pending_logic"].status, Status::Partial);
+        assert!(
+            by["pending_logic"].reason.contains("needs mod.wasm"),
+            "{}",
+            by["pending_logic"].reason
+        );
+        assert_eq!(by["done_logic"].status, Status::Ported);
+        assert!(
+            by["done_logic"].reason.starts_with("ported-wasm"),
+            "{}",
+            by["done_logic"].reason
+        );
         assert_eq!(by["lib"].status, Status::NotNeeded);
         assert_eq!(by["machine"].status, Status::NotYet);
         assert!(by["machine"].reason.contains("0.4"));
@@ -425,15 +512,15 @@ mod tests {
         assert_eq!(
             counts(&rows),
             [
-                ("ported", 1),
-                ("partial", 1),
+                ("ported", 3),
+                ("partial", 2),
                 ("not yet", 3),
                 ("not needed", 1)
             ]
         );
         let md = markdown("test", &rows);
         assert!(
-            md.contains("| **all** | **1** | **1** | **3** | **1** | **6** |"),
+            md.contains("| **all** | **3** | **2** | **3** | **1** | **9** |"),
             "{md}"
         );
         std::fs::remove_dir_all(&work).unwrap();

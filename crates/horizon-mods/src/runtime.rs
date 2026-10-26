@@ -1281,6 +1281,11 @@ fn owns_id(m: &Manifest, id: &str) -> bool {
         .is_some_and(|(ns, path)| !path.is_empty() && m.owned_namespaces().any(|o| o == ns))
 }
 
+fn valid_id(id: &str) -> bool {
+    id.split_once(':')
+        .is_some_and(|(ns, path)| !ns.is_empty() && !path.is_empty())
+}
+
 /// The block entity types a mod declared, if every one is for a block in its
 /// own namespaces, declared once, with at most [`MAX_SLOTS`] slots.
 fn check_types(m: &Manifest, types: Vec<BlockEntityType>) -> Result<Vec<BlockEntityType>, String> {
@@ -1302,17 +1307,18 @@ fn check_types(m: &Manifest, types: Vec<BlockEntityType>) -> Result<Vec<BlockEnt
 }
 
 /// Checks that a mod's `logic.hooks` only claims blocks and items in its own
-/// namespaces.
+/// namespaces, or valid block/item identifiers when it has the `server` capability.
 fn check_logic_hooks(m: &Manifest, hooks: LogicHooks) -> Result<LogicHooks, String> {
+    let can_hook_foreign = m.capabilities.contains(&Capability::Server);
     for block in &hooks.blocks {
-        if !owns_id(m, block) {
+        if !(owns_id(m, block) || (can_hook_foreign && valid_id(block))) {
             return Err(format!(
                 "declares a block hook for {block}, which is not one of its blocks"
             ));
         }
     }
     for item in &hooks.items {
-        if !owns_id(m, item) {
+        if !(owns_id(m, item) || (can_hook_foreign && valid_id(item))) {
             return Err(format!(
                 "declares an item hook for {item}, which is not one of its items"
             ));

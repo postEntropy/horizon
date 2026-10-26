@@ -332,8 +332,8 @@ impl Launcher {
         }));
         buttons = buttons.child(play).child(port).child(from).child(remove);
         let mut notes = vec![format!(
-            "Port gets the jars of the {} mods this computer can port today (content with data \
-             and assets only) from the pack's own links, Modrinth, or your folder, and carries \
+            "Port gets the jars of the {} mods this computer can port today (content tiers \
+             0.2–0.5) from the pack's own links, Modrinth, or your folder, and carries \
              them over. The ports stay here, in {}.",
             p.portable,
             short(&p.work)
