@@ -65,6 +65,7 @@ mod initial_spawn;
 mod integrated;
 mod item_draw;
 mod item_particles;
+mod jei;
 mod jukebox;
 mod lan;
 mod lan_actions;
@@ -1461,6 +1462,7 @@ struct Game<'a> {
     /// Where item entities are, while the block entities tick (hoppers).
     item_columns: Option<machines::ItemColumns>,
     creative_screen: Creative,
+    jei: jei::JeiState,
     control: Option<horizon_client::control::Server>,
     /// The Agent Control setting the socket was last opened or closed for (`agent_settings`).
     agent_control_on: bool,
@@ -5027,9 +5029,11 @@ impl Game<'_> {
             Screen::CommandBlock => self.draw_command_block(&mut batch),
             Screen::Inventory => {
                 self.draw_inventory(&mut batch);
+                self.draw_jei(&mut batch);
             }
             Screen::Creative => {
                 self.draw_creative(&mut batch);
+                self.draw_jei(&mut batch);
             }
             Screen::Chat => self.draw_chat_screen(&mut batch),
             Screen::Playing | Screen::Options | Screen::Win => {}
@@ -10977,6 +10981,12 @@ impl ApplicationHandler for Game<'_> {
                     if self.screen == Screen::Options && d != 0.0 {
                         self.options_scroll(d);
                     }
+                    if matches!(self.screen, Screen::Inventory | Screen::Creative)
+                        && d != 0.0
+                        && self.jei_scroll(d)
+                    {
+                        return Ok(());
+                    }
                     if self.screen == Screen::Creative && d != 0.0 {
                         self.creative_screen.wheel(f64::from(d), &self.pack.names);
                     }
@@ -11149,6 +11159,9 @@ impl ApplicationHandler for Game<'_> {
                             }
                         }
                         Screen::Inventory if pressed => {
+                            if self.jei_click(button == MouseButton::Right) {
+                                return Ok(());
+                            }
                             self.inventory_press(button == MouseButton::Right);
                             if let Some(key) = self.container {
                                 self.container_changed(key);
@@ -11160,6 +11173,9 @@ impl ApplicationHandler for Game<'_> {
                         }
                         Screen::Chat if pressed && button == MouseButton::Left => self.chat_click(),
                         Screen::Creative if pressed => {
+                            if self.jei_click(button == MouseButton::Right) {
+                                return Ok(());
+                            }
                             self.click_creative(button == MouseButton::Right);
                         }
                         Screen::Creative => {
@@ -11228,6 +11244,9 @@ impl ApplicationHandler for Game<'_> {
                 WindowEvent::KeyboardInput { event, .. } if self.book.is_some() => {
                     self.book_key(&event)
                 }
+                WindowEvent::KeyboardInput { event, .. }
+                    if matches!(self.screen, Screen::Inventory | Screen::Creative)
+                        && self.jei_key(&event) => {}
                 WindowEvent::KeyboardInput { event, .. }
                     if self.screen == Screen::Creative
                         && self.creative_screen.tab().search
@@ -11912,6 +11931,7 @@ impl<'a> Game<'a> {
             hoppers: HashMap::new(),
             item_columns: None,
             creative_screen: prepared.creative_screen,
+            jei: Default::default(),
             control: None,
             agent_control_on: false,
             agent_last: None,
@@ -13187,11 +13207,14 @@ impl ApplicationHandler for App {
 /// the loading screen, then swap in the game on the main thread.
 fn run_loading(
     options: Options,
-    settings: Settings,
+    mut settings: Settings,
     vanilla_root: PathBuf,
     pack_error: Option<String>,
     started: Instant,
 ) -> Result<()> {
+    if options.benchmark.is_none() {
+        settings.mods.installed = mods::list_installed_early(&options.dev_mods);
+    }
     let progress = Progress::new();
     let (receiver, loader) =
         startup_menu::spawn_loader(&options, &settings, &vanilla_root, started, &progress)?;
