@@ -586,6 +586,57 @@ impl<'a> Plan<'a> {
                 }
             }
             "mob-data.json" => states(doc, "states", false, false)?,
+            "creative-inventory.json" => {
+                let Some(J::Arr(tabs)) = doc.at("tabs") else {
+                    return Err("creative-inventory.json: missing tabs".into());
+                };
+                let block_ids: std::collections::BTreeSet<&str> =
+                    self.blocks.iter().map(|b| b.decl.id.as_str()).collect();
+                let mut by_tab: std::collections::BTreeMap<&str, Vec<J>> =
+                    std::collections::BTreeMap::new();
+                for i in &self.items {
+                    let id = i.rename.to.as_str();
+                    let is_block = block_ids.contains(id);
+                    let tab_id = creative_tab_for_item(id, i.rename.from.as_str(), is_block);
+                    by_tab
+                        .entry(tab_id)
+                        .or_default()
+                        .push(J::Str(format!("{{count:1,id:\"{id}\"}}")));
+                }
+                for tab in tabs.iter_mut() {
+                    let id = match tab.get("id") {
+                        Some(J::Str(s)) => s.as_str(),
+                        _ => "",
+                    };
+                    let kind = match tab.get("type") {
+                        Some(J::Str(s)) => s.as_str(),
+                        _ => "",
+                    };
+                    if kind == "CATEGORY" {
+                        if let Some(mod_items) = by_tab.remove(id)
+                            && let Some(J::Arr(items)) = tab.get_mut("items")
+                        {
+                            items.splice(0..0, mod_items);
+                        }
+                    } else if kind == "SEARCH" {
+                        let mod_items: Vec<J> = self
+                            .items
+                            .iter()
+                            .map(|i| J::Str(format!("{{count:1,id:\"{}\"}}", i.rename.to)))
+                            .collect();
+                        let count = mod_items.len();
+                        if let Some(J::Arr(items)) = tab.get_mut("items") {
+                            items.splice(0..0, mod_items);
+                        }
+                        if let Some(J::Arr(lines)) = tab.get_mut("lines") {
+                            lines.splice(0..0, (0..count).map(|_| J::Arr(Vec::new())));
+                        }
+                        if let Some(J::Arr(tags)) = tab.get_mut("tags") {
+                            tags.splice(0..0, (0..count).map(|_| J::Arr(Vec::new())));
+                        }
+                    }
+                }
+            }
             "worldgen/block_flags.json" => states(doc, "", false, false)?,
             "worldgen/blocks/structure-blocks.json" => {
                 for key in ["rotate", "mirror", "full_block"] {
@@ -648,8 +699,568 @@ impl<'a> Plan<'a> {
     }
 }
 
+fn creative_tab_for_item(id: &str, template: &str, is_block: bool) -> &'static str {
+    let path = id.split_once(':').map_or(id, |(_, p)| p);
+    let has = |words: &[&str]| words.iter().any(|w| path.contains(w));
+    if path.ends_with("_spawn_egg") || path.starts_with("spawn_egg") {
+        return "minecraft:spawn_eggs";
+    }
+    if !is_block {
+        if has(&[
+            "sword",
+            "bow",
+            "crossbow",
+            "trident",
+            "spear",
+            "dagger",
+            "knife",
+            "katana",
+            "halberd",
+            "mace",
+            "rapier",
+            "scythe",
+            "glaive",
+            "claymore",
+            "battleaxe",
+            "warhammer",
+            "shield",
+            "quiver",
+            "arrow",
+            "bullet",
+            "ammo",
+            "helmet",
+            "chestplate",
+            "leggings",
+            "boots",
+            "cuirass",
+            "greaves",
+            "gauntlet",
+            "armor",
+            "staff",
+            "spell",
+            "tome",
+            "turret",
+        ]) {
+            return "minecraft:combat";
+        }
+        if has(&[
+            "pickaxe",
+            "shovel",
+            "hoe",
+            "axe",
+            "paxel",
+            "excavator",
+            "hammer",
+            "mattock",
+            "saw",
+            "wrench",
+            "screwdriver",
+            "crowbar",
+            "configurator",
+            "multitool",
+            "drill",
+            "chainsaw",
+            "shears",
+            "fishing_rod",
+            "brush",
+            "bucket",
+            "canister",
+            "backpack",
+            "pouch",
+            "bag",
+            "sack",
+            "wallet",
+            "compass",
+            "clock",
+            "spyglass",
+            "map",
+            "atlas",
+            "waystone",
+            "warp",
+            "teleport",
+            "magnet",
+            "charm",
+            "ring",
+            "amulet",
+            "belt",
+            "necklace",
+            "bracelet",
+            "bauble",
+            "curio",
+            "relic",
+            "artifact",
+            "totem",
+            "talisman",
+            "jetpack",
+            "glider",
+            "elytra",
+            "wings",
+            "parachute",
+            "hook",
+            "grapple",
+            "boat",
+            "raft",
+            "minecart",
+            "locomotive",
+            "carriage",
+            "saddle",
+            "harness",
+            "lead",
+            "lasso",
+            "net",
+            "upgrade",
+            "augment",
+            "card",
+            "filter",
+            "module",
+            "remote",
+            "terminal",
+            "wireless",
+            "portable",
+            "scanner",
+            "meter",
+            "gauge",
+            "linker",
+            "binder",
+            "wand",
+            "rod",
+            "chisel",
+            "trowel",
+            "key",
+            "lock",
+            "music_disc",
+            "disc",
+            "horn",
+            "broom",
+            "paraglider",
+        ]) {
+            return "minecraft:tools_and_utilities";
+        }
+        if has(&[
+            "apple",
+            "bread",
+            "meat",
+            "beef",
+            "pork",
+            "mutton",
+            "chicken",
+            "fish",
+            "salmon",
+            "cod",
+            "berry",
+            "berries",
+            "fruit",
+            "pie",
+            "cake",
+            "cookie",
+            "stew",
+            "soup",
+            "salad",
+            "sandwich",
+            "burger",
+            "pizza",
+            "pasta",
+            "noodle",
+            "rice",
+            "sushi",
+            "taco",
+            "burrito",
+            "toast",
+            "waffle",
+            "pancake",
+            "donut",
+            "chocolate",
+            "candy",
+            "ice_cream",
+            "cheese",
+            "butter",
+            "yogurt",
+            "milk",
+            "juice",
+            "tea",
+            "coffee",
+            "soda",
+            "wine",
+            "beer",
+            "ale",
+            "cider",
+            "mead",
+            "smoothie",
+            "shake",
+            "jam",
+            "jelly",
+            "sauce",
+            "curry",
+            "roast",
+            "steak",
+            "bacon",
+            "sausage",
+            "ham",
+            "omelet",
+            "potato",
+            "carrot",
+            "onion",
+            "tomato",
+            "lettuce",
+            "cabbage",
+            "corn",
+            "pepper",
+            "garlic",
+            "ginger",
+            "lemon",
+            "lime",
+            "orange",
+            "peach",
+            "pear",
+            "plum",
+            "cherry",
+            "mango",
+            "banana",
+            "coconut",
+            "pineapple",
+            "strawberry",
+            "blueberry",
+            "raspberry",
+            "blackberry",
+            "cranberry",
+            "grape",
+            "melon",
+            "squash",
+            "fillet",
+            "skewer",
+            "kebab",
+            "dumpling",
+            "croissant",
+            "bagel",
+            "pretzel",
+            "cracker",
+            "chips",
+            "fries",
+            "popcorn",
+            "jerky",
+            "ration",
+            "meal",
+            "feast",
+            "platter",
+            "bowl_of",
+            "slice_of",
+            "cooked_",
+            "baked_",
+            "fried_",
+            "grilled_",
+            "roasted_",
+            "smoked_",
+            "steamed_",
+            "boiled_",
+            "pickled_",
+            "candied_",
+            "glazed_",
+            "stuffed_",
+            "potion",
+            "elixir",
+            "brew",
+            "tonic",
+            "flask",
+            "bottle",
+        ]) {
+            return "minecraft:food_and_drinks";
+        }
+        return "minecraft:ingredients";
+    }
+    if has(&[
+        "pipe",
+        "cable",
+        "wire",
+        "conduit",
+        "tube",
+        "duct",
+        "laser",
+        "router",
+        "relay",
+        "switch",
+        "button",
+        "lever",
+        "pressure_plate",
+        "sensor",
+        "detector",
+        "observer",
+        "comparator",
+        "repeater",
+        "redstone",
+        "logic",
+        "timer",
+        "counter",
+        "sequencer",
+        "transmitter",
+        "receiver",
+        "antenna",
+        "piston",
+        "bearing",
+        "chassis",
+        "gantry",
+        "pulley",
+        "clutch",
+        "gearshift",
+        "gearbox",
+        "shaft",
+        "cogwheel",
+        "chute",
+        "funnel",
+        "tunnel",
+        "mechanical_",
+    ]) || template.contains("redstone")
+        || template.ends_with("_button")
+        || template.ends_with("_pressure_plate")
+        || template == "minecraft:lever"
+    {
+        return "minecraft:redstone_blocks";
+    }
+    if has(&[
+        "machine",
+        "furnace",
+        "smelter",
+        "crusher",
+        "pulverizer",
+        "grinder",
+        "mill",
+        "press",
+        "mixer",
+        "sawmill",
+        "centrifuge",
+        "electrolyzer",
+        "infuser",
+        "enrich",
+        "combiner",
+        "compressor",
+        "extruder",
+        "condenser",
+        "evaporator",
+        "refinery",
+        "distiller",
+        "boiler",
+        "turbine",
+        "generator",
+        "dynamo",
+        "reactor",
+        "solar",
+        "battery",
+        "capacitor",
+        "energy_cube",
+        "controller",
+        "interface",
+        "importer",
+        "exporter",
+        "drive",
+        "terminal",
+        "monitor",
+        "crafting",
+        "workbench",
+        "table",
+        "station",
+        "anvil",
+        "loom",
+        "grindstone",
+        "kiln",
+        "oven",
+        "stove",
+        "grill",
+        "pot",
+        "skillet",
+        "kettle",
+        "cauldron",
+        "vat",
+        "tank",
+        "drum",
+        "barrel",
+        "chest",
+        "crate",
+        "drawer",
+        "cabinet",
+        "cupboard",
+        "locker",
+        "safe",
+        "vault",
+        "basket",
+        "jar",
+        "urn",
+        "pedestal",
+        "altar",
+        "shrine",
+        "pylon",
+        "obelisk",
+        "waystone",
+        "teleporter",
+        "portal",
+        "anchor",
+        "beacon",
+        "trophy",
+        "plush",
+        "statue",
+        "globe",
+        "clock",
+        "bell",
+        "sign",
+        "board",
+        "shelf",
+        "bookcase",
+        "bookshelf",
+        "lectern",
+        "desk",
+        "chair",
+        "stool",
+        "bench",
+        "sofa",
+        "couch",
+        "bed",
+        "hammock",
+        "sleeping_bag",
+        "lamp",
+        "lantern",
+        "torch",
+        "sconce",
+        "chandelier",
+        "brazier",
+        "candle",
+        "light",
+        "fixture",
+        "bulb",
+        "neon",
+        "sink",
+        "faucet",
+        "toilet",
+        "bath",
+        "shower",
+        "mirror",
+        "curtain",
+        "blinds",
+        "awning",
+        "mailbox",
+        "trash",
+        "bin",
+        "fan",
+        "vent",
+        "chimney",
+        "scarecrow",
+        "dummy",
+        "target",
+        "spawner",
+        "cage",
+        "trap",
+    ]) || matches!(
+        template,
+        "minecraft:torch"
+            | "minecraft:lantern"
+            | "minecraft:soul_lantern"
+            | "minecraft:crafting_table"
+            | "minecraft:furnace"
+            | "minecraft:chest"
+            | "minecraft:barrel"
+    ) {
+        return "minecraft:functional_blocks";
+    }
+    if has(&[
+        "white_",
+        "orange_",
+        "magenta_",
+        "light_blue_",
+        "yellow_",
+        "lime_",
+        "pink_",
+        "gray_",
+        "light_gray_",
+        "cyan_",
+        "purple_",
+        "blue_",
+        "brown_",
+        "green_",
+        "red_",
+        "black_",
+        "stained",
+        "dyed",
+        "carpet",
+        "wool",
+        "terracotta",
+        "concrete",
+    ]) || template.contains("stained_glass")
+        || template.contains("wool")
+        || template.contains("carpet")
+        || template.contains("terracotta")
+        || template.contains("concrete")
+    {
+        return "minecraft:colored_blocks";
+    }
+    if has(&[
+        "ore",
+        "log",
+        "wood",
+        "leaves",
+        "sapling",
+        "flower",
+        "grass",
+        "fern",
+        "bush",
+        "shrub",
+        "vine",
+        "moss",
+        "mushroom",
+        "fungus",
+        "roots",
+        "lily",
+        "lotus",
+        "orchid",
+        "rose",
+        "tulip",
+        "daisy",
+        "dandelion",
+        "poppy",
+        "allium",
+        "peony",
+        "lilac",
+        "sunflower",
+        "blossom",
+        "petal",
+        "coral",
+        "kelp",
+        "seagrass",
+        "algae",
+        "reed",
+        "bamboo",
+        "cactus",
+        "succulent",
+        "crop",
+        "seed",
+        "berry_bush",
+        "soil",
+        "dirt",
+        "mud",
+        "clay",
+        "sand",
+        "gravel",
+        "pebble",
+        "crystal",
+        "geode",
+        "cluster",
+        "bud",
+    ]) || matches!(
+        template,
+        "minecraft:oak_log"
+            | "minecraft:oak_leaves"
+            | "minecraft:short_grass"
+            | "minecraft:dandelion"
+            | "minecraft:poppy"
+            | "minecraft:oak_sapling"
+            | "minecraft:dirt"
+            | "minecraft:grass_block"
+            | "minecraft:sand"
+            | "minecraft:gravel"
+    ) {
+        return "minecraft:natural_blocks";
+    }
+    "minecraft:building_blocks"
+}
+
 /// The JSON and NBT tables rewritten for new blocks and items.
-const JSON_TABLES: [&str; 14] = [
+const JSON_TABLES: [&str; 15] = [
     "facts.json",
     "registries.json",
     "gameplay-facts.json",
@@ -659,6 +1270,7 @@ const JSON_TABLES: [&str; 14] = [
     "landing-definitions.json",
     "items.json",
     "command-registries.json",
+    "creative-inventory.json",
     "mob-data.json",
     "worldgen/block_flags.json",
     "worldgen/blocks/structure-blocks.json",
@@ -727,6 +1339,547 @@ fn worldgen_entry(file: &str) -> Option<(&'static str, String)> {
     let (kind, path) = rest.split_once('/')?;
     let (_, bundle) = WORLDGEN_BUNDLES.iter().find(|(k, _)| *k == kind)?;
     Some((bundle, format!("{ns}:{}", path.strip_suffix(".json")?)))
+}
+
+fn is_biome_modifier_file(file: &str) -> bool {
+    let Some((_, rest)) = file.strip_prefix("data/").and_then(|r| r.split_once('/')) else {
+        return false;
+    };
+    (rest.starts_with("neoforge/biome_modifier/") || rest.starts_with("forge/biome_modifier/"))
+        && rest.ends_with(".json")
+}
+
+/// Normalizes custom mod `configured_feature` and `placed_feature` JSONs into
+/// vanilla-compatible representations that `horizon-world`'s worldgen engine
+/// executes natively.
+fn normalize_worldgen_entry(bundle: &str, text: &str) -> String {
+    use serde_json::{Value, json};
+    let Ok(mut doc) = serde_json::from_str::<Value>(text) else {
+        return text.to_owned();
+    };
+    let mut changed = false;
+    if bundle == "worldgen/features.json" {
+        let ty = doc
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned();
+        match ty.as_str() {
+            "mekanism:ore" | "immersiveengineering:ie_ore" => {
+                doc["type"] = Value::String("minecraft:ore".into());
+                if let Some(cfg) = doc.get_mut("config").and_then(Value::as_object_mut) {
+                    cfg.entry("size").or_insert_with(|| json!(9));
+                    cfg.entry("discard_chance_on_air_exposure")
+                        .or_insert_with(|| json!(0.0));
+                }
+                changed = true;
+            }
+            "silentgear:wild_plant" => {
+                doc["type"] = Value::String("minecraft:random_patch".into());
+                changed = true;
+            }
+            "farmersdelight:wild_crop" => {
+                doc["type"] = Value::String("minecraft:random_patch".into());
+                if let Some(cfg) = doc.get_mut("config").and_then(Value::as_object_mut) {
+                    if let Some(primary) = cfg.remove("primary_feature") {
+                        cfg.insert("feature".into(), primary);
+                    }
+                    cfg.remove("secondary_feature");
+                    cfg.remove("floor_feature");
+                }
+                changed = true;
+            }
+            _ => {}
+        }
+    } else if bundle == "worldgen/placed_features.json"
+        && let Some(placement) = doc.get_mut("placement").and_then(Value::as_array_mut)
+    {
+        let mut out = Vec::with_capacity(placement.len());
+        for mut m in std::mem::take(placement) {
+            let mtype = m
+                .get("type")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned();
+            match mtype.as_str() {
+                "create:config_filter"
+                | "mekanism:disableable"
+                | "farmersdelight:biome_tag"
+                | "artifacts:config_value_filter"
+                | "yungsextras:rng_initializer"
+                | "twilightforest:no_structure"
+                | "the_bumblezone:structure_disallow_by_tag"
+                | "aether:dungeon_blacklist_filter"
+                | "pneumaticcraft:oil_lake_filter" => {
+                    changed = true;
+                    continue;
+                }
+                "immersiveengineering:ie_count" => {
+                    m = json!({ "type": "minecraft:count", "count": 8 });
+                    changed = true;
+                }
+                "repurposed_structures:unlimited_count" => {
+                    m["type"] = Value::String("minecraft:count".into());
+                    changed = true;
+                }
+                "eternal_starlight:height_range_filter" => {
+                    m["type"] = Value::String("minecraft:height_range".into());
+                    changed = true;
+                }
+                _ => {}
+            }
+            if m.get("type").and_then(Value::as_str) == Some("minecraft:count")
+                && m.get("count")
+                    .and_then(Value::as_object)
+                    .and_then(|c| c.get("type"))
+                    .and_then(Value::as_str)
+                    == Some("mekanism:configurable_constant")
+            {
+                m["count"] = json!(8);
+                changed = true;
+            }
+            if m.get("type").and_then(Value::as_str) == Some("minecraft:height_range")
+                && matches!(
+                    m.get("height")
+                        .and_then(Value::as_object)
+                        .and_then(|h| h.get("type"))
+                        .and_then(Value::as_str),
+                    Some("mekanism:configurable" | "immersiveengineering:ie_range")
+                )
+            {
+                m["height"] = json!({
+                    "type": "minecraft:trapezoid",
+                    "min_inclusive": { "absolute": -64 },
+                    "max_inclusive": { "absolute": 80 }
+                });
+                changed = true;
+            }
+            out.push(m);
+        }
+        *placement = out;
+    }
+    if changed {
+        serde_json::to_string(&doc).unwrap_or_else(|_| text.to_owned())
+    } else {
+        text.to_owned()
+    }
+}
+
+const DECORATION_STEPS: [&str; 11] = [
+    "raw_generation",
+    "lakes",
+    "local_modifications",
+    "underground_structures",
+    "surface_structures",
+    "strongholds",
+    "underground_ores",
+    "underground_decoration",
+    "fluid_springs",
+    "vegetal_decoration",
+    "top_layer_modification",
+];
+
+fn expand_biome_tag(
+    tag: &str,
+    raw_tags: &BTreeMap<String, Vec<String>>,
+    known_biomes: &std::collections::BTreeSet<String>,
+    visiting: &mut std::collections::BTreeSet<String>,
+    out: &mut std::collections::BTreeSet<String>,
+) {
+    let key = if tag.contains(':') {
+        tag.to_owned()
+    } else {
+        format!("minecraft:{tag}")
+    };
+    if !visiting.insert(key.clone()) {
+        return;
+    }
+    if let Some(entries) = raw_tags.get(&key) {
+        for entry in entries {
+            if let Some(sub) = entry.strip_prefix('#') {
+                expand_biome_tag(sub, raw_tags, known_biomes, visiting, out);
+            } else {
+                let id = if entry.contains(':') {
+                    entry.clone()
+                } else {
+                    format!("minecraft:{entry}")
+                };
+                if known_biomes.contains(&id) {
+                    out.insert(id);
+                }
+            }
+        }
+    }
+    visiting.remove(&key);
+}
+
+fn resolve_biome_selector(
+    val: &serde_json::Value,
+    raw_tags: &BTreeMap<String, Vec<String>>,
+    known_biomes: &std::collections::BTreeSet<String>,
+) -> std::collections::BTreeSet<String> {
+    use serde_json::Value;
+    use std::collections::BTreeSet;
+    let mut out = BTreeSet::new();
+    match val {
+        Value::String(s) => {
+            if let Some(tag) = s.strip_prefix('#') {
+                let mut visiting = BTreeSet::new();
+                expand_biome_tag(tag, raw_tags, known_biomes, &mut visiting, &mut out);
+            } else {
+                let id = if s.contains(':') {
+                    s.clone()
+                } else {
+                    format!("minecraft:{s}")
+                };
+                if known_biomes.contains(&id) {
+                    out.insert(id);
+                }
+            }
+        }
+        Value::Array(arr) => {
+            for item in arr {
+                out.extend(resolve_biome_selector(item, raw_tags, known_biomes));
+            }
+        }
+        Value::Object(map) => {
+            let ty = map.get("type").and_then(Value::as_str).unwrap_or_default();
+            match ty {
+                "neoforge:and" | "forge:and" => {
+                    if let Some(Value::Array(vals)) = map.get("values") {
+                        let mut first = true;
+                        for v in vals {
+                            let sub = resolve_biome_selector(v, raw_tags, known_biomes);
+                            if first {
+                                out = sub;
+                                first = false;
+                            } else {
+                                out.retain(|b| sub.contains(b));
+                            }
+                        }
+                    }
+                }
+                "neoforge:or" | "forge:or" => {
+                    if let Some(Value::Array(vals)) = map.get("values") {
+                        for v in vals {
+                            out.extend(resolve_biome_selector(v, raw_tags, known_biomes));
+                        }
+                    }
+                }
+                "neoforge:not" | "forge:not" => {
+                    if let Some(v) = map.get("value") {
+                        let excluded = resolve_biome_selector(v, raw_tags, known_biomes);
+                        for b in known_biomes {
+                            if !excluded.contains(b) {
+                                out.insert(b.clone());
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    out
+}
+
+/// Applies NeoForge / Forge `add_features` biome modifiers to `worldgen/biomes.json`.
+/// Added features are appended per step in canonical alphabetical order so
+/// `FeatureDecorationPlan`'s cross-biome topological sort stays cycle-free.
+fn apply_biome_modifiers(base: &Path, overlay: &Overlay<'_>, modifiers: &[String]) -> Result<()> {
+    use serde_json::Value;
+    use std::collections::BTreeSet;
+    if modifiers.is_empty() {
+        return Ok(());
+    }
+    let biomes_rel = "worldgen/biomes.json";
+    let biomes_path = if overlay.out.join(biomes_rel).exists() {
+        overlay.out.join(biomes_rel)
+    } else {
+        base.join(biomes_rel)
+    };
+    if !biomes_path.exists() {
+        return Ok(());
+    }
+    let mut biomes_doc = read_json(&biomes_path)?;
+    let J::Obj(biome_entries) = &mut biomes_doc else {
+        return Ok(());
+    };
+    let known_biomes: BTreeSet<String> = biome_entries.iter().map(|(k, _)| k.clone()).collect();
+
+    let placed_path = if overlay.out.join("worldgen/placed_features.json").exists() {
+        overlay.out.join("worldgen/placed_features.json")
+    } else {
+        base.join("worldgen/placed_features.json")
+    };
+    let known_placed: BTreeSet<String> = match read_json(&placed_path) {
+        Ok(J::Obj(o)) => o.into_iter().map(|(k, _)| k).collect(),
+        _ => BTreeSet::new(),
+    };
+
+    let biome_tags_path = if overlay.out.join(BIOME_TAGS).exists() {
+        overlay.out.join(BIOME_TAGS)
+    } else {
+        base.join(BIOME_TAGS)
+    };
+    let mut raw_biome_tags: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    if let Ok(J::Obj(o)) = read_json(&biome_tags_path) {
+        for (tag_id, val) in o {
+            let Some(J::Str(text)) = Some(val) else {
+                continue;
+            };
+            let Ok(v) = serde_json::from_str::<Value>(&text) else {
+                continue;
+            };
+            let mut items = Vec::new();
+            for entry in v["values"].as_array().into_iter().flatten() {
+                if let Some(s) = entry.as_str() {
+                    items.push(s.to_owned());
+                } else if let Some(s) = entry.get("id").and_then(Value::as_str) {
+                    items.push(s.to_owned());
+                }
+            }
+            let key = if tag_id.contains(':') {
+                tag_id
+            } else {
+                format!("minecraft:{tag_id}")
+            };
+            raw_biome_tags.insert(key, items);
+        }
+    }
+    for (alias, defaults) in [
+        ("c:is_overworld", &["#minecraft:is_overworld"][..]),
+        ("forge:is_overworld", &["#minecraft:is_overworld"][..]),
+        ("c:is_nether", &["#minecraft:is_nether"][..]),
+        ("forge:is_nether", &["#minecraft:is_nether"][..]),
+        ("c:is_end", &["#minecraft:is_end"][..]),
+        ("forge:is_end", &["#minecraft:is_end"][..]),
+        ("c:is_forest", &["#minecraft:is_forest"][..]),
+        (
+            "c:is_tree/coniferous",
+            &["#minecraft:is_taiga", "minecraft:grove"][..],
+        ),
+        ("c:is_tree/deciduous", &["#minecraft:is_forest"][..]),
+        (
+            "c:is_plains",
+            &[
+                "minecraft:plains",
+                "minecraft:sunflower_plains",
+                "minecraft:meadow",
+            ][..],
+        ),
+        (
+            "c:is_hot/overworld",
+            &[
+                "#minecraft:is_jungle",
+                "#minecraft:is_savanna",
+                "#minecraft:is_badlands",
+                "minecraft:desert",
+            ][..],
+        ),
+        (
+            "c:is_cold/overworld",
+            &[
+                "#minecraft:is_taiga",
+                "minecraft:snowy_plains",
+                "minecraft:ice_spikes",
+                "minecraft:frozen_peaks",
+                "minecraft:jagged_peaks",
+                "minecraft:snowy_slopes",
+                "minecraft:grove",
+            ][..],
+        ),
+        (
+            "c:is_wet/overworld",
+            &[
+                "#minecraft:is_jungle",
+                "minecraft:swamp",
+                "minecraft:mangrove_swamp",
+                "minecraft:lush_caves",
+            ][..],
+        ),
+        (
+            "c:is_dense_vegetation/overworld",
+            &["#minecraft:is_forest", "#minecraft:is_jungle"][..],
+        ),
+        (
+            "c:is_sparse_vegetation/overworld",
+            &[
+                "#minecraft:is_savanna",
+                "#minecraft:is_badlands",
+                "minecraft:plains",
+            ][..],
+        ),
+        ("c:is_mushroom", &["minecraft:mushroom_fields"][..]),
+        (
+            "c:is_swamp",
+            &["minecraft:swamp", "minecraft:mangrove_swamp"][..],
+        ),
+        ("c:is_sandy", &["minecraft:desert", "minecraft:beach"][..]),
+        (
+            "c:is_snowy",
+            &[
+                "minecraft:snowy_plains",
+                "minecraft:ice_spikes",
+                "minecraft:snowy_taiga",
+                "minecraft:snowy_beach",
+                "minecraft:snowy_slopes",
+                "minecraft:grove",
+            ][..],
+        ),
+    ] {
+        raw_biome_tags
+            .entry(alias.to_owned())
+            .or_insert_with(|| defaults.iter().map(|s| (*s).to_owned()).collect());
+    }
+
+    let mut additions: BTreeMap<String, [BTreeSet<String>; 11]> = BTreeMap::new();
+    let str_list = |v: &Value| -> Vec<String> {
+        match v {
+            Value::String(s) => vec![s.clone()],
+            Value::Array(a) => a
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect(),
+            _ => Vec::new(),
+        }
+    };
+    for text in modifiers {
+        let Ok(doc) = serde_json::from_str::<Value>(text) else {
+            continue;
+        };
+        let ty = doc.get("type").and_then(Value::as_str).unwrap_or_default();
+        let (biomes_val, denied_val, features_val, step_raw) = match ty {
+            "neoforge:add_features"
+            | "forge:add_features"
+            | "actuallyadditions:bool_config_feature_modifier" => (
+                doc.get("biomes"),
+                None,
+                doc.get("features").or_else(|| doc.get("feature")),
+                doc.get("step")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_ascii_lowercase(),
+            ),
+            "farmersdelight:add_features_by_filter" => (
+                doc.get("allowed_biomes"),
+                doc.get("denied_biomes"),
+                doc.get("features"),
+                doc.get("step")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_ascii_lowercase(),
+            ),
+            "productivebees:nest" => (
+                doc.get("biomes"),
+                None,
+                doc.get("features"),
+                doc.get("generation_stage")
+                    .and_then(Value::as_str)
+                    .unwrap_or("top_layer_modification")
+                    .to_ascii_lowercase(),
+            ),
+            "bigreactors:oregen_yellorite"
+            | "bigreactors:oregen_anglesite"
+            | "bigreactors:oregen_benitoite"
+            | "mysticalagriculture:inferium_ore"
+            | "mysticalagriculture:prosperity_ore"
+            | "mysticalagriculture:soulstone"
+            | "mysticalagradditions:end_inferium_ore"
+            | "mysticalagradditions:end_prosperity_ore"
+            | "mysticalagradditions:nether_inferium_ore"
+            | "mysticalagradditions:nether_prosperity_ore" => (
+                doc.get("biomes"),
+                None,
+                doc.get("feature").or_else(|| doc.get("features")),
+                doc.get("step")
+                    .and_then(Value::as_str)
+                    .unwrap_or("underground_ores")
+                    .to_ascii_lowercase(),
+            ),
+            _ => continue,
+        };
+        let step_name = step_raw.trim_start_matches("minecraft:");
+        let Some(step_idx) = DECORATION_STEPS.iter().position(|&s| s == step_name) else {
+            continue;
+        };
+        let Some(biomes_val) = biomes_val else {
+            continue;
+        };
+        let Some(features_val) = features_val else {
+            continue;
+        };
+        let mut target_biomes = resolve_biome_selector(biomes_val, &raw_biome_tags, &known_biomes);
+        if let Some(denied) = denied_val {
+            let denied_set = resolve_biome_selector(denied, &raw_biome_tags, &known_biomes);
+            target_biomes.retain(|b| !denied_set.contains(b));
+        }
+        if target_biomes.is_empty() {
+            continue;
+        }
+        let valid_features: Vec<String> = str_list(features_val)
+            .into_iter()
+            .map(|f| {
+                if f.contains(':') {
+                    f
+                } else {
+                    format!("minecraft:{f}")
+                }
+            })
+            .filter(|f| known_placed.contains(f))
+            .collect();
+        if valid_features.is_empty() {
+            continue;
+        }
+        for biome in target_biomes {
+            let steps = additions.entry(biome).or_default();
+            for feat in &valid_features {
+                steps[step_idx].insert(feat.clone());
+            }
+        }
+    }
+    if additions.is_empty() {
+        return Ok(());
+    }
+    for (biome_id, val) in biome_entries.iter_mut() {
+        let Some(per_step) = additions.get(biome_id) else {
+            continue;
+        };
+        let J::Str(text) = val else {
+            continue;
+        };
+        let Ok(mut bdoc) = serde_json::from_str::<Value>(text) else {
+            continue;
+        };
+        let Some(features) = bdoc.get_mut("features").and_then(Value::as_array_mut) else {
+            continue;
+        };
+        while features.len() < 11 {
+            features.push(Value::Array(Vec::new()));
+        }
+        for (step_idx, added) in per_step.iter().enumerate() {
+            if added.is_empty() {
+                continue;
+            }
+            if let Some(step_arr) = features[step_idx].as_array_mut() {
+                let existing: BTreeSet<String> = step_arr
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect();
+                for feat in added {
+                    if !existing.contains(feat) {
+                        step_arr.push(Value::String(feat.clone()));
+                    }
+                }
+            }
+        }
+        *val = J::Str(serde_json::to_string(&bdoc)?);
+    }
+    overlay.write(biomes_rel, &serde_json::to_vec(&biomes_doc)?)?;
+    Ok(())
 }
 
 /// The key of a mod's structure set or template pool file that adds its
@@ -897,7 +2050,9 @@ fn merge_tag(text: Option<&str>, more: &[J], what: &str) -> Result<String> {
 
 /// The block and item ids and tags a content root has, for tag entries.
 struct Known {
+    base: PathBuf,
     blocks: std::collections::BTreeSet<String>,
+    block_tags: std::collections::BTreeSet<String>,
     items: std::collections::BTreeSet<String>,
     /// The worldgen loader's biomes and biome tags.
     biomes: std::collections::BTreeSet<String>,
@@ -925,7 +2080,9 @@ impl Known {
             })
         };
         Ok(Known {
+            base: base.to_owned(),
             blocks,
+            block_tags: keys("block-tags.json")?,
             items,
             biomes: keys("worldgen/biomes.json")?,
             biome_tags: keys(BIOME_TAGS)?,
@@ -968,8 +2125,9 @@ impl Known {
                 let rel = format!("data/{tns}/tags/{kind}/{path}.json");
                 self.tag_files.contains(&rel)
                     || match kind {
+                        "block" => self.block_tags.contains(&format!("{tns}:{path}")),
                         "worldgen/biome" => self.biome_tags.contains(&format!("{tns}:{path}")),
-                        _ => tns == "minecraft",
+                        _ => self.base.join(&rel).exists(),
                     }
             }
             None => ids.contains(id),
@@ -1113,6 +2271,7 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
     let mut warnings = Vec::new();
     let mut worldgen: BTreeMap<&str, Vec<(String, String)>> = BTreeMap::new();
     let mut additions: BTreeMap<&str, Vec<Addition>> = BTreeMap::new();
+    let mut biome_modifiers: Vec<String> = Vec::new();
     for m in mods {
         let declarations = format!("data/{}/horizon/", m.id);
         let mut reader = m.content.reader()?;
@@ -1133,10 +2292,15 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
                 overlay.write(file, &bytes)?;
                 if let Some((bundle, id)) = worldgen_entry(file) {
                     let text = String::from_utf8(bytes).map_err(|e| format!("{file}: {e}"))?;
+                    let text = normalize_worldgen_entry(bundle, &text);
                     let entries = worldgen.entry(bundle).or_default();
                     match Addition::read(bundle, &text).map_err(|e| format!("{file}: {e}"))? {
                         Some(addition) => additions.entry(bundle).or_default().push(addition),
                         None => entries.push((id, text)),
+                    }
+                } else if is_biome_modifier_file(file) {
+                    if let Ok(text) = String::from_utf8(bytes) {
+                        biome_modifiers.push(text);
                     }
                 } else if let Some(template) = file
                     .strip_prefix("data/")
@@ -1231,18 +2395,58 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
         }
         overlay.write(bundle, &serde_json::to_vec(&doc)?)?;
     }
+    apply_biome_modifiers(base, &overlay, &biome_modifiers)?;
     // A block without its own blockstate looks like its template, so every
     // state still has a model.
     for m in mods {
         for block in &m.content.blocks {
             let (ns, path) = block.id.split_once(':').unwrap_or((&m.id, &block.id));
             let own = format!("assets/{ns}/blockstates/{path}.json");
-            if m.content.files.contains(&own) {
-                continue;
-            }
             let template = block.template.trim_start_matches("minecraft:");
-            let vanilla = base.join(format!("assets/minecraft/blockstates/{template}.json"));
-            overlay.write(&own, &fs::read(&vanilla)?)?;
+            if !m.content.files.contains(&own) {
+                let vanilla = base.join(format!("assets/minecraft/blockstates/{template}.json"));
+                overlay.write(&own, &fs::read(&vanilla)?)?;
+            }
+            let item_def = format!("assets/{ns}/items/{path}.json");
+            if block.item && !m.content.files.contains(&item_def) {
+                let block_model = format!("assets/{ns}/models/block/{path}.json");
+                let item_model = format!("assets/{ns}/models/item/{path}.json");
+                if m.content.files.contains(&item_model) {
+                    let body = format!(
+                        r#"{{"model":{{"type":"minecraft:model","model":"{ns}:item/{path}"}}}}"#
+                    );
+                    overlay.write(&item_def, body.as_bytes())?;
+                } else if m.content.files.contains(&block_model) {
+                    let body = format!(
+                        r#"{{"model":{{"type":"minecraft:model","model":"{ns}:block/{path}"}}}}"#
+                    );
+                    overlay.write(&item_def, body.as_bytes())?;
+                } else {
+                    let vanilla = base.join(format!("assets/minecraft/items/{template}.json"));
+                    if let Ok(bytes) = fs::read(&vanilla) {
+                        overlay.write(&item_def, &bytes)?;
+                    }
+                }
+            }
+        }
+        for item in &m.content.items {
+            let (ns, path) = item.id.split_once(':').unwrap_or((&m.id, &item.id));
+            let item_def = format!("assets/{ns}/items/{path}.json");
+            if !m.content.files.contains(&item_def) {
+                let item_model = format!("assets/{ns}/models/item/{path}.json");
+                if m.content.files.contains(&item_model) {
+                    let body = format!(
+                        r#"{{"model":{{"type":"minecraft:model","model":"{ns}:item/{path}"}}}}"#
+                    );
+                    overlay.write(&item_def, body.as_bytes())?;
+                } else {
+                    let template = item.template.trim_start_matches("minecraft:");
+                    let vanilla = base.join(format!("assets/minecraft/items/{template}.json"));
+                    if let Ok(bytes) = fs::read(&vanilla) {
+                        overlay.write(&item_def, &bytes)?;
+                    }
+                }
+            }
         }
     }
     let mut namespaces: Vec<&str> = mods
@@ -1267,6 +2471,11 @@ pub fn resource_root(base: &Path, mods: &[ContentMod], cache: &Path) -> Result<P
     }
     let out = cache.join("mod-content");
     let stamp = stamp(base, mods)?;
+    let keep = out.join("horizon-mod-content-keep");
+    if keep.exists() && out.join(MARKER).exists() {
+        let _ = fs::remove_file(&keep);
+        let _ = fs::write(out.join(STAMP), &stamp);
+    }
     if fs::read(out.join(STAMP)).is_ok_and(|s| s == stamp.as_bytes()) {
         // A reused root warns as the build did.
         let warnings = fs::read_to_string(out.join(WARNINGS)).unwrap_or_default();
@@ -1305,7 +2514,6 @@ fn stamp(base: &Path, mods: &[ContentMod]) -> Result<String> {
         ))
     };
     let mut parts = vec!["horizon mod content 1".to_owned()];
-    parts.push(meta(&std::env::current_exe()?)?);
     let base = std::path::absolute(base)?;
     parts.push(
         String::from_utf8_lossy(&fs::read(base.join("horizon-resources.json"))?).into_owned(),
