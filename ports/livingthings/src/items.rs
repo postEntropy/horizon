@@ -1,0 +1,63 @@
+//! The items, blocks and block entities this port answers to, extracted from mod data.
+#![allow(dead_code)]
+
+pub const ITEMS: &[&str] = &[
+    "livingthings:ancient_blaze_spawn_egg",
+    "livingthings:ancient_helmet",
+    "livingthings:arrow_from_shark_tooth",
+    "livingthings:baby_ender_dragon_spawn_egg",
+    "livingthings:banana",
+    "livingthings:bone_meal_from_shark_tooth",
+    "livingthings:cooked_crab",
+    "livingthings:cooked_crab_from_campfire_cooking",
+    "livingthings:cooked_crab_from_smoking",
+    "livingthings:cooked_elephant",
+    "livingthings:cooked_elephant_from_campfire_cooking",
+    "livingthings:cooked_elephant_from_smoking",
+    "livingthings:cooked_giraffe",
+    "livingthings:cooked_giraffe_from_campfire_cooking",
+    "livingthings:cooked_giraffe_from_smoking",
+    "livingthings:cooked_lion",
+    "livingthings:cooked_lion_from_campfire_cooking",
+    "livingthings:cooked_lion_from_smoking",
+    "livingthings:cooked_ostrich",
+    "livingthings:cooked_ostrich_from_campfire_cooking",
+    "livingthings:cooked_ostrich_from_smoking",
+    "livingthings:crab",
+    "livingthings:crab_shell",
+    "livingthings:crab_spawn_egg",
+    "livingthings:elephant",
+    "livingthings:elephant_spawn_egg",
+    "livingthings:flamingo_spawn_egg",
+    "livingthings:giraffe",
+    "livingthings:giraffe_spawn_egg",
+    "livingthings:koala_spawn_egg",
+    "livingthings:lexicon",
+    "livingthings:lion",
+    "livingthings:lion_spawn_egg",
+    "livingthings:mantaray_spawn_egg",
+    "livingthings:monkey_spawn_egg",
+    "livingthings:nether_knight_spawn_egg",
+    "livingthings:ostrich",
+    "livingthings:ostrich_egg",
+    "livingthings:ostrich_nest",
+    "livingthings:ostrich_spawn_egg",
+    "livingthings:owl_spawn_egg",
+    "livingthings:peacock_spawn_egg",
+    "livingthings:penguin_spawn_egg",
+    "livingthings:raccoon_spawn_egg",
+    "livingthings:seahorse_bucket",
+    "livingthings:seahorse_spawn_egg",
+    "livingthings:shark_spawn_egg",
+    "livingthings:shark_tooth",
+    "livingthings:shroomie_spawn_egg",
+    "livingthings:snail_spawn_egg",
+];
+
+pub const BLOCKS: &[&str] = &[
+    "livingthings:ostrich_nest",
+];
+
+pub const BLOCK_ENTITIES: &[&str] = &[
+    "livingthings:ostrich_nest",
+];

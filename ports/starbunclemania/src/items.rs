@@ -1,0 +1,62 @@
+//! The items, blocks and block entities this port answers to, extracted from mod data.
+#![allow(dead_code)]
+
+pub const ITEMS: &[&str] = &[
+    "starbunclemania:alak_hat",
+    "starbunclemania:chef_hat",
+    "starbunclemania:clear_fluid_allow",
+    "starbunclemania:clear_fluid_deny",
+    "starbunclemania:cooking_pot_wixie_cauldron",
+    "starbunclemania:crucible_wixie_cauldron",
+    "starbunclemania:cutting_wixie_cauldron",
+    "starbunclemania:direction_scroll",
+    "starbunclemania:drygmy_horns",
+    "starbunclemania:dye_balloon",
+    "starbunclemania:fluid_jar",
+    "starbunclemania:fluid_jar_old",
+    "starbunclemania:fluid_scroll_allow",
+    "starbunclemania:fluid_scroll_deny",
+    "starbunclemania:fluid_sourcelink",
+    "starbunclemania:gas_to_liquid_source",
+    "starbunclemania:glyph_pickup_fluid",
+    "starbunclemania:glyph_place_fluid",
+    "starbunclemania:mixer_wixie_cauldron",
+    "starbunclemania:robin_mask",
+    "starbunclemania:sea_bunny",
+    "starbunclemania:smelting_wixie_cauldron",
+    "starbunclemania:source_condenser",
+    "starbunclemania:source_fluid_bucket",
+    "starbunclemania:star_balloon",
+    "starbunclemania:star_balloon_old",
+    "starbunclemania:star_battery",
+    "starbunclemania:star_bin",
+    "starbunclemania:star_bucket",
+    "starbunclemania:star_build",
+    "starbunclemania:star_hat",
+    "starbunclemania:star_miner",
+    "starbunclemania:star_saddle",
+    "starbunclemania:star_sword",
+    "starbunclemania:star_wand",
+    "starbunclemania:starby_ears",
+    "starbunclemania:stonecutting_wixie_cauldron",
+    "starbunclemania:whirli_prop",
+    "starbunclemania:wyrm_degree",
+];
+
+pub const BLOCKS: &[&str] = &[
+    "starbunclemania:cooking_pot_wixie_cauldron",
+    "starbunclemania:crucible_wixie_cauldron",
+    "starbunclemania:cutting_wixie_cauldron",
+    "starbunclemania:fluid_jar",
+    "starbunclemania:fluid_mix_wixie_cauldron",
+    "starbunclemania:fluid_sourcelink",
+    "starbunclemania:mixer_wixie_cauldron",
+    "starbunclemania:smelting_wixie_cauldron",
+    "starbunclemania:source_condenser",
+    "starbunclemania:source_fluid_block",
+    "starbunclemania:stonecutting_wixie_cauldron",
+];
+
+pub const BLOCK_ENTITIES: &[&str] = &[
+    "starbunclemania:cooking_pot_wixie_cauldron",
+];
