@@ -1349,6 +1349,31 @@ fn is_biome_modifier_file(file: &str) -> bool {
         && rest.ends_with(".json")
 }
 
+fn flatten_config_recursive(val: &mut serde_json::Value, changed: &mut bool) {
+    use serde_json::Value;
+    match val {
+        Value::Object(map) => {
+            if map.contains_key("type")
+                && let Some(Value::Object(cfg)) = map.remove("config")
+            {
+                *changed = true;
+                for (k, v) in cfg {
+                    map.entry(k).or_insert(v);
+                }
+            }
+            for v in map.values_mut() {
+                flatten_config_recursive(v, changed);
+            }
+        }
+        Value::Array(arr) => {
+            for v in arr {
+                flatten_config_recursive(v, changed);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Normalizes custom mod `configured_feature` and `placed_feature` JSONs into
 /// vanilla-compatible representations that `horizon-world`'s worldgen engine
 /// executes natively.
@@ -1365,7 +1390,7 @@ fn normalize_worldgen_entry(bundle: &str, text: &str) -> String {
             .unwrap_or_default()
             .to_owned();
         match ty.as_str() {
-            "mekanism:ore" | "immersiveengineering:ie_ore" => {
+            "mekanism:ore" | "mekanism:ore_retrogen" | "immersiveengineering:ie_ore" => {
                 doc["type"] = Value::String("minecraft:ore".into());
                 if let Some(cfg) = doc.get_mut("config").and_then(Value::as_object_mut) {
                     cfg.entry("size").or_insert_with(|| json!(9));
@@ -1374,7 +1399,7 @@ fn normalize_worldgen_entry(bundle: &str, text: &str) -> String {
                 }
                 changed = true;
             }
-            "silentgear:wild_plant" => {
+            "silentgear:wild_plant" | "minecraft:flower" => {
                 doc["type"] = Value::String("minecraft:random_patch".into());
                 changed = true;
             }
@@ -1391,6 +1416,7 @@ fn normalize_worldgen_entry(bundle: &str, text: &str) -> String {
             }
             _ => {}
         }
+        flatten_config_recursive(&mut doc, &mut changed);
     } else if bundle == "worldgen/placed_features.json"
         && let Some(placement) = doc.get_mut("placement").and_then(Value::as_array_mut)
     {
@@ -1588,7 +1614,7 @@ fn resolve_biome_selector(
 /// Added features are appended per step in canonical alphabetical order so
 /// `FeatureDecorationPlan`'s cross-biome topological sort stays cycle-free.
 fn apply_biome_modifiers(base: &Path, overlay: &Overlay<'_>, modifiers: &[String]) -> Result<()> {
-    use serde_json::Value;
+    use serde_json::{Value, json};
     use std::collections::BTreeSet;
     if modifiers.is_empty() {
         return Ok(());
@@ -1746,11 +1772,48 @@ fn apply_biome_modifiers(base: &Path, overlay: &Overlay<'_>, modifiers: &[String
             _ => Vec::new(),
         }
     };
+    let mut spawn_additions: BTreeMap<String, Vec<Value>> = BTreeMap::new();
     for text in modifiers {
         let Ok(doc) = serde_json::from_str::<Value>(text) else {
             continue;
         };
         let ty = doc.get("type").and_then(Value::as_str).unwrap_or_default();
+        if ty == "neoforge:add_spawns" || ty == "forge:add_spawns" {
+            let Some(biomes_val) = doc.get("biomes") else {
+                continue;
+            };
+            let target_biomes = resolve_biome_selector(biomes_val, &raw_biome_tags, &known_biomes);
+            let mut list = Vec::new();
+            if let Some(sp) = doc.get("spawners") {
+                if let Some(arr) = sp.as_array() {
+                    list.extend(arr.iter().cloned());
+                } else if sp.is_object() {
+                    list.push(sp.clone());
+                }
+            }
+            if !list.is_empty() {
+                for b in target_biomes {
+                    spawn_additions.entry(b).or_default().extend(list.clone());
+                }
+            }
+            continue;
+        }
+        if ty == "aquaculture:fish_spawn" {
+            let Some(biomes_val) = doc.get("includeBiomes") else {
+                continue;
+            };
+            let mut target_biomes = resolve_biome_selector(biomes_val, &raw_biome_tags, &known_biomes);
+            if let Some(denied) = doc.get("excludeBiomes") {
+                let denied_set = resolve_biome_selector(denied, &raw_biome_tags, &known_biomes);
+                target_biomes.retain(|b| !denied_set.contains(b));
+            }
+            if let Some(sp) = doc.get("spawn") {
+                for b in target_biomes {
+                    spawn_additions.entry(b).or_default().push(sp.clone());
+                }
+            }
+            continue;
+        }
         let (biomes_val, denied_val, features_val, step_raw) = match ty {
             "neoforge:add_features"
             | "forge:add_features"
@@ -1840,45 +1903,137 @@ fn apply_biome_modifiers(base: &Path, overlay: &Overlay<'_>, modifiers: &[String
             }
         }
     }
-    if additions.is_empty() {
-        return Ok(());
-    }
-    for (biome_id, val) in biome_entries.iter_mut() {
-        let Some(per_step) = additions.get(biome_id) else {
-            continue;
-        };
-        let J::Str(text) = val else {
-            continue;
-        };
-        let Ok(mut bdoc) = serde_json::from_str::<Value>(text) else {
-            continue;
-        };
-        let Some(features) = bdoc.get_mut("features").and_then(Value::as_array_mut) else {
-            continue;
-        };
-        while features.len() < 11 {
-            features.push(Value::Array(Vec::new()));
-        }
-        for (step_idx, added) in per_step.iter().enumerate() {
-            if added.is_empty() {
+    if !additions.is_empty() {
+        for (biome_id, val) in biome_entries.iter_mut() {
+            let Some(per_step) = additions.get(biome_id) else {
                 continue;
+            };
+            let J::Str(text) = val else {
+                continue;
+            };
+            let Ok(mut bdoc) = serde_json::from_str::<Value>(text) else {
+                continue;
+            };
+            let Some(features) = bdoc.get_mut("features").and_then(Value::as_array_mut) else {
+                continue;
+            };
+            while features.len() < 11 {
+                features.push(Value::Array(Vec::new()));
             }
-            if let Some(step_arr) = features[step_idx].as_array_mut() {
-                let existing: BTreeSet<String> = step_arr
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_owned)
-                    .collect();
-                for feat in added {
-                    if !existing.contains(feat) {
-                        step_arr.push(Value::String(feat.clone()));
+            for (step_idx, added) in per_step.iter().enumerate() {
+                if added.is_empty() {
+                    continue;
+                }
+                if let Some(step_arr) = features[step_idx].as_array_mut() {
+                    let existing: BTreeSet<String> = step_arr
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect();
+                    for feat in added {
+                        if !existing.contains(feat) {
+                            step_arr.push(Value::String(feat.clone()));
+                        }
                     }
                 }
             }
+            *val = J::Str(serde_json::to_string(&bdoc)?);
         }
-        *val = J::Str(serde_json::to_string(&bdoc)?);
+        overlay.write(biomes_rel, &serde_json::to_vec(&biomes_doc)?)?;
     }
-    overlay.write(biomes_rel, &serde_json::to_vec(&biomes_doc)?)?;
+
+    if !spawn_additions.is_empty() {
+        for (biome_id, spawns) in spawn_additions {
+            let Some(name) = biome_id.strip_prefix("minecraft:") else {
+                continue;
+            };
+            let rel = format!("data/minecraft/worldgen/biome/{name}.json");
+            let source_path = if overlay.out.join(&rel).exists() {
+                overlay.out.join(&rel)
+            } else {
+                base.join(&rel)
+            };
+            if !source_path.exists() {
+                continue;
+            }
+            let Ok(bytes) = fs::read(&source_path) else {
+                continue;
+            };
+            let Ok(mut bdoc) = serde_json::from_slice::<Value>(&bytes) else {
+                continue;
+            };
+            let Value::Object(ref mut bdoc_map) = bdoc else {
+                continue;
+            };
+            let Some(nat_map) = bdoc_map
+                .entry("attributes")
+                .or_insert_with(|| json!({}))
+                .as_object_mut()
+            else {
+                continue;
+            };
+            let natural_target = if nat_map.contains_key("argument") {
+                nat_map
+                    .get_mut("argument")
+                    .and_then(Value::as_object_mut)
+                    .unwrap()
+            } else {
+                nat_map
+                    .entry("minecraft:gameplay/natural_mob_spawns")
+                    .or_insert_with(|| json!({}))
+                    .as_object_mut()
+                    .unwrap()
+            };
+            let categories = natural_target
+                .entry("spawns_by_category")
+                .or_insert_with(|| json!({}));
+            if let Some(cmap) = categories.as_object_mut() {
+                for sp in spawns {
+                    let ent_type = sp
+                        .get("type")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned();
+                    let lower = ent_type.to_ascii_lowercase();
+                    let cat = if lower.contains("fish")
+                        || lower.contains("aquaculture")
+                        || lower.contains("water")
+                    {
+                        "water_creature"
+                    } else if lower.contains("zombie")
+                        || lower.contains("skeleton")
+                        || lower.contains("monster")
+                        || lower.contains("creeper")
+                    {
+                        "monster"
+                    } else {
+                        "creature"
+                    };
+                    let arr = cmap.entry(cat).or_insert_with(|| json!([]));
+                    if let Some(list) = arr.as_array_mut() {
+                        let weight = sp.get("weight").and_then(Value::as_u64).unwrap_or(1);
+                        let min_count = sp
+                            .get("minCount")
+                            .or_else(|| sp.get("min_count"))
+                            .and_then(Value::as_u64)
+                            .unwrap_or(1);
+                        let max_count = sp
+                            .get("maxCount")
+                            .or_else(|| sp.get("max_count"))
+                            .and_then(Value::as_u64)
+                            .unwrap_or(1);
+                        list.push(json!({
+                            "type": ent_type,
+                            "weight": weight,
+                            "min_count": min_count,
+                            "max_count": max_count
+                        }));
+                    }
+                }
+            }
+            overlay.write(&rel, &serde_json::to_vec(&bdoc)?)?;
+        }
+    }
     Ok(())
 }
 
@@ -2304,7 +2459,7 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
                     }
                 } else if let Some(template) = file
                     .strip_prefix("data/")
-                    .and_then(|r| r.split_once("/structure/"))
+                    .and_then(|r| r.split_once("/structure/").or_else(|| r.split_once("/structures/")))
                     .filter(|(_, path)| path.ends_with(".nbt"))
                 {
                     // The worldgen loader's templates: worldgen/structure/<ns>/<path>.nbt.

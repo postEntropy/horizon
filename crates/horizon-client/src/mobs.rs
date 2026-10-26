@@ -489,6 +489,88 @@ impl MobTypes {
                 },
             );
         }
+        if let Ok(items_bytes) = fs::read(root.join("items.json"))
+            && let Ok(items_map) = serde_json::from_slice::<HashMap<String, Value>>(&items_bytes)
+        {
+            for item in items_map.keys() {
+                if let Some(entity_name) = item.strip_suffix("_spawn_egg") {
+                    let id = entity_name.to_owned();
+                    if out.contains_key(&id) {
+                        continue;
+                    }
+                    let lower = id.to_ascii_lowercase();
+                    let base_key = if lower.contains("fish")
+                        || lower.contains("aquaculture")
+                        || lower.contains("salmon")
+                    {
+                        "minecraft:salmon"
+                    } else if lower.contains("cod") {
+                        "minecraft:cod"
+                    } else if lower.contains("bee") {
+                        "minecraft:bee"
+                    } else if lower.contains("cow") {
+                        "minecraft:cow"
+                    } else if lower.contains("sheep") {
+                        "minecraft:sheep"
+                    } else if lower.contains("chicken")
+                        || lower.contains("bird")
+                        || lower.contains("duck")
+                    {
+                        "minecraft:chicken"
+                    } else if lower.contains("pig") {
+                        "minecraft:pig"
+                    } else if lower.contains("wolf") || lower.contains("dog") {
+                        "minecraft:wolf"
+                    } else if lower.contains("cat") {
+                        "minecraft:cat"
+                    } else if lower.contains("horse") {
+                        "minecraft:horse"
+                    } else if lower.contains("golem") {
+                        "minecraft:iron_golem"
+                    } else if lower.contains("spider") || lower.contains("arthropod") {
+                        "minecraft:spider"
+                    } else if lower.contains("skeleton") {
+                        "minecraft:skeleton"
+                    } else if lower.contains("creeper") {
+                        "minecraft:creeper"
+                    } else if lower.contains("zombie")
+                        || lower.contains("monster")
+                        || lower.contains("boss")
+                    {
+                        "minecraft:zombie"
+                    } else {
+                        "minecraft:pig"
+                    };
+                    if let Some(base) = out.get(base_key).cloned() {
+                        let mut mod_type = base;
+                        mod_type.id = id.clone();
+                        out.insert(id, mod_type);
+                    }
+                }
+            }
+        }
+        if let Some(types_obj) = types.as_object() {
+            for (type_id, _) in types_obj {
+                if !out.contains_key(type_id)
+                    && type_id.contains(':')
+                    && !type_id.starts_with("minecraft:")
+                {
+                    let lower = type_id.to_ascii_lowercase();
+                    let base_key = if lower.contains("fish") || lower.contains("salmon") {
+                        "minecraft:salmon"
+                    } else if lower.contains("zombie") || lower.contains("monster") {
+                        "minecraft:zombie"
+                    } else {
+                        "minecraft:pig"
+                    };
+                    if let Some(base) = out.get(base_key).cloned() {
+                        let mut mod_type = base;
+                        mod_type.id = type_id.clone();
+                        out.insert(type_id.clone(), mod_type);
+                    }
+                }
+            }
+        }
         Ok(Self { types: out })
     }
 }

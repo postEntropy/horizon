@@ -107,7 +107,7 @@ impl Game<'_> {
         let x0 = (ox + win_w + 8.0).floor();
         let avail_w = batch.width - x0 - 4.0;
         let cols = ((avail_w / 18.0).floor() as usize).clamp(0, 14);
-        if cols < 3 {
+        if cols < 1 {
             return None;
         }
         let width = cols as f32 * 18.0 + 4.0;
