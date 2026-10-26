@@ -1835,6 +1835,23 @@ impl Game<'_> {
                 lines.push((self.translate(key, fallback), rgba(255, 85, 85, 255)));
             }
         }
+        if let Some((ns, _)) = stack.item.split_once(':')
+            && ns != "minecraft"
+        {
+            let mod_name: String = ns
+                .split('_')
+                .filter(|w| !w.is_empty())
+                .map(|w| {
+                    let mut chars = w.chars();
+                    match chars.next() {
+                        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                        None => String::new(),
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+            lines.push((mod_name, rgba(85, 85, 255, 255)));
+        }
         lines
     }
     /// Menu state for the control socket.

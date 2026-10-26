@@ -199,7 +199,7 @@ fn atlas_sprites(root: &Path, packed: &[PackedImage]) -> Vec<PackedImage> {
         origins.iter().find_map(|(order, origin)| {
             let image = match origin {
                 SpriteOrigin::File(texture) => {
-                    let path = texture.strip_prefix("minecraft:").unwrap_or(texture);
+                    let (_, path) = texture.split_once(':').unwrap_or(("minecraft", texture));
                     load(texture, "textures").map(|(w, h, p)| {
                         // Animated strips keep their first frame, like the packed files.
                         if h > w && (path.starts_with("block/") || path.starts_with("item/")) {

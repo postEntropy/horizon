@@ -302,13 +302,30 @@ impl Creative {
                 })
                 .collect();
         }
+        if let Some(mod_query) = term.strip_prefix('@') {
+            let text = java_lower(mod_query);
+            let (ns, rest) = text.split_once(' ').unwrap_or((&text, ""));
+            let (ns, rest) = (java_trim(ns), java_trim(rest));
+            return all
+                .filter(|&i| {
+                    let e = &self.search_index[i];
+                    e.namespace.contains(ns)
+                        && (rest.is_empty()
+                            || e.path.contains(rest)
+                            || java_lower(&names.item(&self.search_items[i].item)).contains(rest))
+                })
+                .collect();
+        }
         // FullTextSearchTree: tooltip lines, and the item id after a colon.
         let text = java_lower(term);
         all.filter(|&i| {
             let e = &self.search_index[i];
             let fallback;
             let lines: &[String] = if e.lines.is_empty() {
-                fallback = [java_lower(&names.item(&self.search_items[i].item))];
+                fallback = [
+                    java_lower(&names.item(&self.search_items[i].item)),
+                    format!("{} {} {}", e.namespace, e.path, e.path.replace('_', " ")),
+                ];
                 &fallback
             } else {
                 &e.lines
@@ -336,8 +353,20 @@ impl Creative {
         }
         tab.items.clone()
     }
+    fn item_count(&self, names: &Names) -> usize {
+        let tab = self.tab();
+        if tab.search {
+            if self.search.is_empty() {
+                self.search_items.len()
+            } else {
+                self.search_results(&self.search, names).len()
+            }
+        } else {
+            tab.items.len()
+        }
+    }
     pub fn rows(&self, names: &Names) -> usize {
-        self.items(names).len().div_ceil(9)
+        self.item_count(names).div_ceil(9)
     }
     /// ItemPickerMenu.calculateRowCount: rows beyond the five shown.
     fn hidden_rows(&self, names: &Names) -> i32 {
@@ -349,7 +378,7 @@ impl Creative {
     }
     /// CreativeModeInventoryScreen.canScroll: more than five rows, on a tab with a scrollbar.
     pub fn can_scroll(&self, names: &Names) -> bool {
-        !self.tab().inventory && self.items(names).len() > 45
+        !self.tab().inventory && self.item_count(names) > 45
     }
     /// insideScrollbar, for a point relative to the screen origin.
     pub fn inside_scrollbar(&self, x: f32, y: f32) -> bool {
@@ -388,7 +417,12 @@ impl Creative {
             return;
         }
         let rows = self.hidden_rows(names) as f64;
-        self.scroll = (self.scroll - (amount / rows) as f32).clamp(0.0, 1.0);
+        let step = if rows > 250.0 {
+            amount * (rows / 60.0).clamp(1.0, 25.0)
+        } else {
+            amount
+        };
+        self.scroll = (self.scroll - (step / rows) as f32).clamp(0.0, 1.0);
     }
     /// The scroller sprite's offset from the top of the track.
     pub fn scroller_offset(&self) -> f32 {
