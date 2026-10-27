@@ -387,7 +387,11 @@ oracle, templates are guessed from the blockstate's properties: the template who
 include them with the fewest left over (models often ignore `powered` or `waterlogged`), the
 block's name breaking ties (`_pane`, `_gate`, `_trapdoor`). Walls and vines have the same
 property names; sides tested as `true` / `false` make a vine (Chipped's 11 vines, which the game
-refused as walls: their blockstates did not load).
+refused as walls: their blockstates did not load). When no template matches, the carry can reduce
+custom variant properties only if removing them leaves the same model for every resulting vanilla
+state. It keeps horizontal `facing` on a directional template, or collapses an equivalent
+decoration to a full block; the report marks this as an approximation. If a custom property picks
+a different model, or the blockstate uses multipart rules, the block stays listed as unsupported.
 
 ### 1. Import
 

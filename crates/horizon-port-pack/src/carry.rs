@@ -157,6 +157,75 @@ pub fn block_template(name: &str, blockstate: &Value) -> Option<&'static str> {
     })
 }
 
+/// Drops custom blockstate axes only when doing so keeps every selected model
+/// identical. This carries decorative blocks whose Java state adds properties
+/// such as `occupied` or `waterlogged` even though those properties do not
+/// change the model. Blocks whose custom state selects different models stay
+/// out until Horizon can represent that state natively.
+fn reduce_blockstate(blockstate: &mut Value) -> Option<&'static str> {
+    if blockstate.get("multipart").is_some() {
+        return None;
+    }
+    let variants = blockstate.get("variants")?.as_object()?;
+    let properties = properties(blockstate);
+    let facing = properties.contains("facing");
+    let template = if facing {
+        "minecraft:carved_pumpkin"
+    } else {
+        "minecraft:stone"
+    };
+    let allowed: BTreeSet<&str> = if facing {
+        BTreeSet::from(["facing"])
+    } else {
+        BTreeSet::new()
+    };
+    if facing {
+        let directions: BTreeSet<String> = values(blockstate, "facing");
+        if directions
+            .iter()
+            .any(|direction| !matches!(direction.as_str(), "north" | "south" | "east" | "west"))
+        {
+            return None;
+        }
+    }
+
+    let mut projected = serde_json::Map::new();
+    for (selector, models) in variants {
+        let mut kept = Vec::new();
+        for part in selector.split(',') {
+            let (property, value) = part.split_once('=')?;
+            if allowed.contains(property) {
+                kept.push((property, value));
+            }
+        }
+        kept.sort_unstable_by_key(|(property, _)| *property);
+        let key = kept
+            .into_iter()
+            .map(|(property, value)| format!("{property}={value}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        if let Some(previous) = projected.get(&key)
+            && previous != models
+        {
+            return None;
+        }
+        projected.insert(key, models.clone());
+    }
+    if projected.is_empty() {
+        return None;
+    }
+    if let Some(generic) = projected.get("")
+        && projected
+            .iter()
+            .filter(|(key, _)| !key.is_empty())
+            .any(|(_, models)| models != generic)
+    {
+        return None;
+    }
+    blockstate["variants"] = Value::Object(projected);
+    Some(template)
+}
+
 /// Adapts mod-only state names to equivalent vanilla template properties so
 /// carried blockstates can select the right model while the block copies a
 /// vanilla state schema.
@@ -1034,6 +1103,9 @@ fn carry_kind(
             {
                 if let Ok(mut v) = serde_json::from_slice(&bytes) {
                     if adapt_blockstate_properties(&mut v) {
+                        adapted_states.insert(b.to_owned());
+                    }
+                    if block_template(b, &v).is_none() && reduce_blockstate(&mut v).is_some() {
                         adapted_states.insert(b.to_owned());
                     }
                     bytes = serde_json::to_vec_pretty(&v).unwrap_or(bytes);
