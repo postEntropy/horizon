@@ -266,6 +266,18 @@ fn adapt_blockstate_properties(blockstate: &mut Value) -> bool {
         });
     }
 
+    let water = values(blockstate, "water");
+    if !water.is_empty()
+        && water
+            .iter()
+            .all(|value| matches!(value.as_str(), "true" | "false"))
+    {
+        changed |= map_state_property(blockstate, "water", |value| {
+            matches!(value, "true" | "false")
+                .then(|| vec![("waterlogged".to_owned(), value.to_owned())])
+        });
+    }
+
     let parts = values(blockstate, "part");
     if !parts.is_empty()
         && parts
@@ -280,6 +292,103 @@ fn adapt_blockstate_properties(blockstate: &mut Value) -> bool {
             };
             Some(vec![("half".to_owned(), value.to_owned())])
         });
+    }
+
+    // Some decorative blocks use `connection` only to select their model.
+    // Encode it in vanilla state axes while keeping each source value distinct;
+    // this preserves model selection and approximates block behaviour.
+    let props = properties(blockstate);
+    let connection_values = values(blockstate, "connection");
+    let facing_values = values(blockstate, "facing");
+    let horizontal = ["north", "east", "south", "west"];
+    let horizontal_facing = props.contains("facing")
+        && !facing_values.is_empty()
+        && facing_values
+            .iter()
+            .all(|value| horizontal.contains(&value.as_str()));
+    if horizontal_facing && !connection_values.is_empty() {
+        if props.contains("hinge")
+            && !props.contains("half")
+            && !props.contains("open")
+            && connection_values.len() <= 4
+        {
+            let remap: BTreeMap<_, _> = connection_values
+                .iter()
+                .enumerate()
+                .map(|(index, from)| {
+                    (
+                        from.as_str(),
+                        vec![
+                            (
+                                "half".to_owned(),
+                                if index / 2 == 0 { "bottom" } else { "top" }.to_owned(),
+                            ),
+                            ("open".to_owned(), (index % 2 != 0).to_string()),
+                        ],
+                    )
+                })
+                .collect();
+            changed |=
+                map_state_property(blockstate, "connection", |value| remap.get(value).cloned());
+        } else if !props.contains("shape")
+            && !props.contains("hinge")
+            && connection_values.len() <= 5
+        {
+            let shapes = [
+                "inner_left",
+                "inner_right",
+                "outer_left",
+                "outer_right",
+                "straight",
+            ];
+            let remap: BTreeMap<_, _> = connection_values
+                .iter()
+                .zip(shapes)
+                .map(|(from, to)| (from.as_str(), vec![("shape".to_owned(), to.to_owned())]))
+                .collect();
+            changed |=
+                map_state_property(blockstate, "connection", |value| remap.get(value).cloned());
+        }
+    }
+    if props == BTreeSet::from(["connection".to_owned()]) && connection_values.len() <= 3 {
+        let axes = ["x", "y", "z"];
+        let remap: BTreeMap<_, _> = connection_values
+            .iter()
+            .zip(axes)
+            .map(|(from, to)| (from.as_str(), vec![("axis".to_owned(), to.to_owned())]))
+            .collect();
+        changed |= map_state_property(blockstate, "connection", |value| remap.get(value).cloned());
+    } else if props == BTreeSet::from(["connection".to_owned()]) && connection_values.len() <= 40 {
+        let shapes = [
+            "inner_left",
+            "inner_right",
+            "outer_left",
+            "outer_right",
+            "straight",
+        ];
+        let facings = ["north", "east", "south", "west"];
+        let halves = ["bottom", "top"];
+        let remap: BTreeMap<_, _> = connection_values
+            .iter()
+            .enumerate()
+            .map(|(index, from)| {
+                (
+                    from.as_str(),
+                    vec![
+                        (
+                            "facing".to_owned(),
+                            facings[(index / shapes.len()) % facings.len()].to_owned(),
+                        ),
+                        (
+                            "half".to_owned(),
+                            halves[index / (shapes.len() * facings.len())].to_owned(),
+                        ),
+                        ("shape".to_owned(), shapes[index % shapes.len()].to_owned()),
+                    ],
+                )
+            })
+            .collect();
+        changed |= map_state_property(blockstate, "connection", |value| remap.get(value).cloned());
     }
 
     let window_states = values(blockstate, "windowstate");
@@ -390,7 +499,15 @@ fn map_selector(
     for part in selector.split(',') {
         let (property, value) = part.split_once('=')?;
         if property == source {
-            parts.extend(map_value(value)?);
+            for (mapped_property, mapped_value) in map_value(value)? {
+                if parts
+                    .iter()
+                    .any(|(property, _)| property == &mapped_property)
+                {
+                    return None;
+                }
+                parts.push((mapped_property, mapped_value));
+            }
             changed = true;
         } else {
             parts.push((property.to_owned(), value.to_owned()));

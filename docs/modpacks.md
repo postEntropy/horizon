@@ -391,10 +391,15 @@ property names; sides tested as `true` / `false` make a vine (Chipped's 11 vines
 refused as walls: their blockstates did not load). When no template matches, the carry can reduce
 custom variant properties only if removing them leaves the same model for every resulting vanilla
 state. Common equivalent axes are mapped to vanilla properties first (`direction` to `facing`,
-window `open_left`/`open_right` to `open` plus `hinge`). The
-report marks these state mappings and safe collapses as approximations. If a custom property picks
-a different model and cannot map to a vanilla state, or the blockstate uses unsupported multipart
-rules, the block stays listed as unsupported.
+boolean `water` to `waterlogged`, and window `open_left`/`open_right` to `open` plus `hinge`). A
+custom `connection` axis with up to five values can be encoded as stair `shape` values when the
+block also has horizontal `facing`; with a `hinge` axis, up to four values can use the door
+template's `half` and `open` axes. A connection-only axis with up to three values can use a log's
+`axis`; larger connection axes can use combinations of stair `facing`, `half` and `shape` (up to
+40 values). These encodings preserve model choices when selectors remain collision-free, and
+approximate block behavior. The report marks these state mappings and safe collapses as
+approximations. If a custom property picks a different model and cannot map to a vanilla state,
+or the blockstate uses unsupported multipart rules, the block stays listed as unsupported.
 
 ### 1. Import
 
