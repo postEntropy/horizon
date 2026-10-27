@@ -606,7 +606,9 @@ fn extra_namespaces(
     for name in zip.file_names() {
         if let Some((_, ns, _)) = split(name)
             && ns != id
-            && ns.len() <= 64
+            && (1..=64).contains(&ns.len())
+            && ns != "."
+            && ns != ".."
             && ns
                 .bytes()
                 .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b))
