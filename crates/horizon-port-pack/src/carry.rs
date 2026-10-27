@@ -1597,6 +1597,8 @@ fn carry_kind(
                         changed |= upgrade_noise_parameters(&mut v);
                     } else if kind == "density_function" {
                         changed |= upgrade_density_function(&mut v);
+                    } else if kind == "noise_settings" {
+                        changed |= upgrade_density_function(&mut v["noise_router"]);
                     }
                     if kind == "structure" {
                         let path = rel.trim_start_matches("worldgen/structure/");

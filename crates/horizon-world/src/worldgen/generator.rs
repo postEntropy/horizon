@@ -167,6 +167,10 @@ pub struct GeneratorData {
     settings: BTreeMap<String, String>,
     presets: BTreeMap<String, String>,
     world_presets: BTreeMap<String, String>,
+    /// Dimension definitions carried in `data/<namespace>/dimension/`.
+    dimensions: BTreeMap<String, String>,
+    /// Dimension types carried in `data/<namespace>/dimension_type/`.
+    dimension_types: BTreeMap<String, String>,
     conditions: MaterialConditionRegistry,
     source_catalog: BiomeSourceCatalog,
     biome_names: Vec<Arc<str>>,
@@ -204,6 +208,51 @@ fn read_optional_bundle(dir: &Path, name: &str) -> Result<Option<Bundle>, Genera
     } else {
         Ok(None)
     }
+}
+
+/// Read a registry whose files live at `data/<namespace>/<registry>/` rather
+/// than in a prepared worldgen bundle.
+fn read_data_registry(root: &Path, registry: &str) -> Result<Bundle, GeneratorError> {
+    let data = root.join("data");
+    let mut out = Bundle::new();
+    if !data.is_dir() {
+        return Ok(out);
+    }
+    for namespace in fs::read_dir(&data)? {
+        let namespace = namespace?;
+        if !namespace.file_type()?.is_dir() {
+            continue;
+        }
+        let namespace_name = namespace.file_name().to_string_lossy().into_owned();
+        let registry_dir = namespace.path().join(registry);
+        if !registry_dir.is_dir() {
+            continue;
+        }
+        let mut files = vec![registry_dir.clone()];
+        while let Some(dir) = files.pop() {
+            for entry in fs::read_dir(dir)? {
+                let entry = entry?;
+                if entry.file_type()?.is_dir() {
+                    files.push(entry.path());
+                    continue;
+                }
+                let path = entry.path();
+                if path.extension().is_none_or(|ext| ext != "json") {
+                    continue;
+                }
+                let relative = path
+                    .strip_prefix(&registry_dir)
+                    .map_err(|_| resource("data registry path"))?;
+                let mut key = relative
+                    .with_extension("")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                key.insert_str(0, &format!("{namespace_name}:"));
+                out.insert(key, fs::read_to_string(path)?);
+            }
+        }
+    }
+    Ok(out)
 }
 fn build_tags(
     raw: &Bundle,
@@ -452,6 +501,8 @@ impl GeneratorData {
             rules: read_bundle(dir, "rules")?,
             settings: read_bundle(dir, "settings")?,
             world_presets: read_bundle(dir, "world_presets")?,
+            dimensions: read_data_registry(dir.parent().unwrap_or(dir), "dimension")?,
+            dimension_types: read_data_registry(dir.parent().unwrap_or(dir), "dimension_type")?,
             presets,
             conditions,
             source_catalog,
@@ -688,9 +739,13 @@ fn state(registry: &BlockRegistry, raw: &Value) -> Result<BlockStateId, Generato
     let name = raw
         .get("Name")
         .and_then(Value::as_str)
+        .or_else(|| raw.get("id").and_then(Value::as_str))
         .or_else(|| raw.as_str())
         .ok_or_else(|| resource("block state"))?;
-    let properties = raw.get("Properties").and_then(Value::as_object);
+    let properties = raw
+        .get("Properties")
+        .or_else(|| raw.get("properties"))
+        .and_then(Value::as_object);
     match properties {
         Some(properties) if !properties.is_empty() => {
             let descriptor = crate::chunk::BlockState {
@@ -760,8 +815,23 @@ where
             .filter(|v| !v.is_null())
             .map(|v| AquiferConfig::from_json(&v.to_string(), &mut densities))
             .transpose()?;
+        let mut rules = data.rules.clone();
+        let rule_name = if let Some(name) = settings_json["material_rule"].as_str() {
+            name.to_owned()
+        } else if settings_json["surface_rule"].is_object() {
+            // Noise settings before 26.3 carry the material rule inline.
+            // Keep it in this generator's registry under a stable private id.
+            let name = "horizon:dimension/inline_surface".to_owned();
+            rules.insert(
+                name.clone(),
+                serde_json::to_string(&settings_json["surface_rule"])?,
+            );
+            name
+        } else {
+            return Err(resource("material_rule"));
+        };
         let mut library = MaterialRuleLibrary::from_json(
-            &data.rules,
+            &rules,
             &data.conditions,
             &codec,
             densities,
@@ -773,10 +843,7 @@ where
             .map(|config| library.compile_aquifer(config))
             .transpose()?
             .map(|samplers| AquiferField::ALL.map(|field| samplers.get(field).clone()));
-        let rule_name = settings_json["material_rule"]
-            .as_str()
-            .ok_or_else(|| resource("material_rule"))?;
-        let rule = library.rule(rule_name)?;
+        let rule = library.rule(&rule_name)?;
         let preliminary = router.get(RouterField::ChunkSurfaceLevel).clone();
         let spawn_target = match settings_json.get("spawn_target") {
             Some(Value::Array(points)) => points
@@ -785,15 +852,25 @@ where
                     let Value::Object(fields) = point else {
                         return Err(resource("spawn_target point"));
                     };
-                    let parameters = fields
-                        .iter()
-                        .map(|(name, interval)| {
-                            Ok((
-                                library.named_density(name)?,
-                                decode_parameter(&interval.to_string())?,
-                            ))
-                        })
-                        .collect::<Result<_, GeneratorError>>()?;
+                    let mut parameters = Vec::new();
+                    for (name, interval) in fields {
+                        let field = match name.as_str() {
+                            "temperature" => Some(RouterField::Temperature),
+                            "humidity" | "vegetation" => Some(RouterField::Vegetation),
+                            "continentalness" | "continents" => Some(RouterField::Continents),
+                            "erosion" => Some(RouterField::Erosion),
+                            "depth" => Some(RouterField::Depth),
+                            "weirdness" | "ridges" => Some(RouterField::Ridges),
+                            // The old point-wide offset became implicit in 26.3.
+                            "offset" => continue,
+                            _ => None,
+                        };
+                        let density = field.map_or_else(
+                            || library.named_density(name),
+                            |field| Ok(router.get(field).clone()),
+                        )?;
+                        parameters.push((density, decode_parameter(&interval.to_string())?));
+                    }
                     Ok(SpawnTargetPoint { parameters })
                 })
                 .collect::<Result<_, GeneratorError>>()?,
@@ -2334,15 +2411,44 @@ impl OverworldGenerator {
         dimension: &str,
         with_structures: bool,
     ) -> Result<Self, GeneratorError> {
-        let preset_json: Value = serde_json::from_str(
-            data.world_presets
-                .get(preset)
-                .ok_or_else(|| resource(format!("missing world preset {preset}")))?,
-        )?;
-        let generator = preset_json["dimensions"][dimension]["generator"].clone();
-        let level = preset_json["dimensions"][dimension]["type"]
-            .as_str()
-            .and_then(dimension_type_height);
+        let preset_dimension = data
+            .world_presets
+            .get(preset)
+            .map(|json| serde_json::from_str::<Value>(json))
+            .transpose()?
+            .and_then(|v| {
+                v["dimensions"][dimension]
+                    .get("generator")
+                    .is_some()
+                    .then(|| {
+                        (
+                            v["dimensions"][dimension]["generator"].clone(),
+                            v["dimensions"][dimension]["type"]
+                                .as_str()
+                                .map(str::to_owned),
+                        )
+                    })
+            });
+        let (generator, dimension_type) = if let Some(preset_dimension) = preset_dimension {
+            preset_dimension
+        } else if let Some(dimension_json) = data.dimensions.get(dimension) {
+            let dimension_json: Value = serde_json::from_str(dimension_json)?;
+            (
+                dimension_json["generator"].clone(),
+                dimension_json["type"].as_str().map(str::to_owned),
+            )
+        } else {
+            return Err(resource(format!(
+                "missing world preset {preset} and dimension {dimension}"
+            )));
+        };
+        let level = dimension_type.as_deref().and_then(|name| {
+            data.dimension_types
+                .get(name)
+                .and_then(|json| serde_json::from_str::<Value>(json).ok())
+                .and_then(|v| Some((v["min_y"].as_i64()? as i32, v["height"].as_i64()? as i32)))
+                .or_else(|| dimension_type_height(name))
+        });
         if generator["type"].as_str() != Some("minecraft:noise") {
             return Err(resource(format!("{dimension} is not a noise generator")));
         }

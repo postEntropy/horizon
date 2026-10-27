@@ -302,7 +302,7 @@ impl Loader {
                         high: noise_value(required(&object, "to_value")?)?,
                     }
                 }
-                "minecraft:noise" => GraphNode::Noise {
+                "minecraft:noise" | "minecraft:shifted_noise" => GraphNode::Noise {
                     noise: self.noise(&object)?,
                     xz_scale: double(required(&object, "xz_scale")?)?,
                     y_scale: double(required(&object, "y_scale")?)?,

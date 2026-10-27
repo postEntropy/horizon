@@ -1565,6 +1565,17 @@ fn normalize_worldgen_entry(bundle: &str, text: &str) -> String {
             _ => {}
         }
         flatten_config_recursive(&mut doc, &mut changed);
+    } else if bundle == "worldgen/settings.json" {
+        // 26.3 added this router input. Older noise settings carried in
+        // modpacks omit it; their vanilla-era analogue is the neutral field
+        // value used by caves, the Nether, and the End.
+        let router = doc.get_mut("noise_router").and_then(Value::as_object_mut);
+        if let Some(router) = router
+            && !router.contains_key("chunk_surface_level")
+        {
+            router.insert("chunk_surface_level".into(), json!(0.0));
+            changed = true;
+        }
     } else if bundle == "worldgen/carvers.json" {
         flatten_config_recursive(&mut doc, &mut changed);
         if let Some(object) = doc.as_object_mut()
