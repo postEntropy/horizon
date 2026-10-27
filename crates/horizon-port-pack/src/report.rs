@@ -1,9 +1,12 @@
 //! Step 7, the coverage report: per mod, ported, partial, not yet or not
 //! needed, with the reason, and the totals by class, tier and licence
 //! (`coverage.json`, `coverage.md`). It reads what the other steps wrote:
-//! the inventory, each mod's `carry-report.json` and its harness result
-//! (`tools/mod_port_harness.py`).
-use crate::inventory::Record;
+//! the inventory, each mod's `carry-report.json`, its jar fetch outcome, and
+//! its harness result (`tools/mod_port_harness.py`).
+use crate::{
+    fetch::{Fetched, How},
+    inventory::Record,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
@@ -108,6 +111,34 @@ fn not_needed(class: &str) -> &'static str {
         "client-ui" => "built into Horizon",
         _ => "nothing to port",
     }
+}
+
+/// A failed jar fetch is the immediate reason a mod cannot enter carry-over.
+fn fetch_problem(fetched: &Fetched, key: &str) -> Option<String> {
+    for how in [How::Failed, How::NeedsKey, How::NotFound] {
+        let Some(outcome) = fetched
+            .files
+            .iter()
+            .find(|file| file.key == key && file.how == how)
+        else {
+            continue;
+        };
+        return Some(match how {
+            How::Failed if !outcome.detail.is_empty() => {
+                format!("jar fetch failed: {}", outcome.detail)
+            }
+            How::Failed => "jar fetch failed".into(),
+            How::NeedsKey => {
+                "CurseForge API key required, or provide the jar from an installed instance".into()
+            }
+            How::NotFound if !outcome.detail.is_empty() => {
+                format!("jar not found: {}", outcome.detail)
+            }
+            How::NotFound => "jar not found".into(),
+            _ => unreachable!(),
+        });
+    }
+    None
 }
 
 fn datapack_inventory(path: &Path) -> Result<(usize, usize), String> {
@@ -392,6 +423,7 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
 }
 
 pub fn build(records: &[Record], work: &Path) -> Vec<Row> {
+    let fetched = Fetched::load(work);
     let mut rows: Vec<Row> = records
         .iter()
         .map(|r| {
@@ -400,7 +432,7 @@ pub fn build(records: &[Record], work: &Path) -> Vec<Row> {
             } else {
                 None
             };
-            let (status, reason) = if let Some(status) = data_pack_carry {
+            let (status, mut reason) = if let Some(status) = data_pack_carry {
                 status
             } else if let Some(status) = pack_file_status(r, work) {
                 status
@@ -425,6 +457,12 @@ pub fn build(records: &[Record], work: &Path) -> Vec<Row> {
                 }
                 (Status::NotYet, why)
             };
+            if status == Status::NotYet
+                && r.jar.is_none()
+                && let Some(problem) = fetch_problem(&fetched, &r.key)
+            {
+                let _ = write!(reason, "; {problem}");
+            }
             Row {
                 key: r.key.clone(),
                 name: r.name.clone(),
