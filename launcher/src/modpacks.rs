@@ -48,7 +48,7 @@ pub struct Imported {
     /// Mods left off, with why: a ported one an earlier one owns a namespace of, or one whose
     /// jar only CurseForge serves when no API key or local copy is available.
     pub left_off: Vec<String>,
-    /// Mods classified as content and supported by a Horizon mod API tier.
+    /// Content, integration and server-only mods in a Horizon API tier.
     pub portable: usize,
     /// Unknown records whose jars can be fetched and inspected before carrying over.
     pub inspectable: usize,
@@ -217,8 +217,8 @@ pub fn import(path: &Path, log: Log) -> Result<Imported, String> {
     load(&work)
 }
 
-/// Gets jars for portable mods and unclassified candidates, then carries over the content that
-/// matches Horizon's templates and writes the report again.
+/// Gets jars for portable mods and unclassified candidates, then carries over supported content,
+/// integration and server-only data that matches Horizon's templates, and writes the report again.
 pub fn port(
     work: &Path,
     resources: Option<&Path>,

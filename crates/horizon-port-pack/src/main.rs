@@ -11,10 +11,10 @@
 //!   `<work>/jars/`: copied from the player's folder, or downloaded from the
 //!   pack's own links or Modrinth's CDN, hash checked. CurseForge-only files
 //!   use the API when `HORIZON_CURSEFORGE_API_KEY` is set.
-//! - `carry <work> [--resources <prepared>] [<mod id>...]`: the content
-//!   mods' data and assets into `<work>/mods/<id>/carry/`, a folder mod for
-//!   local use. With the NeoForge oracle's `<work>/oracle/facts.json`
-//!   (`tools/neoforge_oracle.py`), blocks and items come from its facts;
+//! - `carry <work> [--resources <prepared>] [<mod id>...]`: supported content,
+//!   integration and server-only mods' data and assets into
+//!   `<work>/mods/<id>/carry/`, a folder mod for local use. With the NeoForge oracle's
+//!   `<work>/oracle/facts.json` (`tools/neoforge_oracle.py`), blocks and items come from its facts;
 //!   `--resources` limits templates to the blocks Horizon's tables have.
 //! - `report <work>`: the coverage report, per mod ported, partial, not yet
 //!   or not needed with the reason, in `<work>/coverage.json` and

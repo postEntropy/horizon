@@ -57,7 +57,7 @@ was downloaded.
 |---|---|---|---:|
 | **content** | adds or changes gameplay: blocks, items, machines, mobs, worldgen, magic | yes: carry-over or agent | **287** |
 | **library** | APIs and code shared by other mods (Architectury, Curios, GeckoLib, Kotlin for Forge, Balm...) | no: maps to the Horizon API or the SDK | **80** |
-| **integration** | glue between two other mods (JEI plugins, AE2 ↔ Mekanism, Create add-on wiring) | after both sides are ported | **44** |
+| **integration** | glue between two other mods (JEI plugins, AE2 ↔ Mekanism, Create add-on wiring) | carry now; code after both sides are ported | **44** |
 | **client-ui** | client-only screens, HUDs, tooltips, maps, recipe viewers | yes: client API, or built in | **32** |
 | **other** | pack tooling and engine features: KubeJS, Almost Unified, shader mods, CTM, crash/version tools | no: folded into the pipeline or the engine | **25** |
 | **performance** | Sodium, FerriteCore, ModernFix, ImmediatelyFast, spark, AI and recipe speed-ups | no: Horizon is the replacement | **16** |
@@ -299,18 +299,21 @@ inspected:
 ```
 
 **Status.** `import`, `inventory`, `fetch`, `carry` and `report` run today, and `port` runs
-them for content mods across tiers the API supports. It also fetches unclassified candidates
-so the next inventory pass can use their loader metadata and file census to classify them before
-carry-over. That pass hashes downloaded jars too, so Modrinth can supply categories and required
+them for content, integration and server-only mods across the data, logic, machines and deep
+tiers. Integrations can be carried before their dependencies are ported; their gameplay remains
+partial until those dependencies are available. Client-only code mods still need a separate
+porting path. The pipeline also fetches unclassified candidates so the next inventory pass can use
+their loader metadata and file census to classify them before carry-over. That pass hashes
+downloaded jars too, so Modrinth can supply categories and required
 dependencies for files first listed only by CurseForge. Unknown jars that remain ambiguous stay
 marked for review:
 
 ```
 cargo run -p horizon-port-pack -- import ~/Downloads/pack.mrpack ~/.horizon/ports/pack
 cargo run -p horizon-port-pack -- inventory ~/.horizon/ports/pack     # --offline reuses modrinth.json
-cargo run -p horizon-port-pack -- fetch ~/.horizon/ports/pack         # portable and unclassified candidate jars, or name them
+cargo run -p horizon-port-pack -- fetch ~/.horizon/ports/pack         # supported-tier and unclassified candidate jars, or name them
 #   --from <folder>: copy the player's own jars (an installed instance, a downloads folder)
-cargo run -p horizon-port-pack -- carry ~/.horizon/ports/pack         # content mods with a jar, or name them
+cargo run -p horizon-port-pack -- carry ~/.horizon/ports/pack         # supported-tier mods with a jar, or name them
 #   --resources <prepared root>: only templates Horizon's tables have
 cargo run -p horizon-port-pack -- report ~/.horizon/ports/pack        # coverage.json and coverage.md
 cargo run -p horizon-port-pack -- port ~/Downloads/pack.zip ~/.horizon/ports/pack [--from <folder>] [--resources <root>]

@@ -101,7 +101,7 @@ fn vanilla_blocks(resources: &Path) -> Result<BTreeSet<String>, String> {
     Ok(defaults.keys().cloned().collect())
 }
 
-/// Step 4: the content mods with a jar (or the ones in `only`) carried over
+/// Step 4: supported-tier mods with a jar (or the ones in `only`) carried over
 /// into `<work>/mods/<id>/carry/`. Returns how many were.
 pub fn carry(
     work: &Path,
@@ -132,7 +132,7 @@ pub fn carry(
     let conventions = crate::worldgen::loader_biome_tags(work);
     let chosen = |r: &inventory::Record| {
         if only.is_empty() {
-            r.class == "content"
+            portable(r)
         } else {
             only.contains(&r.key)
         }
@@ -749,10 +749,14 @@ pub fn report(work: &Path, log: Log) -> Result<Vec<report::Row>, String> {
     Ok(rows)
 }
 
-/// What a player's machine can port today: content mods of the tiers
-/// Horizon's mod API supports (`data` 0.2, `logic` 0.3, `machines` 0.4, `deep` 0.5).
+/// What a player's machine can carry or port today: content mods, integrations,
+/// and server-only mods in tiers Horizon's mod API supports (`data` 0.2,
+/// `logic` 0.3, `machines` 0.4, `deep` 0.5). Integrations may remain partial
+/// until their dependencies are ported; keeping them in the pipeline lets
+/// their own data be carried and their jars be fetched in the same pass.
 pub fn portable(r: &inventory::Record) -> bool {
-    r.class == "content" && matches!(r.tier.as_str(), "data" | "logic" | "machines" | "deep")
+    matches!(r.class.as_str(), "content" | "integration" | "server-only")
+        && matches!(r.tier.as_str(), "data" | "logic" | "machines" | "deep")
 }
 
 /// Unknown mods with jars are fetched for a metadata and file-census pass.
