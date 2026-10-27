@@ -21,10 +21,13 @@ use std::{
 };
 
 /// Structure types that are vanilla's jigsaw with extra start rules.
-const JIGSAWS: [&str; 3] = [
+const JIGSAWS: [&str; 6] = [
     "lithostitched:jigsaw",
     "moogs_structures:moogs_structures_generic_jigsaw_structure",
     "repurposed_structures:generic_jigsaw_structure",
+    "undergarden:bigger_jigsaw",
+    "ad_astra:large_jigsaw_structure",
+    "cataclysm:cataclysm_jigsaw",
 ];
 /// The Nether variants of the piece-limited jigsaws: laid out the same,
 /// then moved onto land.
@@ -53,9 +56,10 @@ const PIECE_LIMITED_RULES: [&str; 4] = [
     "pools_that_ignore_boundaries",
 ];
 /// Placements that are vanilla's random spread with extra rules.
-const SPREADS: [&str; 2] = [
+const SPREADS: [&str; 3] = [
     "moogs_structures:advanced_random_spread",
     "repurposed_structures:advanced_random_spread",
+    "cataclysm:cataclysm_random_spread",
 ];
 /// Placements that use vanilla's random spread with the same general
 /// placement rules, including per-set exclusion radii.
@@ -482,8 +486,10 @@ fn upgrade_types(
 ) -> bool {
     let lost = &mut report.rules_lost;
     let mut unsupported = |t: &str| *report.unsupported.entry(t.to_owned()).or_default() += 1;
+    let structure_type = v["type"].as_str().map(str::to_owned);
+    let placement_type = v["placement"]["type"].as_str().map(str::to_owned);
     let changed = match kind {
-        "structure" => match v["type"].as_str() {
+        "structure" => match structure_type.as_deref() {
             // Bumblezone's generic optimized structure uses vanilla's
             // jigsaw fields plus a biome-radius start check. Its optional
             // bound bypass is recorded as lost until the assembler models it.
@@ -559,6 +565,12 @@ fn upgrade_types(
                     }
                     v["horizon:start_checks"]["repurposed"] = check.into();
                 }
+                if t == "ad_astra:large_jigsaw_structure"
+                    && v.as_object_mut()
+                        .is_some_and(|o| o.remove("adapt_noise").is_some())
+                {
+                    *lost.entry("adapt_noise".into()).or_default() += 1;
+                }
                 if let Some(limited) = limited {
                     v["horizon:piece_limited"] = limited;
                 }
@@ -609,7 +621,7 @@ fn upgrade_types(
             }
             _ => false,
         },
-        "structure_set" => match v["placement"]["type"].as_str() {
+        "structure_set" => match placement_type.as_deref() {
             Some(BUMBLEZONE_SPREAD) => {
                 placement_rules(&mut v["placement"], set_tags, lost);
                 v["placement"]["type"] = "minecraft:random_spread".into();
