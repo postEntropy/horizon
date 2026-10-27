@@ -1,6 +1,6 @@
 //! Data packs (`<world>/datapacks`: folders and zips with `pack.mcmeta`) and
 //! the parts of them commands use: `.mcfunction` functions (with macros and
-//! line continuation), function tags and predicates.
+//! line continuation), function tags, predicates and item modifiers.
 use crate::zip::Zip;
 use horizon_world::nbt::Tag;
 use std::{
@@ -303,7 +303,8 @@ pub fn parse_function(id: &str, text: &str) -> Result<Function, String> {
     })
 }
 
-/// The data of every enabled pack: functions, function tags, predicates.
+/// The command-facing data of every enabled pack: functions, function tags,
+/// predicates and item modifiers.
 #[derive(Default)]
 pub struct DataStore {
     pub functions: BTreeMap<String, Function>,

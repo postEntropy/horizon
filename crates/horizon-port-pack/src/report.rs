@@ -130,7 +130,7 @@ fn pack_file_status(record: &Record, work: &Path) -> Option<(Status, String)> {
         }
         ("shaderpacks", false) => "shader pack not fetched or installed yet",
         ("datapacks", true) => {
-            "data pack installed for new worlds; functions, tags and predicates load, but its other data is not applied yet"
+            "data pack installed for new worlds; Horizon supports functions, function tags, predicates and item modifiers, but not its other data yet"
         }
         ("datapacks", false) => "data pack not fetched or installed yet",
         _ => unreachable!(),

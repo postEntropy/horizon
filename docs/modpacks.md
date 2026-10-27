@@ -396,7 +396,9 @@ existing files in that home are kept so reimporting does not erase player edits.
 left out of the client profile.
 
 Data packs from that profile are copied into the `datapacks/` directory of each newly created
-world, where Horizon's world-level data pack loader discovers them. Existing saves are not changed.
+world, where Horizon's world-level loader discovers them. It supports functions, function tags,
+predicates and item modifiers; other data pack contents, including recipes, loot tables and
+worldgen, are not applied from world data packs yet. Existing saves are not changed.
 
 ### 2. Inventory and classification
 
