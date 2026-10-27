@@ -12560,6 +12560,7 @@ fn load_resources(
         ui_ready = true;
     }
     progress.set(0);
+    let assets_started = Instant::now();
     let (assets, render) = match Assets::load(&root).and_then(|assets| {
         let render = assets.reload(&root)?;
         Ok((assets, render))
@@ -12600,6 +12601,10 @@ fn load_resources(
         }
     }
     log::info!("load assets: {:.2}s", started.elapsed().as_secs_f32());
+    log::info!(
+        "Horizon: asset load stage took {:.2}s",
+        assets_started.elapsed().as_secs_f32()
+    );
     progress.set(1);
     let behaviour_json: serde_json::Value = serde_json::from_reader(std::io::BufReader::new(
         std::fs::File::open(root.join("block-behaviours.json"))?,
@@ -12613,6 +12618,7 @@ fn load_resources(
     };
     let load_biomes = || Biomes::load(&root).map_err(|e| e.to_string());
     let load_environment = || Environment::load(&root).map_err(|e| e.to_string());
+    let facts_started = Instant::now();
     let (facts, biomes, environment) = if threads > 1 {
         std::thread::scope(|scope| {
             let facts = scope.spawn(load_facts);
@@ -12632,12 +12638,21 @@ fn load_resources(
     let biomes = Arc::new(biomes.map_err(|e| -> Box<dyn std::error::Error> { e.into() })?);
     let environment = environment.map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
     log::info!("load facts: {:.2}s", started.elapsed().as_secs_f32());
+    log::info!(
+        "Horizon: facts, biomes and environment stage took {:.2}s",
+        facts_started.elapsed().as_secs_f32()
+    );
     progress.set(2);
     log::info!("load biomes+env: {:.2}s", started.elapsed().as_secs_f32());
     progress.set(3);
+    let pack_started = Instant::now();
     let light = Arc::new(LightTables::load(&root, assets.registry, &facts)?);
     let pack = PackResources::load(&root, assets.clone(), render, &facts, biomes.clone(), light)?;
     log::info!("load pack tables: {:.2}s", started.elapsed().as_secs_f32());
+    log::info!(
+        "Horizon: pack tables stage took {:.2}s",
+        pack_started.elapsed().as_secs_f32()
+    );
     progress.set(4);
     if !menu {
         horizon_client::ui::load_metadata(&root);
@@ -12647,11 +12662,16 @@ fn load_resources(
         ));
     }
     let registry_owner = assets.clone();
+    let collision_started = Instant::now();
     let collision = collisions::load(&root, registry_owner.registry)?;
     let motion = MotionResources::load_with_facts(&root, &registry_owner, &facts)?;
     log::info!(
         "load collision+motion: {:.2}s",
         started.elapsed().as_secs_f32()
+    );
+    log::info!(
+        "Horizon: collision and motion stage took {:.2}s",
+        collision_started.elapsed().as_secs_f32()
     );
     progress.set(5);
     let resources = Resources {
@@ -12763,6 +12783,7 @@ fn load_world_rest(
     let mob_data = horizon_client::mobs::MobData::load(root, facts);
     horizon_client::mobs::trial_spawner::load_registry(root);
 
+    let items_started = Instant::now();
     let items = Items::load(root, assets.registry, facts)?;
     log::info!("load items: {:.2}s", started.elapsed().as_secs_f32());
     progress.set(7);
@@ -12775,6 +12796,10 @@ fn load_world_rest(
         items.items.len(),
         biomes.list.len(),
         threads
+    );
+    log::info!(
+        "Horizon: items and recipes stage took {:.2}s",
+        items_started.elapsed().as_secs_f32()
     );
     progress.set(8);
     let stations = horizon_client::stations::StationData::load(root, &items);

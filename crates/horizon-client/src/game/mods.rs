@@ -235,6 +235,7 @@ pub(super) fn content_root(
 ) -> std::path::PathBuf {
     use horizon_client::mod_content::{self, ContentMod};
     use horizon_mods::{Capability, Content, Package};
+    let started = std::time::Instant::now();
     let here = std::env::current_dir().unwrap_or_default();
     let mut paths = horizon_mods::find(&here.join(mod_list::DIR));
     paths.retain(|p| !dev.contains(p));
@@ -273,6 +274,11 @@ pub(super) fn content_root(
     }
     match mod_content::resource_root(root, &mods, &here.join(".horizon-cache")) {
         Ok(out) => {
+            log::info!(
+                "Horizon: content root ready for {} mod(s) in {:.1}s",
+                mods.len(),
+                started.elapsed().as_secs_f32()
+            );
             if out != root {
                 log::info!(
                     "Horizon: content from {} mod(s) in {}",
