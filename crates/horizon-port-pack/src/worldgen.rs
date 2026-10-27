@@ -865,6 +865,10 @@ fn yung_condition(c: &Value, lost: &mut BTreeMap<String, usize>) -> Value {
             "below_range": opt("below_range")}),
         "mod_loaded" if c["modid"] == "minecraft" => serde_json::json!({"type": "true"}),
         "mod_loaded" => serde_json::json!({"type": "false"}),
+        // Horizon is not a Fabric, Forge or NeoForge runtime. Loader-gated
+        // entries are therefore disabled, as they would be on any other
+        // platform, without treating that expected condition as lost logic.
+        "mod_loader" => serde_json::json!({"type": "false"}),
         _ => {
             *lost.entry(format!("yungsapi condition {t}")).or_default() += 1;
             serde_json::json!({"type": "false"})
