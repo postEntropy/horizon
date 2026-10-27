@@ -2,7 +2,7 @@
 //! user's instance has it) and Modrinth's metadata, classified and ordered.
 use crate::{
     classify::{self, Facts, Known},
-    import::Pack,
+    import::{Pack, PackFile},
     jar::{self, JarInfo},
     modrinth::Cache,
 };
@@ -43,13 +43,27 @@ pub struct Record {
     pub info: Option<JarInfo>,
 }
 
-/// The jar of a pack file: the instance's own, or one the user put in
-/// `<work>/jars/`.
-fn jar_of(pack_jar: Option<&PathBuf>, file_name: &str, work: &Path) -> Option<PathBuf> {
-    pack_jar
+/// The jar of a pack file: the instance's own, or a file in `<work>/jars/`.
+/// Reuse a staged file only when it matches the pack's declared digest.
+fn jar_of(file: &PackFile, work: &Path) -> Option<PathBuf> {
+    let path = file
+        .jar
+        .as_ref()
         .cloned()
-        .or_else(|| Some(work.join("jars").join(file_name)))
-        .filter(|p| p.is_file())
+        .or_else(|| Some(work.join("jars").join(file.file_name())))
+        .filter(|p| p.is_file())?;
+    let expected = file.hash.as_deref().or(file.sha1.as_deref());
+    if let Some(expected) = expected {
+        let bytes = std::fs::read(&path).ok()?;
+        crate::import::verify_hash(
+            "cached file",
+            file.hash_format.as_deref().unwrap_or("sha1"),
+            expected,
+            &bytes,
+        )
+        .ok()?;
+    }
+    Some(path)
 }
 
 /// Uses hashes declared in the pack, and fills them from local jars when a
@@ -61,7 +75,7 @@ pub fn hashes(pack: &Pack, work: &Path) -> Vec<String> {
             if let Some(hash) = &file.sha1 {
                 return Some(hash.clone());
             }
-            let path = jar_of(file.jar.as_ref(), file.file_name(), work)?;
+            let path = jar_of(file, work)?;
             let bytes = std::fs::read(path).ok()?;
             Some(crate::import::sha1_hex(&bytes))
         })
@@ -75,7 +89,7 @@ pub fn build(pack: &Pack, cache: &Cache, work: &Path) -> Vec<Record> {
     let mut by_project: HashMap<String, String> = HashMap::new();
     let mut project_deps: Vec<Vec<String>> = Vec::new();
     for f in &pack.files {
-        let jar = jar_of(f.jar.as_ref(), f.file_name(), work);
+        let jar = jar_of(f, work);
         let mut info = jar.as_deref().and_then(|j| jar::read(j).ok());
         let sha1 = f.sha1.as_deref().unwrap_or("");
         let project = cache.project_of(sha1);

@@ -115,7 +115,7 @@ pub fn fetch(
             .iter()
             .filter_map(|r| {
                 let file = files.get(r.path.as_str())?;
-                if r.jar.is_some()
+                if r.jar.as_deref().is_some_and(|jar| matches(jar, file))
                     || local
                         .as_ref()
                         .is_some_and(|local| local.find(file).is_some())
@@ -142,7 +142,9 @@ pub fn fetch(
             detail,
         };
         let dest = jars.join(name);
-        let o = if r.jar.is_some() || (file.curseforge.is_none() && matches(&dest, file)) {
+        let o = if r.jar.as_deref().is_some_and(|jar| matches(jar, file))
+            || (file.curseforge.is_none() && matches(&dest, file))
+        {
             outcome(How::Present, String::new())
         } else if let Some(path) = local.as_ref().and_then(|l| l.find(file)) {
             match fs::copy(&path, &dest) {
