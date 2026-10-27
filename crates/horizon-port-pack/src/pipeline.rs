@@ -464,6 +464,81 @@ fn validate_carried_recipes(
             continue;
         }
         let mut report: Value = read_json(&report_path)?;
+        let previously_unregistered: BTreeSet<String> = report["recipes_unregistered"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect();
+        let outside = folder.join("outside");
+        let mut restored = Vec::new();
+        for recipe_path in recipe_files(&outside.join("data"))? {
+            let relative = recipe_path
+                .strip_prefix(&outside)
+                .map_err(|error| error.to_string())?;
+            let relative_string = relative.to_string_lossy().into_owned();
+            if !previously_unregistered.contains(&relative_string) {
+                continue;
+            }
+            let recipe: Value = match fs::read(&recipe_path)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            {
+                Some(recipe) => recipe,
+                None => continue,
+            };
+            let result = recipe["result"]
+                .as_str()
+                .or_else(|| recipe["result"]["id"].as_str())
+                .or_else(|| recipe["result"]["item"].as_str());
+            let Some(result) = result else {
+                continue;
+            };
+            let id = if result.contains(':') {
+                result.to_owned()
+            } else {
+                format!("minecraft:{result}")
+            };
+            if !known.contains(&id) {
+                continue;
+            }
+            let carried_path = carry.join(relative);
+            if let Some(parent) = carried_path.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|error| format!("{}: {error}", parent.display()))?;
+            }
+            if carried_path.exists() {
+                continue;
+            }
+            fs::rename(&recipe_path, &carried_path)
+                .map_err(|error| format!("{}: {error}", recipe_path.display()))?;
+            restored.push(relative_string);
+        }
+        if !restored.is_empty() {
+            let restored_set: BTreeSet<&str> = restored.iter().map(String::as_str).collect();
+            let listed = report["recipes_unregistered"]
+                .as_array_mut()
+                .ok_or_else(|| {
+                    format!(
+                        "{}: recipes_unregistered is not an array",
+                        report_path.display()
+                    )
+                })?;
+            listed.retain(|value| {
+                value
+                    .as_str()
+                    .is_none_or(|path| !restored_set.contains(path))
+            });
+            let copied = report["copied"].as_u64().unwrap_or(0);
+            report["copied"] = Value::from(copied + restored.len() as u64);
+            write_json(&report_path, &report)?;
+            log(format!(
+                "{}: restored {} cross-mod recipes whose output item is now carried",
+                folder.file_name().unwrap_or_default().to_string_lossy(),
+                restored.len()
+            ));
+        }
         let mut mod_excluded = Vec::new();
         for recipe_path in recipe_files(&carry.join("data"))? {
             let recipe: Value = match fs::read(&recipe_path)
