@@ -382,8 +382,6 @@ pub struct Renderer {
     /// The block sprites, [`SPRITE_SPLIT`] layers per array (the first is
     /// `sprites` in terrain.wgsl, the others `sprites_1`...).
     sprite_textures: Vec<wgpu::Texture>,
-    /// A 1-layer array bound where a pack needs fewer arrays.
-    sprite_unused: wgpu::TextureView,
     mip_levels: u32,
     /// The mipmap levels sampled (the Mipmap Levels option), at most `mip_levels - 1`.
     mipmaps: u32,
@@ -495,25 +493,55 @@ fn sprite_split() -> u32 {
         .filter(|&n| (1..=SPRITE_SPLIT).contains(&n))
         .unwrap_or(SPRITE_SPLIT)
 }
-/// Sprite arrays terrain.wgsl binds (`sprites`, `sprites_1`...).
-const SPRITE_ARRAYS: u32 = 15;
-/// The views of terrain.wgsl's sprite arrays, the unused ones a 1-layer
-/// stand-in.
-fn sprite_views(
-    textures: &[wgpu::Texture],
-    unused: &wgpu::TextureView,
-    mips: Option<u32>,
-) -> Vec<wgpu::TextureView> {
-    (0..SPRITE_ARRAYS as usize)
-        .map(|i| match textures.get(i) {
-            Some(t) => t.create_view(&wgpu::TextureViewDescriptor {
+/// The sprite bindings used by this renderer, exactly one view per array.
+fn sprite_views(textures: &[wgpu::Texture], mips: Option<u32>) -> Vec<wgpu::TextureView> {
+    textures
+        .iter()
+        .map(|texture| {
+            texture.create_view(&wgpu::TextureViewDescriptor {
                 dimension: Some(wgpu::TextureViewDimension::D2Array),
                 mip_level_count: mips,
                 ..Default::default()
-            }),
-            None => unused.clone(),
+            })
         })
         .collect()
+}
+
+/// Build the terrain shader with only the sprite arrays this GPU and pack need.
+fn terrain_shader(sprite_arrays: u32) -> String {
+    let declarations = (1..sprite_arrays)
+        .map(|array| {
+            format!(
+                "@group(0) @binding({}) var sprites_{array}: texture_2d_array<f32>;\n",
+                4 + array
+            )
+        })
+        .collect::<String>();
+    let cases = (0..sprite_arrays.saturating_sub(1))
+        .map(|array| {
+            let sprite = if array == 0 {
+                "sprites".to_owned()
+            } else {
+                format!("sprites_{array}")
+            };
+            format!(
+                "        case {array}u: {{ return textureSampleGrad({sprite}, sprite_sampler, uv, l, dx, dy); }}\n"
+            )
+        })
+        .collect::<String>();
+    let last = sprite_arrays.saturating_sub(1);
+    let last_sprite = if last == 0 {
+        "sprites".to_owned()
+    } else {
+        format!("sprites_{last}")
+    };
+    let default_case = format!(
+        "        default: {{ return textureSampleGrad({last_sprite}, sprite_sampler, uv, l, dx, dy); }}"
+    );
+    include_str!("terrain.wgsl")
+        .replace("// SPRITE_ARRAY_BINDINGS", &declarations)
+        .replace("// SPRITE_ARRAY_CASES", &cases)
+        .replace("// SPRITE_ARRAY_DEFAULT", &default_case)
 }
 /// terrain.wgsl's group 0.
 #[allow(clippy::too_many_arguments)]
@@ -531,39 +559,33 @@ fn terrain_group(
         binding,
         resource: wgpu::BindingResource::TextureView(view),
     };
+    let mut entries = vec![
+        wgpu::BindGroupEntry {
+            binding: 0,
+            resource: globals.as_entire_binding(),
+        },
+        view(1, &sprites[0]),
+        wgpu::BindGroupEntry {
+            binding: 2,
+            resource: wgpu::BindingResource::Sampler(sprite_sampler),
+        },
+        view(3, lightmap),
+        wgpu::BindGroupEntry {
+            binding: 4,
+            resource: wgpu::BindingResource::Sampler(lightmap_sampler),
+        },
+    ];
+    entries.extend(
+        sprites
+            .iter()
+            .enumerate()
+            .skip(1)
+            .map(|(array, sprite)| view(4 + array as u32, sprite)),
+    );
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some(label),
         layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: globals.as_entire_binding(),
-            },
-            view(1, &sprites[0]),
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::Sampler(sprite_sampler),
-            },
-            view(3, lightmap),
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: wgpu::BindingResource::Sampler(lightmap_sampler),
-            },
-            view(5, &sprites[1]),
-            view(6, &sprites[2]),
-            view(7, &sprites[3]),
-            view(8, &sprites[4]),
-            view(9, &sprites[5]),
-            view(10, &sprites[6]),
-            view(11, &sprites[7]),
-            view(12, &sprites[8]),
-            view(13, &sprites[9]),
-            view(14, &sprites[10]),
-            view(15, &sprites[11]),
-            view(16, &sprites[12]),
-            view(17, &sprites[13]),
-            view(18, &sprites[14]),
-        ],
+        entries: &entries,
     })
 }
 /// CPU texture uploads prepared by the resource worker. Consumed by renderer
@@ -730,11 +752,25 @@ fn describe_adapter(adapter: &wgpu::Adapter) {
 /// Whether an adapter's texture arrays hold the block textures Horizon puts
 /// in one array.
 fn check_layers(limits: &wgpu::Limits, layers: u32) -> Result<()> {
-    let needed = layers.min(sprite_split());
+    let split = sprite_split();
+    let needed = layers.min(split);
     if limits.max_texture_array_layers < needed {
         return Err(format!(
             "GPU supports {} texture layers; {needed} required",
             limits.max_texture_array_layers
+        )
+        .into());
+    }
+    let needed_arrays = layers.div_ceil(split).max(1);
+    // The terrain shader samples one lightmap in addition to the sprite
+    // arrays. Keep the shader within this adapter's sampled-texture limit.
+    let max_arrays = limits
+        .max_sampled_textures_per_shader_stage
+        .saturating_sub(1);
+    if needed_arrays > max_arrays {
+        return Err(format!(
+            "GPU supports {max_arrays} block sprite arrays plus one lightmap; \
+             {needed_arrays} arrays required for {layers} block textures"
         )
         .into());
     }
@@ -920,13 +956,6 @@ impl Renderer {
         api: GraphicsApi,
     ) -> Result<Self> {
         let split = sprite_split();
-        if layers > split * SPRITE_ARRAYS {
-            return Err(format!(
-                "{layers} block textures; Horizon draws at most {}",
-                split * SPRITE_ARRAYS
-            )
-            .into());
-        }
         let Opened {
             instance,
             surface,
@@ -1008,9 +1037,11 @@ impl Renderer {
             startup_step(format_args!("creating the pipelines"));
         }
         let gpu_timer = timing::GpuTimer::new(&device, &queue);
+        let sprite_arrays = layers.div_ceil(split).max(1);
+        let shader_source = terrain_shader(sprite_arrays);
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Horizon terrain"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("terrain.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
         let entry = |binding, visibility, ty| wgpu::BindGroupLayoutEntry {
             binding,
@@ -1024,7 +1055,6 @@ impl Renderer {
             view_dimension: wgpu::TextureViewDimension::D2Array,
             multisampled: false,
         };
-        let sprite_arrays = layers.div_ceil(split).max(1);
         if sprite_arrays > 1 {
             log::info!("Horizon: {layers} block textures in {sprite_arrays} arrays");
         }
@@ -1032,61 +1062,49 @@ impl Renderer {
             ("SPRITE_ARRAYS", f64::from(sprite_arrays)),
             ("SPRITE_SPLIT", f64::from(split)),
         ];
+        let mut binding_entries = vec![
+            entry(
+                0,
+                vf,
+                wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+            ),
+            entry(
+                1,
+                vf,
+                wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2Array,
+                    multisampled: false,
+                },
+            ),
+            entry(
+                2,
+                vf,
+                wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+            ),
+            entry(
+                3,
+                vf,
+                wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+            ),
+            entry(
+                4,
+                vf,
+                wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+            ),
+        ];
+        binding_entries.extend((1..sprite_arrays).map(|array| entry(4 + array, vf, sprite_array)));
         let bindings = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Horizon terrain bindings"),
-            entries: &[
-                entry(
-                    0,
-                    vf,
-                    wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                ),
-                entry(
-                    1,
-                    vf,
-                    wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2Array,
-                        multisampled: false,
-                    },
-                ),
-                entry(
-                    1 + 1,
-                    vf,
-                    wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                ),
-                entry(
-                    3,
-                    vf,
-                    wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                ),
-                entry(
-                    4,
-                    vf,
-                    wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                ),
-                entry(5, vf, sprite_array),
-                entry(6, vf, sprite_array),
-                entry(7, vf, sprite_array),
-                entry(8, vf, sprite_array),
-                entry(9, vf, sprite_array),
-                entry(10, vf, sprite_array),
-                entry(11, vf, sprite_array),
-                entry(12, vf, sprite_array),
-                entry(13, vf, sprite_array),
-                entry(14, vf, sprite_array),
-                entry(15, vf, sprite_array),
-                entry(16, vf, sprite_array),
-                entry(17, vf, sprite_array),
-                entry(18, vf, sprite_array),
-            ],
+            entries: &binding_entries,
         });
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Horizon terrain layout"),
@@ -1334,26 +1352,7 @@ impl Renderer {
             &sprite_textures,
             split,
         );
-        let sprite_unused = device
-            .create_texture(&wgpu::TextureDescriptor {
-                label: Some("Block sprites (unused)"),
-                size: wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            })
-            .create_view(&wgpu::TextureViewDescriptor {
-                dimension: Some(wgpu::TextureViewDimension::D2Array),
-                ..Default::default()
-            });
-        let sprite_views = sprite_views(&sprite_textures, &sprite_unused, None);
+        let sprite_views = sprite_views(&sprite_textures, None);
         let sprite_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Block sprites"),
             address_mode_u: wgpu::AddressMode::Repeat,
@@ -2266,7 +2265,6 @@ impl Renderer {
             globals,
             lightmap,
             sprite_textures,
-            sprite_unused,
             mip_levels,
             mipmaps: mip_levels - 1,
             terrain_layout: bindings,
@@ -2745,7 +2743,7 @@ impl Renderer {
             return;
         }
         self.mipmaps = levels;
-        let views = sprite_views(&self.sprite_textures, &self.sprite_unused, Some(levels + 1));
+        let views = sprite_views(&self.sprite_textures, Some(levels + 1));
         self.group = terrain_group(
             &self.device,
             "Horizon terrain resources",

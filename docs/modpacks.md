@@ -274,8 +274,10 @@ How the game loads them, without touching vanilla's path:
   states per mod. ATM10's 42 carried mods take the registry to 193,762 states (18 bits). On the
   network the width is the registry's: unchanged for vanilla clients as long as no content mod
   is on, wider only between Horizons that share the same mods; a Horizon with content mods still
-  reads a vanilla server's 16-bit chunks. Block sprites fill texture arrays of 2048 layers, eight
-  at most (16,384; vanilla takes 1,250, identical textures share a layer; ATM10's 42 take 9,790).
+  reads a vanilla server's 16-bit chunks. Block sprites fill texture arrays up to the GPU's layer
+  limit; Horizon chooses the number of arrays from that adapter's sampled-texture limit, leaving
+  one binding for the lightmap. The total capacity varies by GPU (a 16-texture adapter supports
+  30,720 sprites; identical still textures share a layer). Full ATM10 currently needs 32,629.
 - **Broken mod files load as vanilla loads them.** A blockstate definition that does not bind
   (a multipart value the block does not have), a block model that is missing or does not parse,
   and a recipe that does not parse are logged and skipped: the block gets no model or the

@@ -2762,11 +2762,27 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
                 let merge = tags.entry(file.clone()).or_default();
                 warnings.extend(merge.add(&m.id, file, replace, shared, values));
             } else if !file.starts_with(&declarations) {
-                if file.starts_with("assets/") && m.content.source().is_dir() {
-                    overlay.link_or_copy(file, &m.content.source().join(file))?;
-                    continue;
+                let source = m.content.source();
+                let directory = source.is_dir();
+                let worldgen_file = worldgen_entry(file);
+                let biome_modifier = is_biome_modifier_file(file);
+                let structure = file
+                    .strip_prefix("data/")
+                    .and_then(|r| {
+                        r.split_once("/structure/")
+                            .or_else(|| r.split_once("/structures/"))
+                    })
+                    .filter(|(_, path)| path.ends_with(".nbt"))
+                    .map(|(ns, path)| format!("worldgen/structure/{ns}/{path}"));
+                // Carried directories already contain ordinary resources as
+                // files. Reusing their inodes avoids reading and copying the
+                // much larger data trees into the content root on every build.
+                if directory {
+                    overlay.link_or_copy(file, &source.join(file))?;
+                    if let Some(target) = &structure {
+                        overlay.link_or_copy(target, &source.join(file))?;
+                    }
                 }
-                let bytes = reader.read(file)?;
                 if horizon_mods::content::minecraft_registry_addition(file) {
                     if let Some(previous) = shared_registry_files.get(file) {
                         warnings.push(format!(
@@ -2778,8 +2794,11 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
                     }
                     shared_registry_files.insert(file.clone(), m.id.clone());
                 }
-                overlay.write(file, &bytes)?;
-                if let Some((bundle, id)) = worldgen_entry(file) {
+                if let Some((bundle, id)) = worldgen_file {
+                    let bytes = reader.read(file)?;
+                    if !directory {
+                        overlay.write(file, &bytes)?;
+                    }
                     let text = String::from_utf8(bytes).map_err(|e| format!("{file}: {e}"))?;
                     let text = normalize_worldgen_entry(bundle, &text);
                     if bundle == "worldgen/biomes.json" {
@@ -2793,21 +2812,20 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
                         Some(addition) => additions.entry(bundle).or_default().push(addition),
                         None => entries.push((id, text)),
                     }
-                } else if is_biome_modifier_file(file) {
+                } else if biome_modifier {
+                    let bytes = reader.read(file)?;
+                    if !directory {
+                        overlay.write(file, &bytes)?;
+                    }
                     if let Ok(text) = String::from_utf8(bytes) {
                         biome_modifiers.push(text);
                     }
-                } else if let Some(template) = file
-                    .strip_prefix("data/")
-                    .and_then(|r| {
-                        r.split_once("/structure/")
-                            .or_else(|| r.split_once("/structures/"))
-                    })
-                    .filter(|(_, path)| path.ends_with(".nbt"))
-                {
-                    // The worldgen loader's templates: worldgen/structure/<ns>/<path>.nbt.
-                    let (ns, path) = template;
-                    overlay.write(&format!("worldgen/structure/{ns}/{path}"), &bytes)?;
+                } else if !directory {
+                    let bytes = reader.read(file)?;
+                    overlay.write(file, &bytes)?;
+                    if let Some(target) = structure {
+                        overlay.write(&target, &bytes)?;
+                    }
                 }
             }
         }
