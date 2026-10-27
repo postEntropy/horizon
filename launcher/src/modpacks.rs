@@ -52,7 +52,7 @@ pub struct Imported {
     pub portable: usize,
     /// Unknown records whose jars can be fetched and inspected before carrying over.
     pub inspectable: usize,
-    /// Resource and shader packs fetched into this profile.
+    /// Resource, shader and data packs fetched into this profile.
     pub assets: usize,
 }
 
@@ -139,7 +139,7 @@ pub fn load(work: &Path) -> Result<Imported, String> {
             .count(),
         assets: records
             .iter()
-            .filter(|r| matches!(r.path.split('/').next(), Some("resourcepacks" | "shaderpacks")))
+            .filter(|r| matches!(r.path.split('/').next(), Some("resourcepacks" | "shaderpacks" | "datapacks")))
             .count(),
     })
 }

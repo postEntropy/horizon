@@ -325,7 +325,7 @@ Nether Structures are Partly; Sodium and GeckoLib don't run (Mixins, renderers, 
 Fabric API doesn't run (its id has a dash, which content mods can't use). A check takes 0.2 s to
 3 s, and 24 s for Compressed Blocks (18 MB, 9,360 recipes, writing the carry dominates).
 
-`fetch` gets each mod jar and resource/shader pack archive from the player's instance or a pack-provided source: copied from a folder
+`fetch` gets each mod jar and resource/shader/data pack archive from the player's instance or a pack-provided source: copied from a folder
 they have (matched by SHA-1, or through a CurseForge app instance's `minecraftinstance.json`),
 then downloaded from the link a `.mrpack` gives (on the format's hosts only), or from Modrinth's
 public CDN by SHA-1. For a CurseForge manifest, files unavailable through those sources are
@@ -333,7 +333,8 @@ resolved by their project/file ids using the CurseForge API and downloaded from 
 `HORIZON_CURSEFORGE_API_KEY` in the environment for those requests; the pipeline reads the file's
 SHA-1 from the API and checks the downloaded bytes before keeping them. The key is sent only to
 the official API and CDN hosts. Resource packs are installed in the profile's `resourcepacks/`
-and added to its `options.txt`; shader packs are installed in `shaderpacks/`. `<work>/fetch.json`
+and added to its `options.txt`; shader packs are installed in `shaderpacks/`; data packs go to the
+profile's `datapacks/` and are copied into each newly created world. `<work>/fetch.json`
 says what happened to each file. The ATM10
 measurements below predate this API-key path: the 12 CurseForge-only files then needed the
 player's installed instance.

@@ -323,13 +323,14 @@ pub fn inspectable(r: &inventory::Record) -> bool {
     portable(r) || r.class == "unknown"
 }
 
-/// Resource and shader packs are carried into the profile as files, not as
-/// `.hmod` content. Fetch them alongside content mods so a pack can load them.
+/// Resource, shader and data packs are carried into the profile as files, not
+/// as `.hmod` content. Fetch them alongside content mods so the profile can
+/// install them in the appropriate game location.
 pub fn fetchable(r: &inventory::Record) -> bool {
     inspectable(r)
         || matches!(
             r.path.split('/').next(),
-            Some("resourcepacks" | "shaderpacks")
+            Some("resourcepacks" | "shaderpacks" | "datapacks")
         )
 }
 
@@ -351,7 +352,7 @@ pub fn port(
     // The jars tell classes and tiers better than metadata alone. Unknown
     // candidates are included so their manifests and file census can classify.
     let records = inventory(work, false, log)?;
-    stage_profile_assets(work, &records, log)?;
+    stage_profile_pack_files(work, &records, log)?;
     let only: Vec<String> = records
         .iter()
         .filter(|r| portable(r) && r.jar.is_some())
@@ -365,7 +366,7 @@ pub fn port(
     Ok((fetched, report(work, log)?))
 }
 
-fn stage_profile_assets(
+fn stage_profile_pack_files(
     work: &Path,
     records: &[inventory::Record],
     log: Log,
@@ -373,7 +374,7 @@ fn stage_profile_assets(
     for record in records.iter().filter(|r| {
         matches!(
             r.path.split('/').next(),
-            Some("resourcepacks" | "shaderpacks")
+            Some("resourcepacks" | "shaderpacks" | "datapacks")
         )
     }) {
         let Some(source) = record.jar.as_ref().filter(|path| path.is_file()) else {

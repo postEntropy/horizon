@@ -347,7 +347,7 @@ impl Launcher {
         buttons = buttons.child(play).child(port).child(from).child(remove);
         let mut notes = vec![format!(
             "Port gets jars for {} content mods (tiers 0.2–0.5), inspects {} unclassified \
-             candidates, and fetches {} resource/shader packs. New resource packs are enabled \
+             candidates, and fetches {} resource/shader/data packs. New resource packs are enabled \
              in this profile. Carried mods and pack files stay here, in {}.",
             p.portable,
             p.inspectable,
