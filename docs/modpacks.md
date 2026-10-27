@@ -255,9 +255,10 @@ How the game loads them, without touching vanilla's path:
   carried) is left to none of them, and its files stay outside. The launcher applies the game's
   rule before it starts a pack (`pipeline::loadable`) and lists what it left off.
 - The overlay is built on the first start with a set of mods and kept for later starts. A stamp
-  (`horizon-mod-content.stamp`) hashes the game executable, the base tables and every mod file's
-  size and mtime. Adding, removing or editing a mod, or a new build of Horizon, rebuilds it. For
-  ATM10's 40 data-tier mods the build takes about a minute of the first start on a busy machine.
+  (`horizon-mod-content.stamp`) hashes the content-transform schema, base tables and every mod
+  file's size and mtime. Adding, removing or editing a mod, or changing prepared base data,
+  rebuilds it; renderer and gameplay executable rebuilds reuse it. Bump the transform schema when
+  `mod_content::build` changes its generated output.
 - **Worldgen.** Mods' structures, structure sets, template pools, processor lists, configured and
   placed features, configured carvers, noise parameters, density functions, noise settings, world
   presets and biomes join the `worldgen/*.json` bundles. Biome, noise, density and carver entries
@@ -1010,14 +1011,18 @@ ATM10 mods (153,511 states), the peak of each step falls by about 210 MB:
 | worldgen, uncached | 3,000 | 2,788 |
 
 The fluid tables no longer decode the 211 MB `gameplay-facts.json` a second time (#754). The
-content root is kept between starts (#756). What is left at startup:
+content root is kept between starts (#756), and its stamp now tracks content inputs and the
+transform schema rather than the game executable. What is left at startup:
 
 - `facts.json` went through a JSON tree, then an NBT tree, in both the registry and the assets
   step. It now streams (#825): at ATM10's size (214,338 states) each step's peak fell from
   816 MB to 153 MB (registry) and 235 MB (assets), and the RSS after the assets step from
   1,344 MB to 442 MB;
 - on a first start, the content-root build and `Behaviours`' decode of `gameplay-facts.json`
-  (cached afterwards in the behaviour snapshot).
+  (cached afterwards in the behaviour snapshot). A 318-mod ATM10 run on a Ryzen 5 4600G and GTX
+  1660 Ti measured 189 s for the initial content root and 72 s from cached root to loaded
+  resources; the first frame followed about 3 s later. The dynamic sprite arrays loaded all 32,629
+  block textures. These figures are a local smoke run, not a controlled benchmark.
 
 **Against NeoForge, same 40 mods (2026-10-17).** The 40 data-tier mods carried from ATM10 (the
 42 without Regions Unexplored and MO Structures, whose libraries are only on CurseForge),
@@ -1092,8 +1097,7 @@ ATM10 (the launcher's `--dev-mod` carries), seeds 1234 and 2.
   Macaw's Doors' cherry waffle door, Regions Unexplored's blue crystalite): those blocks draw
   the missing model.
 - **Load time** (Mac mini M4 Pro, offscreen, render distance 12). The first start builds the
-  content root: about 25 to 35 s, and again after every game update, since the root's stamp
-  includes the executable. Later starts: 6.6 to 8.2 s to "resources loaded", against 1.3 to
+  content root: about 25 to 35 s. Later starts: 6.6 to 8.2 s to "resources loaded", against 1.3 to
   2.5 s for vanilla.
 - **Play.** No crash at either seed: spawn, Mo' Structures' pirate ship, castle in the sky,
   barn house and villager tower, CTOV villages, Formations' fountains (one with its chamber),

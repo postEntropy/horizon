@@ -3195,9 +3195,10 @@ const WARNINGS: &str = "horizon-mod-content-warnings.txt";
 /// In a root built by [`resource_root`]: what it was built from.
 const STAMP: &str = "horizon-mod-content.stamp";
 
-/// What a content root is built from: this build of the game, the base's
-/// manifest and the tables [`build`] rewrites, and every file of every mod
-/// in order. Files count by size and modification time, as build tools do.
+/// What a content root is built from: the content transform schema, the
+/// base's manifest and tables [`build`] rewrites, and every file of every mod
+/// in order. A renderer or gameplay executable rebuild does not change the
+/// generated content. Bump this schema when [`build`] changes its output.
 fn stamp(base: &Path, mods: &[ContentMod]) -> Result<String> {
     use sha2::{Digest, Sha256};
     let meta = |path: &Path| -> Result<String> {
@@ -3213,9 +3214,7 @@ fn stamp(base: &Path, mods: &[ContentMod]) -> Result<String> {
             modified.as_nanos()
         ))
     };
-    let mut parts = vec!["horizon mod content 2".to_owned()];
-    let executable = std::env::current_exe()?;
-    parts.push(meta(&executable)?);
+    let mut parts = vec!["horizon mod content 3".to_owned()];
     let base = std::path::absolute(base)?;
     parts.push(
         String::from_utf8_lossy(&fs::read(base.join("horizon-resources.json"))?).into_owned(),
