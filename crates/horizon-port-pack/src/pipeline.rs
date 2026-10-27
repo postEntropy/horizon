@@ -164,7 +164,13 @@ pub fn carry(
     // game. Its files stay outside both.
     let claims = records.iter().filter(|r| chosen(r)).filter_map(|r| {
         let (jar, info) = (r.jar.as_ref()?, r.info.as_ref()?);
-        let owned = carry::namespaces_claimed(jar, &info.mod_id, &|m| in_pack.contains(m)).ok()?;
+        let pack_mod = |m: &str| in_pack.contains(m);
+        let owned = if r.path.split('/').next() == Some("datapacks") {
+            carry::datapack_namespaces_claimed(jar, &info.mod_id, &pack_mod)
+        } else {
+            carry::namespaces_claimed(jar, &info.mod_id, &pack_mod)
+        }
+        .ok()?;
         Some((r.key.as_str(), owned))
     });
     let shared = shared_namespaces(claims, log);
@@ -198,15 +204,14 @@ pub fn carry(
                 .chain(f.items.keys())
                 .any(|k| k.starts_with(&prefix))
         };
-        match carry::carry(
-            jar,
-            info,
-            &work.join("mods").join(&r.key),
-            facts.as_ref().filter(seen),
-            &allowed,
-            &pack,
-            &conventions,
-        ) {
+        let out = work.join("mods").join(&r.key);
+        let facts = facts.as_ref().filter(seen);
+        let result = if r.path.split('/').next() == Some("datapacks") {
+            carry::carry_datapack(jar, info, &out, facts, &allowed, &pack, &conventions)
+        } else {
+            carry::carry(jar, info, &out, facts, &allowed, &pack, &conventions)
+        };
+        match result {
             Ok(report) => {
                 done += 1;
                 log(format!(

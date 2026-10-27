@@ -597,12 +597,11 @@ fn extra_namespaces(
     zip: &mut zip::ZipArchive<fs::File>,
     id: &str,
     pack_mod: &dyn Fn(&str) -> bool,
+    data_pack: bool,
 ) -> Vec<String> {
-    // Inventory assigns data packs a synthetic `datapack_<hash>` id. Unlike
-    // a mod jar, every non-reserved namespace physically present in that
-    // archive is part of the data pack, even when its files contain no
+    // Unlike a mod jar, every non-reserved namespace physically present in
+    // a data pack archive is part of the pack, even when its files contain no
     // textual references that could make the heuristic below discover it.
-    let data_pack = id.starts_with("datapack_");
     let mut candidates = BTreeSet::new();
     for name in zip.file_names() {
         if let Some((_, ns, _)) = split(name)
@@ -670,9 +669,29 @@ pub fn namespaces_claimed(
     id: &str,
     pack_mod: &dyn Fn(&str) -> bool,
 ) -> Result<Vec<String>, String> {
+    namespaces_claimed_kind(jar, id, pack_mod, false)
+}
+
+/// The namespaces a data pack contains, including namespaces with no
+/// textual references. Unlike mod jars, all its non-reserved namespaces are
+/// pack content and need to be represented in the carry manifest.
+pub fn datapack_namespaces_claimed(
+    jar: &Path,
+    id: &str,
+    pack_mod: &dyn Fn(&str) -> bool,
+) -> Result<Vec<String>, String> {
+    namespaces_claimed_kind(jar, id, pack_mod, true)
+}
+
+fn namespaces_claimed_kind(
+    jar: &Path,
+    id: &str,
+    pack_mod: &dyn Fn(&str) -> bool,
+    data_pack: bool,
+) -> Result<Vec<String>, String> {
     let file = fs::File::open(jar).map_err(|e| format!("{}: {e}", jar.display()))?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("{}: {e}", jar.display()))?;
-    Ok(extra_namespaces(&mut zip, id, pack_mod))
+    Ok(extra_namespaces(&mut zip, id, pack_mod, data_pack))
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
@@ -779,6 +798,33 @@ pub fn carry(
     pack: &Pack,
     conventions: &BTreeMap<String, Value>,
 ) -> Result<Report, String> {
+    carry_kind(jar, info, out, facts, allowed, pack, conventions, false)
+}
+
+/// Carries a standalone data pack. Every non-reserved namespace in its
+/// archive belongs to the pack, whether or not its JSON names that namespace.
+pub fn carry_datapack(
+    jar: &Path,
+    info: &JarInfo,
+    out: &Path,
+    facts: Option<&Facts>,
+    allowed: &dyn Fn(&str) -> bool,
+    pack: &Pack,
+    conventions: &BTreeMap<String, Value>,
+) -> Result<Report, String> {
+    carry_kind(jar, info, out, facts, allowed, pack, conventions, true)
+}
+
+fn carry_kind(
+    jar: &Path,
+    info: &JarInfo,
+    out: &Path,
+    facts: Option<&Facts>,
+    allowed: &dyn Fn(&str) -> bool,
+    pack: &Pack,
+    conventions: &BTreeMap<String, Value>,
+    data_pack: bool,
+) -> Result<Report, String> {
     let loaded = pack.loaded;
     let id = &info.mod_id;
     if id.is_empty()
@@ -811,7 +857,7 @@ pub fn carry(
     let piece_counts = crate::worldgen::piece_counts(&mut zip);
     let mut processor_data = crate::processors::ProcessorData::read(&mut zip);
     processor_data.mark_loaded(loaded);
-    report.namespaces = extra_namespaces(&mut zip, id, pack.mods);
+    report.namespaces = extra_namespaces(&mut zip, id, pack.mods, data_pack);
     let owned: Vec<&str> = std::iter::once(id.as_str())
         .chain(report.namespaces.iter().map(String::as_str))
         .collect();
