@@ -101,7 +101,7 @@ const TEMPLATES: &[(&str, &str)] = &[
     ("lit", "minecraft:redstone_lamp"),
     ("hanging,waterlogged", "minecraft:lantern"),
     ("hanging", "minecraft:lantern"),
-    ("waterlogged", "minecraft:chain"),
+    ("waterlogged", "minecraft:iron_chain"),
     ("age", "minecraft:wheat"),
     ("distance,persistent,waterlogged", "minecraft:oak_leaves"),
     ("stage", "minecraft:oak_sapling"),
@@ -710,6 +710,109 @@ pub fn upgrade_recipe(recipe: &mut Value) -> bool {
     }
     *recipe = out;
     true
+}
+
+/// Renames the 1.21 noise parameter fields to 26.3's worldgen noise schema.
+/// The octave coefficients keep their order; their count is the octave count.
+fn upgrade_noise_parameters(noise: &mut Value) -> bool {
+    let Some(object) = noise.as_object_mut() else {
+        return false;
+    };
+    let mut changed = false;
+    if let Some(first_octave) = object.remove("firstOctave") {
+        object.entry("base_octave").or_insert(first_octave);
+        changed = true;
+    }
+    if let Some(amplitudes) = object.remove("amplitudes") {
+        if let Some(values) = amplitudes.as_array() {
+            object
+                .entry("octave_count")
+                .or_insert_with(|| json!(values.len().max(1)));
+        }
+        object.entry("amplitude_modifiers").or_insert(amplitudes);
+        changed = true;
+    }
+    changed
+}
+
+/// Rewrites the 1.21.1 density-function field names and kinds accepted by
+/// the 26.3 decoder. Child functions are converted before their parent.
+fn upgrade_density_function(value: &mut Value) -> bool {
+    let mut changed = match value {
+        Value::Object(object) => object.values_mut().fold(false, |changed, child| {
+            upgrade_density_function(child) | changed
+        }),
+        Value::Array(array) => array.iter_mut().fold(false, |changed, child| {
+            upgrade_density_function(child) | changed
+        }),
+        _ => false,
+    };
+    let Some(object) = value.as_object_mut() else {
+        return changed;
+    };
+    let kind = object
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .strip_prefix("minecraft:")
+        .unwrap_or_else(|| {
+            object
+                .get("type")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+        })
+        .to_owned();
+    let rename = |object: &mut serde_json::Map<String, Value>, from: &str, to: &str| {
+        if let Some(value) = object.remove(from) {
+            object.entry(to.to_owned()).or_insert(value);
+            true
+        } else {
+            false
+        }
+    };
+    if matches!(kind.as_str(), "add" | "sub" | "mul" | "div" | "min" | "max") {
+        changed |= rename(object, "argument1", "left");
+        changed |= rename(object, "argument2", "right");
+    }
+    if matches!(
+        kind.as_str(),
+        "abs"
+            | "square"
+            | "cube"
+            | "sqrt"
+            | "half_negative"
+            | "quarter_negative"
+            | "reciprocal"
+            | "squeeze"
+            | "cache_2d"
+            | "flat_cache"
+            | "cache_once"
+            | "interpolated"
+            | "blend_density"
+    ) {
+        changed |= rename(object, "argument", "input");
+    }
+    if matches!(kind.as_str(), "cache_2d" | "flat_cache" | "cache_once") {
+        object.insert("type".into(), json!("minecraft:cache"));
+        changed = true;
+    } else if kind == "shifted_noise" {
+        object.insert("type".into(), json!("minecraft:noise"));
+        changed = true;
+    } else if kind == "interpolated" {
+        object.entry("cell_size_xz").or_insert(json!(4));
+        object.entry("cell_size_y").or_insert(json!(8));
+        changed = true;
+    } else if kind == "end_islands" {
+        object.insert("type".into(), json!("minecraft:end_outer_islands"));
+        changed = true;
+    } else if kind == "y_clamped_gradient" {
+        object.insert("type".into(), json!("minecraft:gradient"));
+        object.insert("axis".into(), json!("y"));
+        rename(object, "from_y", "from_coordinate");
+        rename(object, "to_y", "to_coordinate");
+        changed = true;
+    }
+    changed
 }
 
 /// Block and item ids vanilla renamed after 1.21.1, as its datafixers
@@ -1354,6 +1457,11 @@ fn carry_kind(
                     );
                     let mut changed =
                         crate::worldgen::upgrade(kind, &mut v, types, &set_tags) || carried;
+                    if kind == "noise" {
+                        changed |= upgrade_noise_parameters(&mut v);
+                    } else if kind == "density_function" {
+                        changed |= upgrade_density_function(&mut v);
+                    }
                     if kind == "structure" {
                         let path = rel.trim_start_matches("worldgen/structure/");
                         let structure = format!("{ns}:{}", path.trim_end_matches(".json"));

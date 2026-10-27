@@ -1353,6 +1353,41 @@ fn is_biome_modifier_file(file: &str) -> bool {
         && rest.ends_with(".json")
 }
 
+/// The density decoder only implements vanilla's density types. A mod's
+/// custom type cannot be represented as a registry entry and must not make
+/// every other dimension's content root fail to load.
+fn custom_density_type(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::Object(object) => object
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .filter(|kind| kind.contains(':') && !kind.starts_with("minecraft:"))
+            .map(str::to_owned)
+            .or_else(|| object.values().find_map(custom_density_type)),
+        serde_json::Value::Array(values) => values.iter().find_map(custom_density_type),
+        _ => None,
+    }
+}
+
+fn references_density(
+    value: &serde_json::Value,
+    ids: &std::collections::BTreeSet<String>,
+    field: Option<&str>,
+) -> bool {
+    match value {
+        serde_json::Value::String(id) => {
+            field != Some("noise") && field != Some("type") && ids.contains(id)
+        }
+        serde_json::Value::Object(object) => object
+            .iter()
+            .any(|(key, value)| references_density(value, ids, Some(key))),
+        serde_json::Value::Array(values) => values
+            .iter()
+            .any(|value| references_density(value, ids, field)),
+        _ => false,
+    }
+}
+
 fn flatten_config_recursive(val: &mut serde_json::Value, changed: &mut bool) {
     use serde_json::Value;
     match val {
@@ -2636,18 +2671,93 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
     }
     // Structures and the pools, sets, processors and features they use, then
     // what mods add to sets and pools, in mod and file order.
+    let skipped_carvers: BTreeMap<String, String> = worldgen
+        .get("worldgen/carvers.json")
+        .into_iter()
+        .flatten()
+        .filter_map(|(id, text)| {
+            let error = horizon_world::worldgen::carver::WorldCarver::from_json(text).err()?;
+            (!id.starts_with("minecraft:")).then(|| (id.clone(), error.to_string()))
+        })
+        .collect();
+    let mut skipped_densities: BTreeMap<String, String> = worldgen
+        .get("worldgen/densities.json")
+        .into_iter()
+        .flatten()
+        .filter_map(|(id, text)| {
+            let value = serde_json::from_str::<serde_json::Value>(text).ok()?;
+            custom_density_type(&value).map(|kind| (id.clone(), kind))
+        })
+        .collect();
+    loop {
+        let missing: std::collections::BTreeSet<String> =
+            skipped_densities.keys().cloned().collect();
+        let dependent: Vec<String> = worldgen
+            .get("worldgen/densities.json")
+            .into_iter()
+            .flatten()
+            .filter(|(id, _)| !skipped_densities.contains_key(id))
+            .filter_map(|(id, text)| {
+                let value = serde_json::from_str::<serde_json::Value>(text).ok()?;
+                references_density(&value, &missing, None).then(|| id.clone())
+            })
+            .collect();
+        if dependent.is_empty() {
+            break;
+        }
+        for id in dependent {
+            skipped_densities.insert(id, "depends on an unsupported density function".into());
+        }
+    }
+    for (id, error) in &skipped_carvers {
+        warnings.push(format!(
+            "worldgen carver {id} was skipped because Horizon cannot load it: {error}"
+        ));
+    }
+    for (id, reason) in &skipped_densities {
+        warnings.push(format!("worldgen density {id} was skipped: {reason}"));
+    }
     for (bundle, entries) in &worldgen {
         if !base.join(bundle).exists() {
             continue;
         }
         let mut doc = read_json(&base.join(bundle))?;
         for (id, text) in entries {
+            if *bundle == "worldgen/carvers.json" && skipped_carvers.contains_key(id) {
+                continue;
+            }
+            if *bundle == "worldgen/densities.json" && skipped_densities.contains_key(id) {
+                continue;
+            }
             doc.set(id, J::Str(text.clone()));
         }
         for addition in additions.get(bundle).into_iter().flatten() {
             addition
                 .apply(&mut doc)
                 .map_err(|e| format!("{bundle}: {e}"))?;
+        }
+        if *bundle == "worldgen/biomes.json" && !skipped_carvers.is_empty() {
+            if let J::Obj(biomes) = &mut doc {
+                for (_, raw) in biomes {
+                    let J::Str(text) = raw else { continue };
+                    let Ok(mut biome) = serde_json::from_str::<serde_json::Value>(text) else {
+                        continue;
+                    };
+                    let Some(carvers) = biome.get_mut("carvers").and_then(|v| v.as_array_mut())
+                    else {
+                        continue;
+                    };
+                    let before = carvers.len();
+                    carvers.retain(|entry| {
+                        !entry
+                            .as_str()
+                            .is_some_and(|id| skipped_carvers.contains_key(id))
+                    });
+                    if carvers.len() != before {
+                        *text = serde_json::to_string(&biome)?;
+                    }
+                }
+            }
         }
         overlay.write(bundle, &serde_json::to_vec(&doc)?)?;
     }
