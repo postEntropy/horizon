@@ -404,7 +404,7 @@ capabilities = ["registries"]
     let files: &[(&str, &[u8])] = &[("data/ruby/horizon/block/ruby_block.json", block)];
     std::fs::write(&ok, Package::write_files(manifest, None, files).unwrap()).unwrap();
     let bad = dir.join("bad.hmod");
-    let files: &[(&str, &[u8])] = &[("data/minecraft/recipe/stone.json", b"{}")];
+    let files: &[(&str, &[u8])] = &[("data/other/recipe/stone.json", b"{}")];
     let bad_manifest = manifest.replace("\"ruby\"", "\"bad\"");
     std::fs::write(
         &bad,

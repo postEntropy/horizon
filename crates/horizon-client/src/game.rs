@@ -7539,6 +7539,18 @@ impl Game<'_> {
         let target_kind = self.mobs[index].kind.id.clone();
         let target_kind = format!("minecraft:{}", target_kind.trim_start_matches("minecraft:"));
         let (amount, scale, crit) = self.melee_damage(&target_kind);
+        let target_position = [
+            self.mobs[index].position.x.floor() as i32,
+            self.mobs[index].position.y.floor() as i32,
+            self.mobs[index].position.z.floor() as i32,
+        ];
+        let context = self
+            .held()
+            .map(|stack| stack.item.to_string())
+            .unwrap_or_else(|| "minecraft:player".to_owned());
+        let damage = self.mod_entity_damage(&target_kind, target_position, amount, &context);
+        let damage_cancelled = damage.is_none();
+        let amount = damage.unwrap_or(amount);
         let sweep = self.sweep_attack_position(scale, crit);
         let (knockback, knockback_attack) = self.extra_knockback(&target_kind, scale);
         self.attack_ticks = 0;
@@ -7560,7 +7572,7 @@ impl Game<'_> {
             Some(f) => self.attack_source(f),
             None => horizon_client::mobs::Damage::of(horizon_client::mobs::DamageKind::Generic),
         };
-        let landed = self.hurt_by_player(index, amount, source);
+        let landed = !damage_cancelled && self.hurt_by_player(index, amount, source);
         if let Some(p) = self.player.as_mut() {
             if p.attack_log.len() >= 64 {
                 p.attack_log.remove(0);

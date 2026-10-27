@@ -62,7 +62,8 @@ use {
     },
     horizon_mods::{
         BlockAction, BlockEntityView, BlockEvent, BlockHit, Clock, CookingKind, CookingRecipe,
-        ItemFacts, Mods, Output, Player, ServerAction, Snapshot, Stack, StackView, Status,
+        EventOutcome, ItemFacts, Mods, Output, Player, ServerAction, Snapshot, Stack, StackView,
+        Status, VanillaHookEvent, VanillaHookKind,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -383,6 +384,15 @@ impl Game<'_> {
         false
     }
     pub(super) fn mods_chat(&mut self, _line: &str) {}
+    pub(super) fn mod_entity_damage(
+        &mut self,
+        _subject: &str,
+        _position: [i32; 3],
+        amount: f32,
+        _context: &str,
+    ) -> Option<f32> {
+        Some(amount)
+    }
     pub(super) fn draw_mod_panels(&self, _batch: &mut HudBatch, _corners: &mut Corners) {}
 }
 
@@ -710,6 +720,43 @@ impl Game<'_> {
     pub(super) fn mods_chat(&mut self, line: &str) {
         self.mods.mods.chat(line);
         self.show_mod_output();
+    }
+    /// Runs the API 0.5 entity-damage hook for a player melee hit. A cancelled
+    /// hit never reaches the normal damage pipeline; otherwise mods' bounded
+    /// multipliers are applied before vanilla armor and damage handling.
+    pub(super) fn mod_entity_damage(
+        &mut self,
+        subject: &str,
+        position: [i32; 3],
+        amount: f32,
+        context: &str,
+    ) -> Option<f32> {
+        #[cfg(feature = "mods")]
+        {
+            if !self.mods.mods.is_running() {
+                return Some(amount);
+            }
+            let (outcome, multiplier, _, _, _) = self.mods.mods.vanilla_hook(&VanillaHookEvent {
+                kind: VanillaHookKind::EntityDamage,
+                subject: subject.to_owned(),
+                dimension: self.dim.id().to_owned(),
+                x: position[0],
+                y: position[1],
+                z: position[2],
+                value: amount,
+                context: context.to_owned(),
+            });
+            if outcome == EventOutcome::Cancel {
+                None
+            } else {
+                Some(amount * multiplier)
+            }
+        }
+        #[cfg(not(feature = "mods"))]
+        {
+            let _ = (subject, position, context);
+            Some(amount)
+        }
     }
     /// A right-click on a mod-owned block. `true` means the mod handled it.
     pub(super) fn mod_use_block(

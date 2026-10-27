@@ -10,7 +10,7 @@ test, does not by itself mean a pack feature works in a playable world.
 |---|---|---|---|---|
 | 0.3 logic | Present | Present | Present for the client and local game hooks inspected | Implemented in parts; full multiplayer and per-capability gameplay coverage is not established |
 | 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist | Usable foundation; feature behavior and multiplayer/persistence coverage are incomplete |
-| 0.5 deep | Present | Present, including runtime tests | No game-side dispatch found for custom entities, models, dimensions or named vanilla hooks | Runtime/API preview; not a complete player-facing API |
+| 0.5 deep | Present | Present, including runtime tests | Player melee damage now dispatches `entity-damage`; custom entity lifecycle, models and other named hooks remain unwired | First live bridge; not a complete player-facing API |
 
 ## Scope for the current ATM10 core milestone
 
@@ -73,11 +73,15 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
 - WIT, SDK and runtime expose custom entities, model animation/draw data,
   dimension registration/teleport, and named vanilla hooks.
 - A runtime sandbox test exercises these host-side operations.
-- A search of `crates/horizon-client/src/game/` found no calls dispatching
-  `tick_entities`, custom entity lifecycle/interactions, registered dimensions,
-  model animation, or `vanilla_hook` into live game behavior. Runtime support
-  therefore does not currently make these systems player-facing.
-- Status: **contract and runtime preview; game integration missing**.
+- `Game::attack_mob` dispatches `entity-damage` before player melee damage is
+  applied. A subscribed mod can multiply the hit or cancel it. This first
+  bridge covers the local player's melee hit path; projectile, mob, environmental
+  and other incoming damage paths do not dispatch it yet.
+- No game-side dispatch was found for `tick_entities`, custom entity
+  lifecycle/interactions, registered dimensions or model animation. The other
+  named hooks (`loot-drop`, `xp-gain`, `crop-grow`, `explosion-detonate` and
+  `enchantment-level`) are also not connected to gameplay.
+- Status: **partial live integration; API coverage remains incomplete**.
 
 ## Verification run
 
