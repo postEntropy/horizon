@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         OnceLock,
         atomic::{AtomicU64, Ordering},
@@ -20,8 +20,8 @@ use std::{
 };
 
 const MAGIC: &[u8; 8] = b"HZBEHAV\0";
-const VERSION: u32 = 2;
-const FILE_NAME: &str = "behaviours-v2.bin";
+const VERSION: u32 = 3;
+const FILE_NAME: &str = "behaviours-v3.bin";
 const MAX_FILE_BYTES: usize = 128 * 1024 * 1024;
 const MAX_DECODED_BYTES: usize = 256 * 1024 * 1024;
 static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
@@ -137,7 +137,7 @@ struct Item {
 
 fn fingerprint(registry: &BlockRegistry, root: &Path) -> io::Result<[u8; 32]> {
     let mut hasher = Sha256::new();
-    hasher.update(b"horizon resolved behaviours 2");
+    hasher.update(b"horizon resolved behaviours 3");
     // The build that resolved the tables: the version constant alone misses
     // loader changes that keep the snapshot layout.
     let exe = std::env::current_exe()?;
@@ -156,37 +156,16 @@ fn fingerprint(registry: &BlockRegistry, root: &Path) -> io::Result<[u8; 32]> {
         "block-tags.json",
         "cached-collision.nbt",
     ] {
-        hash_file(&mut hasher, root, &root.join(relative))?;
+        hash_file_identity(&mut hasher, root, &root.join(relative))?;
     }
     let mut fluids: Vec<PathBuf> = fs::read_dir(root.join("data/minecraft/tags/fluid"))?
         .map(|entry| entry.map(|entry| entry.path()))
         .collect::<io::Result<_>>()?;
     fluids.sort();
     for path in fluids {
-        hash_file(&mut hasher, root, &path)?;
+        hash_file_identity(&mut hasher, root, &path)?;
     }
-    // The registry argument may be modified independently of facts.json.
-    hasher.update((registry.len() as u64).to_le_bytes());
-    let mut seen = std::collections::HashSet::new();
-    for index in 0..registry.len() {
-        let state = registry
-            .state(BlockStateId(index as u32))
-            .ok_or_else(|| invalid("missing registry state"))?;
-        hash_str(&mut hasher, &state.name);
-        let mut props: Vec<_> = state.properties.iter().collect();
-        props.sort_by_key(|(key, _)| *key);
-        hasher.update((props.len() as u32).to_le_bytes());
-        for (key, value) in props {
-            hash_str(&mut hasher, key);
-            hash_str(&mut hasher, value);
-        }
-        if seen.insert(state.name.as_str()) {
-            let default = registry
-                .default_state(&state.name)
-                .ok_or_else(|| invalid("missing default state"))?;
-            hasher.update(default.0.to_le_bytes());
-        }
-    }
+    hasher.update(registry.fingerprint());
     Ok(hasher.finalize().into())
 }
 
@@ -195,14 +174,33 @@ fn hash_str(hasher: &mut Sha256, text: &str) {
     hasher.update(text.as_bytes());
 }
 
-fn hash_file(hasher: &mut Sha256, root: &Path, path: &Path) -> io::Result<()> {
+fn hash_file_identity(hasher: &mut Sha256, root: &Path, path: &Path) -> io::Result<()> {
     let relative = path
         .strip_prefix(root)
         .map_err(|e| invalid(e.to_string()))?;
     hash_str(hasher, &relative.to_string_lossy());
-    let bytes = fs::read(path)?;
-    hasher.update((bytes.len() as u64).to_le_bytes());
-    hasher.update(bytes);
+    let metadata = fs::metadata(path)?;
+    hasher.update(metadata.len().to_le_bytes());
+    let modified = metadata
+        .modified()?
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| invalid(e.to_string()))?;
+    hasher.update(modified.as_secs().to_le_bytes());
+    hasher.update(modified.subsec_nanos().to_le_bytes());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        hasher.update(metadata.dev().to_le_bytes());
+        hasher.update(metadata.ino().to_le_bytes());
+        hasher.update(metadata.ctime().to_le_bytes());
+        hasher.update(metadata.ctime_nsec().to_le_bytes());
+    }
+    #[cfg(not(unix))]
+    {
+        // Preserve content-exact invalidation on platforms without a
+        // high-resolution change timestamp and stable file identity.
+        hasher.update(fs::read(path)?);
+    }
     Ok(())
 }
 

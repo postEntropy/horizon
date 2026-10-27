@@ -5,6 +5,7 @@ mod json;
 use crate::{DATA_VERSION, chunk::BlockState, compression::invalid, nbt::Tag};
 pub use json::BlockStateJsonCodec;
 pub(crate) use json::java_integer;
+use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     hash::{DefaultHasher, Hash, Hasher},
@@ -16,6 +17,7 @@ pub struct BlockStateId(pub u32);
 
 pub struct BlockRegistry {
     states: Vec<BlockState>,
+    fingerprint: [u8; 32],
     /// Ids by a hash of their state, checked against `states`: 12 bytes per
     /// state instead of a second copy of every name and property map (about
     /// 125 MB for a registry of 190,000 states).
@@ -88,6 +90,7 @@ impl BlockRegistry {
         }
         let mut result = Self {
             states: Vec::with_capacity(states.len()),
+            fingerprint: [0; 32],
             ids: HashMap::with_capacity(states.len()),
             collided: BTreeMap::new(),
             defaults: BTreeMap::new(),
@@ -128,10 +131,32 @@ impl BlockRegistry {
         {
             return Err(invalid("registry is missing block defaults"));
         }
+        // Keep the cache identity while the states are already in hand. The
+        // behaviour cache uses this instead of walking a large registry again
+        // on every startup.
+        let mut hasher = Sha256::new();
+        hasher.update((result.states.len() as u64).to_le_bytes());
+        for state in &result.states {
+            hash_fingerprint_str(&mut hasher, &state.name);
+            hasher.update((state.properties.len() as u32).to_le_bytes());
+            for (key, value) in &state.properties {
+                hash_fingerprint_str(&mut hasher, key);
+                hash_fingerprint_str(&mut hasher, value);
+            }
+        }
+        hasher.update((result.defaults.len() as u64).to_le_bytes());
+        for (name, id) in &result.defaults {
+            hash_fingerprint_str(&mut hasher, name);
+            hasher.update(id.0.to_le_bytes());
+        }
+        result.fingerprint = hasher.finalize().into();
         Ok(result)
     }
     pub fn len(&self) -> usize {
         self.states.len()
+    }
+    pub(crate) fn fingerprint(&self) -> &[u8; 32] {
+        &self.fingerprint
     }
     pub fn is_empty(&self) -> bool {
         self.states.is_empty()
@@ -165,6 +190,11 @@ impl BlockRegistry {
         self.id(&state)
             .ok_or_else(|| invalid("invalid block property value"))
     }
+}
+
+fn hash_fingerprint_str(hasher: &mut Sha256, text: &str) {
+    hasher.update((text.len() as u64).to_le_bytes());
+    hasher.update(text.as_bytes());
 }
 
 /// A per-state table (`occlusion.nbt`, `cached-collision.nbt`, ...) whose
