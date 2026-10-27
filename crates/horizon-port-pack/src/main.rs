@@ -1,16 +1,16 @@
 //! `horizon-port-pack`: port a Java modpack to Horizon (`docs/modpacks.md`).
 //!
-//! - `import <pack> <work>`: a `.mrpack`, CurseForge zip or instance folder
+//! - `import <pack> <work>`: a `.mrpack`, CurseForge zip, instance folder or Packwiz project directory
 //!   to `<work>/pack.json`.
 //! - `inventory <work> [--offline]`: Modrinth metadata (cached in
 //!   `<work>/modrinth.json`), the jars in the instance or `<work>/jars/`,
 //!   classes, tiers and dependency layers in `<work>/inventory.json` and
 //!   `inventory.csv`.
 //! - `fetch <work> [--from <folder>] [<mod id>...]`: the jars of the
-//!   portable mods (content, data tier; or the ones named) into
+//!   portable mods and unclassified candidates (or the ones named) into
 //!   `<work>/jars/`: copied from the player's folder, or downloaded from the
-//!   pack's own links or Modrinth's CDN, hash checked. What only CurseForge
-//!   has needs a key and is listed in `<work>/fetch.json`.
+//!   pack's own links or Modrinth's CDN, hash checked. CurseForge-only files
+//!   use the API when `HORIZON_CURSEFORGE_API_KEY` is set.
 //! - `carry <work> [--resources <prepared>] [<mod id>...]`: the content
 //!   mods' data and assets into `<work>/mods/<id>/carry/`, a folder mod for
 //!   local use. With the NeoForge oracle's `<work>/oracle/facts.json`
@@ -54,7 +54,7 @@ fn main() -> ExitCode {
                 let only = rest();
                 let want = |r: &Record| {
                     if only.is_empty() {
-                        pipeline::portable(r)
+                        pipeline::inspectable(r)
                     } else {
                         only.contains(&r.key)
                     }

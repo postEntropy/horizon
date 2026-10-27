@@ -281,8 +281,11 @@ pub fn build(records: &[Record], work: &Path) -> Vec<Row> {
         .iter()
         .map(|r| {
             let (status, reason) = if r.class == "unknown" {
-                let why =
-                    "unclassified: its jar (mods.toml, file census) or a reviewed row decides";
+                let why = if r.jar.is_some() {
+                    "unclassified after reading its jar metadata and file census; needs review"
+                } else {
+                    "unclassified: the port step will inspect its jar metadata and file census"
+                };
                 (Status::NotYet, why.to_owned())
             } else if r.tier == "none" || matches!(r.class.as_str(), "library" | "performance") {
                 (Status::NotNeeded, not_needed(&r.class).to_owned())

@@ -1,5 +1,5 @@
 //! Step 1, import: a Modrinth `.mrpack`, a CurseForge zip, an instance
-//! folder (Prism / MultiMC, or a plain `mods/` folder), or a Crash Assistant
+//! folder (Prism / MultiMC, Packwiz, or a plain `mods/` folder), or a Crash Assistant
 //! `modlist.json` (the list packs such as ATM10 publish) to `pack.json`.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -13,7 +13,7 @@ use std::{
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Pack {
     pub name: String,
-    /// `mrpack`, `curseforge` or `instance`.
+    /// `mrpack`, `curseforge`, `packwiz`, `modlist` or `instance`.
     pub format: String,
     pub minecraft: String,
     /// `neoforge`, `forge`, `fabric` or `quilt`.
@@ -42,6 +42,12 @@ pub struct PackFile {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha1: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash_format: Option<String>,
+    #[serde(default)]
+    pub allow_external_download: bool,
     /// `required`, `optional` or `unsupported`; empty when not stated.
     pub client: String,
     pub server: String,
@@ -81,6 +87,9 @@ const LOADERS: [(&str, &str); 4] = [
 
 pub fn import(path: &Path) -> Result<Pack, String> {
     if path.is_dir() {
+        if path.join("pack.toml").is_file() {
+            return packwiz(path);
+        }
         return instance(path);
     }
     if path.extension().is_some_and(|e| e == "json") {
@@ -110,6 +119,239 @@ pub fn import(path: &Path) -> Result<Pack, String> {
         "{}: neither modrinth.index.json nor manifest.json",
         path.display()
     ))
+}
+
+/// Imports a Packwiz project directory. Index paths and `.pw.toml` filenames
+/// are kept relative to the pack root, and external files retain their
+/// declared URL and hash for the ordinary fetch/inventory pipeline.
+fn packwiz(root: &Path) -> Result<Pack, String> {
+    let root = root
+        .canonicalize()
+        .map_err(|e| format!("{}: {e}", root.display()))?;
+    let pack_path = safe_pack_path(&root, "pack.toml")?;
+    let pack_text = fs::read_to_string(&pack_path).map_err(|e| format!("pack.toml: {e}"))?;
+    let manifest: toml::Value =
+        toml::from_str(&pack_text).map_err(|e| format!("pack.toml: {e}"))?;
+    let index_rel = manifest["index"]["file"].as_str().unwrap_or("index.toml");
+    let index_path = safe_pack_path(&root, index_rel)?;
+    let index_bytes =
+        fs::read(&index_path).map_err(|e| format!("{}: {e}", index_path.display()))?;
+    let index_text = std::str::from_utf8(&index_bytes).map_err(|e| format!("index.toml: {e}"))?;
+    let index: toml::Value = toml::from_str(index_text).map_err(|e| format!("index.toml: {e}"))?;
+    let index_format = manifest["index"]["hash-format"]
+        .as_str()
+        .or_else(|| index["hash-format"].as_str())
+        .unwrap_or("sha256");
+    if let Some(expected) = manifest["index"]["hash"].as_str() {
+        verify_hash("packwiz index", index_format, expected, &index_bytes)?;
+    }
+    let versions = &manifest["versions"];
+    let (loader, loader_version) = ["neoforge", "forge", "fabric", "quilt"]
+        .into_iter()
+        .find_map(|name| {
+            versions[name]
+                .as_str()
+                .map(|v| (name.to_owned(), v.to_owned()))
+        })
+        .unwrap_or_default();
+    let mut pack = Pack {
+        name: manifest["name"]
+            .as_str()
+            .unwrap_or("Packwiz pack")
+            .to_owned(),
+        format: "packwiz".into(),
+        minecraft: versions["minecraft"].as_str().unwrap_or("").to_owned(),
+        loader,
+        loader_version,
+        ..Pack::default()
+    };
+    for entry in index["files"].as_array().into_iter().flatten() {
+        let indexed = entry["file"]
+            .as_str()
+            .ok_or("index.toml: file entry has no path")?;
+        let hash_format = entry["hash-format"].as_str().unwrap_or(index_format);
+        let expected_hash = entry["hash"].as_str().unwrap_or("").to_owned();
+        if expected_hash.is_empty() {
+            return Err(format!("index.toml: {indexed} has no hash"));
+        }
+        let indexed_path = safe_pack_path(&root, indexed)?;
+        let metafile = entry["metafile"].as_bool() == Some(true);
+        if metafile {
+            let metadata_bytes =
+                fs::read(&indexed_path).map_err(|e| format!("{}: {e}", indexed_path.display()))?;
+            verify_hash(indexed, hash_format, &expected_hash, &metadata_bytes)?;
+            let text = String::from_utf8(metadata_bytes)
+                .map_err(|e| format!("{}: {e}", indexed_path.display()))?;
+            let metadata: toml::Value =
+                toml::from_str(&text).map_err(|e| format!("{}: {e}", indexed_path.display()))?;
+            let filename = metadata["filename"]
+                .as_str()
+                .ok_or_else(|| format!("{}: missing filename", indexed))?;
+            let parent = Path::new(indexed).parent().unwrap_or(Path::new(""));
+            let destination = parent.join(filename).to_string_lossy().replace('\\', "/");
+            validate_relative(&destination)?;
+            let top = destination.split('/').next().unwrap_or("").to_owned();
+            let url = metadata["download"]["url"]
+                .as_str()
+                .ok_or_else(|| format!("{}: missing download.url", indexed))?;
+            if !(url.starts_with("https://") || url.starts_with("http://")) {
+                return Err(format!("{}: unsupported download URL", indexed));
+            }
+            let hash_format = metadata["download"]["hash-format"]
+                .as_str()
+                .ok_or_else(|| format!("{}: missing download.hash-format", indexed))?;
+            let hash = metadata["download"]["hash"]
+                .as_str()
+                .ok_or_else(|| format!("{}: missing download.hash", indexed))?;
+            let record = PackFile {
+                path: destination,
+                sha1: (hash_format == "sha1").then(|| hash.to_owned()),
+                hash: Some(hash.to_owned()),
+                hash_format: Some(hash_format.to_owned()),
+                allow_external_download: true,
+                client: match metadata["side"].as_str().unwrap_or("both") {
+                    "server" => "unsupported".into(),
+                    _ => "required".into(),
+                },
+                server: match metadata["side"].as_str().unwrap_or("both") {
+                    "client" => "unsupported".into(),
+                    _ => "required".into(),
+                },
+                downloads: vec![url.to_owned()],
+                name: metadata["name"].as_str().map(str::to_owned),
+                mod_id: metadata["update"]["modrinth"]["mod-id"]
+                    .as_str()
+                    .map(str::to_owned),
+                version: metadata["update"]["modrinth"]["version"]
+                    .as_str()
+                    .map(str::to_owned),
+                ..PackFile::default()
+            };
+            if tracked_path(&record.path) {
+                pack.files.push(record);
+            } else {
+                *pack.overrides.entry(top).or_default() += 1;
+            }
+        } else {
+            let bytes =
+                fs::read(&indexed_path).map_err(|e| format!("{}: {e}", indexed_path.display()))?;
+            verify_hash(indexed, hash_format, &expected_hash, &bytes)?;
+            let relative = indexed.replace('\\', "/");
+            if relative.ends_with(".pw.toml") {
+                continue;
+            }
+            let top = relative.split('/').next().unwrap_or("").to_owned();
+            let is_jar = relative.starts_with("mods/") && relative.ends_with(".jar");
+            let record = PackFile {
+                path: relative,
+                sha1: (hash_format == "sha1").then(|| expected_hash.clone()),
+                hash: Some(expected_hash),
+                hash_format: Some(hash_format.to_owned()),
+                jar: is_jar.then_some(indexed_path),
+                ..PackFile::default()
+            };
+            if tracked_path(&record.path) {
+                pack.files.push(record);
+            } else {
+                *pack.overrides.entry(top).or_default() += 1;
+            }
+        }
+    }
+    Ok(pack)
+}
+
+fn tracked_path(path: &str) -> bool {
+    matches!(
+        path.split('/').next().unwrap_or(""),
+        "mods" | "resourcepacks" | "shaderpacks" | "datapacks"
+    )
+}
+
+fn validate_relative(path: &str) -> Result<(), String> {
+    let path = Path::new(path);
+    if path.as_os_str().is_empty()
+        || path
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(format!("unsafe pack path: {}", path.display()));
+    }
+    Ok(())
+}
+
+fn safe_pack_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
+    validate_relative(relative)?;
+    let path = root.join(relative);
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    if !canonical.starts_with(root) {
+        return Err(format!("pack path escapes its root: {relative}"));
+    }
+    Ok(canonical)
+}
+
+pub(crate) fn verify_hash(
+    label: &str,
+    format: &str,
+    expected: &str,
+    bytes: &[u8],
+) -> Result<(), String> {
+    use sha2::Digest;
+    let actual = match format {
+        "sha1" => sha1_hex(bytes),
+        "sha256" => sha2::Sha256::digest(bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect(),
+        "sha512" => sha2::Sha512::digest(bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect(),
+        "md5" => md5::Md5::digest(bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect(),
+        "murmur2" => murmur2(bytes).to_string(),
+        other => return Err(format!("{label}: unsupported hash format {other}")),
+    };
+    if actual.eq_ignore_ascii_case(expected) {
+        Ok(())
+    } else {
+        Err(format!("{label}: {format} {actual}, pack says {expected}"))
+    }
+}
+
+fn murmur2(data: &[u8]) -> u32 {
+    let (m, r) = (0x5bd1e995u32, 24u32);
+    // Packwiz uses CurseForge's variant: seed 1 and whitespace bytes removed.
+    let filtered: Vec<u8> = data
+        .iter()
+        .copied()
+        .filter(|b| !matches!(b, b' ' | b'\t' | b'\n' | b'\r'))
+        .collect();
+    let mut h = (filtered.len() as u32) ^ 1;
+    let mut chunks = filtered.chunks_exact(4);
+    for chunk in &mut chunks {
+        let mut k = u32::from_le_bytes(chunk.try_into().unwrap());
+        k = k.wrapping_mul(m);
+        k ^= k >> r;
+        k = k.wrapping_mul(m);
+        h = h.wrapping_mul(m) ^ k;
+    }
+    let tail = chunks.remainder();
+    if tail.len() >= 3 {
+        h ^= (tail[2] as u32) << 16;
+    }
+    if tail.len() >= 2 {
+        h ^= (tail[1] as u32) << 8;
+    }
+    if !tail.is_empty() {
+        h = (h ^ tail[0] as u32).wrapping_mul(m);
+    }
+    h ^= h >> 13;
+    h = h.wrapping_mul(m);
+    h ^ (h >> 15)
 }
 
 fn names(zip: &zip::ZipArchive<fs::File>) -> Vec<String> {

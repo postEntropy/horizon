@@ -52,6 +52,22 @@ fn jar_of(pack_jar: Option<&PathBuf>, file_name: &str, work: &Path) -> Option<Pa
         .filter(|p| p.is_file())
 }
 
+/// Uses hashes declared in the pack, and fills them from local jars when a
+/// pack has no hash. This lets metadata services recognize CurseForge files too.
+pub fn hashes(pack: &Pack, work: &Path) -> Vec<String> {
+    pack.files
+        .iter()
+        .filter_map(|file| {
+            if let Some(hash) = &file.sha1 {
+                return Some(hash.clone());
+            }
+            let path = jar_of(file.jar.as_ref(), file.file_name(), work)?;
+            let bytes = std::fs::read(path).ok()?;
+            Some(crate::import::sha1_hex(&bytes))
+        })
+        .collect()
+}
+
 pub fn build(pack: &Pack, cache: &Cache, work: &Path) -> Vec<Record> {
     let known = Known::atm10();
     let mut records = Vec::new();
@@ -81,18 +97,44 @@ pub fn build(pack: &Pack, cache: &Cache, work: &Path) -> Vec<Record> {
             .or_else(|| f.mod_id.clone())
             .or_else(|| Some(p("slug")).filter(|s| !s.is_empty()))
             .unwrap_or(stem);
-        let (client, server) = match project {
+        let (mut client, mut server) = match project {
             Some(_) if f.client.is_empty() => (p("client_side"), p("server_side")),
             _ => (f.client.clone(), f.server.clone()),
         };
+        let mut sides_from_jar = false;
+        if client.is_empty() && server.is_empty() {
+            match info.as_ref().map(|jar| jar.environment.as_str()) {
+                Some("client") => {
+                    client = "required".into();
+                    server = "unsupported".into();
+                    sides_from_jar = true;
+                }
+                Some("server") => {
+                    client = "unsupported".into();
+                    server = "required".into();
+                    sides_from_jar = true;
+                }
+                _ => {}
+            }
+        }
         let census = info.as_ref().map(|i| &i.census);
         let facts = Facts {
             kind: f.kind(),
             client: &client,
             server: &server,
+            sides_from_jar,
             categories: &categories,
             classes: census.map(|c| c.classes),
-            has_content: census.is_some_and(|c| c.blockstates + c.item_models + c.recipes > 0),
+            has_content: census.is_some_and(|c| {
+                c.blockstates
+                    + c.item_models
+                    + c.recipes
+                    + c.loot_tables
+                    + c.tags
+                    + c.worldgen
+                    + c.structures
+                    > 0
+            }),
         };
         let name = info
             .as_ref()

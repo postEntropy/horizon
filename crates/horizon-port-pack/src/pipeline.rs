@@ -45,7 +45,7 @@ pub fn inventory(work: &Path, offline: bool, log: Log) -> Result<Vec<inventory::
     let cache_path = work.join("modrinth.json");
     let mut cache = modrinth::Cache::load(&cache_path);
     if !offline {
-        let hashes: Vec<String> = pack.files.iter().filter_map(|f| f.sha1.clone()).collect();
+        let hashes = inventory::hashes(&pack, work);
         match cache.fetch(&hashes) {
             Ok(()) => write_json(&cache_path, &cache)?,
             Err(e) => log(format!("Modrinth not reached, classifying offline: {e}")),
@@ -314,6 +314,12 @@ pub fn portable(r: &inventory::Record) -> bool {
     r.class == "content" && matches!(r.tier.as_str(), "data" | "logic" | "machines" | "deep")
 }
 
+/// Unknown mods with jars are fetched for a metadata and file-census pass.
+/// That pass can establish whether they add content before carry-over starts.
+pub fn inspectable(r: &inventory::Record) -> bool {
+    portable(r) || r.class == "unknown"
+}
+
 /// Everything after the import, for the portable mods: their jars (`fetch`,
 /// from `from` when the player has them), the inventory again with the jars
 /// read, the carry-over and the report. `resources` is the prepared
@@ -328,9 +334,10 @@ pub fn port(
         Ok(r) => r,
         Err(_) => inventory(work, false, log)?,
     };
-    let fetched = fetch::fetch(work, &records, from, &portable, log)?;
-    // The jars tell classes and tiers better than metadata alone.
-    let records = inventory(work, true, log)?;
+    let fetched = fetch::fetch(work, &records, from, &inspectable, log)?;
+    // The jars tell classes and tiers better than metadata alone. Unknown
+    // candidates are included so their manifests and file census can classify.
+    let records = inventory(work, false, log)?;
     let only: Vec<String> = records
         .iter()
         .filter(|r| portable(r) && r.jar.is_some())

@@ -1,5 +1,5 @@
 //! What a mod jar holds, read without decompiling: its metadata
-//! (`neoforge.mods.toml`, `mods.toml`, `fabric.mod.json`) and a census of
+//! (`neoforge.mods.toml`, `mods.toml`, `quilt.mod.json`, `fabric.mod.json`) and a census of
 //! its data, assets and classes.
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Read, path::Path};
@@ -10,6 +10,9 @@ pub struct JarInfo {
     pub name: String,
     pub version: String,
     pub license: String,
+    /// Fabric/Quilt side restriction from loader metadata (`*`, `client`, or `server`).
+    #[serde(default)]
+    pub environment: String,
     /// Required dependencies by mod id (loaders and `minecraft` left out).
     pub depends: Vec<String>,
     pub census: Census,
@@ -31,7 +34,14 @@ pub struct Census {
     pub mixin_configs: usize,
 }
 
-const NOT_MODS: [&str; 5] = ["minecraft", "neoforge", "forge", "fabricloader", "java"];
+const NOT_MODS: [&str; 6] = [
+    "minecraft",
+    "neoforge",
+    "forge",
+    "fabricloader",
+    "quilt_loader",
+    "java",
+];
 
 pub fn read(path: &Path) -> Result<JarInfo, String> {
     let file = fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -45,6 +55,8 @@ pub fn read(path: &Path) -> Result<JarInfo, String> {
         .or_else(|| text(&mut zip, "META-INF/mods.toml"))
     {
         mods_toml(&t)?
+    } else if let Some(t) = text(&mut zip, "quilt.mod.json") {
+        quilt(&t)?
     } else if let Some(t) = text(&mut zip, "fabric.mod.json") {
         fabric(&t)?
     } else {
@@ -115,6 +127,7 @@ pub fn mods_toml(text: &str) -> Result<JarInfo, String> {
         name: get(first, "displayName"),
         version: get(first, "version"),
         license: get(Some(&doc), "license"),
+        environment: String::new(),
         mod_id,
         depends,
         census: Census::default(),
@@ -145,6 +158,49 @@ pub fn fabric(text: &str) -> Result<JarInfo, String> {
         name: s("name"),
         version: s("version"),
         license,
+        environment: s("environment"),
+        depends,
+        census: Census::default(),
+    })
+}
+
+/// Quilt Loader metadata. Quilt's declared environment uses `dedicated_server`
+/// for server-only mods; normalize it to the shared `server` side label.
+pub fn quilt(text: &str) -> Result<JarInfo, String> {
+    let v: serde_json::Value =
+        serde_json::from_str(text).map_err(|e| format!("quilt.mod.json: {e}"))?;
+    let loader = &v["quilt_loader"];
+    let metadata = &loader["metadata"];
+    let string = |value: &serde_json::Value| value.as_str().unwrap_or("").to_owned();
+    let license = match &metadata["license"] {
+        serde_json::Value::Array(values) => values
+            .iter()
+            .filter_map(|value| value.as_str())
+            .collect::<Vec<_>>()
+            .join(" OR "),
+        value => string(value),
+    };
+    let depends = loader["depends"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|dependency| dependency["optional"].as_bool() != Some(true))
+        .map(|dependency| string(&dependency["id"]))
+        .filter(|id| {
+            !id.is_empty() && !NOT_MODS.contains(&id.as_str()) && !id.starts_with("fabric")
+        })
+        .collect();
+    let environment = match v["minecraft"]["environment"].as_str().unwrap_or("") {
+        "dedicated_server" => "server",
+        value => value,
+    }
+    .to_owned();
+    Ok(JarInfo {
+        mod_id: string(&loader["id"]),
+        name: string(&metadata["name"]),
+        version: string(&loader["version"]),
+        license,
+        environment,
         depends,
         census: Census::default(),
     })

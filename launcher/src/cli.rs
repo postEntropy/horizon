@@ -132,7 +132,7 @@ enum DataCmd {
 enum ModpackCmd {
     /// The imported packs and their coverage (the default)
     List,
-    /// Import a .mrpack, a CurseForge zip or an instance folder, and write its coverage report
+    /// Import a .mrpack, CurseForge zip, instance folder or Packwiz project, and write its coverage report
     Import { path: PathBuf },
     /// Get the jars of what this computer can port and carry them over
     Port {
@@ -1272,7 +1272,8 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
             json(serde_json::json!({
                 "pack": p.slug, "name": p.title(), "summary": p.summary(),
                 "counts": Status::ALL.iter().map(|s| (s.label(), p.count(*s))).collect::<std::collections::BTreeMap<_, _>>(),
-                "portable": p.portable, "ported_mods": p.mods.len(), "jars": p.jars(),
+                "portable": p.portable, "inspectable": p.inspectable,
+                "ported_mods": p.mods.len(), "jars": p.jars(),
                 "report": p.work.join("coverage.md"),
             }));
         } else {
@@ -1283,7 +1284,12 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
                 p.summary(),
                 counts.join(", ")
             );
-            println!("  {} portable, {} carried over", p.portable, p.mods.len());
+            println!(
+                "  {} portable, {} unclassified candidates, {} carried over",
+                p.portable,
+                p.inspectable,
+                p.mods.len()
+            );
             if let Some(jars) = p.jars() {
                 println!("  {jars}");
             }

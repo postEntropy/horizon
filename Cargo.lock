@@ -1359,9 +1359,11 @@ name = "horizon-port-pack"
 version = "0.1.0"
 dependencies = [
  "horizon-mods",
+ "md-5",
  "serde",
  "serde_json",
  "sha1",
+ "sha2",
  "toml",
  "ureq",
  "zip",
@@ -1900,6 +1902,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d640282b302c0bb0a2a8e0233ead9035e3bed871f0b7e81fe4a1ec829765db44"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "md-5"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
+dependencies = [
+ "cfg-if",
+ "digest",
 ]
 
 [[package]]

@@ -152,13 +152,9 @@ horizon-launcher mods remove faithful-32x
 **Modrinth.** The public API (`api.modrinth.com/v2`) needs no key. The launcher names itself in its user agent, as
 Modrinth asks.
 
-### CurseForge (coming soon)
+### CurseForge catalog
 
-CurseForge support is coming soon. Its API (`api.curseforge.com/v1`) needs a paid key, so for now the launcher
-doesn't use it: the Mods page shows **CurseForge (coming soon)** beside the Modrinth switch, disabled, and no search
-or install goes to CurseForge (`browser::sources()` is Modrinth only; `horizon-launcher mods ... --source curseforge`
-says it is coming soon). The CurseForge source (`browser/curseforge.rs`) is kept for when it comes.
-
-A CurseForge modpack zip or instance the player already has still imports, since that needs no key: its jars come
-from the player's installed instance or, when Modrinth has the same file, from Modrinth. A jar only CurseForge serves
-is listed under the pack as "CurseForge downloads coming soon".
+The launcher's mod catalog still lists CurseForge as disabled: search and one-click install through
+`browser::sources()` are not enabled. Importing a CurseForge modpack is separate and works from its
+manifest. The port pipeline can fetch files using the user's `HORIZON_CURSEFORGE_API_KEY`; without
+that key, CurseForge-only files need to come from an installed instance or local jar folder.

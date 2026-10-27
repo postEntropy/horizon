@@ -2709,9 +2709,11 @@ name = "horizon-port-pack"
 version = "0.1.0"
 dependencies = [
  "horizon-mods",
+ "md-5",
  "serde",
  "serde_json",
  "sha1",
+ "sha2 0.10.9",
  "toml 1.1.8+spec-1.1.0",
  "ureq",
  "zip",

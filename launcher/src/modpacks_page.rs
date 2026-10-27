@@ -159,9 +159,9 @@ impl Launcher {
             .items_center()
             .gap(px(8.))
             .child(pick("import-file", "Import a pack file…", false))
-            .child(pick("import-folder", "Import an instance folder…", true))
+            .child(pick("import-folder", "Import an instance or Packwiz folder…", true))
             .child(text(theme::CAPTION).w_full().text_color(t.muted).child(
-                ".mrpack (Modrinth), .zip (CurseForge), or a Prism, MultiMC or CurseForge instance. \
+                ".mrpack (Modrinth), .zip (CurseForge), a Prism/MultiMC instance, or a Packwiz project folder. \
                  Horizon ports what it can on this computer, from your own downloads, and plays \
                  the pack as its own profile. Nothing is uploaded or shared.",
             ));
@@ -280,10 +280,15 @@ impl Launcher {
                 cx.notify();
             }));
         }
-        let port_label = format!("Port {} mods", p.portable);
+        let port_count = p.portable + p.inspectable;
+        let port_label = if p.inspectable > 0 {
+            format!("Analyze and port {port_count} mods")
+        } else {
+            format!("Port {} mods", p.portable)
+        };
         let mut port = button("pack-port", port_label, Kind::Secondary, &t);
         let mut from = button("pack-from", "Use jars from my instance…", Kind::Ghost, &t);
-        if self.pack_busy || p.portable == 0 {
+        if self.pack_busy || port_count == 0 {
             port = disabled(port);
             from = disabled(from);
         } else {
@@ -332,10 +337,11 @@ impl Launcher {
         }));
         buttons = buttons.child(play).child(port).child(from).child(remove);
         let mut notes = vec![format!(
-            "Port gets the jars of the {} mods this computer can port today (content tiers \
-             0.2–0.5) from the pack's own links, Modrinth, or your folder, and carries \
-             them over. The ports stay here, in {}.",
+            "Port gets jars for {} content mods (tiers 0.2–0.5) and inspects {} unclassified \
+             candidates using their loader metadata and files. It uses the pack's links, \
+             Modrinth, CurseForge when configured, or your folder. Carried mods stay here, in {}.",
             p.portable,
+            p.inspectable,
             short(&p.work)
         )];
         if let Some(jars) = p.jars() {

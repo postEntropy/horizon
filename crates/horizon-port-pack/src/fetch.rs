@@ -3,8 +3,8 @@
 //! points (a Modrinth pack's download URLs) or the same file on Modrinth's
 //! public CDN (found by its SHA-1), and only kept when the hash matches; or
 //! copied from a folder the player already has (an installed instance, a
-//! downloads folder). CurseForge's own downloads need an API key, so a file
-//! only CurseForge has is listed as needing one. `<work>/fetch.json` says
+//! downloads folder). CurseForge files use `HORIZON_CURSEFORGE_API_KEY` and
+//! their API-provided SHA-1. `<work>/fetch.json` says
 //! what happened to each file.
 use crate::{
     import::{Pack, PackFile, sha1_hex},
@@ -30,17 +30,18 @@ const HOSTS: [&str; 4] = [
 ];
 /// No mod jar is this large; a bigger answer is not one.
 const MAX_JAR: u64 = 512 << 20;
+const CURSEFORGE_API: &str = "https://api.curseforge.com/v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum How {
     /// Already in `jars/` (or the imported instance).
     Present,
-    /// Downloaded from the pack's URL or Modrinth's CDN, hash checked.
+    /// Downloaded from a pack URL, Modrinth or CurseForge, hash checked.
     Downloaded,
     /// Copied from the player's folder.
     Local,
-    /// Only on CurseForge, whose downloads are coming soon (its API needs a paid key).
+    /// CurseForge API key is missing for a file not present locally.
     NeedsKey,
     NotFound,
     Failed,
@@ -52,7 +53,7 @@ impl How {
             How::Present => "already here",
             How::Downloaded => "downloaded",
             How::Local => "copied from your folder",
-            How::NeedsKey => "CurseForge downloads coming soon",
+            How::NeedsKey => "CurseForge API key needed",
             How::NotFound => "not found",
             How::Failed => "failed",
         }
@@ -97,7 +98,30 @@ pub fn fetch(
     let jars = work.join("jars");
     fs::create_dir_all(&jars).map_err(|e| format!("{}: {e}", jars.display()))?;
     let local = from.map(Local::index);
+    let curseforge_key = std::env::var("HORIZON_CURSEFORGE_API_KEY")
+        .ok()
+        .map(|k| k.trim().to_owned())
+        .filter(|k| !k.is_empty());
     let wanted: Vec<&Record> = records.iter().filter(|r| want(r)).collect();
+    let curseforge_files = curseforge_key.as_deref().map_or_else(HashMap::new, |key| {
+        let ids: Vec<(u64, u64)> = wanted
+            .iter()
+            .filter_map(|r| {
+                let file = files.get(r.path.as_str())?;
+                if r.jar.is_some()
+                    || local
+                        .as_ref()
+                        .is_some_and(|local| local.find(file).is_some())
+                    || (file.curseforge.is_none() && matches(&jars.join(file.file_name()), file))
+                    || url_of(file, &cache).is_some()
+                {
+                    return None;
+                }
+                file.curseforge
+            })
+            .collect();
+        curseforge_files(&ids, key)
+    });
     let mut fetched = Fetched::default();
     for (i, r) in wanted.iter().enumerate() {
         let Some(file) = files.get(r.path.as_str()) else {
@@ -111,26 +135,53 @@ pub fn fetch(
             detail,
         };
         let dest = jars.join(name);
-        let sha1 = file.sha1.as_deref();
-        let o = if r.jar.is_some() || matches(&dest, sha1) {
+        let o = if r.jar.is_some() || (file.curseforge.is_none() && matches(&dest, file)) {
             outcome(How::Present, String::new())
         } else if let Some(path) = local.as_ref().and_then(|l| l.find(file)) {
             match fs::copy(&path, &dest) {
-                Ok(_) => outcome(How::Local, path.display().to_string()),
+                Ok(_) if matches(&dest, file) => outcome(How::Local, path.display().to_string()),
+                Ok(_) => {
+                    let _ = fs::remove_file(&dest);
+                    outcome(
+                        How::Failed,
+                        format!("{} does not match the pack hash", path.display()),
+                    )
+                }
                 Err(e) => outcome(How::Failed, format!("{}: {e}", path.display())),
             }
         } else if let Some(url) = url_of(file, &cache) {
             log(format!("{}/{} {name}", i + 1, wanted.len()));
-            match download(&url, sha1, &dest) {
+            match download(&url, file, &dest) {
                 Ok(()) => outcome(How::Downloaded, url),
                 Err(e) => outcome(How::Failed, e),
             }
-        } else if pack.format == "curseforge" || file.curseforge.is_some() {
-            outcome(
-                How::NeedsKey,
-                "on CurseForge only: choose your installed instance, or put the jar in jars/"
-                    .into(),
-            )
+        } else if let Some((project, file_id)) = file.curseforge {
+            match curseforge_key.as_deref() {
+                None => outcome(
+                    How::NeedsKey,
+                    "set HORIZON_CURSEFORGE_API_KEY or choose your installed instance".into(),
+                ),
+                Some(key) => {
+                    log(format!("{}/{} {name}", i + 1, wanted.len()));
+                    match curseforge_files.get(&(project, file_id)) {
+                        Some(Ok((url, hash))) => {
+                            match download_with_key(url, Some(hash), &dest, key) {
+                                Ok(()) => {
+                                    outcome(How::Downloaded, "downloaded from CurseForge".into())
+                                }
+                                Err(e) => outcome(How::Failed, e),
+                            }
+                        }
+                        Some(Err(e)) => outcome(How::Failed, e.clone()),
+                        None => outcome(
+                            How::Failed,
+                            "CurseForge returned no metadata for this file".into(),
+                        ),
+                    }
+                }
+            }
+        } else if pack.format == "curseforge" {
+            outcome(How::NeedsKey, "CurseForge file ids are missing".into())
         } else {
             outcome(How::NotFound, "no download link in the pack".into())
         };
@@ -153,8 +204,13 @@ pub fn fetch(
         match made
             .unwrap_or(Ok(()))
             .map_err(|e| e.to_string())
-            .and_then(|()| download(&url, sha1.as_deref(), &dest))
-        {
+            .and_then(|()| {
+                let file = PackFile {
+                    sha1: sha1.clone(),
+                    ..PackFile::default()
+                };
+                download(&url, &file, &dest)
+            }) {
             Ok(()) => log(format!("loader: {}", dest.display())),
             Err(e) => log(format!(
                 "loader: {e} (structures keep only vanilla biome tags)"
@@ -163,7 +219,7 @@ pub fn fetch(
     }
     write_json(&work.join("fetch.json"), &fetched)?;
     log(format!(
-        "jars: {} downloaded, {} copied, {} already here, {} on CurseForge only (CurseForge downloads coming soon), {} not found, {} failed",
+        "jars: {} downloaded, {} copied, {} already here, {} need a CurseForge API key, {} not found, {} failed",
         fetched.count(How::Downloaded),
         fetched.count(How::Local),
         fetched.count(How::Present),
@@ -175,9 +231,18 @@ pub fn fetch(
 }
 
 /// Whether `path` holds the file with this SHA-1 (any file when none is known).
-fn matches(path: &Path, sha1: Option<&str>) -> bool {
-    match (fs::read(path), sha1) {
-        (Ok(bytes), Some(h)) => sha1_hex(&bytes).eq_ignore_ascii_case(h),
+fn matches(path: &Path, file: &PackFile) -> bool {
+    match (
+        fs::read(path),
+        file.hash.as_deref().or(file.sha1.as_deref()),
+    ) {
+        (Ok(bytes), Some(h)) => crate::import::verify_hash(
+            "cached file",
+            file.hash_format.as_deref().unwrap_or("sha1"),
+            h,
+            &bytes,
+        )
+        .is_ok(),
         (Ok(_), None) => true,
         (Err(_), _) => false,
     }
@@ -185,7 +250,11 @@ fn matches(path: &Path, sha1: Option<&str>) -> bool {
 
 /// The pack's own download link, else the same file on Modrinth.
 pub fn url_of(file: &PackFile, cache: &Cache) -> Option<String> {
-    let allowed = |u: &&str| HOSTS.iter().any(|h| u.starts_with(h));
+    let allowed = |u: &&str| {
+        HOSTS.iter().any(|h| u.starts_with(h))
+            || (file.allow_external_download
+                && (u.starts_with("https://") || u.starts_with("http://")))
+    };
     if let Some(u) = file.downloads.iter().map(String::as_str).find(allowed) {
         return Some(u.to_owned());
     }
@@ -200,7 +269,7 @@ pub fn url_of(file: &PackFile, cache: &Cache) -> Option<String> {
 }
 
 /// Downloads `url` to `dest`, kept only if its SHA-1 is `sha1`.
-fn download(url: &str, sha1: Option<&str>, dest: &Path) -> Result<(), String> {
+fn download(url: &str, file: &PackFile, dest: &Path) -> Result<(), String> {
     let response = ureq::get(url)
         .set("User-Agent", modrinth::AGENT)
         .call()
@@ -211,9 +280,154 @@ fn download(url: &str, sha1: Option<&str>, dest: &Path) -> Result<(), String> {
         .take(MAX_JAR)
         .read_to_end(&mut bytes)
         .map_err(|e| format!("{url}: {e}"))?;
+    if let Some(want) = file.hash.as_deref().or(file.sha1.as_deref()) {
+        crate::import::verify_hash(
+            url,
+            file.hash_format.as_deref().unwrap_or("sha1"),
+            want,
+            &bytes,
+        )?;
+    }
+    let part = dest.with_extension("part");
+    fs::write(&part, &bytes).map_err(|e| format!("{}: {e}", part.display()))?;
+    fs::rename(&part, dest).map_err(|e| format!("{}: {e}", dest.display()))
+}
+
+/// Fetch metadata and download URLs for CurseForge manifest ids in batches.
+/// The returned SHA-1 is checked before any jar is kept.
+fn curseforge_files(
+    ids: &[(u64, u64)],
+    key: &str,
+) -> HashMap<(u64, u64), Result<(String, String), String>> {
+    let mut out = HashMap::new();
+    let mut unique: Vec<u64> = ids.iter().map(|(_, file)| *file).collect();
+    unique.sort_unstable();
+    unique.dedup();
+    for chunk in unique.chunks(50) {
+        let response = ureq::post(&format!("{CURSEFORGE_API}/mods/files"))
+            .set("x-api-key", key)
+            .set("Accept", "application/json")
+            .set("Content-Type", "application/json")
+            .send_string(&serde_json::json!({"fileIds": chunk}).to_string());
+        let batch = response
+            .map_err(curseforge_error)
+            .and_then(|r| {
+                r.into_string()
+                    .map_err(|e| format!("CurseForge response could not be read: {e}"))
+            })
+            .and_then(|text| {
+                serde_json::from_str::<Value>(&text)
+                    .map_err(|e| format!("CurseForge returned invalid JSON: {e}"))
+            });
+        match batch {
+            Ok(batch) => {
+                let returned: HashMap<u64, &Value> = batch["data"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|item| Some((item["id"].as_u64()?, item)))
+                    .collect();
+                for (project, file) in ids.iter().filter(|(_, file)| chunk.contains(file)) {
+                    let resolved = returned
+                        .get(file)
+                        .ok_or_else(|| format!("CurseForge returned no metadata for file {file}"))
+                        .and_then(|metadata| {
+                            if metadata["modId"].as_u64() != Some(*project) {
+                                return Err(format!(
+                                    "CurseForge file {file} belongs to a different project"
+                                ));
+                            }
+                            let sha1 = metadata["hashes"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .find(|h| h["algo"].as_u64() == Some(1))
+                                .and_then(|h| h["value"].as_str())
+                                .ok_or_else(|| {
+                                    format!("CurseForge file {file} has no SHA-1 hash")
+                                })?;
+                            let url = match metadata["downloadUrl"]
+                                .as_str()
+                                .filter(|u| u.starts_with("https://edge.forgecdn.net/files/"))
+                            {
+                                Some(url) => url.to_owned(),
+                                None => curseforge_download_url(*project, *file, key)?,
+                            };
+                            Ok((url, sha1.to_owned()))
+                        });
+                    out.insert((*project, *file), resolved);
+                }
+            }
+            Err(error) => {
+                for (project, file) in ids.iter().filter(|(_, file)| chunk.contains(file)) {
+                    out.insert((*project, *file), Err(error.clone()));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn curseforge_error(error: ureq::Error) -> String {
+    match error {
+        ureq::Error::Status(401 | 403, _) => {
+            "CurseForge rejected HORIZON_CURSEFORGE_API_KEY".to_owned()
+        }
+        ureq::Error::Status(code, _) => format!("CurseForge answered HTTP {code}"),
+        ureq::Error::Transport(e) => format!("CurseForge connection failed: {e}"),
+    }
+}
+
+fn curseforge_download_url(project: u64, file: u64, key: &str) -> Result<String, String> {
+    let url = format!("{CURSEFORGE_API}/mods/{project}/files/{file}/download-url");
+    let response = ureq::get(&url)
+        .set("x-api-key", key)
+        .set("Accept", "application/json")
+        .call()
+        .map_err(curseforge_error)?;
+    let text = response
+        .into_string()
+        .map_err(|e| format!("CurseForge response could not be read: {e}"))?;
+    let body: Value = serde_json::from_str(&text)
+        .map_err(|e| format!("CurseForge returned invalid JSON: {e}"))?;
+    body["data"]
+        .as_str()
+        .filter(|u| u.starts_with("https://edge.forgecdn.net/files/"))
+        .map(str::to_owned)
+        .ok_or_else(|| format!("CurseForge file {file} has an unsupported download URL"))
+}
+
+/// CurseForge requires the key on its CDN requests as of July 2026. Only
+/// send it to the official CDN host, never to pack-provided URLs.
+fn download_with_key(url: &str, sha1: Option<&str>, dest: &Path, key: &str) -> Result<(), String> {
+    if !url.starts_with("https://edge.forgecdn.net/files/") {
+        return Err("refusing to send the CurseForge key to a non-CurseForge host".into());
+    }
+    let agent = ureq::AgentBuilder::new().redirects(0).build();
+    let response = agent
+        .get(url)
+        .set("User-Agent", modrinth::AGENT)
+        .set("x-api-key", key)
+        .call()
+        .map_err(|e| match e {
+            ureq::Error::Status(401 | 403, _) => {
+                "CurseForge rejected the API key for this download".to_owned()
+            }
+            ureq::Error::Status(code, _) if (300..400).contains(&code) => {
+                "CurseForge CDN redirected; refusing to forward the API key".into()
+            }
+            ureq::Error::Status(code, _) => format!("CurseForge CDN answered HTTP {code}"),
+            ureq::Error::Transport(e) => format!("CurseForge download failed: {e}"),
+        })?;
+    let mut bytes = Vec::new();
+    response
+        .into_reader()
+        .take(MAX_JAR)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("CurseForge download: {e}"))?;
     let got = sha1_hex(&bytes);
     if let Some(want) = sha1.filter(|w| !w.eq_ignore_ascii_case(&got)) {
-        return Err(format!("{url}: SHA-1 {got}, the pack says {want}"));
+        return Err(format!("CurseForge SHA-1 {got} does not match {want}"));
     }
     let part = dest.with_extension("part");
     fs::write(&part, &bytes).map_err(|e| format!("{}: {e}", part.display()))?;
@@ -265,7 +479,9 @@ impl Local {
 
     fn find(&self, file: &PackFile) -> Option<PathBuf> {
         if let Some(h) = &file.sha1 {
-            return self.by_sha1.get(&h.to_ascii_lowercase()).cloned();
+            if let Some(path) = self.by_sha1.get(&h.to_ascii_lowercase()) {
+                return Some(path.clone());
+            }
         }
         let name = file
             .curseforge

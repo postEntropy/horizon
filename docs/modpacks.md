@@ -292,13 +292,16 @@ inspected:
 ```
 
 **Status.** `import`, `inventory`, `fetch`, `carry` and `report` run today, and `port` runs
-them all for what a player's machine can port (content mods of the data tier), as the
-launcher's "Import modpack" does:
+them for content mods across tiers the API supports. It also fetches unclassified candidates
+so the next inventory pass can use their loader metadata and file census to classify them before
+carry-over. That pass hashes downloaded jars too, so Modrinth can supply categories and required
+dependencies for files first listed only by CurseForge. Unknown jars that remain ambiguous stay
+marked for review:
 
 ```
 cargo run -p horizon-port-pack -- import ~/Downloads/pack.mrpack ~/.horizon/ports/pack
 cargo run -p horizon-port-pack -- inventory ~/.horizon/ports/pack     # --offline reuses modrinth.json
-cargo run -p horizon-port-pack -- fetch ~/.horizon/ports/pack         # the portable mods' jars, or name them
+cargo run -p horizon-port-pack -- fetch ~/.horizon/ports/pack         # portable and unclassified candidate jars, or name them
 #   --from <folder>: copy the player's own jars (an installed instance, a downloads folder)
 cargo run -p horizon-port-pack -- carry ~/.horizon/ports/pack         # content mods with a jar, or name them
 #   --resources <prepared root>: only templates Horizon's tables have
@@ -322,16 +325,16 @@ Nether Structures are Partly; Sodium and GeckoLib don't run (Mixins, renderers, 
 Fabric API doesn't run (its id has a dash, which content mods can't use). A check takes 0.2 s to
 3 s, and 24 s for Compressed Blocks (18 MB, 9,360 recipes, writing the carry dominates).
 
-`fetch` gets each jar the player's way, never from us: copied from a folder they have (matched
-by SHA-1, or through a CurseForge app instance's `minecraftinstance.json`), else downloaded from
-the link the pack itself gives (a `.mrpack`'s, on the format's hosts only) or, for a CurseForge
-pack, the same file on Modrinth's public CDN, found by its SHA-1. A jar is kept only when its
-hash matches. A file only CurseForge has is listed as "CurseForge downloads coming soon" (its API
-needs a paid key; Ludovic, 2026-10-22), with the player's installed instance as the way round it.
-`<work>/fetch.json` says what happened to each file. On All the Mods 10 8.3's CurseForge zip
-(2026-10-17): of the 54 data-tier content mods, 42 come from Modrinth's CDN (84 MB) and 12 need
-the key or the instance; `port` then carries the 42 over (0 ported, 42 partial: the harness is a
-dev step).
+`fetch` gets each jar from the player's instance or a pack-provided source: copied from a folder
+they have (matched by SHA-1, or through a CurseForge app instance's `minecraftinstance.json`),
+then downloaded from the link a `.mrpack` gives (on the format's hosts only), or from Modrinth's
+public CDN by SHA-1. For a CurseForge manifest, files unavailable through those sources are
+resolved by their project/file ids using the CurseForge API and downloaded from its CDN. Set
+`HORIZON_CURSEFORGE_API_KEY` in the environment for those requests; the pipeline reads the file's
+SHA-1 from the API and checks the downloaded bytes before keeping them. The key is sent only to
+the official API and CDN hosts. `<work>/fetch.json` says what happened to each file. The ATM10
+measurements below predate this API-key path: the 12 CurseForge-only files then needed the
+player's installed instance.
 
 `inventory` reads metadata only: Modrinth answers by file hash, and the jars only if the user's
 instance has them (an imported instance folder, or jars put in `<work>/jars/`). Without jars,
@@ -377,9 +380,9 @@ refused as walls: their blockstates did not load).
 | Format | Read | Jars come from |
 |---|---|---|
 | Modrinth `.mrpack` | `modrinth.index.json`: `dependencies` (minecraft, neoforge / fabric-loader / forge / quilt-loader), `files[]` with path, sha1/sha512, `env` (client/server), download URLs; `overrides/`, `client-overrides/`, `server-overrides/` | downloaded from the listed Modrinth URLs, hash-checked |
-| CurseForge zip | `manifest.json`: `minecraft.version`, `modLoaders[]`, `files[]` (`projectID`, `fileID`, `required`), `overrides`. When the overrides hold Crash Assistant's `config/crash_assistant/modlist.json` (All the Mods 10 does), its jar names, mod ids and SHA-1s replace the bare ids | the user's installed instance (CurseForge app `minecraftinstance.json` + `mods/`), or the same file on Modrinth by SHA-1. CurseForge's API needs a key, so we take what the user already downloaded |
-| Prism / MultiMC instance | `mmc-pack.json` components (`net.minecraft`, `net.neoforged`, `net.fabricmc.fabric-loader`), `instance.cfg`, `.minecraft/mods/*.jar`, packwiz `.pw.toml` files if present | the instance folder |
-| packwiz | `pack.toml`, `index.toml`, `mods/*.pw.toml` | as listed |
+| CurseForge zip | `manifest.json`: `minecraft.version`, `modLoaders[]`, `files[]` (`projectID`, `fileID`, `required`), `overrides`. When the overrides hold Crash Assistant's `config/crash_assistant/modlist.json` (All the Mods 10 does), its jar names, mod ids and SHA-1s replace the bare ids | the user's installed instance, a matching Modrinth SHA-1, or CurseForge API/CDN when `HORIZON_CURSEFORGE_API_KEY` is set |
+| Prism / MultiMC instance | `mmc-pack.json` components (`net.minecraft`, `net.neoforged`, `net.fabricmc.fabric-loader`), `instance.cfg`, `.minecraft/mods/*.jar` | the instance folder |
+| Packwiz project directory | `pack.toml`, the indexed `index.toml`, local files and `.pw.toml` remote-file metadata; verifies SHA-1, SHA-256, SHA-512, MD5 and CurseForge Murmur2 hashes | local indexed files or the declared HTTP(S) URL, hash-checked |
 | Crash Assistant `modlist.json` | jar name → mod id, name, version, Modrinth SHA-1; the loader entry (NeoForge `21.1.x` is Minecraft 1.21.1). Packs such as ATM10 publish it in their repository | metadata only; jars put in `<work>/jars/` |
 
 `pack.json` holds the Minecraft version, the loader and its version, each file with its hashes
@@ -810,7 +813,8 @@ left out (blocks with a class of their own are counted and named, since facts ca
 their extra code); **partial** with the failing checks, the blocks left out and what the
 templates miss; **not yet** with the API tier it waits for, or the dependency; **not needed**
 for libraries, performance mods, pack tooling and what Horizon has built in. Unclassified mods
-(the 20 CurseForge-only rows the reviewed table only guesses) count as not yet.
+count as not yet; `port` fetches their jars when possible and uses loader metadata and file census
+to reclassify them. A jar that remains ambiguous is marked for review instead of being guessed into a tier.
 
 **ATM10, measured** (`import` of ATM10's `modlist.json` from its repository on 2026-10-16, 496
 files; `inventory`; `carry` and the harness on the eight mods we downloaded; `report`):
@@ -983,7 +987,7 @@ In scope (each is a PR or a small stack):
    and lang, in single player. Proven by a harness: a test mod's block placed, rendered, broken
    with the right time and tool, dropping its loot, crafted from its recipe; every per-state
    fact equal to its template's with the overrides applied. Parity unchanged with no mods.
-3. **`horizon-port-pack`**: import (`.mrpack`, CurseForge zip and instance, Prism), inventory,
+3. **`horizon-port-pack`**: import (`.mrpack`, CurseForge zip, instances and Packwiz projects), inventory,
    classify, licence record, dependency order, data carry-over for data-tier mods and their
    `.hmod`s, coverage report. Run on ATM10's real list (coverage report published in the PR,
    metadata only) and on a small real pack end to end.
@@ -992,7 +996,7 @@ In scope (each is a PR or a small stack):
    (CC0), XTones Reworked (MIT), Cloud Glass (MIT), Glassential (MIT), Crystalix (LGPL)), each
    with its harness against the NeoForge 1.21.1 oracle. The ports stay local even though these
    licences would allow publishing: we ask first.
-5. **Launcher:** "Import modpack" (`.mrpack` / CurseForge zip / instance) showing the
+5. **Launcher:** "Import modpack" (`.mrpack` / CurseForge zip / instance / Packwiz project) showing the
    coverage report (ATM10's first), and "Port and play" for what is portable.
 6. **Measured:** load time, RAM and FPS of that pack on NeoForge 1.21.1 against Horizon, with
    the full ATM10 on NeoForge as the reference row.
@@ -1037,7 +1041,8 @@ What is missing, ranked by how much a player notices:
 
 1. **Code mods.** 333 of ATM10's 496 mods (machines, magic, mobs, tools, storage): the pack's
    gameplay. They need behaviour APIs (0.3 and later) and a port per mod.
-2. **The 12 mods only on CurseForge**, which the carry has not fetched.
+2. **The 12 mods only on CurseForge** in the 2026-10-22 measurement; the importer now has an
+   API-key fetch path, but those files still need to be carried and checked.
 3. **Plainer structures.** The 605 dropped processors are what makes structures look aged,
    overgrown or fitted to their biome in Java: Formations' biome swaps and block ageing (its
    tables are All Rights Reserved code), Repurposed Structures' random and noise replacements
@@ -1053,10 +1058,10 @@ What is missing, ranked by how much a player notices:
 
 ### Three packs through the mod browser, measured
 
-2026-10-22, Mac mini M4 Pro (offscreen, a debug launcher, release-profile `horizon-port-pack` and game), while
+2026-10-22, before CurseForge API-key downloads were added, Mac mini M4 Pro (offscreen, a debug launcher, release-profile `horizon-port-pack` and game), while
 other sessions kept the CPU at 85 to 93 %, so times are upper bounds. The two Modrinth packs were imported with
-`horizon-launcher mods install <slug>` (the browser's Import), ATM10 from its CurseForge zip with `modpack import`
-(CurseForge support is coming soon), then each ported with `--resources` for 26.3 and opened as a survival
+`horizon-launcher mods install <slug>` (the browser's Import), ATM10 from its CurseForge zip with `modpack import`,
+then each ported with `--resources` for 26.3 and opened as a survival
 world with every ported mod on (horizon-ctl `launch --dev-mod ...`, from a scratch script).
 
 | Pack | Files | Import | Port | Ported mods | Coverage | Declared | World load (resources) | Crashes |
@@ -1067,7 +1072,7 @@ world with every ported mod on (horizon-ctl `launch --dev-mod ...`, from a scrat
 
 The same world with no mods loads in 5.4 s (resources 1.1 s). Import is the pack download and Modrinth's answers by
 file hash; Vanilla Perfected's 30 s is mostly its 108 lookups and its download. Port is the jars (downloaded for the
-two Modrinth packs; ATM10's 42 copied from a folder, 12 more are on CurseForge only: CurseForge downloads coming soon) and the carry,
+two Modrinth packs; ATM10's 42 copied from a folder, with 12 more available only through CurseForge) and the carry,
 which writes tens of thousands of small files. World load grows with the blocks the pack declares: ATM10 adds
 about 155,000 block states, and loading their models and textures is most of its 28.7 s.
 
@@ -1081,5 +1086,5 @@ the mods that need porting (not counting performance mods and libraries), 2 of 8
 - Contacting authors of permissively licensed mods to publish ports (none contacted).
 - Whether players should run code-port agents themselves (their own Claude Code or Codex
   login, as Zenith does) or only download published ports.
-- CurseForge: dropped for now (its API needs a paid key; Ludovic, 2026-10-22), shown as coming
-  soon. CurseForge packs import from their zip or an installed instance.
+- CurseForge catalog search and one-click install remain disabled. CurseForge packs import from
+  their zip or an installed instance; API-key file fetching is available to the port pipeline.

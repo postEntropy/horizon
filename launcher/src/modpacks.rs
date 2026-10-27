@@ -1,4 +1,4 @@
-//! Modpacks: import a Java modpack (a Modrinth `.mrpack`, a CurseForge zip, an instance folder),
+//! Modpacks: import a Java modpack (a Modrinth `.mrpack`, CurseForge zip, instance or Packwiz folder),
 //! show what Horizon runs of it, port that on this computer from the player's own downloads, and
 //! play it as a profile of its own (docs/modpacks.md).
 //!
@@ -46,10 +46,12 @@ pub struct Imported {
     /// The carried-over mods the profile loads.
     pub mods: Vec<PathBuf>,
     /// Mods left off, with why: a ported one an earlier one owns a namespace of, or one whose
-    /// jar only CurseForge serves (CurseForge downloads coming soon).
+    /// jar only CurseForge serves when no API key or local copy is available.
     pub left_off: Vec<String>,
-    /// The mods the port step gets and carries over (content, data tier).
+    /// Mods classified as content and supported by a Horizon mod API tier.
     pub portable: usize,
+    /// Unknown records whose jars can be fetched and inspected before carrying over.
+    pub inspectable: usize,
 }
 
 impl Imported {
@@ -87,8 +89,8 @@ impl Imported {
             (How::Present, "already here"),
             (
                 How::NeedsKey,
-                "only on CurseForge (CurseForge downloads coming soon: choose your installed \
-                 instance instead)",
+                "CurseForge API key needed (set HORIZON_CURSEFORGE_API_KEY or choose your \
+                 installed instance)",
             ),
             (How::NotFound, "not found"),
             (How::Failed, "failed"),
@@ -115,7 +117,7 @@ pub fn load(work: &Path) -> Result<Imported, String> {
             .files
             .iter()
             .filter(|o| o.how == How::NeedsKey)
-            .map(|o| format!("{}: CurseForge downloads coming soon", o.key)),
+            .map(|o| format!("{}: HORIZON_CURSEFORGE_API_KEY is not set", o.key)),
     );
     Ok(Imported {
         slug: work
@@ -129,6 +131,10 @@ pub fn load(work: &Path) -> Result<Imported, String> {
         mods,
         left_off,
         portable: records.iter().filter(|r| pipeline::portable(r)).count(),
+        inspectable: records
+            .iter()
+            .filter(|r| r.class == "unknown" && r.jar.is_none())
+            .count(),
     })
 }
 
@@ -177,8 +183,8 @@ pub fn import(path: &Path, log: Log) -> Result<Imported, String> {
     load(&work)
 }
 
-/// Ports what this computer can: the portable mods' jars (from `from` when the player has them,
-/// else the pack's links or Modrinth), carried over for `resources`, then the report again.
+/// Gets jars for portable mods and unclassified candidates, then carries over the content that
+/// matches Horizon's templates and writes the report again.
 pub fn port(
     work: &Path,
     resources: Option<&Path>,
@@ -190,15 +196,15 @@ pub fn port(
 }
 
 /// What the mod browser does with a modpack: imports it, then ports what this computer can
-/// (from the pack's links and Modrinth), so it plays straight away. A port that fails leaves the
-/// pack imported; the error says so.
+/// (from the pack's links, Modrinth, or CurseForge when its API key is set), so it plays straight
+/// away. A port that fails leaves the pack imported; the error says so.
 pub fn import_and_port(
     path: &Path,
     resources: Option<&Path>,
     log: Log,
 ) -> Result<Imported, String> {
     let pack = import(path, log)?;
-    if pack.portable == 0 {
+    if pack.portable == 0 && pack.inspectable == 0 {
         return Ok(pack);
     }
     port(&pack.work, resources, None, log)
@@ -277,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn jars_only_curseforge_serves_are_left_off_as_coming_soon() {
+    fn curseforge_files_without_a_key_are_left_off_with_setup_hint() {
         use horizon_port_pack::fetch::Outcome;
         let work = std::env::temp_dir().join(format!("horizon-launcher-cf-{}", std::process::id()));
         let _ = fs::remove_dir_all(&work);
@@ -295,12 +301,12 @@ mod tests {
         let pack = load(&work).unwrap();
         assert_eq!(
             pack.left_off,
-            ["allthemodium: CurseForge downloads coming soon"]
+            ["allthemodium: HORIZON_CURSEFORGE_API_KEY is not set"]
         );
         assert!(pack
             .jars()
             .unwrap()
-            .contains("CurseForge downloads coming soon"));
+            .contains("CurseForge API key needed"));
         fs::remove_dir_all(&work).unwrap();
     }
 

@@ -68,6 +68,8 @@ pub struct Facts<'a> {
     pub kind: &'a str,
     pub client: &'a str,
     pub server: &'a str,
+    /// Side restrictions read from loader metadata in the jar itself.
+    pub sides_from_jar: bool,
     /// Modrinth categories.
     pub categories: &'a [String],
     /// From the jar: classes, and whether it has blocks, items or data.
@@ -91,13 +93,28 @@ pub fn rules(f: &Facts) -> (&'static str, &'static str, &'static str) {
         return ("performance", "none", "categories");
     }
     if f.client != "unsupported" && f.server == "unsupported" {
-        return ("client-ui", "client", "sides");
+        return (
+            "client-ui",
+            "client",
+            if f.sides_from_jar { "jar" } else { "sides" },
+        );
     }
     if f.client == "unsupported" && f.server != "unsupported" && !f.server.is_empty() {
-        return ("server-only", "logic", "sides");
+        return (
+            "server-only",
+            "logic",
+            if f.sides_from_jar { "jar" } else { "sides" },
+        );
     }
     if f.classes == Some(0) && f.has_content {
         return ("content", "data", "jar");
+    }
+    // A non-empty implementation plus carried block/item/recipe resources is
+    // evidence of playable content. Without public categories or reviewed
+    // metadata, logic is the lowest safe API tier; machines/deep need evidence
+    // the file census cannot establish.
+    if f.classes.is_some_and(|classes| classes > 0) && f.has_content {
+        return ("content", "logic", "jar");
     }
     let content = [
         "adventure",
