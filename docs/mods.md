@@ -294,14 +294,12 @@ The fence: files go in the mod's own namespaces (`assets/<id>/`,
 `data/<id>/`, and those its manifest lists), plus additions to vanilla tags
 (`data/minecraft/tags/`), to the vanilla recipe, advancement and loot-table
 registries, and to the convention tags NeoForge and Fabric mods share
-(`data/c/tags/`). Resource files that vanilla merges across packs are also
-allowed under `assets/minecraft/`: language files, font definitions, atlas
-definitions and `sounds.json`. Those files contribute to vanilla's shared
-resources; they cannot claim the `minecraft` namespace. Merged files follow
-the matching vanilla rule: language keys override, atlas sources append, font
-providers use resource-stack order, and sound events append unless replaced.
-For ordinary same-path files, the later mod in load order wins and the game
-logs the collision.
+(`data/c/tags/`). Assets may also add or override files under
+`assets/minecraft/`, as resource packs do. Known shared definitions merge by
+vanilla's rules: language keys override, atlas sources append, font providers
+use resource-stack order, and sound events append unless replaced. Other
+same-path assets use the later mod in load order. These files do not claim the
+`minecraft` namespace.
 Templates and `sounds` name vanilla blocks; unknown keys are refused.
 
 Some Java mods ship their files under other names than their mod id (Towns

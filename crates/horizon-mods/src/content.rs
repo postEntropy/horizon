@@ -60,22 +60,11 @@ pub fn minecraft_registry_addition(path: &str) -> bool {
             .any(|kind| rest.starts_with(kind))
 }
 
-/// Shared vanilla resource files whose definitions merge across packs rather
-/// than replacing one another. Keep this in step with `packs::merge_kind`.
+/// Vanilla asset paths a content mod may add to its resource pack. The pack
+/// stack merges known shared definitions and layers other paths by load order.
 pub fn minecraft_resource_addition(path: &str) -> bool {
-    let Some(rest) = path.strip_prefix("assets/minecraft/") else {
-        return false;
-    };
-    if rest == "sounds.json" {
-        return true;
-    }
-    let Some(json) = rest.strip_suffix(".json") else {
-        return false;
-    };
-    let Some((kind, name)) = json.split_once('/') else {
-        return false;
-    };
-    !name.is_empty() && matches!(kind, "lang" | "font" | "atlases")
+    path.strip_prefix("assets/minecraft/")
+        .is_some_and(|rest| !rest.is_empty())
 }
 
 /// A vanilla identifier, `minecraft:path`.
