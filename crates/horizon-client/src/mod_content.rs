@@ -19,7 +19,7 @@ use horizon_mods::content::{Block, Content, Rarity};
 use horizon_world::nbt::{self, JavaString, Limits, Tag};
 use serde::{Deserialize, Serialize, de};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     fmt, fs,
     io::{BufWriter, Write},
     ops::Range,
@@ -281,19 +281,36 @@ fn block_state_count(block: &NewBlock<'_>) -> usize {
     }
 }
 
+fn state_ranges<'a>(names: &[&'a str], block_count: usize) -> Result<HashMap<&'a str, Range<u32>>> {
+    let mut ranges = HashMap::with_capacity(block_count);
+    let mut start = 0;
+    while start < names.len() {
+        let name = names[start];
+        let mut end = start + 1;
+        while end < names.len() && names[end] == name {
+            end += 1;
+        }
+        if ranges.insert(name, start as u32..end as u32).is_some() {
+            return Err(format!("facts.json: states for {name} are not contiguous").into());
+        }
+        start = end;
+    }
+    Ok(ranges)
+}
+
 fn read_json(path: &Path) -> Result<J> {
     Ok(serde_json::from_slice(&fs::read(path)?).map_err(|e| format!("{}: {e}", path.display()))?)
 }
 
 impl<'a> Plan<'a> {
     fn new(base: &Path, mods: &'a [ContentMod]) -> Result<Self> {
-        let mut facts = read_json(&base.join("facts.json"))?;
-        let names: Vec<String> = match facts.at("states") {
+        let facts = read_json(&base.join("facts.json"))?;
+        let names: Vec<&str> = match facts.get("states") {
             Some(J::Arr(states)) => states
                 .iter()
                 .map(|s| match s {
                     J::Arr(row) => match row.first() {
-                        Some(J::Str(name)) => Ok(name.clone()),
+                        Some(J::Str(name)) => Ok(name.as_str()),
                         _ => Err("facts.json: a state without a name"),
                     },
                     _ => Err("facts.json: a state that is not a row"),
@@ -301,20 +318,19 @@ impl<'a> Plan<'a> {
                 .collect::<std::result::Result<_, _>>()?,
             _ => return Err("facts.json: no states".into()),
         };
-        let defaults: BTreeMap<String, u32> = match facts.at("defaults") {
+        let defaults: BTreeMap<String, u32> = match facts.get("defaults") {
             Some(J::Obj(o)) => o
                 .iter()
                 .filter_map(|(k, v)| Some((k.clone(), v.as_u32()?)))
                 .collect(),
             _ => return Err("facts.json: no defaults".into()),
         };
-        let range = |name: &str| -> Option<Range<u32>> {
-            let start = names.iter().position(|n| n == name)?;
-            let len = names[start..].iter().take_while(|n| *n == name).count();
-            // A block's states are one run in registry order.
-            (names[start + len..].iter().all(|n| n != name))
-                .then_some(start as u32..(start + len) as u32)
-        };
+        // A block's states are one run in registry order. Index those runs
+        // once: searching the suffix for every declaration made planning
+        // quadratic for large carried registries (hundreds of thousands of
+        // states and thousands of mod blocks).
+        let ranges = state_ranges(&names, defaults.len())?;
+        let range = |name: &str| ranges.get(name).cloned();
         let mut blocks = Vec::new();
         let mut next = names.len() as u32;
         let mut sorted: Vec<&ContentMod> = mods.iter().collect();

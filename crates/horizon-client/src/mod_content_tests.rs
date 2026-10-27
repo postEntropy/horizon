@@ -34,6 +34,20 @@ fn json_keeps_key_order_and_numbers() {
 }
 
 #[test]
+fn state_ranges_index_contiguous_states_in_one_pass() {
+    let ranges = state_ranges(&["stone", "stone", "dirt", "oak_log", "oak_log"], 3).unwrap();
+    assert_eq!(ranges["stone"], 0..2);
+    assert_eq!(ranges["dirt"], 2..3);
+    assert_eq!(ranges["oak_log"], 3..5);
+}
+
+#[test]
+fn state_ranges_reject_noncontiguous_block_states() {
+    let error = state_ranges(&["stone", "dirt", "stone"], 2).unwrap_err();
+    assert!(error.to_string().contains("stone are not contiguous"));
+}
+
+#[test]
 fn tags_merge_without_repeats() {
     let vanilla = r#"{"values": ["minecraft:stone"]}"#;
     let more = [
