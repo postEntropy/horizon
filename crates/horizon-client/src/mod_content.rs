@@ -1339,7 +1339,9 @@ const WORLDGEN_BUNDLES: [(&str, &str); 12] = [
 
 /// A mod file that adds to a worldgen bundle: (bundle, id).
 fn worldgen_entry(file: &str) -> Option<(&'static str, String)> {
-    let (ns, rest) = file.strip_prefix("data/")?.split_once("/worldgen/")?;
+    let path = file.strip_prefix("data/")?;
+    let (ns, path) = path.split_once('/')?;
+    let rest = path.strip_prefix("worldgen/")?;
     let (kind, path) = rest.split_once('/')?;
     let (_, bundle) = WORLDGEN_BUNDLES.iter().find(|(k, _)| *k == kind)?;
     Some((bundle, format!("{ns}:{}", path.strip_suffix(".json")?)))
@@ -2456,10 +2458,10 @@ impl TagMerge {
     }
 }
 
-/// Threads rewriting the tables at once. Each holds a whole table as a tree
-/// (gameplay-facts.json's is over a gigabyte with ATM10's mods), so more
-/// would mostly add memory.
-const TABLE_THREADS: usize = 3;
+/// Threads rewriting the tables at once. Carried mod blocks expand
+/// gameplay-facts.json substantially: ATM10 adds over 678,000 states, so
+/// keeping more than one expanded table in memory can exhaust the launcher.
+const TABLE_THREADS: usize = 1;
 
 /// Rewrites the base's per-state tables for the mods' states into the
 /// overlay. They are independent: [`TABLE_THREADS`] threads take them,
