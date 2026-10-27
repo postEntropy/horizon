@@ -1,0 +1,34 @@
+[
+  {
+    "name": "gas_burning_generator_consumes_ethene_and_generates_energy_across_reload",
+    "block": "mekanismgenerators:gas_burning_generator",
+    "dimension": "minecraft:overworld",
+    "x": 0,
+    "y": 64,
+    "z": 0,
+    "ticks": 205,
+    "reload_at": [100],
+    "energy": {
+      "stored": 0,
+      "capacity": 100000,
+      "max_receive": 100000,
+      "max_extract": 100000
+    },
+    "fluids": [
+      {
+        "tank": 1000,
+        "fluid": "mekanism:ethene",
+        "amount": 1000,
+        "capacity": 64000
+      }
+    ],
+    "expect_final": {
+      "slots": {},
+      "energy": {
+        "stored": 32800,
+        "capacity": 100000
+      },
+      "saved_progress": 0
+    }
+  }
+]

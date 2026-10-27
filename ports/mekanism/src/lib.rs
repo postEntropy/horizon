@@ -363,7 +363,10 @@ fn screen(block: &str, dimension: &str, x: i32, y: i32, z: i32) -> ScreenSpec {
         };
     }
     let processing_screen = recipe_type(block).is_some()
-        || matches!(block, "mekanism:energized_smelter" | "mekanism:metallurgic_infuser");
+        || matches!(
+            block,
+            "mekanism:energized_smelter" | "mekanism:metallurgic_infuser"
+        );
     let (input_x, input_y, output_x, output_y, progress_x, progress_y, energy_x, energy_y) =
         if processing_screen {
             (54, 16, 110, 30, 76, 38, 163, 16)
@@ -371,16 +374,6 @@ fn screen(block: &str, dimension: &str, x: i32, y: i32, z: i32) -> ScreenSpec {
             (34, 35, 99, 35, 73, 35, 10, 27)
         };
     let mut widgets = vec![Widget {
-        id: u32::MAX,
-        kind: WidgetKind::Background,
-        x: 0,
-        y: 0,
-        width: 176,
-        height: 166,
-        text: "mekanism/gui/base".into(),
-        value: 0,
-        max_value: 0,
-    }, Widget {
         id: 0,
         kind: WidgetKind::Slot,
         x: input_x,
@@ -398,7 +391,11 @@ fn screen(block: &str, dimension: &str, x: i32, y: i32, z: i32) -> ScreenSpec {
         y: energy_y,
         width: if processing_screen { 6 } else { 12 },
         height: if processing_screen { 54 } else { 50 },
-        text: if processing_screen { String::new() } else { "Energy".into() },
+        text: if processing_screen {
+            String::new()
+        } else {
+            "Energy".into()
+        },
         value: 0,
         max_value: 1_000_000,
     });
@@ -671,7 +668,10 @@ impl Mod for Mekanism {
             && (event.state.ends_with("_mechanical_pipe")
                 || event.state.ends_with("_pressurized_tube"))
         {
-            let key = side_key(&event.dimension, event.x, event.y, event.z, &event.face);
+            let Some(face) = server::get_block_face() else {
+                return EventOutcome::Pass;
+            };
+            let key = side_key(&event.dimension, event.x, event.y, event.z, &face);
             let current = self
                 .side_modes
                 .get(&key)
@@ -685,23 +685,31 @@ impl Mod for Mekanism {
             };
             self.side_modes.insert(key, next.into());
             let _ = machine::set_world_rule(
-                &side_rule(&event.dimension, event.x, event.y, event.z, &event.face),
+                &side_rule(&event.dimension, event.x, event.y, event.z, &face),
                 next,
             );
             return EventOutcome::Consume;
         }
-        if !matches!(event.action, BlockAction::UseWithoutItem | BlockAction::UseItemOn)
-            || !is_machine(&event.state)
+        if !matches!(
+            event.action,
+            BlockAction::UseWithoutItem | BlockAction::UseItemOn
+        ) || !is_machine(&event.state)
         {
             return EventOutcome::Pass;
         }
-        let _ = ui::open_screen(&screen(
-            &event.state,
-            &event.dimension,
-            event.x,
-            event.y,
-            event.z,
-        ));
+        let spec = screen(&event.state, &event.dimension, event.x, event.y, event.z);
+        if ui::open_screen(&spec).is_ok() {
+            ui::set_backgrounds(
+                &spec.id,
+                &[ui::ScreenBackground {
+                    texture: "mekanism:gui/base".into(),
+                    x: 0,
+                    y: 0,
+                    width: spec.width,
+                    height: spec.height,
+                }],
+            );
+        }
         EventOutcome::Consume
     }
 

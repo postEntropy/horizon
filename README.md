@@ -71,7 +71,7 @@ The launcher's **Servers** page creates, starts, backs up and updates a Horizon 
 
 ## Modpacks
 
-The launcher's **Modpacks** page imports a Modrinth or CurseForge pack, shows which of its mods Horizon can carry over, and plays the ones it can as their own profile. Today that means content mods made of data and assets; mods with Java code are not ported yet. See [Modpacks](https://playhorizon.dev/docs/modpacks).
+The launcher's **Modpacks** page imports a Modrinth or CurseForge pack, shows which of its mods Horizon can carry over, and plays the ones it can as their own profile. This fork is extending that workflow to selected code mods by reimplementing their behavior in Rust and WebAssembly; Java mod jars still do not run in Horizon. All the Mods 10 is our current test pack, with partial Mekanism and Mekanism: Generators ports. The full pack is not playable yet. See the [modpack workflow](docs/modpacks.md) and [code-mod roadmap](docs/research/code-mods-plan.md).
 
 ## Agent control
 

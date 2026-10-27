@@ -13,6 +13,8 @@ use horizon_mod_sdk::{
 struct Mekanismgenerators {
     blocks: HashMap<u32, String>,
     burn_left: HashMap<u32, u32>,
+    energy_restore: HashMap<u32, EnergyView>,
+    gas_restore: HashMap<u32, capabilities::FluidView>,
     turbine_restore: HashMap<u32, capabilities::FluidView>,
     fission_restore: HashMap<u32, Vec<(u32, capabilities::FluidView)>>,
     fusion_restore: HashMap<u32, FusionStored>,
@@ -277,6 +279,8 @@ impl Mod for Mekanismgenerators {
             Self {
                 blocks: HashMap::new(),
                 burn_left: HashMap::new(),
+                energy_restore: HashMap::new(),
+                gas_restore: HashMap::new(),
                 turbine_restore: HashMap::new(),
                 fission_restore: HashMap::new(),
                 fusion_restore: HashMap::new(),
@@ -301,23 +305,28 @@ impl Mod for Mekanismgenerators {
             })
             .collect::<Vec<_>>()
             .into_iter()
-            .chain([BlockEntityType {
-                block: "mekanismgenerators:turbine_valve".into(),
-                slots: 0,
-                ticks: true,
-            }, BlockEntityType {
-                block: "mekanismgenerators:fission_reactor_port".into(),
-                slots: 0,
-                ticks: true,
-            }, BlockEntityType {
-                block: "mekanismgenerators:fusion_reactor_controller".into(),
-                slots: 1,
-                ticks: true,
-            }, BlockEntityType {
-                block: "mekanismgenerators:fusion_reactor_port".into(),
-                slots: 0,
-                ticks: true,
-            }])
+            .chain([
+                BlockEntityType {
+                    block: "mekanismgenerators:turbine_valve".into(),
+                    slots: 0,
+                    ticks: true,
+                },
+                BlockEntityType {
+                    block: "mekanismgenerators:fission_reactor_port".into(),
+                    slots: 0,
+                    ticks: true,
+                },
+                BlockEntityType {
+                    block: "mekanismgenerators:fusion_reactor_controller".into(),
+                    slots: 1,
+                    ticks: true,
+                },
+                BlockEntityType {
+                    block: "mekanismgenerators:fusion_reactor_port".into(),
+                    slots: 0,
+                    ticks: true,
+                },
+            ])
             .collect()
     }
 
@@ -359,6 +368,42 @@ impl Mod for Mekanismgenerators {
                 .map(u32::from_le_bytes)
                 .unwrap_or(0),
         );
+        if is_generator(block)
+            && let Some(marker) = saved.windows(4).position(|window| window == b"GEN1")
+            && let Some(bytes) = saved.get(marker + 4..marker + 36)
+        {
+            let energy = EnergyView {
+                stored: u64::from_le_bytes(bytes[..8].try_into().unwrap_or([0; 8])),
+                capacity: u64::from_le_bytes(bytes[8..16].try_into().unwrap_or([0; 8])),
+                max_receive: u64::from_le_bytes(bytes[16..24].try_into().unwrap_or([0; 8])),
+                max_extract: u64::from_le_bytes(bytes[24..32].try_into().unwrap_or([0; 8])),
+            };
+            self.energy_restore.insert(
+                handle,
+                EnergyView {
+                    stored: energy.stored.min(energy.capacity),
+                    ..energy
+                },
+            );
+        }
+        if block == "mekanismgenerators:gas_burning_generator"
+            && let Some(marker) = saved.windows(4).position(|window| window == b"GAS1")
+            && let Some(header) = saved.get(marker + 4..marker + 24)
+        {
+            let amount = u64::from_le_bytes(header[..8].try_into().unwrap_or([0; 8]));
+            let capacity = u64::from_le_bytes(header[8..16].try_into().unwrap_or([0; 8]));
+            let len = u32::from_le_bytes(header[16..20].try_into().unwrap_or([0; 4])) as usize;
+            if let Some(fluid) = saved.get(marker + 24..marker + 24 + len) {
+                self.gas_restore.insert(
+                    handle,
+                    capabilities::FluidView {
+                        fluid: String::from_utf8_lossy(fluid).into_owned(),
+                        amount: amount.min(capacity),
+                        capacity,
+                    },
+                );
+            }
+        }
         if is_turbine_valve(block)
             && let Some(marker) = saved.windows(4).position(|window| window == b"TUR1")
             && let Some(header) = saved.get(marker + 4..marker + 24)
@@ -422,8 +467,7 @@ impl Mod for Mekanismgenerators {
                 };
                 let tank = u32::from_le_bytes(record[..4].try_into().unwrap_or([0; 4]));
                 let amount = u64::from_le_bytes(record[4..12].try_into().unwrap_or([0; 8]));
-                let tank_capacity =
-                    u64::from_le_bytes(record[12..20].try_into().unwrap_or([0; 8]));
+                let tank_capacity = u64::from_le_bytes(record[12..20].try_into().unwrap_or([0; 8]));
                 let len = u32::from_le_bytes(record[20..24].try_into().unwrap_or([0; 4])) as usize;
                 cursor += 24;
                 let Some(fluid) = saved.get(cursor..cursor.saturating_add(len)) else {
@@ -478,17 +522,28 @@ impl Mod for Mekanismgenerators {
                 let Some(link) = machine::get_world_rule(&rule) else {
                     if is_controller {
                         set_active(handle, "false");
-                        let screen = screen_id(block, &position.dimension, position.x, position.y, position.z);
+                        let screen = screen_id(
+                            block,
+                            &position.dimension,
+                            position.x,
+                            position.y,
+                            position.z,
+                        );
                         ui::set_gauge(&screen, 30, 0, 1, "Reactor not formed");
                     }
                     continue;
                 };
                 let mut fields = link.split(';');
-                let Some(minimum) = fields.next() else { continue };
-                let Some(_port_count) = fields.next().and_then(|value| value.parse::<u64>().ok()) else {
+                let Some(minimum) = fields.next() else {
                     continue;
                 };
-                let Some(controller_coords) = fields.next() else { continue };
+                let Some(_port_count) = fields.next().and_then(|value| value.parse::<u64>().ok())
+                else {
+                    continue;
+                };
+                let Some(controller_coords) = fields.next() else {
+                    continue;
+                };
                 let Ok(minimum) = minimum
                     .split(',')
                     .map(str::parse::<i32>)
@@ -503,13 +558,13 @@ impl Mod for Mekanismgenerators {
                 else {
                     continue;
                 };
-                let ([x, y, z], [cx, cy, cz]) =
-                    (minimum.as_slice(), controller_coords.as_slice())
+                let ([x, y, z], [cx, cy, cz]) = (minimum.as_slice(), controller_coords.as_slice())
                 else {
                     continue;
                 };
                 let shared_key = position_key(&position.dimension, *x, *y, *z);
-                let local_key = position_key(&position.dimension, position.x, position.y, position.z);
+                let local_key =
+                    position_key(&position.dimension, position.x, position.y, position.z);
                 let capacities = [
                     (1_000, 1_000_000),
                     (1_001, 1_000_000),
@@ -519,14 +574,15 @@ impl Mod for Mekanismgenerators {
                 ];
                 let restored = self.fusion_restore.remove(&handle);
                 if capabilities::get_energy(&shared_key).is_none() {
-                    let view = restored.as_ref().map(|state| state.energy.clone()).unwrap_or(
-                        EnergyView {
+                    let view = restored
+                        .as_ref()
+                        .map(|state| state.energy.clone())
+                        .unwrap_or(EnergyView {
                             stored: 0,
                             capacity: 10_000_000_000,
                             max_receive: 10_000_000_000,
                             max_extract: 10_000_000_000,
-                        },
-                    );
+                        });
                     capabilities::set_energy_buffer(&shared_key, view);
                 }
                 for (tank, capacity) in capacities {
@@ -590,9 +646,8 @@ impl Mod for Mekanismgenerators {
                         || machine::get_property(handle, "active")
                             .is_some_and(|value| value == "true");
                     if !lit
-                        && machine::get_slot(handle, 0).is_some_and(|item| {
-                            item.id == "mekanismgenerators:hohlraum"
-                        })
+                        && machine::get_slot(handle, 0)
+                            .is_some_and(|item| item.id == "mekanismgenerators:hohlraum")
                         && capabilities::extract_energy(&shared_key, 1_000_000_000, true)
                             >= 1_000_000_000
                     {
@@ -605,14 +660,11 @@ impl Mod for Mekanismgenerators {
                         || machine::get_property(handle, "active")
                             .is_some_and(|value| value == "true");
                     if active {
-                        let energy_room = capabilities::get_energy(&shared_key).map_or(0, |view| {
-                            view.capacity.saturating_sub(view.stored)
-                        });
+                        let energy_room = capabilities::get_energy(&shared_key)
+                            .map_or(0, |view| view.capacity.saturating_sub(view.stored));
                         let direct_fuel = capabilities::get_fluid(&shared_key, 1_002)
                             .filter(|view| view.fluid == "mekanismgenerators:fusion_fuel")
-                            .map_or(0, |view| {
-                                view.amount.min(1_000).min(energy_room / 200_000)
-                            });
+                            .map_or(0, |view| view.amount.min(1_000).min(energy_room / 200_000));
                         let (fuel_used, generated) = if direct_fuel > 0 {
                             (direct_fuel, direct_fuel.saturating_mul(200_000))
                         } else {
@@ -697,8 +749,8 @@ impl Mod for Mekanismgenerators {
                         );
                     }
                     if let Some(shared_energy) = capabilities::get_energy(&shared_key) {
-                        let local_energy = capabilities::get_energy(&local_key)
-                            .map_or(0, |view| view.stored);
+                        let local_energy =
+                            capabilities::get_energy(&local_key).map_or(0, |view| view.stored);
                         let room = 100_000_000u64.saturating_sub(local_energy);
                         let transfer = shared_energy.stored.min(room).min(10_000_000);
                         if transfer > 0
@@ -711,7 +763,13 @@ impl Mod for Mekanismgenerators {
                 }
                 if let Some(energy) = capabilities::get_energy(&local_key) {
                     ui::set_gauge(
-                        &screen_id(block, &position.dimension, position.x, position.y, position.z),
+                        &screen_id(
+                            block,
+                            &position.dimension,
+                            position.x,
+                            position.y,
+                            position.z,
+                        ),
                         11,
                         energy.stored,
                         energy.capacity,
@@ -721,26 +779,36 @@ impl Mod for Mekanismgenerators {
                 for (widget, tank) in [(20, 1_000), (21, 1_001), (22, 1_002), (23, 1_004)] {
                     if let Some(view) = capabilities::get_fluid(&shared_key, tank) {
                         ui::set_gauge(
-                            &screen_id(block, &position.dimension, position.x, position.y, position.z),
+                            &screen_id(
+                                block,
+                                &position.dimension,
+                                position.x,
+                                position.y,
+                                position.z,
+                            ),
                             widget,
                             view.amount,
                             view.capacity,
-                            if view.fluid.is_empty() { "Empty" } else { &view.fluid },
+                            if view.fluid.is_empty() {
+                                "Empty"
+                            } else {
+                                &view.fluid
+                            },
                         );
                     }
                 }
                 if is_controller {
-                    let screen = screen_id(block, &position.dimension, position.x, position.y, position.z);
+                    let screen = screen_id(
+                        block,
+                        &position.dimension,
+                        position.x,
+                        position.y,
+                        position.z,
+                    );
                     if let Some(energy) = capabilities::get_energy(&shared_key) {
                         ui::set_gauge(&screen, 11, energy.stored, energy.capacity, "Fusion energy");
                     }
-                    ui::set_gauge(
-                        &screen,
-                        30,
-                        1,
-                        1,
-                        &format!("Formed · {link}")
-                    );
+                    ui::set_gauge(&screen, 30, 1, 1, &format!("Formed · {link}"));
                 }
                 continue;
             }
@@ -752,20 +820,31 @@ impl Mod for Mekanismgenerators {
                 );
                 let Some(link) = machine::get_world_rule(&rule) else {
                     set_active(handle, "false");
-                    let screen = screen_id(block, &position.dimension, position.x, position.y, position.z);
+                    let screen = screen_id(
+                        block,
+                        &position.dimension,
+                        position.x,
+                        position.y,
+                        position.z,
+                    );
                     ui::set_gauge(&screen, 30, 0, 1, "Reactor not formed");
                     continue;
                 };
                 let mut fields = link.split(';');
-                let Some(minimum) = fields.next() else { continue };
+                let Some(minimum) = fields.next() else {
+                    continue;
+                };
                 let Some(size) = fields.next() else { continue };
-                let Some(fuel_assemblies) = fields.next().and_then(|v| v.parse::<u64>().ok()) else {
+                let Some(fuel_assemblies) = fields.next().and_then(|v| v.parse::<u64>().ok())
+                else {
                     continue;
                 };
                 let Some(_port_count) = fields.next().and_then(|v| v.parse::<u64>().ok()) else {
                     continue;
                 };
-                let Some(primary) = fields.next() else { continue };
+                let Some(primary) = fields.next() else {
+                    continue;
+                };
                 let Ok(minimum) = minimum
                     .split(',')
                     .map(str::parse::<i32>)
@@ -793,7 +872,8 @@ impl Mod for Mekanismgenerators {
                     continue;
                 };
                 let shared_key = position_key(&position.dimension, *x, *y, *z);
-                let local_key = position_key(&position.dimension, position.x, position.y, position.z);
+                let local_key =
+                    position_key(&position.dimension, position.x, position.y, position.z);
                 let capacities = [
                     (0, 1_000_000),
                     (1_000, 1_000_000),
@@ -949,7 +1029,13 @@ impl Mod for Mekanismgenerators {
                         }
                     }
                 }
-                let screen = screen_id(block, &position.dimension, position.x, position.y, position.z);
+                let screen = screen_id(
+                    block,
+                    &position.dimension,
+                    position.x,
+                    position.y,
+                    position.z,
+                );
                 for (widget, tank) in [(10, 0), (20, 1_000), (21, 1_001), (22, 1_002)] {
                     if let Some(view) = capabilities::get_fluid(&shared_key, tank) {
                         ui::set_gauge(
@@ -957,7 +1043,11 @@ impl Mod for Mekanismgenerators {
                             widget,
                             view.amount,
                             view.capacity,
-                            if view.fluid.is_empty() { "Empty" } else { &view.fluid },
+                            if view.fluid.is_empty() {
+                                "Empty"
+                            } else {
+                                &view.fluid
+                            },
                         );
                     }
                 }
@@ -982,7 +1072,9 @@ impl Mod for Mekanismgenerators {
                     continue;
                 };
                 let mut fields = link.split(';');
-                let Some(coords) = fields.next() else { continue };
+                let Some(coords) = fields.next() else {
+                    continue;
+                };
                 let Some(volume) = fields.next().and_then(|v| v.parse::<u64>().ok()) else {
                     continue;
                 };
@@ -1005,7 +1097,9 @@ impl Mod for Mekanismgenerators {
                 else {
                     continue;
                 };
-                let [x, y, z] = coords.as_slice() else { continue };
+                let [x, y, z] = coords.as_slice() else {
+                    continue;
+                };
                 let key = position_key(&position.dimension, position.x, position.y, position.z);
                 let shared_key = position_key(&position.dimension, *x, *y, *z);
                 let steam_capacity = volume.saturating_mul(160_000).max(64_000);
@@ -1059,13 +1153,7 @@ impl Mod for Mekanismgenerators {
                         false,
                     );
                     if moved > 0 {
-                        capabilities::drain_fluid_tank(
-                            &key,
-                            1_000,
-                            &local.fluid,
-                            moved,
-                            false,
-                        );
+                        capabilities::drain_fluid_tank(&key, 1_000, &local.fluid, moved, false);
                     }
                 }
                 if capabilities::get_energy(&key).is_none() {
@@ -1109,7 +1197,13 @@ impl Mod for Mekanismgenerators {
                 set_active(handle, "true");
                 if let Some(energy) = capabilities::get_energy(&key) {
                     ui::set_gauge(
-                        &screen_id(block, &position.dimension, position.x, position.y, position.z),
+                        &screen_id(
+                            block,
+                            &position.dimension,
+                            position.x,
+                            position.y,
+                            position.z,
+                        ),
                         11,
                         energy.stored,
                         energy.capacity,
@@ -1118,11 +1212,21 @@ impl Mod for Mekanismgenerators {
                 }
                 if let Some(steam) = capabilities::get_fluid(&shared_key, 1_000) {
                     ui::set_gauge(
-                        &screen_id(block, &position.dimension, position.x, position.y, position.z),
+                        &screen_id(
+                            block,
+                            &position.dimension,
+                            position.x,
+                            position.y,
+                            position.z,
+                        ),
                         20,
                         steam.amount,
                         steam.capacity,
-                        if steam.fluid.is_empty() { "Empty steam" } else { &steam.fluid },
+                        if steam.fluid.is_empty() {
+                            "Empty steam"
+                        } else {
+                            &steam.fluid
+                        },
                     );
                 }
                 continue;
@@ -1135,26 +1239,32 @@ impl Mod for Mekanismgenerators {
             if block == "mekanismgenerators:gas_burning_generator"
                 && capabilities::get_fluid(&key, 1_000).is_none()
             {
+                let restored =
+                    self.gas_restore
+                        .remove(&handle)
+                        .unwrap_or(capabilities::FluidView {
+                            fluid: String::new(),
+                            amount: 0,
+                            capacity: 64_000,
+                        });
                 capabilities::set_fluid_tank(
                     &key,
                     1_000,
                     &capabilities::FluidView {
-                        fluid: String::new(),
-                        amount: 0,
+                        fluid: restored.fluid,
+                        amount: restored.amount.min(64_000),
                         capacity: 64_000,
                     },
                 );
             }
             if capabilities::get_energy(&key).is_none() {
-                capabilities::set_energy_buffer(
-                    &key,
-                    EnergyView {
-                        stored: 0,
-                        capacity,
-                        max_receive: 100_000,
-                        max_extract: 100_000,
-                    },
-                );
+                let restored = self.energy_restore.remove(&handle).unwrap_or(EnergyView {
+                    stored: 0,
+                    capacity,
+                    max_receive: 100_000,
+                    max_extract: 100_000,
+                });
+                capabilities::set_energy_buffer(&key, restored);
             }
             let mut generation = 0u64;
             if matches!(
@@ -1313,6 +1423,40 @@ impl Mod for Mekanismgenerators {
             .unwrap_or(0)
             .to_le_bytes()
             .to_vec();
+        if self
+            .blocks
+            .get(&handle)
+            .is_some_and(|block| is_generator(block))
+            && let Some(position) = machine::get_position(handle)
+            && let Some(energy) = capabilities::get_energy(&position_key(
+                &position.dimension,
+                position.x,
+                position.y,
+                position.z,
+            ))
+        {
+            saved.extend_from_slice(b"GEN1");
+            saved.extend_from_slice(&energy.stored.to_le_bytes());
+            saved.extend_from_slice(&energy.capacity.to_le_bytes());
+            saved.extend_from_slice(&energy.max_receive.to_le_bytes());
+            saved.extend_from_slice(&energy.max_extract.to_le_bytes());
+        }
+        if self
+            .blocks
+            .get(&handle)
+            .is_some_and(|block| block == "mekanismgenerators:gas_burning_generator")
+            && let Some(position) = machine::get_position(handle)
+            && let Some(fuel) = capabilities::get_fluid(
+                &position_key(&position.dimension, position.x, position.y, position.z),
+                1_000,
+            )
+        {
+            saved.extend_from_slice(b"GAS1");
+            saved.extend_from_slice(&fuel.amount.to_le_bytes());
+            saved.extend_from_slice(&fuel.capacity.to_le_bytes());
+            saved.extend_from_slice(&(fuel.fluid.len() as u32).to_le_bytes());
+            saved.extend_from_slice(fuel.fluid.as_bytes());
+        }
         if self
             .blocks
             .get(&handle)
