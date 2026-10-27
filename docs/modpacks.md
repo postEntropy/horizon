@@ -163,7 +163,7 @@ frame, chat and command hooks. Server mods do not run yet. What a content pack n
 | Block registry: ids, states, properties, shapes, sounds, light | — | data and up (all 331) | **0.2** | declared in `data/<mod>/horizon/block/*.json`, each from a vanilla *template* block (below) |
 | Item registry, block items | — | data and up | **0.2** | `data/<mod>/horizon/item/*.json`, from a vanilla template item |
 | Recipes, loot tables, tags, advancements, lang, blockstates, models, textures, sounds in the mod's namespace | vanilla namespace only | data and up | **0.2** | the 26.3 data-pack and resource-pack formats, as they are |
-| Worldgen JSON: features, structures, template pools, processors, noise parameters, density functions, noise settings, world presets, structure NBT, biome additions | vanilla bundle only | about 30 data-tier structure and biome mods | 0.2.x | carried into `worldgen/` bundles; noise and density registries are compiled before use |
+| Worldgen JSON: features, structures, template pools, processors, carvers, noise parameters, density functions, noise settings, world presets, structure NBT, biome additions | vanilla bundle only | about 30 data-tier structure and biome mods | 0.2.x | carried into `worldgen/` bundles; noise, density and carver registries are compiled before use |
 | Block and item behaviour callbacks: use, place, break, attack, random tick, scheduled tick, neighbour change, entity inside | — | logic and up (253) | **0.3** | `server` interface; hooks per registered id, budgeted |
 | Server events, typed commands, game rules | — | logic and up, server-only (11) | **0.3** | `server` interface |
 | Config: typed schema in the manifest, per world and per server, a settings page | — | most mods with code | **0.3** | `config` + the Options > Mods page |
@@ -249,8 +249,9 @@ How the game loads them, without touching vanilla's path:
   size and mtime. Adding, removing or editing a mod, or a new build of Horizon, rebuilds it. For
   ATM10's 40 data-tier mods the build takes about a minute of the first start on a busy machine.
 - **Worldgen.** Mods' structures, structure sets, template pools, processor lists, configured and
-  placed features, noise parameters, density functions, noise settings and world presets join the
-  `worldgen/*.json` bundles. Noise and density registries are compiled before the root is accepted.
+  placed features, configured carvers, noise parameters, density functions, noise settings and
+  world presets join the `worldgen/*.json` bundles. Noise, density and carver registries are
+  compiled before the root is accepted.
   Their structure templates go under
   `worldgen/structure/<ns>/`. Their biome tags are merged into `worldgen/biome_tags.json`, minus
   the biomes and tags Horizon does not have. Mod biome definitions are not loaded yet; terrain

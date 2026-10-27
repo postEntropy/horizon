@@ -1322,13 +1322,14 @@ const TAG_BUNDLES: [&str; 2] = ["block-tags.json", "worldgen/block_tags.json"];
 const BIOME_TAGS: &str = "worldgen/biome_tags.json";
 /// Worldgen registries a content mod may add to, and the bundle the
 /// worldgen loader reads each from (id → the file's text).
-const WORLDGEN_BUNDLES: [(&str, &str); 10] = [
+const WORLDGEN_BUNDLES: [(&str, &str); 11] = [
     ("structure", "worldgen/structures.json"),
     ("structure_set", "worldgen/structure_sets.json"),
     ("template_pool", "worldgen/template_pools.json"),
     ("processor_list", "worldgen/processor_lists.json"),
     ("configured_feature", "worldgen/features.json"),
     ("placed_feature", "worldgen/placed_features.json"),
+    ("configured_carver", "worldgen/carvers.json"),
     ("noise", "worldgen/noises.json"),
     ("density_function", "worldgen/densities.json"),
     ("noise_settings", "worldgen/settings.json"),
@@ -2577,6 +2578,18 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
         horizon_world::worldgen::density::DensityRegistry::from_json(&noises, &densities).map_err(
             |e| std::io::Error::other(format!("invalid mod worldgen noise/density registry: {e}")),
         )?;
+    }
+    if worldgen.contains_key("worldgen/carvers.json") {
+        let overlaid = overlay.out.join("worldgen/carvers.json");
+        let path = if overlaid.exists() {
+            overlaid
+        } else {
+            base.join("worldgen/carvers.json")
+        };
+        let carvers: BTreeMap<String, String> = serde_json::from_slice(&fs::read(path)?)?;
+        horizon_world::worldgen::carver::CarverCatalog::from_json(&carvers).map_err(|e| {
+            std::io::Error::other(format!("invalid mod worldgen carver registry: {e}"))
+        })?;
     }
     apply_biome_modifiers(base, &overlay, &biome_modifiers)?;
     // A block without its own blockstate looks like its template, so every
