@@ -163,7 +163,7 @@ pub fn extract_overrides(source: &Path, destination: &Path) -> Result<usize, Str
                 .map(|p| root.join(p))
                 .find(|p| p.join("mods").is_dir())
                 .unwrap_or_else(|| root.clone());
-            for folder in ["config", "defaultconfigs", "kubejs"] {
+            for folder in ["config", "defaultconfigs", "kubejs", "datapacks"] {
                 count += copy_tree(&game.join(folder), destination, &root)?;
             }
         }
@@ -206,6 +206,115 @@ pub fn extract_overrides(source: &Path, destination: &Path) -> Result<usize, Str
         }
     }
     Ok(count)
+}
+
+/// Turns override data packs into inventory files so they use the same
+/// fetch, carry-over, and coverage path as data packs listed in a manifest.
+/// Folder packs are zipped in the staging area; their ZIP is also what new
+/// worlds receive from the profile.
+pub fn index_override_datapacks(work: &Path, pack: &mut Pack) -> Result<usize, String> {
+    let root = work.join("pack-overrides/datapacks");
+    let entries = match fs::read_dir(&root) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => return Err(format!("{}: {error}", root.display())),
+    };
+    let mut entries: Vec<_> = entries.flatten().collect();
+    entries.sort_by_key(fs::DirEntry::file_name);
+    let mut indexed = 0;
+    for entry in entries {
+        let path = entry.path();
+        let metadata =
+            fs::symlink_metadata(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        let archive = if metadata.is_dir() && path.join("pack.mcmeta").is_file() {
+            let stem = path.file_name().unwrap_or_default().to_string_lossy();
+            let mut target = root.join(format!("{stem}.override.zip"));
+            let mut suffix = 2;
+            while target.exists() {
+                target = root.join(format!("{stem}.override-{suffix}.zip"));
+                suffix += 1;
+            }
+            zip_datapack_folder(&path, &target)?;
+            fs::remove_dir_all(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            target
+        } else if metadata.is_file() && path.extension().is_some_and(|ext| ext == "zip") {
+            path
+        } else {
+            continue;
+        };
+        let relative = archive
+            .strip_prefix(&root)
+            .map_err(|e| format!("{}: {e}", archive.display()))?
+            .to_string_lossy()
+            .replace('\\', "/");
+        let pack_path = format!("datapacks/{relative}");
+        if pack.files.iter().any(|file| file.path == pack_path) {
+            continue;
+        }
+        let bytes = fs::read(&archive).map_err(|e| format!("{}: {e}", archive.display()))?;
+        let name = archive
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        pack.files.push(PackFile {
+            path: pack_path,
+            sha1: Some(sha1_hex(&bytes)),
+            name: Some(name),
+            jar: Some(archive),
+            ..PackFile::default()
+        });
+        indexed += 1;
+    }
+    Ok(indexed)
+}
+
+fn zip_datapack_folder(source: &Path, destination: &Path) -> Result<(), String> {
+    fn add_files(
+        root: &Path,
+        dir: &Path,
+        zip: &mut zip::ZipWriter<fs::File>,
+    ) -> Result<(), String> {
+        let mut entries: Vec<_> = fs::read_dir(dir)
+            .map_err(|e| format!("{}: {e}", dir.display()))?
+            .flatten()
+            .collect();
+        entries.sort_by_key(fs::DirEntry::file_name);
+        for entry in entries {
+            let path = entry.path();
+            let metadata =
+                fs::symlink_metadata(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            if metadata.file_type().is_symlink() {
+                continue;
+            }
+            if metadata.is_dir() {
+                add_files(root, &path, zip)?;
+            } else if metadata.is_file() {
+                let relative = path
+                    .strip_prefix(root)
+                    .map_err(|e| format!("{}: {e}", path.display()))?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                validate_relative(&relative)?;
+                zip.start_file(&relative, zip::write::SimpleFileOptions::default())
+                    .map_err(|e| e.to_string())?;
+                let mut file =
+                    fs::File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+                std::io::copy(&mut file, zip).map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(())
+    }
+
+    let file =
+        fs::File::create(destination).map_err(|e| format!("{}: {e}", destination.display()))?;
+    let mut zip = zip::ZipWriter::new(file);
+    add_files(source, source, &mut zip)?;
+    zip.finish()
+        .map_err(|e| format!("{}: {e}", destination.display()))?;
+    Ok(())
 }
 
 fn copy_tree(source: &Path, destination: &Path, root: &Path) -> Result<usize, String> {

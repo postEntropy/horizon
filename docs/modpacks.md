@@ -400,7 +400,7 @@ world, where Horizon's world-level loader discovers them. Its command-facing loa
 functions, function tags, predicates and item modifiers. Standalone data packs listed as files in
 the manifest also go through carry-over, which upgrades and loads supported namespaced recipes,
 loot tables and worldgen. Data packs present only in `overrides/datapacks/` are installed in new
-worlds but do not yet go through that carry-over step. Existing saves are not changed.
+worlds and indexed for that same carry-over step. Existing saves are not changed.
 
 ### 2. Inventory and classification
 

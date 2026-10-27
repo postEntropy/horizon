@@ -24,10 +24,11 @@ pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, Strin
 /// Step 1: the pack at `pack` to `<work>/pack.json`.
 pub fn import(pack: &Path, work: &Path, log: Log) -> Result<import::Pack, String> {
     let source = pack;
-    let pack = import::import(source)?;
+    let mut pack = import::import(source)?;
     fs::create_dir_all(work).map_err(|e| format!("{}: {e}", work.display()))?;
-    write_json(&work.join("pack.json"), &pack)?;
     let overrides = import::extract_overrides(source, &work.join("pack-overrides"))?;
+    let override_datapacks = import::index_override_datapacks(work, &mut pack)?;
+    write_json(&work.join("pack.json"), &pack)?;
     let mut kinds = BTreeMap::<&str, usize>::new();
     for f in &pack.files {
         *kinds.entry(f.kind()).or_default() += 1;
@@ -37,6 +38,11 @@ pub fn import(pack: &Path, work: &Path, log: Log) -> Result<import::Pack, String
         pack.name, pack.format, pack.minecraft, pack.loader, pack.loader_version, pack.overrides
     ));
     log(format!("{overrides} pack configuration files staged"));
+    if override_datapacks > 0 {
+        log(format!(
+            "{override_datapacks} override data packs indexed for carry-over"
+        ));
+    }
     Ok(pack)
 }
 
@@ -393,6 +399,9 @@ fn stage_profile_pack_files(
         }
         let kind = record.path.split('/').next().unwrap_or_default();
         let destination = work.join("pack-overrides").join(kind).join(name);
+        if source == &destination {
+            continue;
+        }
         let parent = destination.parent().ok_or("asset path has no parent")?;
         fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         fs::copy(source, &destination)
