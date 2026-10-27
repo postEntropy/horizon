@@ -46,7 +46,7 @@ A mod with API 0.3 logic, API 0.4 machines and API 0.5 deep systems: the SDK bui
 The game's side of `horizon-machine-mod` beyond `horizon-mod`.
 
 - Imports (what the game offers): `config`, `server`, `keys`, `target`, `inventory`, `machine`, `capabilities`, `ui`, `net`, `recipes`, `world-read`, `render`, `entities`, `models`, `dimensions`, `vanilla-hooks`
-- Exports (what the mod provides): `block-entities`, `logic`, `mod-entities`
+- Exports (what the mod provides): `block-entities`, `mod-entities`
 
 ## `log`
 

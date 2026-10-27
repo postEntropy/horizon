@@ -682,7 +682,15 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     let _ = mods.drain();
 
     mods.menu_click("test_machine:smelter_menu", 0, 1);
-    assert_eq!(mods.open_screens().next().unwrap().1.widgets[0].value, 50);
+    let status_after_click = mods.entries()[0].status.clone();
+    assert_eq!(
+        mods.open_screens()
+            .next()
+            .map(|(_, spec)| spec.widgets[0].value),
+        Some(50),
+        "mod status after click: {:?}",
+        status_after_click
+    );
     mods.menu_button("test_machine:smelter_menu", 2);
     assert_eq!(mods.open_screens().count(), 0);
     assert_eq!(

@@ -1,0 +1,79 @@
+package horizon:mods@0.1.0;
+
+/// Runtime binding for logic hooks except `on-block`, whose record changed
+/// shape in early preview components. The runtime calls that one dynamically.
+interface logic {
+    enum item-action {
+        use-in-air,
+        use-on-block,
+        attack-entity,
+        finish-using,
+    }
+    record item-event {
+        action: item-action,
+        item: string,
+        player: string,
+        dimension: string,
+        x: s32,
+        y: s32,
+        z: s32,
+        target: string,
+    }
+    enum server-event-kind {
+        player-join,
+        player-leave,
+        entity-spawn,
+        entity-death,
+        block-break,
+        block-place,
+    }
+    record server-event {
+        kind: server-event-kind,
+        subject: string,
+        dimension: string,
+        x: s32,
+        y: s32,
+        z: s32,
+        detail: string,
+    }
+    enum event-outcome {
+        pass,
+        consume,
+        cancel,
+    }
+    enum vanilla-hook-kind {
+        loot-drop,
+        entity-damage,
+        xp-gain,
+        crop-grow,
+        explosion-detonate,
+        enchantment-level,
+    }
+    record vanilla-hook-event {
+        kind: vanilla-hook-kind,
+        subject: string,
+        dimension: string,
+        x: s32,
+        y: s32,
+        z: s32,
+        value: f32,
+        context: string,
+    }
+    record logic-hooks {
+        blocks: list<string>,
+        items: list<string>,
+        server-events: list<server-event-kind>,
+        channels: list<string>,
+    }
+    hooks: func() -> logic-hooks;
+    on-item: func(event: item-event) -> event-outcome;
+    on-server: func(event: server-event) -> event-outcome;
+    on-menu-click: func(screen-id: string, slot: u32, button: u8);
+    on-menu-button: func(screen-id: string, button: u8);
+    on-packet: func(channel: string, payload: list<u8>, from-player: option<string>);
+    on-vanilla-hook: func(event: vanilla-hook-event) -> event-outcome;
+}
+
+world logic-host {
+    export logic;
+}

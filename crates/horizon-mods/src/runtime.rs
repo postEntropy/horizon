@@ -26,6 +26,15 @@ mod machine_bindings {
         additional_derives: [PartialEq],
     });
 }
+/// The typed logic bindings intentionally omit `on-block`: early preview
+/// components used both the old and new record shape under the same WIT id.
+mod logic_bindings {
+    wasmtime::component::bindgen!({
+        path: "wit-compat",
+        world: "logic-host",
+        additional_derives: [PartialEq],
+    });
+}
 pub use bindings::horizon::mods::{
     game::{Clock, Player},
     hud::{Corner, Line},
@@ -35,6 +44,11 @@ use bindings::{
     exports::horizon::mods::events::Registration,
     horizon::mods::{chat, game, hud, log as mod_log, storage},
 };
+use logic_bindings::LogicHost;
+pub use logic_bindings::exports::horizon::mods::logic::{
+    EventOutcome, ItemAction, ItemEvent, LogicHooks, ServerEvent, ServerEventKind,
+    VanillaHookEvent, VanillaHookKind,
+};
 use machine_bindings::{
     MachineHost,
     horizon::mods::{
@@ -42,13 +56,33 @@ use machine_bindings::{
         render, server, target, ui, vanilla_hooks, world_read as world,
     },
 };
+use wasmtime::component::{Func, Val};
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlockAction {
+    UseWithoutItem,
+    UseItemOn,
+    Place,
+    Broken,
+    Attack,
+    RandomTick,
+    ScheduledTick,
+    NeighborChanged,
+    EntityInside,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlockEvent {
+    pub action: BlockAction,
+    pub dimension: String,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub state: String,
+    pub actor: String,
+    pub held_item: String,
+}
 pub use machine_bindings::{
     exports::horizon::mods::{
         block_entities::BlockEntityType,
-        logic::{
-            BlockAction, BlockEvent, EventOutcome, ItemAction, ItemEvent, LogicHooks, ServerEvent,
-            ServerEventKind, VanillaHookEvent, VanillaHookKind,
-        },
         mod_entities::{AiGoal, EntityType, SpawnCategory},
     },
     horizon::mods::{
@@ -296,8 +330,15 @@ struct Running {
 
 struct Exports {
     events: HorizonMod,
-    /// Present when the component exports `block-entities` / `logic`.
+    /// Present when the component exports block entities.
     machine: Option<MachineHost>,
+    logic: Option<LogicHost>,
+    on_block: Option<BlockCallback>,
+}
+
+struct BlockCallback {
+    func: Func,
+    fields: Vec<String>,
 }
 
 struct State {
@@ -518,6 +559,21 @@ impl Mods {
             true => Some(MachineHost::new(&mut store, &instance).map_err(|e| reason(&e))?),
             false => None,
         };
+        let (logic_exports, on_block) = if has_machine {
+            let logic = LogicHost::new(&mut store, &instance).map_err(|e| reason(&e))?;
+            let logic_index =
+                instance.get_export_index(&mut store, None, "horizon:mods/logic@0.1.0");
+            let callback = logic_index
+                .as_ref()
+                .and_then(|index| instance.get_export_index(&mut store, Some(index), "on-block"))
+                .and_then(|index| instance.get_func(&mut store, &index))
+                .map(|func| block_callback(func, &store))
+                .transpose()
+                .map_err(|e| reason(&e))?;
+            (Some(logic), callback)
+        } else {
+            (None, None)
+        };
         let mut hooks = events
             .horizon_mods_events()
             .call_init(&mut store)
@@ -542,11 +598,16 @@ impl Mods {
                 ));
             }
             types = check_types(m, declared)?;
-            let declared_logic = machine
+            let declared_logic = logic_exports
+                .as_ref()
+                .expect("machine logic binding was created")
                 .horizon_mods_logic()
                 .call_hooks(&mut store)
                 .map_err(|e| reason(&e))?;
             logic = check_logic_hooks(m, declared_logic)?;
+            if !logic.blocks.is_empty() && on_block.is_none() {
+                return Err("registers block callbacks but exports no on-block function".into());
+            }
             let declared_entities = machine
                 .horizon_mods_mod_entities()
                 .call_types(&mut store)
@@ -569,7 +630,12 @@ impl Mods {
         self.out.append(&mut store.data_mut().out);
         Ok(Some(Running {
             store,
-            exports: Exports { events, machine },
+            exports: Exports {
+                events,
+                machine,
+                logic: logic_exports,
+                on_block,
+            },
             hooks,
             types,
             logic,
@@ -879,7 +945,11 @@ impl Mods {
         }
         let outcome = self
             .call(i, FUEL_EVENT, |m, s| {
-                machine_of(m)?.horizon_mods_logic().call_on_block(s, &event)
+                let callback = m
+                    .on_block
+                    .as_ref()
+                    .ok_or_else(|| wasmtime::Error::msg("no on-block export"))?;
+                call_on_block(callback, s, &event)
             })
             .unwrap_or(EventOutcome::Pass);
         if let Some(run) = self.entries[i].run.as_mut() {
@@ -898,7 +968,7 @@ impl Mods {
             return EventOutcome::Pass;
         };
         self.call(i, FUEL_EVENT, |m, s| {
-            machine_of(m)?.horizon_mods_logic().call_on_item(s, &event)
+            logic_of(m)?.horizon_mods_logic().call_on_item(s, &event)
         })
         .unwrap_or(EventOutcome::Pass)
     }
@@ -915,9 +985,7 @@ impl Mods {
                 continue;
             }
             if let Some(res) = self.call(i, FUEL_EVENT, |m, s| {
-                machine_of(m)?
-                    .horizon_mods_logic()
-                    .call_on_server(s, &event)
+                logic_of(m)?.horizon_mods_logic().call_on_server(s, &event)
             }) {
                 if res == EventOutcome::Cancel {
                     return EventOutcome::Cancel;
@@ -944,7 +1012,7 @@ impl Mods {
             return;
         };
         self.call(i, FUEL_EVENT, |m, s| {
-            machine_of(m)?
+            logic_of(m)?
                 .horizon_mods_logic()
                 .call_on_menu_click(s, screen_id, slot, button)
         });
@@ -964,7 +1032,7 @@ impl Mods {
             return;
         };
         self.call(i, FUEL_EVENT, |m, s| {
-            machine_of(m)?
+            logic_of(m)?
                 .horizon_mods_logic()
                 .call_on_menu_button(s, screen_id, button)
         });
@@ -979,7 +1047,7 @@ impl Mods {
                 .is_some_and(|r| r.logic.channels.iter().any(|c| c == channel));
             if wants {
                 self.call(i, FUEL_EVENT, |m, s| {
-                    machine_of(m)?.horizon_mods_logic().call_on_packet(
+                    logic_of(m)?.horizon_mods_logic().call_on_packet(
                         s,
                         channel,
                         payload,
@@ -1339,7 +1407,7 @@ impl Mods {
                 continue;
             }
             if let Some(res) = self.call(i, FUEL_EVENT, |m, s| {
-                machine_of(m)?
+                logic_of(m)?
                     .horizon_mods_logic()
                     .call_on_vanilla_hook(s, event)
             }) && res != EventOutcome::Pass
@@ -1448,6 +1516,100 @@ fn machine_of(m: &Exports) -> wasmtime::Result<&MachineHost> {
     m.machine
         .as_ref()
         .ok_or_else(|| wasmtime::Error::msg("no block-entities export"))
+}
+
+fn logic_of(m: &Exports) -> wasmtime::Result<&LogicHost> {
+    m.logic
+        .as_ref()
+        .ok_or_else(|| wasmtime::Error::msg("no logic export"))
+}
+
+fn call_on_block(
+    callback: &BlockCallback,
+    store: &mut Store<State>,
+    event: &BlockEvent,
+) -> wasmtime::Result<EventOutcome> {
+    let face = store.data().active_block_face.clone().unwrap_or_default();
+    let fields = callback
+        .fields
+        .iter()
+        .map(|field| {
+            let value = match field.as_str() {
+                "action" => Val::Enum(
+                    match event.action {
+                        BlockAction::UseWithoutItem => "use-without-item",
+                        BlockAction::UseItemOn => "use-item-on",
+                        BlockAction::Place => "place",
+                        BlockAction::Broken => "broken",
+                        BlockAction::Attack => "attack",
+                        BlockAction::RandomTick => "random-tick",
+                        BlockAction::ScheduledTick => "scheduled-tick",
+                        BlockAction::NeighborChanged => "neighbor-changed",
+                        BlockAction::EntityInside => "entity-inside",
+                    }
+                    .into(),
+                ),
+                "dimension" => Val::String(event.dimension.clone()),
+                "x" => Val::S32(event.x),
+                "y" => Val::S32(event.y),
+                "z" => Val::S32(event.z),
+                "face" => Val::String(face.clone()),
+                "state" => Val::String(event.state.clone()),
+                "actor" => Val::String(event.actor.clone()),
+                "held-item" => Val::String(event.held_item.clone()),
+                other => {
+                    return Err(wasmtime::Error::msg(format!(
+                        "unknown on-block field {other}"
+                    )));
+                }
+            };
+            Ok((field.clone(), value))
+        })
+        .collect::<wasmtime::Result<Vec<_>>>()?;
+    let mut results = [Val::Enum("pass".into())];
+    callback
+        .func
+        .call(&mut *store, &[Val::Record(fields)], &mut results)?;
+    callback.func.post_return(store)?;
+    match &results[0] {
+        Val::Enum(value) if value == "pass" => Ok(EventOutcome::Pass),
+        Val::Enum(value) if value == "consume" => Ok(EventOutcome::Consume),
+        Val::Enum(value) if value == "cancel" => Ok(EventOutcome::Cancel),
+        other => Err(wasmtime::Error::msg(format!(
+            "invalid on-block outcome {other:?}"
+        ))),
+    }
+}
+
+fn block_callback(func: Func, store: &Store<State>) -> wasmtime::Result<BlockCallback> {
+    let params = func.params(store);
+    let Some((_, wasmtime::component::Type::Record(record))) = params.first() else {
+        return Err(wasmtime::Error::msg("on-block has no event record"));
+    };
+    let fields: Vec<String> = record.fields().map(|field| field.name.to_owned()).collect();
+    let required = [
+        "action",
+        "dimension",
+        "x",
+        "y",
+        "z",
+        "state",
+        "actor",
+        "held-item",
+    ];
+    if required
+        .iter()
+        .any(|name| !fields.iter().any(|field| field == name))
+        || fields
+            .iter()
+            .any(|field| !required.contains(&field.as_str()) && field != "face")
+    {
+        return Err(wasmtime::Error::msg(format!(
+            "unsupported on-block record fields: {}",
+            fields.join(", ")
+        )));
+    }
+    Ok(BlockCallback { func, fields })
 }
 
 /// Checks that `id` is `<namespace>:<path>` where `namespace` belongs to `m`.

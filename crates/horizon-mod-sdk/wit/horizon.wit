@@ -993,6 +993,5 @@ world machine-host {
     import dimensions;
     import vanilla-hooks;
     export block-entities;
-    export logic;
     export mod-entities;
 }
