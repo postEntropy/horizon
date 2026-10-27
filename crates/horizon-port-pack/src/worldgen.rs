@@ -137,7 +137,7 @@ const HORIZON_ENHANCED_TERRAIN: &str = "horizon:enhanced_terrain_adaptation";
 /// and End stronghold still write `vertical_distance_from_start_piece`.
 const DEAD_FIELDS: [&str; 1] = ["vertical_distance_from_start_piece"];
 /// Pool elements that are vanilla's with extra fields: (mod type, vanilla type).
-const ELEMENTS: [(&str, &str); 3] = [
+const ELEMENTS: [(&str, &str); 4] = [
     (
         "moogs_structures:versioned_single_pool_element",
         "minecraft:single_pool_element",
@@ -145,6 +145,10 @@ const ELEMENTS: [(&str, &str); 3] = [
     (
         "repurposed_structures:legacy_ocean_bottom_single_pool_element",
         "minecraft:legacy_single_pool_element",
+    ),
+    (
+        "irons_spellbooks:individual_terrain_element",
+        "minecraft:single_pool_element",
     ),
     ("empty_pool_element", "minecraft:empty_pool_element"),
 ];
@@ -629,6 +633,12 @@ fn upgrade_types(
                         if let Some(kernel) = own.and_then(|a| moogs_terrain(&a, lost)) {
                             element[HORIZON_ENHANCED_TERRAIN] = kernel;
                         }
+                    } else if t == "irons_spellbooks:individual_terrain_element" {
+                        let adjustment = element
+                            .as_object_mut()
+                            .and_then(|o| o.remove("terrain_adjustment"))
+                            .unwrap_or_else(|| Value::String("none".into()));
+                        element["horizon:individual_terrain"] = adjustment;
                     }
                     element["element_type"] = (*to).into();
                     changed = true;

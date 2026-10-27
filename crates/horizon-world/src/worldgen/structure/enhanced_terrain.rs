@@ -309,6 +309,7 @@ mod tests {
             yung: None,
             enhanced_terrain: own.map(Arc::new),
             ground_level: 1,
+            individual_terrain: None,
         })
     }
 

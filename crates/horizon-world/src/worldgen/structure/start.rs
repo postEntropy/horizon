@@ -267,7 +267,7 @@ impl AvoidBiomes {
 fn heightmap(name: &str) -> Option<HeightmapType> {
     HeightmapType::ALL.into_iter().find(|k| k.name() == name)
 }
-fn terrain(name: Option<&str>) -> TerrainAdjustment {
+pub(super) fn terrain(name: Option<&str>) -> TerrainAdjustment {
     match name {
         Some("bury") => TerrainAdjustment::Bury,
         Some("beard_thin") => TerrainAdjustment::BeardThin,
@@ -1195,7 +1195,11 @@ fn try_generate(
     for piece in &pieces[1..] {
         bounding_box.encapsulate(&piece.bounding_box());
     }
-    if def.terrain != TerrainAdjustment::None {
+    let individual_terrain = pieces.iter().any(|piece| match piece {
+        Piece::Pool(pool) => pool.element.individual_terrain().is_some(),
+        Piece::Legacy(_) => false,
+    });
+    if def.terrain != TerrainAdjustment::None || individual_terrain {
         bounding_box = bounding_box.inflated(12, 12);
     }
     if let Some(enhanced) = def.enhanced_terrain.as_ref().filter(|e| e.inflate) {
@@ -1284,6 +1288,44 @@ pub fn beardifier(
             {
                 include(b, &mut kernels);
             }
+        }
+        // Irons Spellbooks' IndividualTerrainStructurePoolElement replaces
+        // Beardifier's normal handling for this start when one of its pieces
+        // is close to the chunk: only its own rigid pieces contribute, with
+        // their individual adjustment, and jigsaw junctions are omitted.
+        let individual_near = start.pieces.iter().any(|piece| match piece {
+            Piece::Pool(pool) => {
+                pool.element.individual_terrain().is_some()
+                    && piece.bounding_box().max[0] >= bx - 12
+                    && piece.bounding_box().min[0] <= bx + 15 + 12
+                    && piece.bounding_box().max[2] >= bz - 12
+                    && piece.bounding_box().min[2] <= bz + 15 + 12
+            }
+            Piece::Legacy(_) => false,
+        });
+        if individual_near {
+            for piece in &start.pieces {
+                let Piece::Pool(pool) = piece else {
+                    continue;
+                };
+                let Some(adjustment) = pool.element.individual_terrain() else {
+                    continue;
+                };
+                let b = piece.bounding_box();
+                let near = b.max[0] >= bx - 12
+                    && b.min[0] <= bx + 15 + 12
+                    && b.max[2] >= bz - 12
+                    && b.min[2] <= bz + 15 + 12;
+                if near && pool.element.projection() == Projection::Rigid {
+                    rigids.push(RigidPiece {
+                        bounds: StructureBounds::new(b.min, b.max)?,
+                        adjustment,
+                        ground_level_delta: pool.ground_level_delta,
+                    });
+                    include(b, &mut any);
+                }
+            }
+            continue;
         }
         let adjustment = def.terrain;
         if adjustment == TerrainAdjustment::None {

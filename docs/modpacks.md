@@ -676,6 +676,10 @@ Two cases the oracle fills in:
     now carry their wrapped element instead of making the whole template pool unreadable. The
     wrapper's selection rule is not implemented yet and is counted by name in `rules_lost`;
     ATM10's CTOV has 134 such elements.
+  - **Iron's Spells individual terrain elements.** Its custom single pool element maps to
+    Horizon's single element with a per-piece terrain adjustment. The Beardifier uses only
+    those rigid pieces for that start and skips their jigsaw junctions, matching the mod's
+    adjustment behavior. ATM10 has 131 instances of this element.
   - **YUNG's API** (#839, #846 in the game; #840, #847 in carry). `yungsapi:yung_jigsaw` and its
     elements become vanilla's jigsaw and single element, with their rules under
     `horizon:yungsapi`. The game assembles them as YUNG's `JigsawManager` does: priority

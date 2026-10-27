@@ -1028,6 +1028,7 @@ mod tests {
             yung: None,
             enhanced_terrain: None,
             ground_level: 1,
+            individual_terrain: None,
         });
         let piece = || PoolPiece {
             bounding_box: BoundingBox::new([0; 3], [4; 3]),

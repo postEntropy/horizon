@@ -917,6 +917,7 @@ mod tests {
             yung: rules.map(Box::new),
             enhanced_terrain: None,
             ground_level: 1,
+            individual_terrain: None,
         })
     }
 

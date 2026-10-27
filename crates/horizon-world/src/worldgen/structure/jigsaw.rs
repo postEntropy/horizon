@@ -13,6 +13,7 @@ use crate::{
     },
 };
 use horizon_core::{
+    density::TerrainAdjustment,
     geometry::Direction,
     position::BlockPos,
     random::{LegacyRandom, RandomSource, position_seed},
@@ -48,6 +49,9 @@ pub enum PoolElement {
         /// getGroundLevelDelta: 1, or Formations' `ground_level`
         /// (`"horizon:ground_level"`).
         ground_level: i32,
+        /// Per-piece beardifier rule, carried from a mod's individual terrain
+        /// pool element (`"horizon:individual_terrain"`).
+        individual_terrain: Option<TerrainAdjustment>,
     },
     Feature {
         feature: String,
@@ -160,6 +164,10 @@ impl PoolElement {
                             .and_then(|g| i32::try_from(g).ok())
                             .ok_or(DecodeError::Field("horizon:ground_level"))?,
                     },
+                    individual_terrain: value
+                        .get("horizon:individual_terrain")
+                        .and_then(Value::as_str)
+                        .map(|value| super::start::terrain(Some(value))),
                 }
             }
             "minecraft:feature_pool_element" => Self::Feature {
@@ -187,6 +195,15 @@ impl PoolElement {
             Self::Single { projection, .. }
             | Self::Feature { projection, .. }
             | Self::List { projection, .. } => *projection,
+        }
+    }
+    /// Whether this pool element carries a per-piece terrain adjustment.
+    pub fn individual_terrain(&self) -> Option<TerrainAdjustment> {
+        match self {
+            Self::Single {
+                individual_terrain, ..
+            } => *individual_terrain,
+            _ => None,
         }
     }
     pub fn size(&self, rotation: Rotation) -> [i32; 3] {
