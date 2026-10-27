@@ -791,6 +791,23 @@ impl Game<'_> {
             world_seed: self.level.seed,
         };
         let (items, skulls) = drops::die(m, &death, &mut self.rand_sequences);
+        let item_count = items
+            .iter()
+            .filter(|drop| matches!(drop, drops::Drop::Item(_)))
+            .count();
+        let hook_position = [
+            m.position.x.floor() as i32,
+            m.position.y.floor() as i32,
+            m.position.z.floor() as i32,
+        ];
+        let context = m
+            .last_damage
+            .map(|(damage, _)| {
+                damage_type(damage.kind, matches!(damage.attacker, Some(Who::Player))).to_owned()
+            })
+            .unwrap_or_else(|| "minecraft:generic".into());
+        let (loot_outcome, extra_drops) =
+            self.mod_loot_drop(&m.kind.id, hook_position, item_count as f32, &context);
         if skulls
             && let Some(Who::Mob(id)) = m.last_damage.and_then(|(d, _)| d.attacker)
             && let Some(creeper) = self.mobs.iter_mut().find(|o| o.id == id)
@@ -801,7 +818,7 @@ impl Game<'_> {
         let raider = horizon_client::mobs::raider::is_raider(m.species());
         for d in items {
             match d {
-                drops::Drop::Item(stack) => {
+                drops::Drop::Item(stack) if loot_outcome.keeps_vanilla_drops() => {
                     let item = if raider && stack.item == horizon_client::mobs::raider::BANNER {
                         horizon_client::mobs::raider::ominous_banner()
                     } else {
@@ -809,8 +826,19 @@ impl Game<'_> {
                     };
                     self.spawn_item(item, pos, [0.0, 0.2, 0.0], 10);
                 }
+                drops::Drop::Item(_) => {}
                 drops::Drop::Orb(value) if !consumed => self.spawn_orbs(pos, value as u32),
                 drops::Drop::Orb(_) => {}
+            }
+        }
+        if loot_outcome.keeps_mod_drops() {
+            for drop in extra_drops {
+                self.spawn_item(
+                    horizon_client::items::ItemStack::new(&drop.id, drop.count),
+                    pos,
+                    [0.0, 0.2, 0.0],
+                    10,
+                );
             }
         }
     }

@@ -50,6 +50,29 @@ pub(super) struct ModWidgetView {
     pub(super) value: u64,
     pub(super) max_value: u64,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ModHookOutcome {
+    Pass,
+    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
+    Consume,
+    Cancel,
+}
+impl ModHookOutcome {
+    pub(super) fn keeps_vanilla_drops(self) -> bool {
+        self == Self::Pass
+    }
+    pub(super) fn keeps_mod_drops(self) -> bool {
+        self != Self::Cancel
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct ModItemDrop {
+    pub(super) id: String,
+    pub(super) count: u32,
+}
+
 #[cfg(feature = "mods")]
 use {
     super::Screen,
@@ -62,8 +85,8 @@ use {
     },
     horizon_mods::{
         BlockAction, BlockEntityView, BlockEvent, BlockHit, Clock, CookingKind, CookingRecipe,
-        EventOutcome, ItemFacts, Mods, Output, Player, ServerAction, Snapshot, Stack, StackView,
-        Status, VanillaHookEvent, VanillaHookKind,
+        EventOutcome, ItemDrop, ItemFacts, Mods, Output, Player, ServerAction, Snapshot, Stack,
+        StackView, Status, VanillaHookEvent, VanillaHookKind,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -395,6 +418,15 @@ impl Game<'_> {
     }
     pub(super) fn mod_xp_gain(&mut self, amount: u32, _context: &str) -> u32 {
         amount
+    }
+    pub(super) fn mod_loot_drop(
+        &mut self,
+        _subject: &str,
+        _position: [i32; 3],
+        _value: f32,
+        _context: &str,
+    ) -> (ModHookOutcome, Vec<ModItemDrop>) {
+        (ModHookOutcome::Pass, Vec::new())
     }
     pub(super) fn draw_mod_panels(&self, _batch: &mut HudBatch, _corners: &mut Corners) {}
 }
@@ -795,6 +827,52 @@ impl Game<'_> {
             let _ = context;
             amount
         }
+    }
+    pub(super) fn mod_loot_drop(
+        &mut self,
+        subject: &str,
+        position: [i32; 3],
+        value: f32,
+        context: &str,
+    ) -> (ModHookOutcome, Vec<ModItemDrop>) {
+        if !self.mods.mods.is_running() {
+            return (ModHookOutcome::Pass, Vec::new());
+        }
+        let (outcome, _, _, _, drops) = self.mods.mods.vanilla_hook(&VanillaHookEvent {
+            kind: VanillaHookKind::LootDrop,
+            subject: subject.to_owned(),
+            dimension: self.dim.id().to_owned(),
+            x: position[0],
+            y: position[1],
+            z: position[2],
+            value,
+            context: context.to_owned(),
+        });
+        let outcome = match outcome {
+            EventOutcome::Pass => ModHookOutcome::Pass,
+            EventOutcome::Consume => ModHookOutcome::Consume,
+            EventOutcome::Cancel => ModHookOutcome::Cancel,
+        };
+        let mut validated = Vec::new();
+        for ItemDrop { id, count } in drops {
+            let Some(max_stack) = self.res.items().get(&id).map(|item| item.max_stack) else {
+                log::warn!("Horizon: mod loot hook returned unknown item {id}");
+                continue;
+            };
+            if count == 0 || max_stack == 0 {
+                continue;
+            }
+            let mut remaining = count;
+            while remaining > 0 {
+                let stack = remaining.min(max_stack);
+                validated.push(ModItemDrop {
+                    id: id.clone(),
+                    count: stack,
+                });
+                remaining -= stack;
+            }
+        }
+        (outcome, validated)
     }
     /// A right-click on a mod-owned block. `true` means the mod handled it.
     pub(super) fn mod_use_block(
@@ -2632,5 +2710,20 @@ mod xp_tests {
         assert_eq!(scaled_xp(7, 0.5), 4);
         assert_eq!(scaled_xp(7, 0.0), 0);
         assert_eq!(scaled_xp(u32::MAX, f32::MAX), i32::MAX as u32);
+    }
+}
+
+#[cfg(test)]
+mod loot_tests {
+    use super::ModHookOutcome;
+
+    #[test]
+    fn loot_hook_outcomes_select_the_default_and_mod_drops() {
+        assert!(ModHookOutcome::Pass.keeps_vanilla_drops());
+        assert!(ModHookOutcome::Pass.keeps_mod_drops());
+        assert!(!ModHookOutcome::Consume.keeps_vanilla_drops());
+        assert!(ModHookOutcome::Consume.keeps_mod_drops());
+        assert!(!ModHookOutcome::Cancel.keeps_vanilla_drops());
+        assert!(!ModHookOutcome::Cancel.keeps_mod_drops());
     }
 }

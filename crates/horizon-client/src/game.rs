@@ -3433,12 +3433,27 @@ impl Game<'_> {
                     p.cause_food_exhaustion(0.005);
                 }
                 let drops = self.block_loot_at(pos, state, held.as_ref());
+                let context = held
+                    .as_ref()
+                    .map(|stack| stack.item.to_string())
+                    .unwrap_or_else(|| "minecraft:player".into());
+                let (loot_outcome, extra_drops) =
+                    self.mod_loot_drop(&facts.name, pos, drops.len() as f32, &context);
                 let silk = held
                     .as_ref()
                     .is_some_and(|h| h.enchantment_level("minecraft:silk_touch") > 0);
-                for d in drops {
-                    if &*d.item != "minecraft:air" {
-                        self.pop_resource(pos, d);
+                if loot_outcome.keeps_vanilla_drops() {
+                    for d in drops {
+                        if &*d.item != "minecraft:air" {
+                            self.pop_resource(pos, d);
+                        }
+                    }
+                }
+                if loot_outcome.keeps_mod_drops() {
+                    for d in extra_drops {
+                        let at = spill::pop_position(&mut self.world.random, pos);
+                        let velocity = dispenser::new_item_motion();
+                        self.spawn_item(ItemStack::new(&d.id, d.count), at, velocity, 10);
                     }
                 }
                 // BeehiveBlock.playerDestroy: silk touch keeps the bees in.

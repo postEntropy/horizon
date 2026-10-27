@@ -10,7 +10,7 @@ test, does not by itself mean a pack feature works in a playable world.
 |---|---|---|---|---|
 | 0.3 logic | Present | Present | Present for the client and local game hooks inspected | Implemented in parts; full multiplayer and per-capability gameplay coverage is not established |
 | 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist | Usable foundation; feature behavior and multiplayer/persistence coverage are incomplete |
-| 0.5 deep | Present | Present, including runtime tests | Player melee damage now dispatches `entity-damage`; custom entity lifecycle, models and other named hooks remain unwired | First live bridge; not a complete player-facing API |
+| 0.5 deep | Present | Present, including runtime tests | Melee damage, XP awards and block/mob loot dispatch hooks; custom entity lifecycle, models and other hooks remain unwired | Partial live bridge; not a complete player-facing API |
 
 ## Scope for the current ATM10 core milestone
 
@@ -80,10 +80,15 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
 - Orb experience and advancement reward points dispatch `xp-gain`. Mods may
   scale the points or cancel the award. XP from other sources still needs an
   audit against the same event.
+- Player-mined block loot and mob-death item drops dispatch `loot-drop` before
+  item entities spawn. `pass` preserves vanilla drops and adds mod drops;
+  `consume` uses the mod drops instead; `cancel` suppresses item drops. XP orbs
+  remain separate from item loot.
 - No game-side dispatch was found for `tick_entities`, custom entity
   lifecycle/interactions, registered dimensions or model animation. The named
-  hooks `loot-drop`, `crop-grow`, `explosion-detonate` and
-  `enchantment-level` are not connected to gameplay.
+  hooks `crop-grow`, `explosion-detonate` and `enchantment-level` are not
+  connected to gameplay. Container, fishing and structure loot paths still
+  need review.
 - Status: **partial live integration; API coverage remains incomplete**.
 
 ## Verification run
