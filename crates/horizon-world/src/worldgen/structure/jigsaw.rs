@@ -61,6 +61,16 @@ pub enum PoolElement {
         elements: Vec<PoolElement>,
         projection: Projection,
     },
+    Limited {
+        delegate: Box<PoolElement>,
+        limit: usize,
+        min_depth: i32,
+    },
+    Guaranteed {
+        delegate: Box<PoolElement>,
+        count: usize,
+        min_depth: i32,
+    },
 }
 #[derive(Clone, Debug)]
 pub struct Jigsaw {
@@ -186,15 +196,71 @@ impl PoolElement {
                     projection: p,
                 }
             }
+            "horizon:limited" | "horizon:guaranteed" => {
+                let delegate = Box::new(Self::decode(
+                    value
+                        .get("delegate")
+                        .ok_or(DecodeError::Field("pool element delegate"))?,
+                    resources,
+                    bindings,
+                    inherited,
+                )?);
+                let min_depth = value
+                    .get("min_depth")
+                    .map_or(Some(0), |v| v.as_u64().and_then(|n| i32::try_from(n).ok()))
+                    .ok_or(DecodeError::Field("pool element minimum depth"))?;
+                if kind == "horizon:limited" {
+                    let limit = value["limit"]
+                        .as_u64()
+                        .and_then(|n| usize::try_from(n).ok())
+                        .ok_or(DecodeError::Field("limited pool element limit"))?;
+                    Self::Limited {
+                        delegate,
+                        limit,
+                        min_depth,
+                    }
+                } else {
+                    let count = value["count"]
+                        .as_u64()
+                        .and_then(|n| usize::try_from(n).ok())
+                        .filter(|n| *n > 0)
+                        .ok_or(DecodeError::Field("guaranteed pool element count"))?;
+                    Self::Guaranteed {
+                        delegate,
+                        count,
+                        min_depth,
+                    }
+                }
+            }
             _ => return Err(DecodeError::Field("pool element type")),
         })
     }
     pub fn projection(&self) -> Projection {
         match self {
             Self::Empty => Projection::TerrainMatching,
+            Self::Limited { delegate, .. } | Self::Guaranteed { delegate, .. } => {
+                delegate.projection()
+            }
             Self::Single { projection, .. }
             | Self::Feature { projection, .. }
             | Self::List { projection, .. } => *projection,
+        }
+    }
+    fn selection_priority(&self) -> u8 {
+        match self {
+            Self::Limited { .. } | Self::Guaranteed { .. } => 1,
+            _ => 0,
+        }
+    }
+    fn depth_and_limit(&self) -> Option<(i32, usize)> {
+        match self {
+            Self::Limited {
+                min_depth, limit, ..
+            } => Some((*min_depth, *limit)),
+            Self::Guaranteed {
+                min_depth, count, ..
+            } => Some((*min_depth, *count)),
+            _ => None,
         }
     }
     /// Whether this pool element carries a per-piece terrain adjustment.
@@ -203,12 +269,18 @@ impl PoolElement {
             Self::Single {
                 individual_terrain, ..
             } => *individual_terrain,
+            Self::Limited { delegate, .. } | Self::Guaranteed { delegate, .. } => {
+                delegate.individual_terrain()
+            }
             _ => None,
         }
     }
     pub fn size(&self, rotation: Rotation) -> [i32; 3] {
         match self {
             Self::Empty | Self::Feature { .. } => [0; 3],
+            Self::Limited { delegate, .. } | Self::Guaranteed { delegate, .. } => {
+                delegate.size(rotation)
+            }
             Self::Single { template, .. } => template.size(rotation),
             Self::List { elements, .. } => elements.iter().fold([0; 3], |acc, e| {
                 let s = e.size(rotation);
@@ -220,6 +292,9 @@ impl PoolElement {
         match self {
             Self::Empty => BoundingBox::new(position, position),
             Self::Feature { .. } => BoundingBox::new(position, position),
+            Self::Limited { delegate, .. } | Self::Guaranteed { delegate, .. } => {
+                delegate.bounding_box(position, rotation)
+            }
             Self::Single { template, .. } => {
                 template.bounding_box(position, rotation, [0; 3], Mirror::None)
             }
@@ -246,6 +321,9 @@ impl PoolElement {
     ) -> Vec<Jigsaw> {
         match self {
             Self::Empty => Vec::new(),
+            Self::Limited { delegate, .. } | Self::Guaranteed { delegate, .. } => {
+                delegate.shuffled_jigsaws(resources, position, rotation, random)
+            }
             Self::Feature { .. } => vec![Jigsaw {
                 pos: position,
                 front: Direction::Down,
@@ -275,6 +353,9 @@ impl PoolElement {
     pub fn ground_level_delta(&self) -> i32 {
         match self {
             Self::Single { ground_level, .. } => *ground_level,
+            Self::Limited { delegate, .. } | Self::Guaranteed { delegate, .. } => {
+                delegate.ground_level_delta()
+            }
             _ => 1,
         }
     }
@@ -282,6 +363,7 @@ impl PoolElement {
     pub fn yung(&self) -> Option<&super::yung::Rules> {
         match self {
             Self::Single { yung, .. } => yung.as_deref(),
+            Self::Limited { delegate, .. } | Self::Guaranteed { delegate, .. } => delegate.yung(),
             _ => None,
         }
     }
@@ -291,6 +373,9 @@ impl PoolElement {
             Self::Single {
                 enhanced_terrain, ..
             } => enhanced_terrain.as_deref(),
+            Self::Limited { delegate, .. } | Self::Guaranteed { delegate, .. } => {
+                delegate.enhanced_terrain()
+            }
             _ => None,
         }
     }
@@ -369,6 +454,7 @@ impl Pool {
     fn shuffled(&self, random: &mut impl RandomSource) -> Vec<Arc<PoolElement>> {
         let mut copy = self.templates.clone();
         shuffle(&mut copy, random);
+        copy.sort_by_key(|element| std::cmp::Reverse(element.selection_priority()));
         copy
     }
     pub(super) fn max_size(&self) -> i32 {
@@ -510,6 +596,20 @@ fn place_element<W: FeatureWorld + PlacementContext, R: RandomSource>(
 ) -> Result<bool, PlacementQueryError> {
     match element {
         PoolElement::Empty => Ok(true),
+        PoolElement::Limited { delegate, .. } | PoolElement::Guaranteed { delegate, .. } => {
+            place_element(
+                delegate,
+                world,
+                resources,
+                random,
+                chunk_box,
+                position,
+                reference,
+                rotation,
+                waterlogging,
+                place_feature,
+            )
+        }
         PoolElement::Feature { feature, .. } => place_feature(world, random, feature, position),
         PoolElement::List { elements, .. } => {
             for e in elements {
@@ -748,6 +848,7 @@ pub(super) fn add_children(
         bindings,
         pieces,
         queue: BTreeMap::new(),
+        selected: HashMap::new(),
     };
     placer.children(0, free, 0, context, random);
     while let Some(state) = placer.next() {
@@ -762,6 +863,9 @@ struct Placer<'a, 'p> {
     pieces: &'p mut Vec<PoolPiece>,
     /// SequencedPriorityIterator: highest priority first, FIFO within one.
     queue: BTreeMap<i32, VecDeque<PieceState>>,
+    /// How many times each limited/guaranteed pool element has been placed
+    /// in this structure instance.
+    selected: HashMap<usize, usize>,
 }
 impl Placer<'_, '_> {
     fn next(&mut self) -> Option<PieceState> {
@@ -838,7 +942,16 @@ impl Placer<'_, '_> {
                 targets.extend(target_pool.shuffled(random));
             }
             targets.extend(fallback.shuffled(random));
+            let target_depth = depth + 1;
             for target in targets {
+                if let Some((min_depth, limit)) = target.depth_and_limit() {
+                    let key = Arc::as_ptr(&target) as usize;
+                    if target_depth < min_depth
+                        || self.selected.get(&key).copied().unwrap_or(0) >= limit
+                    {
+                        continue;
+                    }
+                }
                 if matches!(target.as_ref(), PoolElement::Empty) {
                     break;
                 }
@@ -941,6 +1054,12 @@ impl Placer<'_, '_> {
                             }],
                             waterlogging: self.config.waterlogging,
                         });
+                        if target.depth_and_limit().is_some() {
+                            *self
+                                .selected
+                                .entry(Arc::as_ptr(&target) as usize)
+                                .or_default() += 1;
+                        }
                         if depth < self.config.max_depth {
                             self.queue
                                 .entry(jigsaw.placement_priority)

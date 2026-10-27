@@ -672,10 +672,10 @@ Two cases the oracle fills in:
     `add_template_pool_elements` modifiers whose load conditions hold for the mods ported
     along, and from CTOV's Java registration: its 21 village types and 11 outposts join
     vanilla's `villages` and `pillager_outposts` with the mod's default weights.
-  - **Lithostitched pool wrappers.** `limited`, `guaranteed` and nested `delegating` elements
-    now carry their wrapped element instead of making the whole template pool unreadable. The
-    wrapper's selection rule is not implemented yet and is counted by name in `rules_lost`;
-    ATM10's CTOV has 134 such elements.
+  - **Lithostitched pool wrappers.** `limited` and `guaranteed` elements carry into Horizon's
+    jigsaw runtime, which honors their minimum depth and per-structure placement cap. Nested
+    `delegating` elements still carry their delegate, with the lost selection rule counted by
+    name in `rules_lost`.
   - **Iron's Spells individual terrain elements.** Its custom single pool element maps to
     Horizon's single element with a per-piece terrain adjustment. The Beardifier uses only
     those rigid pieces for that start and skips their jigsaw junctions, matching the mod's

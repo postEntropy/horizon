@@ -171,6 +171,8 @@ pub struct Upgrade {
     pub unsupported: BTreeMap<String, usize>,
     /// Rules of mapped types the game does not run, by field.
     pub rules_lost: BTreeMap<String, usize>,
+    /// Lithostitched pool selection wrappers carried as Horizon elements, by type.
+    pub pool_elements_carried: BTreeMap<String, usize>,
     /// Processors written in Java, taken out of their lists, by type.
     pub processors_dropped: BTreeMap<String, usize>,
     /// Processors written in Java carried as data the game runs
@@ -651,6 +653,7 @@ fn upgrade_types(
         },
         "template_pool" => {
             let mut changed = false;
+            let carried = &mut report.pool_elements_carried;
             let mut elements: Vec<&mut Value> = Vec::new();
             for e in v["elements"].as_array_mut().into_iter().flatten() {
                 let element = &mut e["element"];
@@ -662,9 +665,7 @@ fn upgrade_types(
                 }
             }
             for element in elements {
-                if unwrap_lithostitched_pool_element(element, lost) {
-                    changed = true;
-                }
+                changed |= carry_pool_element(element, carried, lost);
                 let Some(t) = element["element_type"].as_str() else {
                     continue;
                 };
@@ -709,21 +710,38 @@ fn upgrade_types(
     changed
 }
 
-/// Lithostitched wraps a pool element to limit or guarantee how often the
-/// delegate is selected. Horizon can load the delegate as vanilla's element,
-/// but does not implement those selection rules yet; record each lost rule.
-/// Delegating wrappers can contain another wrapper, so unwrap recursively.
-fn unwrap_lithostitched_pool_element(
+/// Carry Lithostitched's pool selection wrappers into the Horizon jigsaw
+/// runtime. Lists and delegates may nest, so visit their children recursively.
+fn carry_pool_element(
     element: &mut Value,
+    carried: &mut BTreeMap<String, usize>,
     lost: &mut BTreeMap<String, usize>,
 ) -> bool {
     let Some(kind) = element["element_type"].as_str() else {
         return false;
     };
-    if !matches!(
-        kind,
-        "lithostitched:limited" | "lithostitched:guaranteed" | "lithostitched:delegating"
-    ) {
+    if matches!(kind, "lithostitched:limited" | "lithostitched:guaranteed") {
+        let kind = kind.to_owned();
+        let to = match kind.as_str() {
+            "lithostitched:limited" => "horizon:limited",
+            _ => "horizon:guaranteed",
+        };
+        *carried.entry(kind).or_default() += 1;
+        element["element_type"] = to.into();
+        if let Some(delegate) = element.get_mut("delegate") {
+            carry_pool_element(delegate, carried, lost);
+        }
+        return true;
+    }
+    if kind == "minecraft:list_pool_element" {
+        let Some(elements) = element.get_mut("elements").and_then(Value::as_array_mut) else {
+            return false;
+        };
+        return elements.iter_mut().fold(false, |changed, child| {
+            carry_pool_element(child, carried, lost) | changed
+        });
+    }
+    if kind != "lithostitched:delegating" {
         return false;
     }
     let Some(delegate) = element
@@ -735,7 +753,7 @@ fn unwrap_lithostitched_pool_element(
     };
     *lost.entry(kind.to_owned()).or_default() += 1;
     *element = delegate;
-    unwrap_lithostitched_pool_element(element, lost);
+    carry_pool_element(element, carried, lost);
     true
 }
 
