@@ -176,6 +176,15 @@ Access: capability `block-entities`.
 
 Capability `block-entities` (API 0.4): what the code of a mod's block entities may read and change while the game ticks them. A handle names one block entity and is valid only during the `block-entities` call it was passed to; slots and block state belong to the game (hoppers, menus, drops and saves see them), the mod keeps the rest of its state itself.
 
+### record `block-entity-position`
+
+| Field | Type | |
+| --- | --- | --- |
+| `dimension` | `string` |  |
+| `x` | `s32` |  |
+| `y` | `s32` |  |
+| `z` | `s32` |  |
+
 ### record `item-stack`
 
 An item and how many. Item components are not carried yet.
@@ -206,6 +215,9 @@ An item and how many. Item components are not carried yet.
 | --- | --- | --- |
 | `get-slot` | `func(handle: u32, slot: u32) -> option<item-stack>` | The block entity's slot, none when empty or out of range. |
 | `set-slot` | `func(handle: u32, slot: u32, stack: option<item-stack>) -> bool` | Empties the slot with none; a stack over the item's maximum is cut to it. False for a slot out of range, an unknown item or a handle not in this call. |
+| `get-position` | `func(handle: u32) -> option<block-entity-position>` | The loaded block entity's dimension and world position. |
+| `get-world-rule` | `func(name: string) -> option<string>` | Reads a game-side rule value attached to this world's mod runtime. |
+| `set-world-rule` | `func(name: string, value: string) -> result<_, string>` | Sets a namespaced rule value for coordination between this mod's machines. |
 | `get-property` | `func(handle: u32, name: string) -> option<string>` | A property of the block entity's block state (`lit` -> `true`). |
 | `set-property` | `func(handle: u32, name: string, value: string) -> bool` | False when the block has no such property or value. |
 | `max-stack-size` | `func(id: string) -> u32` | The most of `id` one slot holds; 0 for an unknown item. |
@@ -377,7 +389,7 @@ Capability `capabilities` (API 0.4): standard Forge Energy (FE), fluid tanks, it
 
 | Field | Type | |
 | --- | --- | --- |
-| `fluid` | `string` | Fluid id (`minecraft:water`, `minecraft:lava`, `<mod>:<fluid>`), or empty. |
+| `fluid` | `string` | Fluid id (`minecraft:water`) or chemical id (`mekanism:hydrogen`), or empty. |
 | `amount` | `u64` | Amount in millibuckets (mB). |
 | `capacity` | `u64` | Tank capacity in mB. |
 
@@ -395,10 +407,12 @@ Capability `capabilities` (API 0.4): standard Forge Energy (FE), fluid tanks, it
 | `get-energy` | `func(pos: string) -> option<energy-view>` | Queries the energy buffer at `pos` (`dimension:x,y,z`). |
 | `receive-energy` | `func(pos: string, amount: u64, simulate: bool) -> u64` | Pushes up to `amount` FE into `pos`; returns FE accepted. |
 | `extract-energy` | `func(pos: string, amount: u64, simulate: bool) -> u64` | Pulls up to `amount` FE from `pos`; returns FE extracted. |
-| `set-fluid-tank` | `func(pos: string, tank: u32, view: fluid-view)` | Declares or updates tank `tank` at `pos`. |
-| `get-fluid` | `func(pos: string, tank: u32) -> option<fluid-view>` | Queries fluid tank `tank` at `pos`. |
+| `set-fluid-tank` | `func(pos: string, tank: u32, view: fluid-view)` | Declares or updates fluid or chemical tank `tank` at `pos`. |
+| `get-fluid` | `func(pos: string, tank: u32) -> option<fluid-view>` | Queries fluid or chemical tank `tank` at `pos`. |
 | `fill-fluid` | `func(pos: string, fluid: string, amount: u64, simulate: bool) -> u64` | Fills up to `amount` mB of `fluid` into `pos`; returns mB accepted. |
+| `fill-fluid-tank` | `func(pos: string, tank: u32, fluid: string, amount: u64, simulate: bool) -> u64` | Fills tank `tank` at `pos`; for chemical tanks the id is a chemical id. |
 | `drain-fluid` | `func(pos: string, fluid: string, amount: u64, simulate: bool) -> u64` | Drains up to `amount` mB of `fluid` from `pos`; returns mB drained. |
+| `drain-fluid-tank` | `func(pos: string, tank: u32, fluid: string, amount: u64, simulate: bool) -> u64` | Drains tank `tank` at `pos`; for chemical tanks the id is a chemical id. |
 | `set-item-slot` | `func(pos: string, slot: u32, id: string, count: u32)` | Sets item slot `slot` at `pos` (count 0 clears). |
 | `get-item-slots` | `func(pos: string) -> list<item-slot>` | Lists non-empty item slots at `pos`. |
 | `get-attachment` | `func(target: string, key: string) -> option<list<u8>>` | Reads a mod data attachment on `target` (`entity:<id>`, `chunk:<dim>:<x>,<z>`, `level:<dim>`) under `key`. |
@@ -417,6 +431,7 @@ Capability `ui` (API 0.4): declarative container menus and screens.
 
 | Case | |
 | --- | --- |
+| `background` |  |
 | `slot` |  |
 | `progress-arrow` |  |
 | `flame` |  |
@@ -477,7 +492,7 @@ Capability `recipes` (API 0.4): read the loaded recipe graph and register custom
 
 | Field | Type | |
 | --- | --- | --- |
-| `items` | `list<string>` | Accepted item ids or `#tag` strings. |
+| `items` | `list<string>` | Accepted item ids or `#tag` strings. For resource inputs, ids use `@fluid/<tank>/<id>` or `@chemical/<tank>/<id>`. |
 | `count` | `u32` | Required count. |
 
 ### record `recipe-entry`
@@ -487,7 +502,7 @@ Capability `recipes` (API 0.4): read the loaded recipe graph and register custom
 | `id` | `string` | Recipe id (`minecraft:iron_ingot_from_smelting_raw_iron`, `<mod>:<name>`). |
 | `kind` | `string` | Recipe type (`minecraft:crafting_shaped`, `minecraft:smelting`, `<mod>:<machine>`). |
 | `inputs` | `list<ingredient-slot>` | Input ingredients. |
-| `outputs` | `list<string>` | Output item ids and counts (`id*count`). |
+| `outputs` | `list<string>` | Output item ids and counts (`id*count`), or resource outputs as `@fluid/<tank>/<id>*<amount>` / `@chemical/<tank>/<id>*<amount>`. |
 | `ticks` | `u32` | Processing time in ticks (0 for instant crafting). |
 | `energy` | `u64` | Energy cost in FE (0 when none). |
 
@@ -574,6 +589,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `x` | `s32` | Block X coordinate. |
 | `y` | `s32` | Block Y coordinate. |
 | `z` | `s32` | Block Z coordinate. |
+| `face` | `string` | Hit face (`down`, `up`, `north`, `south`, `west`, `east`), empty when unavailable. |
 | `state` | `string` | Block state string (`<mod>:<block>[...]`). |
 | `actor` | `string` | Player name or entity id, if triggered by one. |
 | `held-item` | `string` | Held item id, if any. |

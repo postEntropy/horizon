@@ -754,6 +754,20 @@ impl Game<'_> {
                 "container.brewing",
                 Slots::Block(pos),
             )
+        } else if let Some(BlockEntity::Mod { items, block, .. }) =
+            self.world.block_entities.get(&pos)
+        {
+            let rows = items.len().div_ceil(9).clamp(1, 6);
+            let menu = match rows {
+                1 => "minecraft:generic_9x1",
+                2 => "minecraft:generic_9x2",
+                3 => "minecraft:generic_9x3",
+                4 => "minecraft:generic_9x4",
+                5 => "minecraft:generic_9x5",
+                _ => "minecraft:generic_9x6",
+            };
+            let _ = block;
+            (menu, "container.chest", Slots::Block(pos))
         } else if let Some((other, right)) = self.chest_partner(pos) {
             // ChestBlock.combine: the right half's slots come first.
             let halves = if right {
@@ -780,13 +794,29 @@ impl Game<'_> {
             };
             (menu, title, Slots::Block(pos))
         };
-        let Some(items) = host
+        let Some(mut items) = host
             .hub
             .guest(conn)
             .and_then(|g| slots.read(&self.world, g))
         else {
             return false;
         };
+        if let Slots::Block(block_pos) = &slots
+            && matches!(
+                self.world.block_entities.get(block_pos),
+                Some(BlockEntity::Mod { .. })
+            )
+        {
+            // The packet's generic 9-wide menu has empty backing slots beyond
+            // a mod machine's declared inventory. Include them before the
+            // player's 36 slots so both sides use the same menu indices.
+            let rows = menu
+                .strip_prefix("minecraft:generic_9x")
+                .and_then(|rows| rows.parse::<usize>().ok())
+                .unwrap_or(1)
+                .clamp(1, 6);
+            items.resize(rows * 9, None);
+        }
         // ServerPlayer.openMenu closes the menu that was open.
         self.guest_container_closed(host, conn);
         self.lan_station_closed(host, conn, None);
@@ -1079,6 +1109,23 @@ impl Game<'_> {
                 self.drop_guest_items(host, gi, drops);
             }
             S::ContainerClose(p) => {
+                let mod_screen = host.hub.guests[gi]
+                    .menu
+                    .as_ref()
+                    .filter(|m| m.window == p.container)
+                    .and_then(|m| match m.slots {
+                        Slots::Block(pos) => Some(pos),
+                        _ => None,
+                    })
+                    .is_some_and(|pos| {
+                        matches!(
+                            self.world.block_entities.get(&pos),
+                            Some(BlockEntity::Mod { .. })
+                        )
+                    });
+                if mod_screen {
+                    self.mod_close_screen();
+                }
                 if host.hub.guests[gi]
                     .menu
                     .as_ref()

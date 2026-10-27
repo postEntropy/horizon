@@ -5,7 +5,7 @@
 //! properties until the oracle's facts replace the guess.
 use crate::{jar::JarInfo, oracle::Facts};
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -124,6 +124,27 @@ pub fn template(name: &str, properties: &BTreeSet<String>) -> Option<&'static st
 /// `tall`; sides and `up` that are `true` or `false` are a vine's (Chipped's
 /// vines), which the names alone take for a wall.
 pub fn block_template(name: &str, blockstate: &Value) -> Option<&'static str> {
+    let props = properties(blockstate);
+    if props == BTreeSet::from(["active".into(), "facing".into()]) {
+        return Some(
+            if values(blockstate, "facing").contains("up")
+                || values(blockstate, "facing").contains("down")
+            {
+                "minecraft:observer"
+            } else {
+                "minecraft:furnace"
+            },
+        );
+    }
+    if props == BTreeSet::from(["active".into()]) {
+        return Some("minecraft:redstone_lamp");
+    }
+    if props == BTreeSet::from(["facing".into(), "powered".into()]) {
+        return Some("minecraft:observer");
+    }
+    if props == BTreeSet::from(["mode".into()]) || props == BTreeSet::from(["storage".into()]) {
+        return Some("minecraft:stone");
+    }
     let t = template(name, &properties(blockstate))?;
     let boolean = ["north", "east", "south", "west"]
         .iter()
@@ -134,6 +155,54 @@ pub fn block_template(name: &str, blockstate: &Value) -> Option<&'static str> {
     } else {
         t
     })
+}
+
+/// Adapts mod-only state names to equivalent vanilla template properties so
+/// carried blockstates can select the right model while the block copies a
+/// vanilla state schema.
+fn adapt_blockstate_properties(blockstate: &mut Value) -> bool {
+    let props = properties(blockstate);
+    let alias = if props == BTreeSet::from(["active".into(), "facing".into()]) {
+        if values(blockstate, "facing").contains("up")
+            || values(blockstate, "facing").contains("down")
+        {
+            Some(("active", "powered"))
+        } else {
+            Some(("active", "lit"))
+        }
+    } else if props == BTreeSet::from(["active".into()]) {
+        Some(("active", "lit"))
+    } else {
+        None
+    };
+    if let Some((from, to)) = alias
+        && let Some(variants) = blockstate["variants"].as_object_mut()
+    {
+        let old = std::mem::take(variants);
+        for (key, value) in old {
+            let renamed = key
+                .split(',')
+                .map(|part| {
+                    part.strip_prefix(&format!("{from}="))
+                        .map_or_else(|| part.to_owned(), |v| format!("{to}={v}"))
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            variants.insert(renamed, value);
+        }
+        return true;
+    }
+    if props == BTreeSet::from(["mode".into()]) || props == BTreeSet::from(["storage".into()]) {
+        let first = blockstate["variants"]
+            .as_object()
+            .and_then(|variants| variants.values().next())
+            .cloned();
+        if let Some(first) = first {
+            blockstate["variants"] = json!({"": first});
+            return true;
+        }
+    }
+    false
 }
 
 /// The values a blockstate file tests a property for.
@@ -721,6 +790,7 @@ pub fn carry(
     let _ = fs::remove_dir_all(&outside);
     let mut report = Report::default();
     let mut blockstates: BTreeMap<String, Value> = BTreeMap::new();
+    let mut adapted_states = BTreeSet::new();
     let mut item_models = BTreeSet::new();
     let mut convention = BTreeSet::new();
     let mut block_loot = BTreeSet::new();
@@ -899,7 +969,11 @@ pub fn carry(
                 .and_then(|b| b.strip_suffix(".json"))
                 .filter(|_| own)
             {
-                if let Ok(v) = serde_json::from_slice(&bytes) {
+                if let Ok(mut v) = serde_json::from_slice(&bytes) {
+                    if adapt_blockstate_properties(&mut v) {
+                        adapted_states.insert(b.to_owned());
+                    }
+                    bytes = serde_json::to_vec_pretty(&v).unwrap_or(bytes);
                     blockstates.insert(b.to_owned(), v);
                 }
             } else if let Some(m) = rel
@@ -976,7 +1050,24 @@ pub fn carry(
             let Some(b) = full.strip_prefix(&prefix) else {
                 break;
             };
-            let Some(choice) = facts.template(full, allowed) else {
+            let choice = facts.template(full, allowed).or_else(|| {
+                let template = blockstates
+                    .get(b)
+                    .and_then(|state| block_template(b, state))?;
+                let id = if template.starts_with("minecraft:") {
+                    template.to_owned()
+                } else {
+                    format!("minecraft:{template}")
+                };
+                allowed(&id).then(|| crate::oracle::Choice {
+                    template: id,
+                    properties: Map::new(),
+                    differences: vec![
+                        "mod-specific block states adapted to a vanilla template".into(),
+                    ],
+                })
+            });
+            let Some(choice) = choice else {
                 let props: Vec<&str> = block.properties.keys().map(String::as_str).collect();
                 let why = format!(
                     "no vanilla {} with properties [{}]",
@@ -1090,6 +1181,15 @@ pub fn carry(
                 Some(t) => {
                     write_decl("block", b, &json!({"template": t}))?;
                     report.blocks.insert(b.clone(), t.to_owned());
+                    if adapted_states.contains(b) {
+                        report.differences.insert(
+                            b.clone(),
+                            vec![
+                                "mod-specific state properties adapted to a vanilla template"
+                                    .into(),
+                            ],
+                        );
+                    }
                 }
                 None => {
                     let props: Vec<String> = properties(state).into_iter().collect();

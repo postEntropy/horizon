@@ -79,6 +79,14 @@ pub enum BlockEntity {
     Beehive(Box<crate::beehive::Beehive>),
     /// `CommandBlockEntity` of the three command blocks (`crate::command_block`).
     CommandBlock(Box<crate::command_block::CommandBlock>),
+    /// A block entity owned by a WASM mod. `handle` belongs to the current
+    /// runtime only; `saved` is the mod's serialized state for world saves.
+    Mod {
+        block: String,
+        handle: u32,
+        saved: Vec<u8>,
+        items: Vec<Option<ItemStack>>,
+    },
 }
 /// `CrafterBlockEntity`: nine slots that can be disabled, the powered flag
 /// and the ticks left in the crafting animation.
@@ -278,6 +286,7 @@ impl BlockEntity {
             Self::Vault(_) => "minecraft:vault",
             Self::Beehive(_) => "minecraft:beehive",
             Self::CommandBlock(_) => "minecraft:command_block",
+            Self::Mod { .. } => "horizon:mod_block_entity",
         }
     }
     pub fn contents(&self) -> Vec<ItemStack> {
@@ -298,6 +307,7 @@ impl BlockEntity {
             Self::Sculk(_) => Vec::new(),
             Self::Banner(_) => Vec::new(),
             Self::Crafter(c) => c.items.iter().flatten().cloned().collect(),
+            Self::Mod { items, .. } => items.iter().flatten().cloned().collect(),
         }
     }
     pub fn slots(&self) -> &[Option<ItemStack>] {
@@ -318,6 +328,7 @@ impl BlockEntity {
             | Self::Vault(_)
             | Self::Beehive(_)
             | Self::CommandBlock(_) => &[],
+            Self::Mod { items, .. } => items,
         }
     }
     pub fn slots_mut(&mut self) -> &mut [Option<ItemStack>] {
@@ -338,6 +349,7 @@ impl BlockEntity {
             | Self::Vault(_)
             | Self::Beehive(_)
             | Self::CommandBlock(_) => &mut [],
+            Self::Mod { items, .. } => items,
         }
     }
 }

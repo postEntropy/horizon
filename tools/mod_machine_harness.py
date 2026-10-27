@@ -5,11 +5,14 @@ Java mod in the dev-only NeoForge oracle and on its Horizon port, compared tick 
     mod_machine_harness.py --jars DIR [--deps DIR] --hmod PORT.hmod --scenarios S.json --work DIR
         [--prepared .local/horizon-client/26.3] [--oracle TRACE.json]
 
-A scenario places a block, fills slots, runs N ticks (with slot changes at given ticks) and
-records after every tick the slots, the listed block-state properties and the listed integer
-fields of the saved block entity (the Java tag's names; the port saves the same names as JSON).
-Writes WORK/oracle-trace.json, WORK/horizon-trace.json and WORK/result.json, and exits 1 on a
-difference. The jars and the port stay in the work folder: nothing here holds mod code.
+A scenario places a block, fills slots and optional energy/fluid buffers, runs N ticks (with slot
+changes at given ticks) and records the slots, listed block-state properties and listed saved
+fields after every tick. The Horizon probe also records energy and its saved progress counter;
+these extra fields do not affect the Java comparison unless the oracle provides them. An optional
+`expect_final` object asserts selected fields in the last Horizon trace. `--prepared` must be a
+resource root containing the mod's carried data for custom machine recipes. Writes
+WORK/oracle-trace.json, WORK/horizon-trace.json and WORK/result.json, and exits 1 on a difference.
+The jars and the port stay in the work folder: nothing here holds mod code.
 """
 import argparse
 import json
@@ -29,12 +32,21 @@ def compare(oracle, horizon):
         got = by_name.get(name, [])
         equal, diffs = 0, []
         for tick, (w, g) in enumerate(zip(want, got)):
-            if w == g:
+            # The Horizon probe adds diagnostics such as FE and its progress
+            # counter; compare the fields the Java oracle actually emitted.
+            projected = {key: g[key] for key in w if key in g}
+            if all(key in g for key in w) and w == projected:
                 equal += 1
             elif len(diffs) < 5:
-                keys = sorted({*w, *g})
-                diffs.append({'tick': tick, **{k: {'java': w.get(k), 'horizon': g.get(k)}
-                                               for k in keys if w.get(k) != g.get(k)}})
+                keys = sorted(w)
+                diffs.append({
+                    'tick': tick,
+                    **{
+                        k: {'java': w[k], 'horizon': g.get(k, '<missing>')}
+                        for k in keys
+                        if k not in g or w[k] != g[k]
+                    },
+                })
         if len(want) != len(got):
             diffs.append({'ticks': {'java': len(want), 'horizon': len(got)}})
         out.append({'name': name, 'ticks': len(want), 'equal': equal, 'differences': diffs})

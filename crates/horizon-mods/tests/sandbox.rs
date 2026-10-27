@@ -455,6 +455,10 @@ fn stack(id: &str, count: u32) -> Stack {
 fn smelter(handle: u32, input: Option<Stack>) -> BlockEntityView {
     BlockEntityView {
         handle,
+        dimension: "minecraft:overworld".into(),
+        x: 0,
+        y: 64,
+        z: 0,
         slots: vec![input, None],
         properties: vec![Property {
             name: "lit".into(),
@@ -663,6 +667,7 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
         x: 0,
         y: 64,
         z: 0,
+        face: String::new(),
         state: "test_machine:smelter[lit=false]".into(),
         actor: "Player".into(),
         held_item: String::new(),

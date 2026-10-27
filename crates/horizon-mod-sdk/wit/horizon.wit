@@ -126,6 +126,12 @@ world horizon-mod {
 /// passed to; slots and block state belong to the game (hoppers, menus, drops
 /// and saves see them), the mod keeps the rest of its state itself.
 interface machine {
+    record block-entity-position {
+        dimension: string,
+        x: s32,
+        y: s32,
+        z: s32,
+    }
     /// An item and how many. Item components are not carried yet.
     record item-stack {
         /// `minecraft:coal`, `<mod>:<path>`, ...
@@ -149,6 +155,12 @@ interface machine {
     /// Empties the slot with none; a stack over the item's maximum is cut to it.
     /// False for a slot out of range, an unknown item or a handle not in this call.
     set-slot: func(handle: u32, slot: u32, stack: option<item-stack>) -> bool;
+    /// The loaded block entity's dimension and world position.
+    get-position: func(handle: u32) -> option<block-entity-position>;
+    /// Reads a game-side rule value attached to this world's mod runtime.
+    get-world-rule: func(name: string) -> option<string>;
+    /// Sets a namespaced rule value for coordination between this mod's machines.
+    set-world-rule: func(name: string, value: string) -> result<_, string>;
     /// A property of the block entity's block state (`lit` -> `true`).
     get-property: func(handle: u32, name: string) -> option<string>;
     /// False when the block has no such property or value.
@@ -335,7 +347,7 @@ interface capabilities {
         max-extract: u64,
     }
     record fluid-view {
-        /// Fluid id (`minecraft:water`, `minecraft:lava`, `<mod>:<fluid>`), or empty.
+        /// Fluid id (`minecraft:water`) or chemical id (`mekanism:hydrogen`), or empty.
         fluid: string,
         /// Amount in millibuckets (mB).
         amount: u64,
@@ -358,14 +370,18 @@ interface capabilities {
     receive-energy: func(pos: string, amount: u64, simulate: bool) -> u64;
     /// Pulls up to `amount` FE from `pos`; returns FE extracted.
     extract-energy: func(pos: string, amount: u64, simulate: bool) -> u64;
-    /// Declares or updates tank `tank` at `pos`.
+    /// Declares or updates fluid or chemical tank `tank` at `pos`.
     set-fluid-tank: func(pos: string, tank: u32, view: fluid-view);
-    /// Queries fluid tank `tank` at `pos`.
+    /// Queries fluid or chemical tank `tank` at `pos`.
     get-fluid: func(pos: string, tank: u32) -> option<fluid-view>;
     /// Fills up to `amount` mB of `fluid` into `pos`; returns mB accepted.
     fill-fluid: func(pos: string, fluid: string, amount: u64, simulate: bool) -> u64;
+    /// Fills tank `tank` at `pos`; for chemical tanks the id is a chemical id.
+    fill-fluid-tank: func(pos: string, tank: u32, fluid: string, amount: u64, simulate: bool) -> u64;
     /// Drains up to `amount` mB of `fluid` from `pos`; returns mB drained.
     drain-fluid: func(pos: string, fluid: string, amount: u64, simulate: bool) -> u64;
+    /// Drains tank `tank` at `pos`; for chemical tanks the id is a chemical id.
+    drain-fluid-tank: func(pos: string, tank: u32, fluid: string, amount: u64, simulate: bool) -> u64;
     /// Sets item slot `slot` at `pos` (count 0 clears).
     set-item-slot: func(pos: string, slot: u32, id: string, count: u32);
     /// Lists non-empty item slots at `pos`.
@@ -385,6 +401,7 @@ interface capabilities {
 /// Capability `ui` (API 0.4): declarative container menus and screens.
 interface ui {
     enum widget-kind {
+        background,
         slot,
         progress-arrow,
         flame,
@@ -448,7 +465,8 @@ interface net {
 /// custom machine recipe types (`<mod>:<type>`).
 interface recipes {
     record ingredient-slot {
-        /// Accepted item ids or `#tag` strings.
+        /// Accepted item ids or `#tag` strings. For resource inputs, ids use
+        /// `@fluid/<tank>/<id>` or `@chemical/<tank>/<id>`.
         items: list<string>,
         /// Required count.
         count: u32,
@@ -460,7 +478,8 @@ interface recipes {
         kind: string,
         /// Input ingredients.
         inputs: list<ingredient-slot>,
-        /// Output item ids and counts (`id*count`).
+        /// Output item ids and counts (`id*count`), or resource outputs as
+        /// `@fluid/<tank>/<id>*<amount>` / `@chemical/<tank>/<id>*<amount>`.
         outputs: list<string>,
         /// Processing time in ticks (0 for instant crafting).
         ticks: u32,
@@ -554,6 +573,8 @@ interface logic {
         y: s32,
         /// Block Z coordinate.
         z: s32,
+        /// Hit face (`down`, `up`, `north`, `south`, `west`, `east`), empty when unavailable.
+        face: string,
         /// Block state string (`<mod>:<block>[...]`).
         state: string,
         /// Player name or entity id, if triggered by one.

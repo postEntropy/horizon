@@ -363,18 +363,39 @@ impl HudAtlas {
         for folder in folders {
             walk(&textures.join(folder), &mut files);
         }
+        // Content mods may provide menu textures outside the vanilla namespace.
+        // Keep their namespace in the sprite name so declarative mod screens can
+        // refer to `mekanism/gui/base` without adding a per-mod renderer.
+        if full && let Ok(namespaces) = fs::read_dir(root.join("assets")) {
+            for namespace in namespaces.flatten().filter(|entry| entry.path().is_dir()) {
+                let dir = namespace.path().join("gui");
+                walk(&dir, &mut files);
+            }
+        }
         files.retain(|p| {
             let s = p.to_string_lossy();
             !s.contains("title/background") && !s.contains("realms") && !s.contains("presets")
         });
         type Decoded = (PackedImage, Option<TextureFlags>, Option<(u32, u32)>);
         let decode_one = |path: &PathBuf| -> Option<Decoded> {
-            let name = path
-                .strip_prefix(&textures)
-                .ok()?
-                .with_extension("")
-                .to_string_lossy()
-                .replace('\\', "/");
+            let name = if let Ok(relative) = path.strip_prefix(&textures) {
+                relative
+                    .with_extension("")
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            } else {
+                let relative = path.strip_prefix(root.join("assets")).ok()?;
+                let mut parts = relative.components();
+                let namespace = parts.next()?.as_os_str().to_string_lossy();
+                let gui_relative = parts.as_path();
+                format!(
+                    "{namespace}/{}",
+                    gui_relative
+                        .with_extension("")
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                )
+            };
             let (w, mut h, pixels) = decode(path).ok()?;
             // Animated strips keep their first frame.
             let frames = name.starts_with("block/") || name.starts_with("item/");

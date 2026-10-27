@@ -127,6 +127,10 @@ pub struct Property {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BlockEntityView {
     pub handle: u32,
+    pub dimension: String,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
     pub slots: Vec<Option<Stack>>,
     pub properties: Vec<Property>,
     pub changed: bool,
@@ -316,6 +320,8 @@ struct State {
     /// lent to the current `tick` call (none outside it).
     facts: Option<Arc<dyn ItemFacts>>,
     views: Vec<BlockEntityView>,
+    /// Position retained between callbacks so create/save hooks can address capabilities.
+    positions: HashMap<u32, (String, i32, i32, i32)>,
     /// Capability `config`: typed schema and values.
     config_schemas: BTreeMap<String, ConfigSchema>,
     configs: BTreeMap<String, ConfigValue>,
@@ -484,6 +490,7 @@ impl Mods {
                 .build(),
             facts,
             views: Vec::new(),
+            positions: HashMap::new(),
             config_schemas: m.config.clone(),
             configs,
             key_bindings: Vec::new(),
@@ -601,6 +608,95 @@ impl Mods {
         }
     }
 
+    /// Sets a game-owned energy buffer. The game uses this to expose block
+    /// inventories and energy networks to mod callbacks; machine probes use it
+    /// to give a scenario a known starting charge.
+    pub fn set_energy_buffer(&self, pos: &str, mut view: EnergyView) {
+        view.stored = view.stored.min(view.capacity);
+        if let Ok(mut sh) = self.shared.lock() {
+            sh.energy.insert(pos.to_owned(), view);
+        }
+    }
+
+    /// Reads a game-owned energy buffer after mod callbacks have run.
+    pub fn energy_buffer(&self, pos: &str) -> Option<EnergyView> {
+        self.shared.lock().ok()?.energy.get(pos).copied()
+    }
+
+    /// Clears transient energy and fluid buffers for a machine position. Game
+    /// save/load probes use this to ensure the reloaded block entity restores
+    /// its contents from its serialized state.
+    pub fn clear_machine_buffers(&self, pos: &str) {
+        if let Ok(mut sh) = self.shared.lock() {
+            sh.energy.remove(pos);
+            sh.fluids.retain(|(at, _), _| at != pos);
+        }
+    }
+
+    /// Reads a capability tank from game logic (for item containers and pipes).
+    pub fn fluid_tank(&self, pos: &str, tank: u32) -> Option<FluidView> {
+        self.shared
+            .lock()
+            .ok()?
+            .fluids
+            .get(&(pos.to_owned(), tank))
+            .cloned()
+    }
+
+    /// Declares a game-owned tank for vanilla interactions before the first mod tick.
+    pub fn declare_fluid_tank(&self, pos: &str, tank: u32, capacity: u64) {
+        if let Ok(mut sh) = self.shared.lock() {
+            sh.fluids
+                .entry((pos.to_owned(), tank))
+                .or_insert(FluidView {
+                    fluid: String::new(),
+                    amount: 0,
+                    capacity,
+                });
+        }
+    }
+
+    /// Fills a capability tank from game logic; returns the accepted amount.
+    pub fn fill_fluid_tank(&self, pos: &str, tank: u32, fluid: &str, amount: u64) -> u64 {
+        if fluid.is_empty() || amount == 0 {
+            return 0;
+        }
+        let Ok(mut sh) = self.shared.lock() else {
+            return 0;
+        };
+        let Some(view) = sh.fluids.get_mut(&(pos.to_owned(), tank)) else {
+            return 0;
+        };
+        if view.amount > 0 && view.fluid != fluid {
+            return 0;
+        }
+        let accepted = amount.min(view.capacity.saturating_sub(view.amount));
+        if accepted > 0 {
+            view.fluid = fluid.to_owned();
+            view.amount += accepted;
+        }
+        accepted
+    }
+
+    /// Drains a capability tank from game logic; returns the amount removed.
+    pub fn drain_fluid_tank(&self, pos: &str, tank: u32, amount: u64) -> Option<FluidView> {
+        let mut sh = self.shared.lock().ok()?;
+        let view = sh.fluids.get_mut(&(pos.to_owned(), tank))?;
+        if view.amount < amount || amount == 0 {
+            return None;
+        }
+        let drained = FluidView {
+            fluid: view.fluid.clone(),
+            amount,
+            capacity: view.capacity,
+        };
+        view.amount -= amount;
+        if view.amount == 0 {
+            view.fluid.clear();
+        }
+        Some(drained)
+    }
+
     /// Updates a key's down/pressed state for capability `keys`.
     pub fn set_key_state(&mut self, id: &str, down: bool, pressed: bool) {
         for entry in &mut self.entries {
@@ -665,6 +761,17 @@ impl Mods {
         if let Ok(mut sh) = self.shared.lock() {
             sh.recipes.retain(|r| r.id != entry.id);
             sh.recipes.push(entry);
+        }
+    }
+
+    /// Adds recipes loaded from the active resource data to the read-only
+    /// machine recipe graph. A mod registering the same id can replace it.
+    pub fn add_resource_recipes(&mut self, entries: impl IntoIterator<Item = RecipeEntry>) {
+        if let Ok(mut sh) = self.shared.lock() {
+            for entry in entries {
+                sh.recipes.retain(|r| r.id != entry.id);
+                sh.recipes.push(entry);
+            }
         }
     }
 
@@ -934,6 +1041,27 @@ impl Mods {
             Some((s.id.as_str(), s.open_screen.as_ref()?))
         })
     }
+    /// The game's container closed a mod-owned screen.
+    pub fn close_screen(&mut self, screen_id: &str) {
+        let Some(entry) = self.entries.iter_mut().find(|e| {
+            e.run.as_ref().is_some_and(|run| {
+                run.store
+                    .data()
+                    .open_screen
+                    .as_ref()
+                    .is_some_and(|spec| spec.id == screen_id)
+            })
+        }) else {
+            return;
+        };
+        if let Some(run) = entry.run.as_mut() {
+            let state = run.store.data_mut();
+            state.open_screen = None;
+            state.out.push(Output::ScreenClosed {
+                mod_id: state.id.clone(),
+            });
+        }
+    }
     /// What mods asked to show since the last call.
     pub fn drain(&mut self) -> Vec<Output> {
         std::mem::take(&mut self.out)
@@ -965,10 +1093,25 @@ impl Mods {
     /// game must keep for it. None when no running mod has `block`, or the
     /// mod stopped.
     pub fn create_block_entity(&mut self, block: &str, saved: &[u8]) -> Option<(u32, u32)> {
+        self.create_block_entity_at(block, saved, None)
+    }
+
+    /// Creates a block entity with its world position available during restore.
+    pub fn create_block_entity_at(
+        &mut self,
+        block: &str,
+        saved: &[u8],
+        position: Option<(String, i32, i32, i32)>,
+    ) -> Option<(u32, u32)> {
         let (i, ty) = self.block_entity_type(block)?;
         let slots = ty.slots;
         let handle = self.next_handle;
         self.next_handle = self.next_handle.wrapping_add(1);
+        if let Some(position) = position {
+            if let Some(run) = self.entries[i].run.as_mut() {
+                run.store.data_mut().positions.insert(handle, position);
+            }
+        }
         self.call(i, FUEL_EVENT, |m, s| {
             machine_of(m)?
                 .horizon_mods_block_entities()
@@ -1047,6 +1190,16 @@ impl Mods {
                     .horizon_mods_block_entities()
                     .call_remove(s, handle)
             });
+            if let Some(run) = self.entries[i].run.as_mut() {
+                if let Some((dimension, x, y, z)) = run.store.data_mut().positions.remove(&handle) {
+                    let pos = format!("{dimension}:{x},{y},{z}");
+                    if let Ok(mut shared) = self.shared.lock() {
+                        shared.energy.remove(&pos);
+                        shared.fluids.retain(|(at, _), _| at != &pos);
+                        shared.item_slots.remove(&pos);
+                    }
+                }
+            }
         }
     }
 
@@ -1491,6 +1644,31 @@ impl State {
     }
 }
 impl machine::Host for State {
+    fn get_position(&mut self, handle: u32) -> Option<machine::BlockEntityPosition> {
+        if let Some(view) = self.view(handle) {
+            return Some(machine::BlockEntityPosition {
+                dimension: view.dimension.clone(),
+                x: view.x,
+                y: view.y,
+                z: view.z,
+            });
+        }
+        let (dimension, x, y, z) = self.positions.get(&handle)?.clone();
+        Some(machine::BlockEntityPosition { dimension, x, y, z })
+    }
+    fn get_world_rule(&mut self, name: String) -> Option<String> {
+        self.shared.lock().ok()?.rules.get(&name).cloned()
+    }
+    fn set_world_rule(&mut self, name: String, value: String) -> Result<(), String> {
+        if !self.owns_id(&name) {
+            return Err(format!("rule {name:?} is outside the mod's namespaces"));
+        }
+        let Ok(mut shared) = self.shared.lock() else {
+            return Err("world state lock poisoned".into());
+        };
+        shared.rules.insert(name, value);
+        Ok(())
+    }
     fn get_slot(&mut self, handle: u32, slot: u32) -> Option<Stack> {
         self.view(handle)?
             .slots
@@ -1844,13 +2022,23 @@ impl capabilities::Host for State {
         self.shared.lock().ok()?.fluids.get(&(pos, tank)).cloned()
     }
     fn fill_fluid(&mut self, pos: String, fluid: String, amount: u64, simulate: bool) -> u64 {
+        self.fill_fluid_tank(pos, 0, fluid, amount, simulate)
+    }
+    fn fill_fluid_tank(
+        &mut self,
+        pos: String,
+        tank: u32,
+        fluid: String,
+        amount: u64,
+        simulate: bool,
+    ) -> u64 {
         if fluid.is_empty() || amount == 0 {
             return 0;
         }
         let Ok(mut sh) = self.shared.lock() else {
             return 0;
         };
-        let Some(view) = sh.fluids.get_mut(&(pos, 0)) else {
+        let Some(view) = sh.fluids.get_mut(&(pos, tank)) else {
             return 0;
         };
         if !view.fluid.is_empty() && view.fluid != fluid && view.amount > 0 {
@@ -1865,10 +2053,20 @@ impl capabilities::Host for State {
         accepted
     }
     fn drain_fluid(&mut self, pos: String, fluid: String, amount: u64, simulate: bool) -> u64 {
+        self.drain_fluid_tank(pos, 0, fluid, amount, simulate)
+    }
+    fn drain_fluid_tank(
+        &mut self,
+        pos: String,
+        tank: u32,
+        fluid: String,
+        amount: u64,
+        simulate: bool,
+    ) -> u64 {
         let Ok(mut sh) = self.shared.lock() else {
             return 0;
         };
-        let Some(view) = sh.fluids.get_mut(&(pos, 0)) else {
+        let Some(view) = sh.fluids.get_mut(&(pos, tank)) else {
             return 0;
         };
         if view.amount == 0 || (!fluid.is_empty() && view.fluid != fluid) {

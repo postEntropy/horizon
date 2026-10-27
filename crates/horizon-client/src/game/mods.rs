@@ -7,6 +7,8 @@
 //! without it the game links no wasmtime, and every hook does nothing.
 //! Content mods (`content_root`) load in every build.
 use super::Game;
+#[cfg(feature = "mods")]
+use horizon_client::hud::rgba;
 use horizon_client::{
     command::{Dispatcher, vanilla},
     extras_hud::Corners,
@@ -14,6 +16,40 @@ use horizon_client::{
     mod_list,
 };
 use std::{path::PathBuf, time::Duration};
+
+#[derive(Clone, Debug)]
+#[cfg_attr(not(feature = "mods"), allow(dead_code))]
+pub(super) struct ModScreenView {
+    pub(super) title: String,
+    pub(super) width: u32,
+    pub(super) height: u32,
+    pub(super) widgets: Vec<ModWidgetView>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(not(feature = "mods"), allow(dead_code))]
+pub(super) enum ModWidgetKind {
+    Background,
+    Slot,
+    ProgressArrow,
+    Flame,
+    EnergyBar,
+    FluidGauge,
+    Label,
+    Button,
+}
+#[derive(Clone, Debug)]
+#[cfg_attr(not(feature = "mods"), allow(dead_code))]
+pub(super) struct ModWidgetView {
+    pub(super) id: u32,
+    pub(super) kind: ModWidgetKind,
+    pub(super) x: i32,
+    pub(super) y: i32,
+    pub(super) width: u32,
+    pub(super) height: u32,
+    pub(super) text: String,
+    pub(super) value: u64,
+    pub(super) max_value: u64,
+}
 #[cfg(feature = "mods")]
 use {
     super::Screen,
@@ -25,10 +61,14 @@ use {
         text::{self, Text},
     },
     horizon_mods::{
-        BlockEntityView, BlockHit, Clock, CookingKind, CookingRecipe, ItemFacts, Mods, Output,
-        Player, ServerAction, Snapshot, Stack, StackView, Status,
+        BlockAction, BlockEntityView, BlockEvent, BlockHit, Clock, CookingKind, CookingRecipe,
+        ItemFacts, Mods, Output, Player, ServerAction, Snapshot, Stack, StackView, Status,
     },
-    std::{collections::HashMap, sync::Arc, time::Instant},
+    std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+        time::Instant,
+    },
 };
 
 #[cfg(feature = "mods")]
@@ -87,6 +127,62 @@ pub(super) struct ModsState {
     /// Active mod block entities in the loaded world, keyed by `[x, y, z]`.
     #[cfg(feature = "mods")]
     block_entities: HashMap<[i32; 3], BlockEntityView>,
+    #[cfg(feature = "mods")]
+    resource_recipes_loaded: bool,
+    #[cfg(feature = "mods")]
+    thermal_evaporation_plants: HashMap<[i32; 3], Vec<[i32; 3]>>,
+    #[cfg(feature = "mods")]
+    thermal_evaporation_checked_tick: u64,
+    #[cfg(feature = "mods")]
+    induction_matrix_ports: HashMap<[i32; 3], String>,
+    #[cfg(feature = "mods")]
+    dynamic_tank_valves: HashMap<[i32; 3], String>,
+    #[cfg(feature = "mods")]
+    turbine_valves: HashMap<[i32; 3], String>,
+    #[cfg(feature = "mods")]
+    fission_reactor_ports: HashMap<[i32; 3], String>,
+    #[cfg(feature = "mods")]
+    fusion_reactor_components: HashMap<[i32; 3], String>,
+}
+
+#[cfg(feature = "mods")]
+struct InductionMatrixInfo {
+    min: [i32; 3],
+    capacity: u64,
+    transfer: u64,
+    ports: Vec<[i32; 3]>,
+}
+
+#[cfg(feature = "mods")]
+struct DynamicTankInfo {
+    min: [i32; 3],
+    volume: u64,
+    valves: Vec<[i32; 3]>,
+}
+
+#[cfg(feature = "mods")]
+struct TurbineInfo {
+    min: [i32; 3],
+    volume: u64,
+    max_rate: u64,
+    rotor_height: u64,
+    rotors: u64,
+    valves: Vec<[i32; 3]>,
+}
+
+#[cfg(feature = "mods")]
+struct FissionReactorInfo {
+    min: [i32; 3],
+    size: [i32; 3],
+    ports: Vec<[i32; 3]>,
+    fuel_assemblies: u64,
+}
+
+#[cfg(feature = "mods")]
+struct FusionReactorInfo {
+    min: [i32; 3],
+    ports: Vec<[i32; 3]>,
+    controller: [i32; 3],
 }
 impl ModsState {
     /// The chat's command tree: vanilla's, plus the running mods' commands.
@@ -248,6 +344,35 @@ impl Game<'_> {
     pub(super) fn sync_mods(&mut self) {}
     pub(super) fn tick_mods(&mut self) {}
     pub(super) fn mods_frame(&mut self, _elapsed: Duration) {}
+    pub(super) fn mod_use_block(
+        &mut self,
+        _pos: [i32; 3],
+        _face: [i32; 3],
+        _held_item: Option<&str>,
+    ) -> bool {
+        false
+    }
+    pub(super) fn mod_ticking_blocks(&self) -> Vec<String> {
+        Vec::new()
+    }
+    pub(super) fn mod_menu_click(&mut self, _slot: u32, _button: u8) {}
+    pub(super) fn mod_menu_button(&mut self, _button: u8) {}
+    pub(super) fn mod_close_screen(&mut self) {}
+    pub(super) fn mod_screen_view(&self) -> Option<ModScreenView> {
+        None
+    }
+    pub(super) fn mod_slot_position(&self, _slot: usize) -> Option<(f32, f32)> {
+        None
+    }
+    pub(super) fn mod_button_at(&self, _x: f32, _y: f32) -> Option<u8> {
+        None
+    }
+    pub(super) fn draw_mod_screen(&self, _batch: &mut HudBatch, _ox: f32, _oy: f32) {}
+    pub(super) fn ensure_mod_block_entity(&mut self, _pos: [i32; 3], _block: &str) -> bool {
+        false
+    }
+    pub(super) fn mod_save_block_entity(&mut self, _pos: [i32; 3]) {}
+    pub(super) fn tick_mod_block_entities(&mut self, _positions: &[(i32, i32, i32)]) {}
     pub(super) fn mod_command(&mut self, _command: &str) -> bool {
         false
     }
@@ -275,7 +400,10 @@ impl Game<'_> {
         let mut mods = Mods::load(&paths, on, vanilla_command);
         mods.set_item_facts(Arc::new(GameFacts(self.res.clone())));
         self.mods.mods = mods;
+        self.mods.resource_recipes_loaded = false;
+        self.load_mod_resource_recipes();
         self.mods.block_entities.clear();
+        self.world.block_entities.set_states(Vec::new());
         self.list_mods();
         self.sync_mod_commands();
         self.show_mod_output();
@@ -372,8 +500,27 @@ impl Game<'_> {
     }
     /// A game tick.
     pub(super) fn tick_mods(&mut self) {
+        self.load_mod_resource_recipes();
         if !self.mods.mods.is_running() {
+            self.mods.block_entities.clear();
             return;
+        }
+        let stale: Vec<([i32; 3], u32)> = self
+            .mods
+            .block_entities
+            .iter()
+            .filter_map(|(&pos, view)| {
+                let live = matches!(
+                    self.world.block_entities.get(&(pos[0], pos[1], pos[2])),
+                    Some(horizon_client::containers::BlockEntity::Mod { handle, .. })
+                        if *handle == view.handle
+                );
+                (!live).then_some((pos, view.handle))
+            })
+            .collect();
+        for (pos, handle) in stale {
+            self.mods.block_entities.remove(&pos);
+            self.mods.mods.remove_block_entity(handle);
         }
         let snapshot = self.mod_snapshot();
         self.mods.mods.set_snapshot(snapshot);
@@ -440,17 +587,83 @@ impl Game<'_> {
                 .set_inventory(main_hand, off_hand, inv, Vec::new());
         }
         self.mods.mods.tick(self.ticks);
-        if !self.mods.block_entities.is_empty() {
-            let mut entries: Vec<([i32; 3], BlockEntityView)> =
-                self.mods.block_entities.drain().collect();
-            let mut views: Vec<BlockEntityView> =
-                entries.iter_mut().map(|(_, v)| std::mem::take(v)).collect();
-            self.mods.mods.tick_block_entities(&mut views);
-            for ((pos, _), view) in entries.into_iter().zip(views) {
-                self.mods.block_entities.insert(pos, view);
-            }
-        }
         self.show_mod_output();
+    }
+    fn load_mod_resource_recipes(&mut self) {
+        if self.mods.resource_recipes_loaded {
+            return;
+        }
+        let Some(rest) = self.res.rest.get() else {
+            return;
+        };
+        self.mods
+            .mods
+            .add_resource_recipes(rest.recipes.machine.iter().map(|recipe| {
+                horizon_mods::RecipeEntry {
+                    id: recipe.id.clone(),
+                    kind: recipe.kind.clone(),
+                    inputs: recipe
+                        .inputs
+                        .iter()
+                        .map(|input| match input {
+                            horizon_client::crafting::MachineInput::Item { ingredient, count } => {
+                                horizon_mods::IngredientSlot {
+                                    items: ingredient.1.clone(),
+                                    count: *count,
+                                }
+                            }
+                            horizon_client::crafting::MachineInput::Resource {
+                                kind,
+                                tank,
+                                accepted,
+                                amount,
+                            } => {
+                                let kind = match kind {
+                                    horizon_client::crafting::MachineResourceKind::Fluid => "fluid",
+                                    horizon_client::crafting::MachineResourceKind::Chemical => {
+                                        "chemical"
+                                    }
+                                };
+                                let tank = *tank + if kind == "chemical" { 1_000 } else { 0 };
+                                horizon_mods::IngredientSlot {
+                                    items: accepted
+                                        .iter()
+                                        .map(|id| format!("@{kind}/{tank}/{id}"))
+                                        .collect(),
+                                    count: *amount,
+                                }
+                            }
+                        })
+                        .collect(),
+                    outputs: recipe
+                        .outputs
+                        .iter()
+                        .map(|output| match output {
+                            horizon_client::crafting::MachineOutput::Item(stack) => {
+                                format!("{}*{}", stack.item, stack.count)
+                            }
+                            horizon_client::crafting::MachineOutput::Resource {
+                                kind,
+                                tank,
+                                id,
+                                amount,
+                            } => {
+                                let kind = match kind {
+                                    horizon_client::crafting::MachineResourceKind::Fluid => "fluid",
+                                    horizon_client::crafting::MachineResourceKind::Chemical => {
+                                        "chemical"
+                                    }
+                                };
+                                let tank = *tank + if kind == "chemical" { 1_000 } else { 0 };
+                                format!("@{kind}/{tank}/{id}*{amount}")
+                            }
+                        })
+                        .collect(),
+                    ticks: recipe.ticks,
+                    energy: recipe.energy,
+                }
+            }));
+        self.mods.resource_recipes_loaded = true;
     }
     /// Once per frame: the frame hook, and dev mods' rebuilds.
     pub(super) fn mods_frame(&mut self, elapsed: Duration) {
@@ -490,6 +703,1702 @@ impl Game<'_> {
     /// A chat line the player received.
     pub(super) fn mods_chat(&mut self, line: &str) {
         self.mods.mods.chat(line);
+        self.show_mod_output();
+    }
+    /// A right-click on a mod-owned block. `true` means the mod handled it.
+    pub(super) fn mod_use_block(
+        &mut self,
+        pos: [i32; 3],
+        face: [i32; 3],
+        held_item: Option<&str>,
+    ) -> bool {
+        if !self.mods.mods.is_running() {
+            return false;
+        }
+        let name = self
+            .res
+            .facts()
+            .get(self.world.block(pos[0], pos[1], pos[2]))
+            .name
+            .to_string();
+        self.ensure_mod_block_entity(pos, &name);
+        // Vanilla buckets can fill and drain Mekanism's fluid tanks. The mod
+        // capability state is shared with machine ticks and persists on save.
+        if (name.starts_with("mekanism:") && name.ends_with("_fluid_tank"))
+            || name == "mekanism:dynamic_valve"
+        {
+            if let Some(item) = held_item {
+                let is_bucket = matches!(
+                    item,
+                    "minecraft:bucket" | "minecraft:water_bucket" | "minecraft:lava_bucket"
+                );
+                let key = format!("{}:{},{},{}", self.dim.id(), pos[0], pos[1], pos[2]);
+                self.mods.mods.declare_fluid_tank(&key, 0, 64_000);
+                let transfer = match item {
+                    "minecraft:water_bucket" => Some(("minecraft:water", "minecraft:bucket")),
+                    "minecraft:lava_bucket" => Some(("minecraft:lava", "minecraft:bucket")),
+                    "minecraft:bucket" => self.mods.mods.fluid_tank(&key, 0).and_then(|tank| {
+                        let bucket = match tank.fluid.as_str() {
+                            "minecraft:water" if tank.amount >= 1_000 => "minecraft:water_bucket",
+                            "minecraft:lava" if tank.amount >= 1_000 => "minecraft:lava_bucket",
+                            _ => return None,
+                        };
+                        Some(("", bucket))
+                    }),
+                    _ => None,
+                };
+                if let Some((fluid, result_item)) = transfer {
+                    let moved = if item == "minecraft:bucket" {
+                        self.creative || self.mods.mods.drain_fluid_tank(&key, 0, 1_000).is_some()
+                    } else {
+                        self.mods.mods.fill_fluid_tank(&key, 0, fluid, 1_000) == 1_000
+                    };
+                    if moved {
+                        if item == "minecraft:bucket" {
+                            if self.creative {
+                                *self.held_mut() =
+                                    Some(horizon_client::items::ItemStack::new(result_item, 1));
+                            } else {
+                                self.consume_held();
+                                let result = horizon_client::items::ItemStack::new(result_item, 1);
+                                if let Some(rest) = self.give(result)
+                                    && let Some(eye) = self.eye_position()
+                                {
+                                    self.spawn_item(rest, eye, [0.0, 0.1, 0.0], 40);
+                                }
+                            }
+                        } else if !self.creative {
+                            *self.held_mut() =
+                                Some(horizon_client::items::ItemStack::new(result_item, 1));
+                        }
+                        self.mod_save_block_entity(pos);
+                        return true;
+                    }
+                }
+                if is_bucket {
+                    return true;
+                }
+            }
+        }
+        let outcome = self.mods.mods.block_event(BlockEvent {
+            action: if held_item.is_some() {
+                BlockAction::UseItemOn
+            } else {
+                BlockAction::UseWithoutItem
+            },
+            dimension: self.dim.id().to_owned(),
+            x: pos[0],
+            y: pos[1],
+            z: pos[2],
+            face: match face {
+                [0, -1, 0] => "down",
+                [0, 1, 0] => "up",
+                [0, 0, -1] => "north",
+                [0, 0, 1] => "south",
+                [-1, 0, 0] => "west",
+                [1, 0, 0] => "east",
+                _ => "",
+            }
+            .to_owned(),
+            state: name,
+            actor: String::new(),
+            held_item: held_item.unwrap_or_default().to_owned(),
+        });
+        let opened_screen = self.mods.mods.open_screens().next().is_some();
+        self.show_mod_output();
+        self.mod_save_block_entity(pos);
+        if outcome != horizon_mods::EventOutcome::Pass && opened_screen {
+            self.open_menu(pos);
+        }
+        outcome != horizon_mods::EventOutcome::Pass
+    }
+    /// The blocks whose API 0.4 block entities tick each server tick.
+    pub(super) fn mod_ticking_blocks(&self) -> Vec<String> {
+        self.mods
+            .mods
+            .block_entity_types()
+            .filter(|ty| ty.ticks)
+            .map(|ty| ty.block.clone())
+            .collect()
+    }
+    /// A click in the mod's declared screen, paired with the game's slot menu.
+    pub(super) fn mod_menu_click(&mut self, slot: u32, button: u8) {
+        let Some(screen_id) = self
+            .mods
+            .mods
+            .open_screens()
+            .next()
+            .map(|(_, spec)| spec.id.clone())
+        else {
+            return;
+        };
+        self.mods.mods.menu_click(&screen_id, slot, button);
+        self.show_mod_output();
+        if let Some(pos) = self.container {
+            self.mod_save_block_entity([pos.0, pos.1, pos.2]);
+        }
+    }
+    pub(super) fn mod_menu_button(&mut self, button: u8) {
+        let Some(screen_id) = self
+            .mods
+            .mods
+            .open_screens()
+            .next()
+            .map(|(_, spec)| spec.id.clone())
+        else {
+            return;
+        };
+        self.mods.mods.menu_button(&screen_id, button);
+        self.show_mod_output();
+        if let Some(pos) = self.container {
+            self.mod_save_block_entity([pos.0, pos.1, pos.2]);
+        }
+    }
+    pub(super) fn mod_close_screen(&mut self) {
+        let Some(screen_id) = self
+            .mods
+            .mods
+            .open_screens()
+            .next()
+            .map(|(_, spec)| spec.id.clone())
+        else {
+            return;
+        };
+        self.mods.mods.close_screen(&screen_id);
+        self.show_mod_output();
+    }
+    pub(super) fn mod_screen_view(&self) -> Option<ModScreenView> {
+        let (_, spec) = self.mods.mods.open_screens().next()?;
+        let widgets = spec
+            .widgets
+            .iter()
+            .map(|w| ModWidgetView {
+                id: w.id,
+                kind: match w.kind {
+                    horizon_mods::WidgetKind::Background => ModWidgetKind::Background,
+                    horizon_mods::WidgetKind::Slot => ModWidgetKind::Slot,
+                    horizon_mods::WidgetKind::ProgressArrow => ModWidgetKind::ProgressArrow,
+                    horizon_mods::WidgetKind::Flame => ModWidgetKind::Flame,
+                    horizon_mods::WidgetKind::EnergyBar => ModWidgetKind::EnergyBar,
+                    horizon_mods::WidgetKind::FluidGauge => ModWidgetKind::FluidGauge,
+                    horizon_mods::WidgetKind::Label => ModWidgetKind::Label,
+                    horizon_mods::WidgetKind::Button => ModWidgetKind::Button,
+                },
+                x: w.x,
+                y: w.y,
+                width: w.width,
+                height: w.height,
+                text: w.text.clone(),
+                value: w.value,
+                max_value: w.max_value,
+            })
+            .collect();
+        Some(ModScreenView {
+            title: spec.title.clone(),
+            width: spec.width,
+            height: spec.height,
+            widgets,
+        })
+    }
+    pub(super) fn mod_slot_position(&self, slot: usize) -> Option<(f32, f32)> {
+        let slot = u32::try_from(slot).ok()?;
+        let w = self
+            .mod_screen_view()?
+            .widgets
+            .into_iter()
+            .find(|w| w.kind == ModWidgetKind::Slot && w.id == slot)?;
+        Some((w.x as f32, w.y as f32))
+    }
+    pub(super) fn mod_button_at(&self, x: f32, y: f32) -> Option<u8> {
+        self.mod_screen_view()?
+            .widgets
+            .into_iter()
+            .filter(|w| w.kind == ModWidgetKind::Button)
+            .find(|w| {
+                x >= w.x as f32
+                    && y >= w.y as f32
+                    && x < w.x as f32 + w.width as f32
+                    && y < w.y as f32 + w.height as f32
+            })
+            .and_then(|w| u8::try_from(w.id).ok())
+    }
+    pub(super) fn draw_mod_screen(&self, batch: &mut HudBatch, ox: f32, oy: f32) {
+        let Some(screen) = self.mod_screen_view() else {
+            return;
+        };
+        let atlas = &self.gui.atlas;
+        let width = screen.width as f32;
+        let height = screen.height as f32;
+        let has_background = screen
+            .widgets
+            .iter()
+            .any(|w| w.kind == ModWidgetKind::Background && atlas.sprites.contains_key(&w.text));
+        if has_background {
+            for w in screen
+                .widgets
+                .iter()
+                .filter(|w| w.kind == ModWidgetKind::Background)
+            {
+                batch.sprite_scaled(
+                    atlas,
+                    &w.text,
+                    ox + w.x as f32,
+                    oy + w.y as f32,
+                    w.width as f32,
+                    w.height as f32,
+                    u32::MAX,
+                );
+            }
+        } else {
+            batch.fill(atlas, ox, oy, width, height, rgba(198, 198, 198, 255));
+            batch.fill(
+                atlas,
+                ox + 2.0,
+                oy + 2.0,
+                width - 4.0,
+                height - 4.0,
+                rgba(55, 55, 55, 255),
+            );
+        }
+        let heading_color = if has_background {
+            rgba(48, 48, 48, 255)
+        } else {
+            u32::MAX
+        };
+        let heading_x = if has_background {
+            ox + (width - HudBatch::text_width(atlas, &screen.title)) / 2.0
+        } else {
+            ox + 8.0
+        };
+        batch.text(
+            atlas,
+            &screen.title,
+            heading_x,
+            oy + 5.0,
+            heading_color,
+            false,
+        );
+        batch.text(
+            atlas,
+            "Inventory",
+            ox + 8.0,
+            oy + height - 92.0,
+            heading_color,
+            false,
+        );
+        for i in 0..36 {
+            let (x, y) = if i < 9 {
+                (8.0 + i as f32 * 18.0, height - 24.0)
+            } else {
+                (
+                    8.0 + ((i - 9) % 9) as f32 * 18.0,
+                    height - 82.0 + ((i - 9) / 9) as f32 * 18.0,
+                )
+            };
+            batch.sprite(atlas, "gui/sprites/container/slot", ox + x, oy + y);
+        }
+        for w in screen.widgets {
+            let (x, y, width, height) = (
+                ox + w.x as f32,
+                oy + w.y as f32,
+                w.width as f32,
+                w.height as f32,
+            );
+            let ratio = if w.max_value == 0 {
+                0.0
+            } else {
+                (w.value as f32 / w.max_value as f32).clamp(0.0, 1.0)
+            };
+            match w.kind {
+                ModWidgetKind::Background => {}
+                ModWidgetKind::Slot => {
+                    let mek_slot = match w.text.as_str() {
+                        "Input" => Some("mekanism/gui/slot/input"),
+                        "Second input" => Some("mekanism/gui/slot/input_2"),
+                        "Output" => Some("mekanism/gui/slot/output"),
+                        _ => None,
+                    };
+                    if let Some(sprite) = mek_slot.filter(|name| atlas.sprites.contains_key(*name))
+                    {
+                        batch.sprite_scaled(atlas, sprite, x, y, width, height, u32::MAX);
+                    } else {
+                        batch.sprite(atlas, "gui/sprites/container/slot", x, y);
+                    }
+                }
+                ModWidgetKind::ProgressArrow => {
+                    if atlas.sprites.contains_key("mekanism/gui/progress/right") {
+                        batch.sprite_region(
+                            atlas,
+                            "mekanism/gui/progress/right",
+                            [x, y, width, height],
+                            32.0,
+                            24.0,
+                        );
+                    } else {
+                        batch.fill(atlas, x, y, width, height, rgba(34, 34, 34, 255));
+                        batch.fill(atlas, x, y, width * ratio, height, rgba(230, 230, 230, 255));
+                    }
+                }
+                ModWidgetKind::Flame => {
+                    batch.fill(atlas, x, y, width, height, rgba(34, 34, 34, 255));
+                    let fill = height * ratio;
+                    batch.fill(
+                        atlas,
+                        x,
+                        y + height - fill,
+                        width,
+                        fill,
+                        rgba(240, 100, 20, 255),
+                    );
+                }
+                ModWidgetKind::EnergyBar | ModWidgetKind::FluidGauge => {
+                    batch.fill(atlas, x, y, width, height, rgba(24, 24, 24, 255));
+                    let fill = height * ratio;
+                    if w.kind == ModWidgetKind::EnergyBar
+                        && atlas
+                            .sprites
+                            .contains_key("mekanism/gui/bar/vertical_power")
+                    {
+                        batch.sprite_scaled(
+                            atlas,
+                            "mekanism/gui/bar/vertical_power",
+                            x + 1.0,
+                            y + height - fill,
+                            (width - 2.0).max(0.0),
+                            fill,
+                            u32::MAX,
+                        );
+                        continue;
+                    }
+                    let color = if w.kind == ModWidgetKind::EnergyBar {
+                        rgba(60, 150, 240, 255)
+                    } else {
+                        rgba(50, 170, 220, 255)
+                    };
+                    batch.fill(
+                        atlas,
+                        x + 2.0,
+                        y + height - fill,
+                        (width - 4.0).max(0.0),
+                        fill,
+                        color,
+                    );
+                    if !w.text.is_empty() {
+                        batch.text(atlas, &w.text, x + width + 4.0, y, u32::MAX, false);
+                    }
+                }
+                ModWidgetKind::Label => {
+                    batch.text(atlas, &w.text, x, y, u32::MAX, false);
+                }
+                ModWidgetKind::Button => {
+                    batch.fill(atlas, x, y, width, height, rgba(80, 80, 80, 255));
+                    let tw = HudBatch::text_width(atlas, &w.text);
+                    batch.text(
+                        atlas,
+                        &w.text,
+                        x + (width - tw) / 2.0,
+                        y + (height - 8.0) / 2.0,
+                        u32::MAX,
+                        false,
+                    );
+                }
+            }
+        }
+    }
+    /// Creates the game-owned inventory and mod state on placement or first use.
+    pub(super) fn ensure_mod_block_entity(&mut self, pos: [i32; 3], block: &str) -> bool {
+        let key = (pos[0], pos[1], pos[2]);
+        if let Some(horizon_client::containers::BlockEntity::Mod {
+            block,
+            handle: 0,
+            saved,
+            items,
+        }) = self.world.block_entities.get(&key)
+        {
+            let (block, saved, items) = (block.clone(), saved.clone(), items.clone());
+            let Some((handle, slots)) = self.mods.mods.create_block_entity_at(
+                &block,
+                &saved,
+                Some((self.dim.id().to_owned(), pos[0], pos[1], pos[2])),
+            ) else {
+                return false;
+            };
+            if let Some(horizon_client::containers::BlockEntity::Mod {
+                handle: current_handle,
+                items: current_items,
+                saved: current_saved,
+                ..
+            }) = self.world.block_entities.get_mut(&key)
+            {
+                *current_handle = handle;
+                current_items.resize(slots as usize, None);
+                *current_saved = self.mods.mods.save_block_entity(handle).unwrap_or(saved);
+            }
+            self.mods.block_entities.insert(
+                pos,
+                BlockEntityView {
+                    handle,
+                    dimension: self.dim.id().to_owned(),
+                    x: pos[0],
+                    y: pos[1],
+                    z: pos[2],
+                    slots: items
+                        .into_iter()
+                        .map(|s| {
+                            s.map(|s| Stack {
+                                id: s.item.to_string(),
+                                count: s.count,
+                            })
+                        })
+                        .collect(),
+                    ..Default::default()
+                },
+            );
+            return true;
+        }
+        if matches!(
+            self.world.block_entities.get(&key),
+            Some(horizon_client::containers::BlockEntity::Mod { .. })
+        ) {
+            return true;
+        }
+        let Some((handle, slots)) = self.mods.mods.create_block_entity_at(
+            block,
+            &[],
+            Some((self.dim.id().to_owned(), pos[0], pos[1], pos[2])),
+        ) else {
+            return false;
+        };
+        self.world.block_entities.insert(
+            key,
+            horizon_client::containers::BlockEntity::Mod {
+                block: block.to_owned(),
+                handle,
+                saved: self.mods.mods.save_block_entity(handle).unwrap_or_default(),
+                items: vec![None; slots as usize],
+            },
+        );
+        self.mods.block_entities.insert(
+            pos,
+            BlockEntityView {
+                handle,
+                dimension: self.dim.id().to_owned(),
+                x: pos[0],
+                y: pos[1],
+                z: pos[2],
+                slots: vec![None; slots as usize],
+                ..Default::default()
+            },
+        );
+        self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
+        true
+    }
+    pub(super) fn mod_save_block_entity(&mut self, pos: [i32; 3]) {
+        let key = (pos[0], pos[1], pos[2]);
+        let Some(handle) = (match self.world.block_entities.get(&key) {
+            Some(horizon_client::containers::BlockEntity::Mod { handle, .. }) => Some(*handle),
+            _ => None,
+        }) else {
+            return;
+        };
+        let Some(saved) = self.mods.mods.save_block_entity(handle) else {
+            return;
+        };
+        if let Some(horizon_client::containers::BlockEntity::Mod { saved: current, .. }) =
+            self.world.block_entities.get_mut(&key)
+            && *current != saved
+        {
+            *current = saved;
+            self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
+        }
+    }
+    fn thermal_evaporation_casing(&self, pos: [i32; 3]) -> bool {
+        matches!(
+            self.res
+                .facts()
+                .get(self.world.block(pos[0], pos[1], pos[2]))
+                .name
+                .as_ref(),
+            "mekanism:thermal_evaporation_block"
+                | "mekanism:structural_glass"
+                | "mekanism:thermal_evaporation_controller"
+                | "mekanism:thermal_evaporation_valve"
+        )
+    }
+    fn induction_matrix_block(&self, pos: [i32; 3]) -> String {
+        self.res
+            .facts()
+            .get(self.world.block(pos[0], pos[1], pos[2]))
+            .name
+            .to_string()
+    }
+    /// Finds the formed matrix containing an induction port. Its casing may
+    /// be at most 18 blocks per side; the interior is at most 16 per side.
+    fn induction_matrix_for_port(&self, port: [i32; 3]) -> Option<InductionMatrixInfo> {
+        // Avoid the box search for a lone port or incomplete build.
+        let mut nearby_cells = false;
+        let mut nearby_providers = false;
+        let mut nearby_casings = 0usize;
+        for x in port[0] - 16..=port[0] + 16 {
+            for y in port[1] - 16..=port[1] + 16 {
+                for z in port[2] - 16..=port[2] + 16 {
+                    let block = self.induction_matrix_block([x, y, z]);
+                    nearby_cells |= block.ends_with("_induction_cell");
+                    nearby_providers |= block.ends_with("_induction_provider");
+                    nearby_casings += usize::from(block == "mekanism:induction_casing");
+                }
+            }
+        }
+        if !nearby_cells || !nearby_providers || nearby_casings < 20 {
+            return None;
+        }
+        let mut sizes = Vec::with_capacity(16 * 16 * 16);
+        for sx in 3..=18 {
+            for sy in 3..=18 {
+                for sz in 3..=18 {
+                    sizes.push([sx, sy, sz]);
+                }
+            }
+        }
+        sizes.sort_by_key(|size| size[0] * size[1] * size[2]);
+        for size in sizes {
+            for rx in 0..size[0] {
+                for ry in 0..size[1] {
+                    for rz in 0..size[2] {
+                        let port_edges = usize::from(rx == 0 || rx == size[0] - 1)
+                            + usize::from(ry == 0 || ry == size[1] - 1)
+                            + usize::from(rz == 0 || rz == size[2] - 1);
+                        if port_edges != 1 {
+                            continue;
+                        }
+                        let min = [port[0] - rx, port[1] - ry, port[2] - rz];
+                        let max = [
+                            min[0] + size[0] - 1,
+                            min[1] + size[1] - 1,
+                            min[2] + size[2] - 1,
+                        ];
+                        let corners = [
+                            [min[0], min[1], min[2]],
+                            [min[0], min[1], max[2]],
+                            [min[0], max[1], min[2]],
+                            [min[0], max[1], max[2]],
+                            [max[0], min[1], min[2]],
+                            [max[0], min[1], max[2]],
+                            [max[0], max[1], min[2]],
+                            [max[0], max[1], max[2]],
+                        ];
+                        if corners.iter().any(|&pos| {
+                            self.induction_matrix_block(pos) != "mekanism:induction_casing"
+                        }) {
+                            continue;
+                        }
+                        let mut capacity = 0u64;
+                        let mut transfer = 0u64;
+                        let mut cells = 0u32;
+                        let mut providers = 0u32;
+                        let mut ports = Vec::new();
+                        let mut valid = true;
+                        'volume: for x in min[0]..=max[0] {
+                            for y in min[1]..=max[1] {
+                                for z in min[2]..=max[2] {
+                                    let pos = [x, y, z];
+                                    let edges = usize::from(x == min[0] || x == max[0])
+                                        + usize::from(y == min[1] || y == max[1])
+                                        + usize::from(z == min[2] || z == max[2]);
+                                    let block = self.induction_matrix_block(pos);
+                                    if edges >= 2 {
+                                        if block != "mekanism:induction_casing" {
+                                            valid = false;
+                                            break 'volume;
+                                        }
+                                    } else if edges == 1 {
+                                        if !matches!(
+                                            block.as_str(),
+                                            "mekanism:induction_casing"
+                                                | "mekanism:induction_port"
+                                                | "mekanism:structural_glass"
+                                                | "mekanismgenerators:reactor_glass"
+                                        ) {
+                                            valid = false;
+                                            break 'volume;
+                                        }
+                                        if block == "mekanism:induction_port" {
+                                            ports.push(pos);
+                                        }
+                                    } else if !matches!(
+                                        block.as_str(),
+                                        "minecraft:air"
+                                            | "minecraft:cave_air"
+                                            | "minecraft:void_air"
+                                    ) {
+                                        if let Some(tier) = block
+                                            .strip_prefix("mekanism:")
+                                            .and_then(|n| n.strip_suffix("_induction_cell"))
+                                        {
+                                            capacity = capacity.saturating_add(match tier {
+                                                "basic" => 3_200_000_000,
+                                                "advanced" => 25_600_000_000,
+                                                "elite" => 204_800_000_000,
+                                                "ultimate" => 1_600_000_000_000,
+                                                _ => 0,
+                                            });
+                                            cells += 1;
+                                        } else if let Some(tier) = block
+                                            .strip_prefix("mekanism:")
+                                            .and_then(|n| n.strip_suffix("_induction_provider"))
+                                        {
+                                            transfer = transfer.saturating_add(match tier {
+                                                "basic" => 25_600,
+                                                "advanced" => 204_800,
+                                                "elite" => 1_638_400,
+                                                "ultimate" => 13_000_000,
+                                                _ => 0,
+                                            });
+                                            providers += 1;
+                                        } else {
+                                            valid = false;
+                                            break 'volume;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if valid && cells > 0 && providers > 0 && !ports.is_empty() {
+                            return Some(InductionMatrixInfo {
+                                min,
+                                capacity,
+                                transfer,
+                                ports,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+    /// Finds the 3×3×3 through 18×18×18 Dynamic Tank around a valve.
+    fn dynamic_tank_for_valve(&self, valve: [i32; 3]) -> Option<DynamicTankInfo> {
+        let mut nearby_casing = 0usize;
+        for x in valve[0] - 16..=valve[0] + 16 {
+            for y in valve[1] - 16..=valve[1] + 16 {
+                for z in valve[2] - 16..=valve[2] + 16 {
+                    nearby_casing += usize::from(
+                        self.induction_matrix_block([x, y, z]) == "mekanism:dynamic_tank",
+                    );
+                }
+            }
+        }
+        if nearby_casing < 20 {
+            return None;
+        }
+        let mut sizes = Vec::with_capacity(16 * 16 * 16);
+        for sx in 3..=18 {
+            for sy in 3..=18 {
+                for sz in 3..=18 {
+                    sizes.push([sx, sy, sz]);
+                }
+            }
+        }
+        sizes.sort_by_key(|size| size[0] * size[1] * size[2]);
+        for size in sizes {
+            for rx in 0..size[0] {
+                for ry in 0..size[1] {
+                    for rz in 0..size[2] {
+                        let face = usize::from(rx == 0 || rx == size[0] - 1)
+                            + usize::from(ry == 0 || ry == size[1] - 1)
+                            + usize::from(rz == 0 || rz == size[2] - 1);
+                        if face != 1 {
+                            continue;
+                        }
+                        let min = [valve[0] - rx, valve[1] - ry, valve[2] - rz];
+                        let max = [
+                            min[0] + size[0] - 1,
+                            min[1] + size[1] - 1,
+                            min[2] + size[2] - 1,
+                        ];
+                        let corners = [
+                            [min[0], min[1], min[2]],
+                            [min[0], min[1], max[2]],
+                            [min[0], max[1], min[2]],
+                            [min[0], max[1], max[2]],
+                            [max[0], min[1], min[2]],
+                            [max[0], min[1], max[2]],
+                            [max[0], max[1], min[2]],
+                            [max[0], max[1], max[2]],
+                        ];
+                        if corners
+                            .iter()
+                            .any(|&pos| self.induction_matrix_block(pos) != "mekanism:dynamic_tank")
+                        {
+                            continue;
+                        }
+                        let mut valves = Vec::new();
+                        let mut valid = true;
+                        'volume: for x in min[0]..=max[0] {
+                            for y in min[1]..=max[1] {
+                                for z in min[2]..=max[2] {
+                                    let edges = usize::from(x == min[0] || x == max[0])
+                                        + usize::from(y == min[1] || y == max[1])
+                                        + usize::from(z == min[2] || z == max[2]);
+                                    let pos = [x, y, z];
+                                    let block = self.induction_matrix_block(pos);
+                                    if edges >= 2 {
+                                        if block != "mekanism:dynamic_tank" {
+                                            valid = false;
+                                            break 'volume;
+                                        }
+                                    } else if edges == 1
+                                        && !matches!(
+                                            block.as_str(),
+                                            "mekanism:dynamic_tank"
+                                                | "mekanism:dynamic_valve"
+                                                | "mekanism:structural_glass"
+                                        )
+                                    {
+                                        valid = false;
+                                        break 'volume;
+                                    }
+                                    if block == "mekanism:dynamic_valve" {
+                                        valves.push(pos);
+                                    }
+                                }
+                            }
+                        }
+                        if valid && !valves.is_empty() {
+                            return Some(DynamicTankInfo {
+                                min,
+                                volume: (size[0] * size[1] * size[2]) as u64,
+                                valves,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Finds a vertically oriented, square Industrial Turbine around a valve.
+    fn turbine_for_valve(&self, valve: [i32; 3]) -> Option<TurbineInfo> {
+        let mut nearby_casing = 0usize;
+        for x in valve[0] - 18..=valve[0] + 18 {
+            for y in valve[1] - 18..=valve[1] + 18 {
+                for z in valve[2] - 18..=valve[2] + 18 {
+                    nearby_casing += usize::from(
+                        self.induction_matrix_block([x, y, z])
+                            == "mekanismgenerators:turbine_casing",
+                    );
+                }
+            }
+        }
+        if nearby_casing < 40 {
+            return None;
+        }
+
+        // A valve must be on a vertical wall, away from the bottom, roof and corners.
+        for width in 5..=17 {
+            for height in 5..=18 {
+                for (rx, rz) in (1..width - 1)
+                    .map(|offset| (offset, 0))
+                    .chain((1..width - 1).map(|offset| (offset, width - 1)))
+                    .chain((1..width - 1).map(|offset| (0, offset)))
+                    .chain((1..width - 1).map(|offset| (width - 1, offset)))
+                {
+                    for ry in 1..height - 1 {
+                        let min = [valve[0] - rx, valve[1] - ry, valve[2] - rz];
+                        let max = [min[0] + width - 1, min[1] + height - 1, min[2] + width - 1];
+                        let mut valid = true;
+                        let mut valves = Vec::new();
+                        let mut vents = 0u64;
+                        let mut dispersers = 0u64;
+                        let mut blades = 0u64;
+                        let mut coils = 0u64;
+                        let mut rotational_complex = 0u64;
+                        'structure: for x in min[0]..=max[0] {
+                            for y in min[1]..=max[1] {
+                                for z in min[2]..=max[2] {
+                                    let on_x = x == min[0] || x == max[0];
+                                    let on_y = y == min[1] || y == max[1];
+                                    let on_z = z == min[2] || z == max[2];
+                                    let face_count =
+                                        usize::from(on_x) + usize::from(on_y) + usize::from(on_z);
+                                    let block = self.induction_matrix_block([x, y, z]);
+                                    if face_count == 3 || (face_count == 2 && on_y) {
+                                        if block != "mekanismgenerators:turbine_casing" {
+                                            valid = false;
+                                            break 'structure;
+                                        }
+                                    } else if face_count == 1 {
+                                        if y == min[1] {
+                                            if !matches!(
+                                                block.as_str(),
+                                                "mekanismgenerators:turbine_casing"
+                                                    | "mekanism:structural_glass"
+                                            ) {
+                                                valid = false;
+                                                break 'structure;
+                                            }
+                                        } else if y == max[1] {
+                                            if !matches!(
+                                                block.as_str(),
+                                                "mekanismgenerators:turbine_casing"
+                                                    | "mekanismgenerators:turbine_vent"
+                                            ) {
+                                                valid = false;
+                                                break 'structure;
+                                            }
+                                        } else if !matches!(
+                                            block.as_str(),
+                                            "mekanismgenerators:turbine_casing"
+                                                | "mekanism:structural_glass"
+                                                | "mekanismgenerators:turbine_valve"
+                                                | "mekanismgenerators:turbine_vent"
+                                        ) {
+                                            valid = false;
+                                            break 'structure;
+                                        }
+                                    } else {
+                                        match block.as_str() {
+                                            "mekanism:pressure_disperser" => dispersers += 1,
+                                            "mekanismgenerators:turbine_vent" => vents += 1,
+                                            "mekanismgenerators:turbine_rotor" => blades += 1,
+                                            "mekanismgenerators:rotational_complex" => {
+                                                rotational_complex += 1
+                                            }
+                                            "mekanismgenerators:electromagnetic_coil" => coils += 1,
+                                            "mekanismgenerators:saturating_condenser"
+                                            | "mekanismgenerators:turbine_casing"
+                                            | "minecraft:air"
+                                            | "minecraft:cave_air"
+                                            | "minecraft:void_air" => {}
+                                            _ => {
+                                                valid = false;
+                                                break 'structure;
+                                            }
+                                        }
+                                    }
+                                    if block == "mekanismgenerators:turbine_valve" {
+                                        valves.push([x, y, z]);
+                                    }
+                                }
+                            }
+                        }
+                        let rotor_height = blades;
+                        let lower_volume = ((width - 2) * (width - 2)) as u64 * rotor_height;
+                        let max_rate = (dispersers * 1_280 * lower_volume).min(vents * 32_000);
+                        if valid
+                            && valves.len() >= 2
+                            && vents > 0
+                            && dispersers > 0
+                            && blades > 0
+                            && coils > 0
+                            && rotational_complex == 1
+                            && rotor_height <= ((2 * width - 5).min(14) as u64)
+                            && max_rate > 0
+                        {
+                            return Some(TurbineInfo {
+                                min,
+                                volume: ((width - 2) * (width - 2) * (height - 2)) as u64,
+                                max_rate,
+                                rotor_height,
+                                rotors: 1,
+                                valves,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Finds a closed Fission Reactor cuboid around one of its external ports.
+    fn fission_reactor_for_port(&self, port: [i32; 3]) -> Option<FissionReactorInfo> {
+        let mut nearby_casing = 0usize;
+        for x in port[0] - 18..=port[0] + 18 {
+            for y in port[1] - 18..=port[1] + 18 {
+                for z in port[2] - 18..=port[2] + 18 {
+                    nearby_casing += usize::from(
+                        self.induction_matrix_block([x, y, z])
+                            == "mekanismgenerators:fission_reactor_casing",
+                    );
+                }
+            }
+        }
+        if nearby_casing < 20 {
+            return None;
+        }
+        for sx in 3..=18 {
+            for sy in 4..=18 {
+                for sz in 3..=18 {
+                    let size = [sx, sy, sz];
+                    for rx in 0..sx {
+                        for ry in 0..sy {
+                            for rz in 0..sz {
+                                let faces = usize::from(rx == 0 || rx == sx - 1)
+                                    + usize::from(ry == 0 || ry == sy - 1)
+                                    + usize::from(rz == 0 || rz == sz - 1);
+                                if faces != 1 {
+                                    continue;
+                                }
+                                let min = [port[0] - rx, port[1] - ry, port[2] - rz];
+                                let max = [min[0] + sx - 1, min[1] + sy - 1, min[2] + sz - 1];
+                                let mut valid = true;
+                                let mut ports = Vec::new();
+                                let mut fuel_assemblies = 0u64;
+                                let mut fuel_columns = HashSet::new();
+                                'shell: for x in min[0]..=max[0] {
+                                    for y in min[1]..=max[1] {
+                                        for z in min[2]..=max[2] {
+                                            let faces = usize::from(x == min[0] || x == max[0])
+                                                + usize::from(y == min[1] || y == max[1])
+                                                + usize::from(z == min[2] || z == max[2]);
+                                            let pos = [x, y, z];
+                                            let block = self.induction_matrix_block(pos);
+                                            if faces >= 2 {
+                                                if block
+                                                    != "mekanismgenerators:fission_reactor_casing"
+                                                {
+                                                    valid = false;
+                                                    break 'shell;
+                                                }
+                                            } else if faces == 1 {
+                                                if !matches!(
+                                                    block.as_str(),
+                                                    "mekanismgenerators:fission_reactor_casing"
+                                                        | "mekanismgenerators:reactor_glass"
+                                                        | "mekanismgenerators:fission_reactor_port"
+                                                        | "mekanismgenerators:fission_reactor_logic_adapter"
+                                                ) {
+                                                    valid = false;
+                                                    break 'shell;
+                                                }
+                                                if block
+                                                    == "mekanismgenerators:fission_reactor_port"
+                                                {
+                                                    ports.push(pos);
+                                                }
+                                            } else {
+                                                match block.as_str() {
+                                                    "mekanismgenerators:fission_fuel_assembly" => {
+                                                        fuel_assemblies += 1;
+                                                        fuel_columns.insert((x, z));
+                                                    }
+                                                    "mekanismgenerators:control_rod_assembly"
+                                                    | "minecraft:air"
+                                                    | "minecraft:cave_air"
+                                                    | "minecraft:void_air" => {}
+                                                    _ => {
+                                                        valid = false;
+                                                        break 'shell;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if !valid || ports.len() < 4 || fuel_assemblies == 0 {
+                                    continue;
+                                }
+                                // Fuel assemblies form separate vertical columns, capped by a control rod.
+                                'columns: for &(x, z) in &fuel_columns {
+                                    let mut found_fuel = false;
+                                    let mut found_rod = false;
+                                    let mut ended = false;
+                                    for y in min[1] + 1..max[1] {
+                                        let block = self.induction_matrix_block([x, y, z]);
+                                        match block.as_str() {
+                                            "mekanismgenerators:fission_fuel_assembly"
+                                                if !ended =>
+                                            {
+                                                found_fuel = true;
+                                            }
+                                            "mekanismgenerators:control_rod_assembly"
+                                                if found_fuel && !found_rod && !ended =>
+                                            {
+                                                found_rod = true;
+                                                ended = true;
+                                            }
+                                            "minecraft:air" | "minecraft:cave_air"
+                                            | "minecraft:void_air" => {
+                                                if found_fuel {
+                                                    ended = true;
+                                                }
+                                            }
+                                            _ => {
+                                                valid = false;
+                                                break 'columns;
+                                            }
+                                        }
+                                    }
+                                    if !found_fuel || !found_rod {
+                                        valid = false;
+                                        break 'columns;
+                                    }
+                                }
+                                if !valid {
+                                    continue;
+                                }
+                                if fuel_columns.iter().any(|&(x, z)| {
+                                    [(x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1)]
+                                        .iter()
+                                        .any(|neighbor| fuel_columns.contains(neighbor))
+                                }) {
+                                    continue;
+                                }
+                                ports.sort_unstable();
+                                return Some(FissionReactorInfo {
+                                    min,
+                                    size,
+                                    ports,
+                                    fuel_assemblies,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Validates the fixed five-layer Fusion Reactor around its controller.
+    fn fusion_reactor_for_controller(&self, controller: [i32; 3]) -> Option<FusionReactorInfo> {
+        let min = [controller[0] - 2, controller[1] - 4, controller[2] - 2];
+        let mut ports = Vec::new();
+        let mut focus_matrices = 0u8;
+        let mut valid = true;
+        for layer in 0..5 {
+            for x in 0..5 {
+                for z in 0..5 {
+                    let is_corner = matches!((x, z), (0, 0) | (0, 4) | (4, 0) | (4, 4));
+                    let required = match layer {
+                        0 => x == 2 || z == 2 || is_corner,
+                        1 | 3 => (x == 0 || x == 4 || z == 0 || z == 4) && !is_corner,
+                        2 => true,
+                        4 => ((x == 2 || z == 2) && (x != 2 || z != 2)) || is_corner,
+                        _ => false,
+                    };
+                    let at = [min[0] + x, min[1] + layer, min[2] + z];
+                    let block = self.induction_matrix_block(at);
+                    if layer == 4 && x == 2 && z == 2 {
+                        if at != controller
+                            || block != "mekanismgenerators:fusion_reactor_controller"
+                        {
+                            valid = false;
+                            break;
+                        }
+                        continue;
+                    }
+                    if !required {
+                        if block != "minecraft:air"
+                            && block != "minecraft:cave_air"
+                            && block != "minecraft:void_air"
+                        {
+                            valid = false;
+                            break;
+                        }
+                        continue;
+                    }
+                    if is_corner {
+                        if block != "mekanismgenerators:fusion_reactor_frame" {
+                            valid = false;
+                            break;
+                        }
+                        continue;
+                    }
+                    if !matches!(
+                        block.as_str(),
+                        "mekanismgenerators:fusion_reactor_frame"
+                            | "mekanismgenerators:reactor_glass"
+                            | "mekanismgenerators:fusion_reactor_port"
+                            | "mekanismgenerators:fusion_reactor_logic_adapter"
+                            | "mekanismgenerators:laser_focus_matrix"
+                    ) {
+                        valid = false;
+                        break;
+                    }
+                    if block == "mekanismgenerators:fusion_reactor_port" {
+                        ports.push(at);
+                    }
+                    if block == "mekanismgenerators:laser_focus_matrix" {
+                        focus_matrices += 1;
+                        if layer != 2 || x != 2 || z != 2 {
+                            valid = false;
+                            break;
+                        }
+                    }
+                }
+                if !valid {
+                    break;
+                }
+            }
+            if !valid {
+                break;
+            }
+        }
+        let center = [min[0] + 2, min[1] + 2, min[2] + 2];
+        let external_heat_port =
+            self.induction_matrix_block(center) == "mekanismgenerators:fusion_reactor_port";
+        (valid && ports.len() >= 2 && (focus_matrices == 1 || external_heat_port)).then_some(
+            FusionReactorInfo {
+                min,
+                ports,
+                controller,
+            },
+        )
+    }
+
+    fn thermal_evaporation_air(&self, pos: [i32; 3]) -> bool {
+        matches!(
+            self.res
+                .facts()
+                .get(self.world.block(pos[0], pos[1], pos[2]))
+                .name
+                .as_ref(),
+            "minecraft:air" | "minecraft:cave_air" | "minecraft:void_air"
+        )
+    }
+    /// Checks the 4×4, hollow, 3–18 block high Thermal Evaporation Plant.
+    fn thermal_evaporation_valves(&self, controller: [i32; 3]) -> Option<Vec<[i32; 3]>> {
+        for height in 3..=18 {
+            for base_y in (controller[1] - height + 1)..=controller[1] {
+                for base_x in (controller[0] - 3)..=controller[0] {
+                    for base_z in (controller[2] - 3)..=controller[2] {
+                        let rel_x = controller[0] - base_x;
+                        let rel_z = controller[2] - base_z;
+                        let rel_y = controller[1] - base_y;
+                        if !(0..=3).contains(&rel_x)
+                            || !(0..=3).contains(&rel_z)
+                            || !(0..height).contains(&rel_y)
+                        {
+                            continue;
+                        }
+                        let border = rel_x == 0 || rel_x == 3 || rel_z == 0 || rel_z == 3;
+                        let top_corner = rel_y == height - 1
+                            && (rel_x == 0 || rel_x == 3)
+                            && (rel_z == 0 || rel_z == 3);
+                        if !border
+                            || ((rel_x == 0 || rel_x == 3)
+                                && (rel_z == 0 || rel_z == 3)
+                                && !top_corner)
+                        {
+                            continue;
+                        }
+                        let mut valves = Vec::new();
+                        let mut valid = true;
+                        for y_layer in 0..height {
+                            let y = base_y + y_layer;
+                            for x in 0..4 {
+                                for z in 0..4 {
+                                    let at = [base_x + x, y, base_z + z];
+                                    let edge = x == 0 || x == 3 || z == 0 || z == 3;
+                                    if y_layer == 0 {
+                                        if !self.thermal_evaporation_casing(at) {
+                                            valid = false;
+                                            break;
+                                        }
+                                    } else if edge {
+                                        let corner = x != 1 && x != 2 && z != 1 && z != 2;
+                                        if y_layer == height - 1
+                                            && corner
+                                            && self.thermal_evaporation_air(at)
+                                        {
+                                            continue;
+                                        }
+                                        if !self.thermal_evaporation_casing(at) {
+                                            valid = false;
+                                            break;
+                                        }
+                                    } else if !self.thermal_evaporation_air(at) {
+                                        valid = false;
+                                        break;
+                                    }
+                                    if self
+                                        .res
+                                        .facts()
+                                        .get(self.world.block(at[0], at[1], at[2]))
+                                        .name
+                                        .as_ref()
+                                        == "mekanism:thermal_evaporation_valve"
+                                    {
+                                        valves.push(at);
+                                    }
+                                }
+                                if !valid {
+                                    break;
+                                }
+                            }
+                            if !valid {
+                                break;
+                            }
+                        }
+                        if valid && !valves.is_empty() {
+                            return Some(valves);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+    /// Ticks all loaded mod block entities in block-entity order, in one
+    /// fuel-budgeted call per mod, and returns their game-owned state.
+    pub(super) fn tick_mod_block_entities(&mut self, positions: &[(i32, i32, i32)]) {
+        let dimension = self.dim.id().to_owned();
+        // The server capability is useful during a machine tick only for
+        // positions the game has copied into its read cache. The pump needs
+        // six adjacent cells, so refresh just that small neighborhood.
+        for &(x, y, z) in positions {
+            if !matches!(
+                self.res
+                    .facts()
+                    .get(self.world.block(x, y, z))
+                    .name
+                    .as_ref(),
+                "mekanism:electric_pump" | "mekanism:fluidic_plenisher"
+            ) {
+                continue;
+            }
+            for [dx, dy, dz] in [
+                [0, 0, 0],
+                [1, 0, 0],
+                [-1, 0, 0],
+                [0, 1, 0],
+                [0, -1, 0],
+                [0, 0, 1],
+                [0, 0, -1],
+            ] {
+                let (nx, ny, nz) = (x + dx, y + dy, z + dz);
+                let state = self.world.block(nx, ny, nz);
+                let name = self.res.facts().get(state).name.to_string();
+                let state_name = self
+                    .pack
+                    .assets
+                    .registry
+                    .state(state)
+                    .map_or(name.clone(), |s| {
+                        if s.properties.is_empty() {
+                            name.clone()
+                        } else {
+                            let properties = s
+                                .properties
+                                .iter()
+                                .map(|(key, value)| format!("{key}={value}"))
+                                .collect::<Vec<_>>()
+                                .join(",");
+                            format!("{name}[{properties}]")
+                        }
+                    });
+                self.mods
+                    .mods
+                    .set_world_block(&dimension, nx, ny, nz, &state_name);
+            }
+        }
+        if self.ticks.is_multiple_of(20) {
+            self.mods.induction_matrix_ports.clear();
+            let mut checked = HashSet::new();
+            for &(x, y, z) in positions {
+                let port = [x, y, z];
+                if self.induction_matrix_block(port) != "mekanism:induction_port"
+                    || !checked.insert(port)
+                    || self.mods.induction_matrix_ports.contains_key(&port)
+                {
+                    continue;
+                }
+                if let Some(matrix) = self.induction_matrix_for_port(port) {
+                    let link = format!(
+                        "{},{},{};{};{}",
+                        matrix.min[0],
+                        matrix.min[1],
+                        matrix.min[2],
+                        matrix.capacity,
+                        matrix.transfer
+                    );
+                    for matrix_port in matrix.ports {
+                        self.mods
+                            .induction_matrix_ports
+                            .insert(matrix_port, link.clone());
+                    }
+                }
+            }
+        }
+        for &(x, y, z) in positions {
+            if self.induction_matrix_block([x, y, z]) == "mekanism:induction_port" {
+                let rule = format!("mekanism:induction/port/{dimension}/{x},{y},{z}");
+                let value = self
+                    .mods
+                    .induction_matrix_ports
+                    .get(&[x, y, z])
+                    .map_or("", String::as_str);
+                self.mods.mods.set_rule(&rule, value);
+            }
+        }
+        if self.ticks.is_multiple_of(20) {
+            self.mods.dynamic_tank_valves.clear();
+            let mut checked = HashSet::new();
+            for &(x, y, z) in positions {
+                let valve = [x, y, z];
+                if self.induction_matrix_block(valve) != "mekanism:dynamic_valve"
+                    || !checked.insert(valve)
+                    || self.mods.dynamic_tank_valves.contains_key(&valve)
+                {
+                    continue;
+                }
+                if let Some(tank) = self.dynamic_tank_for_valve(valve) {
+                    let link = format!(
+                        "{},{},{};{};{}",
+                        tank.min[0],
+                        tank.min[1],
+                        tank.min[2],
+                        tank.volume,
+                        tank.valves.len()
+                    );
+                    for tank_valve in tank.valves {
+                        self.mods
+                            .dynamic_tank_valves
+                            .insert(tank_valve, link.clone());
+                    }
+                }
+            }
+        }
+        for &(x, y, z) in positions {
+            if self.induction_matrix_block([x, y, z]) == "mekanism:dynamic_valve" {
+                let rule = format!("mekanism:dynamic/valve/{dimension}/{x},{y},{z}");
+                let value = self
+                    .mods
+                    .dynamic_tank_valves
+                    .get(&[x, y, z])
+                    .map_or("", String::as_str);
+                self.mods.mods.set_rule(&rule, value);
+            }
+        }
+        if self.ticks.is_multiple_of(20) {
+            self.mods.turbine_valves.clear();
+            let mut checked = HashSet::new();
+            for &(x, y, z) in positions {
+                let valve = [x, y, z];
+                if self.induction_matrix_block(valve) != "mekanismgenerators:turbine_valve"
+                    || !checked.insert(valve)
+                    || self.mods.turbine_valves.contains_key(&valve)
+                {
+                    continue;
+                }
+                if let Some(turbine) = self.turbine_for_valve(valve) {
+                    let link = format!(
+                        "{},{},{};{};{};{};{};{}",
+                        turbine.min[0],
+                        turbine.min[1],
+                        turbine.min[2],
+                        turbine.volume,
+                        turbine.max_rate,
+                        turbine.rotor_height,
+                        turbine.rotors,
+                        turbine.valves.len()
+                    );
+                    for turbine_valve in turbine.valves {
+                        self.mods.turbine_valves.insert(turbine_valve, link.clone());
+                    }
+                }
+            }
+        }
+        for &(x, y, z) in positions {
+            if self.induction_matrix_block([x, y, z]) == "mekanismgenerators:turbine_valve" {
+                let rule = format!("mekanismgenerators:turbine/valve/{dimension}/{x},{y},{z}");
+                let value = self
+                    .mods
+                    .turbine_valves
+                    .get(&[x, y, z])
+                    .map_or("", String::as_str);
+                self.mods.mods.set_rule(&rule, value);
+            }
+        }
+        if self.ticks.is_multiple_of(20) {
+            self.mods.fission_reactor_ports.clear();
+            let mut checked = HashSet::new();
+            for &(x, y, z) in positions {
+                let port = [x, y, z];
+                if self.induction_matrix_block(port) != "mekanismgenerators:fission_reactor_port"
+                    || !checked.insert(port)
+                    || self.mods.fission_reactor_ports.contains_key(&port)
+                {
+                    continue;
+                }
+                if let Some(reactor) = self.fission_reactor_for_port(port) {
+                    let link = format!(
+                        "{},{},{};{},{},{};{};{};{},{},{}",
+                        reactor.min[0],
+                        reactor.min[1],
+                        reactor.min[2],
+                        reactor.size[0],
+                        reactor.size[1],
+                        reactor.size[2],
+                        reactor.fuel_assemblies,
+                        reactor.ports.len(),
+                        reactor.ports[0][0],
+                        reactor.ports[0][1],
+                        reactor.ports[0][2]
+                    );
+                    for reactor_port in reactor.ports {
+                        self.mods
+                            .fission_reactor_ports
+                            .insert(reactor_port, link.clone());
+                    }
+                }
+            }
+        }
+        for &(x, y, z) in positions {
+            if self.induction_matrix_block([x, y, z]) == "mekanismgenerators:fission_reactor_port" {
+                let rule = format!("mekanismgenerators:fission/port/{dimension}/{x},{y},{z}");
+                let value = self
+                    .mods
+                    .fission_reactor_ports
+                    .get(&[x, y, z])
+                    .map_or("", String::as_str);
+                self.mods.mods.set_rule(&rule, value);
+            }
+        }
+        if self.ticks.is_multiple_of(20) {
+            self.mods.fusion_reactor_components.clear();
+            for &(x, y, z) in positions {
+                let controller = [x, y, z];
+                if self.induction_matrix_block(controller)
+                    != "mekanismgenerators:fusion_reactor_controller"
+                {
+                    continue;
+                }
+                let Some(reactor) = self.fusion_reactor_for_controller(controller) else {
+                    continue;
+                };
+                let link = format!(
+                    "{},{},{};{};{},{},{}",
+                    reactor.min[0],
+                    reactor.min[1],
+                    reactor.min[2],
+                    reactor.ports.len(),
+                    reactor.controller[0],
+                    reactor.controller[1],
+                    reactor.controller[2]
+                );
+                self.mods
+                    .fusion_reactor_components
+                    .insert(controller, link.clone());
+                for port in reactor.ports {
+                    self.mods
+                        .fusion_reactor_components
+                        .insert(port, link.clone());
+                }
+            }
+        }
+        for &(x, y, z) in positions {
+            let pos = [x, y, z];
+            let block = self.induction_matrix_block(pos);
+            if block == "mekanismgenerators:fusion_reactor_controller" {
+                let rule = format!("mekanismgenerators:fusion/controller/{dimension}/{x},{y},{z}");
+                let value = self
+                    .mods
+                    .fusion_reactor_components
+                    .get(&pos)
+                    .map_or("", String::as_str);
+                self.mods.mods.set_rule(&rule, value);
+            } else if block == "mekanismgenerators:fusion_reactor_port" {
+                let rule = format!("mekanismgenerators:fusion/port/{dimension}/{x},{y},{z}");
+                let value = self
+                    .mods
+                    .fusion_reactor_components
+                    .get(&pos)
+                    .map_or("", String::as_str);
+                self.mods.mods.set_rule(&rule, value);
+            }
+        }
+        let mut controllers = Vec::new();
+        let mut valves = Vec::new();
+        for &(x, y, z) in positions {
+            let name = &self.res.facts().get(self.world.block(x, y, z)).name;
+            if name.as_ref() == "mekanism:thermal_evaporation_controller" {
+                controllers.push([x, y, z]);
+                self.mods.mods.set_rule(
+                    &format!("mekanism:tep/controller/{dimension}/{x},{y},{z}"),
+                    "false",
+                );
+            } else if name.as_ref() == "mekanism:thermal_evaporation_valve" {
+                valves.push([x, y, z]);
+                self.mods
+                    .mods
+                    .set_rule(&format!("mekanism:tep/valve/{dimension}/{x},{y},{z}"), "");
+            }
+        }
+        if self.ticks.is_multiple_of(20) {
+            self.mods.thermal_evaporation_plants.clear();
+            for &controller in &controllers {
+                self.mods.mods.set_rule(
+                    &format!(
+                        "mekanism:tep/heat/{dimension}/{},{},{}",
+                        controller[0], controller[1], controller[2]
+                    ),
+                    "false",
+                );
+                if let Some(plant_valves) = self.thermal_evaporation_valves(controller) {
+                    self.mods
+                        .thermal_evaporation_plants
+                        .insert(controller, plant_valves);
+                }
+            }
+            self.mods.thermal_evaporation_checked_tick = self.ticks;
+        }
+        if self.mods.thermal_evaporation_checked_tick == self.ticks
+            || !self.mods.thermal_evaporation_plants.is_empty()
+        {
+            for controller in controllers {
+                let Some(plant_valves) = self.mods.thermal_evaporation_plants.get(&controller)
+                else {
+                    continue;
+                };
+                self.mods.mods.set_rule(
+                    &format!(
+                        "mekanism:tep/controller/{dimension}/{},{},{}",
+                        controller[0], controller[1], controller[2]
+                    ),
+                    "true",
+                );
+                for &valve in plant_valves {
+                    self.mods.mods.set_rule(
+                        &format!(
+                            "mekanism:tep/valve/{dimension}/{},{},{}",
+                            valve[0], valve[1], valve[2]
+                        ),
+                        &format!("{},{},{}", controller[0], controller[1], controller[2]),
+                    );
+                }
+            }
+        }
+        let mut entries = Vec::new();
+        let mut views = Vec::new();
+        for &pos in positions {
+            if !matches!(
+                self.world.block_entities.get(&pos),
+                Some(horizon_client::containers::BlockEntity::Mod { .. })
+            ) {
+                let state = self.world.block(pos.0, pos.1, pos.2);
+                let block = self.res.facts().get(state).name.to_string();
+                self.ensure_mod_block_entity([pos.0, pos.1, pos.2], &block);
+            }
+            let Some(horizon_client::containers::BlockEntity::Mod {
+                block,
+                mut handle,
+                saved,
+                mut items,
+            }) = self.world.block_entities.take(&pos)
+            else {
+                continue;
+            };
+            if handle == 0 {
+                let Some((new_handle, slots)) = self.mods.mods.create_block_entity_at(
+                    &block,
+                    &saved,
+                    Some((self.dim.id().to_owned(), pos.0, pos.1, pos.2)),
+                ) else {
+                    self.world.block_entities.put(
+                        pos,
+                        horizon_client::containers::BlockEntity::Mod {
+                            block,
+                            handle,
+                            saved,
+                            items,
+                        },
+                    );
+                    continue;
+                };
+                handle = new_handle;
+                items.resize(slots as usize, None);
+            }
+            let state = self.world.block(pos.0, pos.1, pos.2);
+            let mut properties = Vec::new();
+            if let Some(current) = self.pack.assets.registry.state(state) {
+                for (name, value) in &current.properties {
+                    let mut values: Vec<String> = (0..self.pack.assets.registry.len())
+                        .map(|i| horizon_world::registry::BlockStateId(i as u32))
+                        .filter(|&id| self.res.facts().get(id).name.as_ref() == block)
+                        .filter_map(|id| self.pack.assets.registry.state(id))
+                        .filter_map(|s| s.properties.get(name).cloned())
+                        .collect();
+                    values.sort();
+                    values.dedup();
+                    properties.push(horizon_mods::Property {
+                        name: name.clone(),
+                        value: value.clone(),
+                        values,
+                    });
+                }
+            }
+            views.push(BlockEntityView {
+                handle,
+                dimension: self.dim.id().to_owned(),
+                x: pos.0,
+                y: pos.1,
+                z: pos.2,
+                slots: items
+                    .iter()
+                    .map(|slot| {
+                        slot.as_ref().map(|s| Stack {
+                            id: s.item.to_string(),
+                            count: s.count,
+                        })
+                    })
+                    .collect(),
+                properties,
+                changed: false,
+            });
+            entries.push((pos, block, handle, saved, items, state));
+        }
+        self.mods.mods.tick_block_entities(&mut views);
+        for ((pos, block, handle, old_saved, mut items, state), view) in
+            entries.into_iter().zip(views)
+        {
+            if view.changed {
+                items = view
+                    .slots
+                    .iter()
+                    .map(|slot| {
+                        slot.as_ref().map(|s| ItemStack {
+                            item: Arc::from(s.id.as_str()),
+                            count: s.count,
+                            damage: 0,
+                            extra: None,
+                        })
+                    })
+                    .collect();
+                if let Some(mut block_state) = self.pack.assets.registry.state(state).cloned() {
+                    for property in &view.properties {
+                        block_state
+                            .properties
+                            .insert(property.name.clone(), property.value.clone());
+                    }
+                    if let Ok(id) = self.pack.assets.registry.resolve(&block_state) {
+                        let _ = self.world.set(pos.0, pos.1, pos.2, id);
+                    }
+                }
+            }
+            let saved = self
+                .mods
+                .mods
+                .save_block_entity(handle)
+                .unwrap_or(old_saved.clone());
+            if view.changed || saved != old_saved {
+                self.world.modified.insert((pos.0 >> 4, pos.2 >> 4));
+            }
+            self.mods.block_entities.insert([pos.0, pos.1, pos.2], view);
+            self.world.block_entities.put(
+                pos,
+                horizon_client::containers::BlockEntity::Mod {
+                    block,
+                    handle,
+                    saved,
+                    items,
+                },
+            );
+        }
         self.show_mod_output();
     }
     /// Chat lines, command feedback and stopped mods, into the chat.

@@ -553,6 +553,17 @@ pub fn encode_block_entity(
         BlockEntity::Vault(v) => entries.extend(v.save()),
         BlockEntity::Beehive(h) => entries.extend(h.to_nbt()),
         BlockEntity::CommandBlock(c) => entries.extend(c.save()),
+        BlockEntity::Mod {
+            block,
+            saved,
+            items,
+            ..
+        } => {
+            entries.push(("mod_block", string(block)));
+            entries.push(("mod_data", Tag::ByteArray(saved.clone())));
+            entries.push(("mod_slots", Tag::Int(items.len() as i32)));
+            entries.push(("Items", encode_items(items)));
+        }
     }
     Tag::compound(entries)
 }
@@ -572,6 +583,26 @@ pub fn decode_block_entity(tag: &Tag) -> Option<((i32, i32, i32), crate::contain
     let int = |k: &str| number(tag.get(k)).map(|v| v as i32);
     let id = text(tag.get("id"))?;
     let pos = (int("x")?, int("y")?, int("z")?);
+    if id == "horizon:mod_block_entity" {
+        let block = text(tag.get("mod_block"))?;
+        let saved = match tag.get("mod_data") {
+            Some(Tag::ByteArray(bytes)) => bytes.clone(),
+            _ => Vec::new(),
+        };
+        let items = decode_items(
+            tag.get("Items"),
+            int("mod_slots").unwrap_or(0).max(0) as usize,
+        );
+        return Some((
+            pos,
+            BlockEntity::Mod {
+                block,
+                handle: 0,
+                saved,
+                items,
+            },
+        ));
+    }
     if id == "minecraft:jukebox" {
         let record = tag.get("RecordItem").and_then(item_from_nbt);
         let ticks = number(tag.get("ticks_since_song_started")).unwrap_or(0);
@@ -689,6 +720,7 @@ pub fn decode_block_entity(tag: &Tag) -> Option<((i32, i32, i32), crate::contain
         BlockEntity::Vault(v) => **v = crate::vault::Vault::load(tag),
         BlockEntity::Beehive(h) => **h = crate::beehive::Beehive::from_nbt(tag),
         BlockEntity::CommandBlock(c) => **c = crate::command_block::CommandBlock::load(tag),
+        BlockEntity::Mod { .. } => unreachable!("handled above"),
     }
     Some((pos, entity))
 }

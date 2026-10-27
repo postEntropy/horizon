@@ -24,6 +24,7 @@ impl Game<'_> {
         let ticking = self.block_ticking_area();
         let mut spawners = Vec::new();
         let mut trial_spawners = Vec::new();
+        let mut mod_machines = Vec::new();
         self.item_columns = Some(Default::default());
         for slot in self.world.block_entity_tickers() {
             let pos = slot.0;
@@ -54,9 +55,11 @@ impl Game<'_> {
                 Some(BlockEntity::Beehive(_)) => self.tick_beehive(pos),
                 Some(BlockEntity::Furnace(_)) => self.tick_furnace(pos)?,
                 Some(BlockEntity::Brewing(_)) => self.tick_brewing_stand(pos)?,
+                Some(BlockEntity::Mod { .. }) => mod_machines.push(pos),
                 _ => {}
             }
         }
+        self.tick_mod_block_entities(&mod_machines);
         // Items move between passes: the columns hold for this one only.
         self.item_columns = None;
         self.update_song_volumes();
@@ -76,6 +79,7 @@ impl Game<'_> {
     /// `tick_creaking_heart`).
     fn ticking_states(&self) -> Vec<Ticking> {
         let registry = self.pack.assets.registry;
+        let mod_ticking_blocks = self.mod_ticking_blocks();
         (0..registry.len())
             .map(|i| {
                 let state = BlockStateId(i as u32);
@@ -99,6 +103,7 @@ impl Game<'_> {
                         if record { Ticking::Yes } else { Ticking::Idle }
                     }
                     n if FurnaceKind::from_block(n).is_some() => Ticking::Yes,
+                    n if mod_ticking_blocks.iter().any(|block| block == n) => Ticking::Yes,
                     _ => Ticking::No,
                 }
             })

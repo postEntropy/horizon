@@ -705,6 +705,11 @@ fn serve(
     };
     let audio = Audio::silent(&options.resources);
     let mut server = Game::new(res, pack, gui, options, settings, audio, None)?;
+    // Block use, machine ticks, and block-entity saves run on the integrated
+    // server. Start the same enabled/dev mods there as on the window client;
+    // the client's runtime cannot own authoritative machine state.
+    server.mods.dev = server.options.dev_mods.clone();
+    server.start_mods();
     server.run_integrated(launch, flags, tasks, ready)
 }
 

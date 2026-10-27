@@ -1,0 +1,7 @@
+id = "mekanism"
+name = "Mekanism"
+version = "10.7.19-horizon.1"
+api = "0.4"
+side = "both"
+capabilities = ["registries", "block-entities", "capabilities", "ui", "recipes", "server"]
+namespaces = ["projecte"]

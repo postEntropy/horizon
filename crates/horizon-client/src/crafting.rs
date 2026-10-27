@@ -1121,9 +1121,128 @@ pub struct Cooking {
     pub experience: f32,
     pub time: u32,
 }
+#[derive(Clone, Debug)]
+pub struct MachineRecipe {
+    pub id: String,
+    pub kind: String,
+    pub inputs: Vec<MachineInput>,
+    pub outputs: Vec<MachineOutput>,
+    pub ticks: u32,
+    pub energy: u64,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MachineResourceKind {
+    Fluid,
+    Chemical,
+}
+#[derive(Clone, Debug)]
+pub enum MachineInput {
+    Item {
+        ingredient: Ingredient,
+        count: u32,
+    },
+    Resource {
+        kind: MachineResourceKind,
+        tank: u32,
+        accepted: Vec<String>,
+        amount: u32,
+    },
+}
+#[derive(Clone, Debug)]
+pub enum MachineOutput {
+    Item(ItemStack),
+    Resource {
+        kind: MachineResourceKind,
+        tank: u32,
+        id: String,
+        amount: u32,
+    },
+}
+
+fn resource_tags(root: &Path, kind: MachineResourceKind) -> HashMap<String, Vec<String>> {
+    fn json_files(dir: &Path, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                json_files(&path, out);
+            } else if path.extension().is_some_and(|e| e == "json") {
+                out.push(path);
+            }
+        }
+    }
+    fn expand(
+        id: &str,
+        raw: &HashMap<String, Vec<String>>,
+        seen: &mut HashSet<String>,
+        out: &mut Vec<String>,
+    ) {
+        if !seen.insert(id.to_owned()) {
+            return;
+        }
+        if let Some(values) = raw.get(id) {
+            for value in values {
+                if let Some(tag) = value.strip_prefix('#') {
+                    expand(tag, raw, seen, out);
+                } else if !out.contains(value) {
+                    out.push(value.clone());
+                }
+            }
+        }
+    }
+    let data = root.join("data");
+    let Ok(namespaces) = fs::read_dir(data) else {
+        return HashMap::new();
+    };
+    let mut raw = HashMap::new();
+    for ns in namespaces.flatten().filter(|e| e.path().is_dir()) {
+        let ns_name = ns.file_name().to_string_lossy().into_owned();
+        let base = match kind {
+            MachineResourceKind::Fluid => ns.path().join("tags/fluid"),
+            MachineResourceKind::Chemical => ns.path().join("tags/mekanism/chemical"),
+        };
+        let mut files = Vec::new();
+        json_files(&base, &mut files);
+        for path in files {
+            let Ok(relative) = path.strip_prefix(&base) else {
+                continue;
+            };
+            let id = format!(
+                "{ns_name}:{}",
+                relative
+                    .with_extension("")
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            );
+            let Ok(data) = fs::read(&path) else {
+                continue;
+            };
+            let Ok(value) = serde_json::from_slice::<Value>(&data) else {
+                continue;
+            };
+            let values = value["values"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect();
+            raw.insert(id, values);
+        }
+    }
+    let mut expanded = HashMap::new();
+    for id in raw.keys() {
+        let mut values = Vec::new();
+        expand(id, &raw, &mut HashSet::new(), &mut values);
+        expanded.insert(id.clone(), values);
+    }
+    expanded
+}
 pub struct Recipes {
     pub crafting: Vec<(String, Recipe)>,
     pub cooking: Vec<Cooking>,
+    pub machine: Vec<MachineRecipe>,
     /// `category` and `group` of each crafting recipe, by file name.
     pub meta: HashMap<String, (String, String)>,
     facts: HashMap<Arc<str>, Facts>,
@@ -1206,6 +1325,7 @@ impl Recipes {
     pub fn load(root: &Path, items: &Items) -> Result<Self> {
         let mut crafting = Vec::new();
         let mut cooking = Vec::new();
+        let mut machine = Vec::new();
         let mut meta = HashMap::new();
         let json_files = |dir: &Path| -> Result<Vec<PathBuf>> {
             fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
@@ -1224,6 +1344,8 @@ impl Recipes {
             files.sort();
             Ok(files)
         };
+        let fluid_tags = resource_tags(root, MachineResourceKind::Fluid);
+        let chemical_tags = resource_tags(root, MachineResourceKind::Chemical);
         // Vanilla's recipes by bare name, then content mods' as `<ns>:<name>`.
         let mc_dir = root.join("data/minecraft/recipe");
         let mut files: Vec<(String, PathBuf, PathBuf)> = json_files(&mc_dir)?
@@ -1264,6 +1386,206 @@ impl Recipes {
             let result = || Template::parse(&v["result"]);
             let special = |recipe: Option<Special>| recipe.map(Recipe::Special);
             let rtype = v["type"].as_str().unwrap_or("");
+            if rtype.starts_with("mekanism:") {
+                type InputSpec = (&'static str, Option<MachineResourceKind>);
+                let variants: Vec<Vec<InputSpec>> = match rtype {
+                    "mekanism:combining" => vec![vec![("main_input", None), ("extra_input", None)]],
+                    "mekanism:metallurgic_infusing"
+                    | "mekanism:injecting"
+                    | "mekanism:purifying"
+                    | "mekanism:dissolution"
+                    | "mekanism:nucleosynthesizing"
+                    | "mekanism:compressing" => vec![vec![
+                        ("item_input", None),
+                        ("chemical_input", Some(MachineResourceKind::Chemical)),
+                    ]],
+                    "mekanism:reaction" => vec![vec![
+                        ("item_input", None),
+                        ("chemical_input", Some(MachineResourceKind::Chemical)),
+                        ("fluid_input", Some(MachineResourceKind::Fluid)),
+                    ]],
+                    "mekanism:washing" => vec![vec![
+                        ("chemical_input", Some(MachineResourceKind::Chemical)),
+                        ("fluid_input", Some(MachineResourceKind::Fluid)),
+                    ]],
+                    "mekanism:chemical_infusing" | "mekanism:pigment_mixing" => vec![vec![
+                        ("left_input", Some(MachineResourceKind::Chemical)),
+                        ("right_input", Some(MachineResourceKind::Chemical)),
+                    ]],
+                    "mekanism:painting" => vec![vec![
+                        ("item_input", None),
+                        ("chemical_input", Some(MachineResourceKind::Chemical)),
+                    ]],
+                    "mekanism:rotary" => vec![
+                        vec![("chemical_input", Some(MachineResourceKind::Chemical))],
+                        vec![("fluid_input", Some(MachineResourceKind::Fluid))],
+                    ],
+                    "mekanism:separating" | "mekanism:evaporating" => {
+                        vec![vec![("input", Some(MachineResourceKind::Fluid))]]
+                    }
+                    "mekanism:crystallizing" | "mekanism:centrifuging" | "mekanism:activating" => {
+                        vec![vec![("input", Some(MachineResourceKind::Chemical))]]
+                    }
+                    _ => vec![vec![("input", None)]],
+                };
+                for variant in variants {
+                    let rotary_fluid_mode = variant
+                        .first()
+                        .is_some_and(|(_, kind)| *kind == Some(MachineResourceKind::Fluid));
+                    let mut inputs = Vec::new();
+                    let mut resource_input_tanks = HashMap::<MachineResourceKind, u32>::new();
+                    for (field, resource_kind) in variant {
+                        let value = &v[field];
+                        if let Some(kind) = resource_kind {
+                            let selector = value["tag"]
+                                .as_str()
+                                .map(|tag| (tag, true))
+                                .or_else(|| {
+                                    value["chemical"]
+                                        .as_str()
+                                        .or_else(|| value["fluid"].as_str())
+                                        .map(|id| (id, false))
+                                })
+                                .or_else(|| value["id"].as_str().map(|id| (id, false)));
+                            let Some((selector, is_tag)) = selector else {
+                                continue;
+                            };
+                            let tags = match kind {
+                                MachineResourceKind::Fluid => &fluid_tags,
+                                MachineResourceKind::Chemical => &chemical_tags,
+                            };
+                            let accepted = if is_tag {
+                                tags.get(selector)
+                                    .cloned()
+                                    .unwrap_or_else(|| vec![selector.to_owned()])
+                            } else {
+                                vec![selector.to_owned()]
+                            };
+                            let tank = resource_input_tanks.entry(kind).or_default();
+                            let amount = value["amount"].as_u64().unwrap_or(1) as u32;
+                            inputs.push(MachineInput::Resource {
+                                kind,
+                                tank: *tank,
+                                accepted,
+                                amount: amount.max(1),
+                            });
+                            *tank += 1;
+                        } else if let Some(ingredient) = Ingredient::parse(value, items) {
+                            let count = value["count"].as_u64().unwrap_or(1) as u32;
+                            inputs.push(MachineInput::Item {
+                                ingredient,
+                                count: count.max(1),
+                            });
+                        }
+                    }
+                    let mut outputs = Vec::new();
+                    let mut output_resource_tanks = resource_input_tanks.clone();
+                    let mut add_item_output = |field: &str| {
+                        let value = &v[field];
+                        if let Some(item) = value["id"].as_str()
+                            && items.items.contains_key(item)
+                        {
+                            let count = value["count"].as_u64().unwrap_or(1) as u32;
+                            outputs.push(MachineOutput::Item(ItemStack::new(item, count.max(1))));
+                        }
+                    };
+                    let item_output_fields: &[&str] = match rtype {
+                        "mekanism:enriching" | "mekanism:crushing" | "mekanism:combining" => {
+                            &["output"]
+                        }
+                        "mekanism:sawing" => &["main_output", "secondary_output"],
+                        "mekanism:reaction" => &["item_output"],
+                        "mekanism:crystallizing" => &["output"],
+                        "mekanism:painting"
+                        | "mekanism:metallurgic_infusing"
+                        | "mekanism:injecting"
+                        | "mekanism:purifying"
+                        | "mekanism:nucleosynthesizing"
+                        | "mekanism:compressing" => &["output"],
+                        _ => &[],
+                    };
+                    for field in item_output_fields {
+                        add_item_output(field);
+                    }
+                    let mut add_resource_output = |field: &str, kind: MachineResourceKind| {
+                        let value = &v[field];
+                        if let Some(id) = value["id"]
+                            .as_str()
+                            .or_else(|| value["chemical"].as_str())
+                            .or_else(|| value["fluid"].as_str())
+                        {
+                            let tank = output_resource_tanks.entry(kind).or_default();
+                            let amount = value["amount"].as_u64().unwrap_or(1) as u32;
+                            outputs.push(MachineOutput::Resource {
+                                kind,
+                                tank: *tank,
+                                id: id.to_owned(),
+                                amount: amount.max(1),
+                            });
+                            *tank += 1;
+                        }
+                    };
+                    match rtype {
+                        "mekanism:chemical_conversion"
+                        | "mekanism:oxidizing"
+                        | "mekanism:pigment_extracting"
+                        | "mekanism:activating"
+                        | "mekanism:centrifuging"
+                        | "mekanism:chemical_infusing"
+                        | "mekanism:pigment_mixing" => {
+                            add_resource_output("output", MachineResourceKind::Chemical);
+                        }
+                        "mekanism:evaporating" => {
+                            add_resource_output("output", MachineResourceKind::Fluid);
+                        }
+                        "mekanism:metallurgic_infusing"
+                        | "mekanism:injecting"
+                        | "mekanism:purifying"
+                        | "mekanism:dissolution"
+                        | "mekanism:nucleosynthesizing"
+                        | "mekanism:compressing"
+                        | "mekanism:washing" => {
+                            if item_output_fields.is_empty() {
+                                add_resource_output("output", MachineResourceKind::Chemical);
+                            }
+                        }
+                        "mekanism:reaction" => {
+                            add_resource_output("chemical_output", MachineResourceKind::Chemical);
+                        }
+                        "mekanism:separating" => {
+                            add_resource_output(
+                                "left_chemical_output",
+                                MachineResourceKind::Chemical,
+                            );
+                            add_resource_output(
+                                "right_chemical_output",
+                                MachineResourceKind::Chemical,
+                            );
+                        }
+                        "mekanism:rotary" => {
+                            if rotary_fluid_mode {
+                                add_resource_output(
+                                    "chemical_output",
+                                    MachineResourceKind::Chemical,
+                                );
+                            } else {
+                                add_resource_output("fluid_output", MachineResourceKind::Fluid);
+                            }
+                        }
+                        _ => {}
+                    }
+                    if !inputs.is_empty() && !outputs.is_empty() {
+                        machine.push(MachineRecipe {
+                            id: name.clone(),
+                            kind: rtype.to_owned(),
+                            inputs,
+                            outputs,
+                            ticks: v["duration"].as_u64().unwrap_or(200) as u32,
+                            energy: v["energy_required"].as_u64().unwrap_or(0),
+                        });
+                    }
+                }
+            }
             let parsed: Option<Recipe> = match rtype {
                 "minecraft:crafting_shaped" | "crafting_shaped" | "mekanism:mek_data"
                     if v.get("pattern").is_some() && v.get("key").is_some() =>
@@ -1526,6 +1848,7 @@ impl Recipes {
         Ok(Self {
             crafting,
             cooking,
+            machine,
             meta,
             facts,
             curses,
@@ -1776,6 +2099,7 @@ mod tests {
         Recipes {
             crafting: Vec::new(),
             cooking,
+            machine: Vec::new(),
             meta: HashMap::new(),
             facts: HashMap::new(),
             curses: HashSet::new(),
@@ -1828,6 +2152,7 @@ mod tests {
         let recipes = Recipes {
             crafting: Vec::new(),
             cooking: Vec::new(),
+            machine: Vec::new(),
             meta: HashMap::new(),
             facts: HashMap::new(),
             curses: HashSet::new(),

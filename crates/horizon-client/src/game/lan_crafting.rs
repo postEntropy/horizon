@@ -212,17 +212,23 @@ impl Game<'_> {
         else {
             return false;
         };
-        let (kind, items) = match self.world.block_entities.get(&pos) {
+        let (kind, items, is_mod) = match self.world.block_entities.get(&pos) {
             Some(BlockEntity::Furnace(f)) => {
                 let recipe = match f.kind.recipe_type() {
                     "minecraft:blasting" => "blasting",
                     "minecraft:smoking" => "smoking",
                     _ => "smelting",
                 };
-                (Kind::Furnace(recipe), f.items.to_vec())
+                (Kind::Furnace(recipe), f.items.to_vec(), false)
             }
-            Some(BlockEntity::Brewing(b)) => (Kind::Brewing, b.items.to_vec()),
-            Some(BlockEntity::Crafter(c)) => (Kind::CrafterBlock, c.items.to_vec()),
+            Some(BlockEntity::Brewing(b)) => (Kind::Brewing, b.items.to_vec(), false),
+            Some(BlockEntity::Crafter(c)) => (Kind::CrafterBlock, c.items.to_vec(), false),
+            Some(BlockEntity::Mod {
+                block: _, items, ..
+            }) => {
+                let rows = items.len().div_ceil(9).clamp(1, 6);
+                (Kind::Chest(rows), items.clone(), true)
+            }
             _ => return false,
         };
         // CrafterBlockEntity.containerData: the disabled slots, then triggered.
@@ -282,7 +288,17 @@ impl Game<'_> {
                     c.disabled[k] = menu.data[k] == 1;
                 }
             }
+            Some(BlockEntity::Mod { items, .. }) => {
+                for (k, item) in items.iter_mut().enumerate() {
+                    *item = menu.slot(k).cloned();
+                }
+                self.world.modified.insert((pos.0 >> 4, pos.2 >> 4));
+            }
             _ => {}
+        }
+        if is_mod && p.slot >= 0 {
+            self.mod_menu_click(p.slot as u32, p.button as u8);
+            self.mod_save_block_entity([pos.0, pos.1, pos.2]);
         }
         host.play.entry(conn).or_default().crafting.machine = Some((p.container, menu));
         host.hub.inventory_clicked(conn, p, &self.world, &changed);

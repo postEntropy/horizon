@@ -2980,6 +2980,10 @@ impl Game<'_> {
                     1.0,
                 );
             }
+        } else if self.ensure_mod_block_entity(pos, &name) {
+            // Mod block entity: the normal container slots operate on its
+            // game-owned inventory; its mod controls machine-specific data.
+            self.container = Some(key);
         } else if self.open_station(pos, &name) {
             // Workstation menus: game/stations.rs.
         } else {
@@ -3412,6 +3416,16 @@ impl Game<'_> {
                 self.swing_arm();
                 return Ok(true);
             }
+            if self.hand == Hand::Main
+                && self.mod_use_block(
+                    hit.pos,
+                    hit.face,
+                    held.as_ref().map(|stack| stack.item.as_ref()),
+                )
+            {
+                self.swing_arm();
+                return Ok(true);
+            }
             match self.use_respawn_anchor(hit.pos, held.as_ref())? {
                 respawn_anchor::AnchorUse::Charged => {
                     self.swing_arm();
@@ -3574,7 +3588,8 @@ impl Game<'_> {
             return Ok(true);
         };
         let target = [pos.x, pos.y, pos.z];
-        if let Some(entity) = BlockEntity::for_block(&self.res.facts().get(state).name) {
+        let block_name = self.res.facts().get(state).name.to_string();
+        if let Some(entity) = BlockEntity::for_block(&block_name) {
             let key = (target[0], target[1], target[2]);
             self.world.block_entities.insert(key, entity);
             let game_master = self.can_use_game_master_blocks();
@@ -3591,6 +3606,8 @@ impl Game<'_> {
                 Some(BlockEntity::Sign(sign)) if !sign.waxed => self.open_sign_editor(key, true),
                 _ => {}
             }
+        } else {
+            self.ensure_mod_block_entity(target, &block_name);
         }
         self.swing_arm();
         // BlockItem.place's sound is among the level events;
@@ -5055,6 +5072,9 @@ impl Game<'_> {
         if self.screen == Screen::Creative {
             return Self::creative_origin(batch);
         }
+        if let Some(screen) = self.mod_screen_view() {
+            return batch.centered_origin(screen.width as f32, screen.height as f32);
+        }
         let (x, y) = batch.centered_origin(176.0, self.screen_height());
         (x + self.recipe_book_shift(batch.width), y)
     }
@@ -5077,6 +5097,7 @@ impl Game<'_> {
         let mut v: Vec<usize> = (0..36).collect();
         match self.container_kind() {
             Some(BlockEntity::Chest(_)) => v.extend((0..self.container_size()).map(|i| 300 + i)),
+            Some(BlockEntity::Mod { items, .. }) => v.extend((0..items.len()).map(|i| 300 + i)),
             Some(BlockEntity::Furnace(_)) => v.extend(300..303),
             Some(BlockEntity::Brewing(_)) => v.extend(300..305),
             Some(BlockEntity::Crafter(_)) => v.extend(300..310),
@@ -5106,6 +5127,24 @@ impl Game<'_> {
     }
     /// InventoryMenu / CraftingMenu slot layouts.
     fn slot_position(&self, i: usize) -> (f32, f32) {
+        if let Some(screen) = self.mod_screen_view()
+            && i < 36
+        {
+            let height = screen.height as f32;
+            return if i < 9 {
+                (8.0 + i as f32 * 18.0, height - 24.0)
+            } else {
+                (
+                    8.0 + ((i - 9) % 9) as f32 * 18.0,
+                    height - 82.0 + ((i - 9) / 9) as f32 * 18.0,
+                )
+            };
+        }
+        if (300..500).contains(&i)
+            && let Some(position) = self.mod_slot_position(i - 300)
+        {
+            return position;
+        }
         if self.creative_inventory_open()
             && let Some(position) = Creative::inventory_slot_position(i)
         {
@@ -5291,6 +5330,30 @@ impl Game<'_> {
             {
                 Some(BlockEntity::Chest(_)) if self.draw_machine_screen(batch, ox, oy) => {}
                 Some(BlockEntity::Chest(_)) => self.draw_chest_screen(batch, ox, oy),
+                Some(BlockEntity::Mod { block, .. }) => {
+                    if self.mod_screen_view().is_some() {
+                        self.draw_mod_screen(batch, ox, oy);
+                    } else {
+                        part(
+                            batch,
+                            "gui/container/generic_54",
+                            0.0,
+                            0.0,
+                            176.0,
+                            166.0,
+                            ox,
+                            oy,
+                        );
+                        let title = self.container_title(
+                            block
+                                .split_once(':')
+                                .map_or(block.as_str(), |(_, name)| name)
+                                .replace('_', " "),
+                        );
+                        batch.text(atlas, &title, ox + 8.0, oy + 6.0, grey, false);
+                        batch.text(atlas, "Inventory", ox + 8.0, oy + 72.0, grey, false);
+                    }
+                }
                 Some(BlockEntity::Furnace(f)) => {
                     let (tex, title) = match f.kind {
                         horizon_client::containers::FurnaceKind::Furnace => {
@@ -5400,6 +5463,9 @@ impl Game<'_> {
         self.close_station();
         self.mount_closed();
         self.recipe_ui.reset_screen();
+        if matches!(self.container_kind(), Some(BlockEntity::Mod { .. })) {
+            self.mod_close_screen();
+        }
         if self.remote.is_some() {
             return self.remote_close_container();
         }
@@ -5731,7 +5797,16 @@ impl Game<'_> {
             )
         } else {
             let (kind, map) = if self.container.is_some() {
-                let size = self.container_size();
+                // A mod block entity may expose fewer real slots than the
+                // generic 9-wide menu the server opens for it. Keep the
+                // server menu's slot layout when predicting remote clicks;
+                // unmapped extra machine slots remain scratch slots.
+                let size = match (self.remote.is_some(), self.container_kind()) {
+                    (true, Some(BlockEntity::Mod { items, .. })) => {
+                        items.len().div_ceil(9).clamp(1, 6) * 9
+                    }
+                    _ => self.container_size(),
+                };
                 let (kind, count) = match self.container_kind() {
                     Some(BlockEntity::Chest(_)) => {
                         let shulker = self.container.is_some_and(|k| {
@@ -5745,6 +5820,9 @@ impl Game<'_> {
                             n => Kind::Chest((n / 9).clamp(1, 6)),
                         };
                         (kind, size)
+                    }
+                    Some(BlockEntity::Mod { .. }) => {
+                        (Kind::Chest(size.div_ceil(9).clamp(1, 6)), size)
                     }
                     Some(BlockEntity::Brewing(_)) => (Kind::Brewing, 5),
                     Some(BlockEntity::Furnace(f)) => (
@@ -6483,6 +6561,11 @@ impl Game<'_> {
             return;
         };
         let batch = HudBatch::new(size);
+        let (ox, oy) = self.inventory_origin(&batch);
+        if let Some(button) = self.mod_button_at(self.cursor.0 - ox, self.cursor.1 - oy) {
+            self.mod_menu_button(button);
+            return;
+        }
         let Some(slot) = self.slot_at(&batch, self.cursor.0, self.cursor.1) else {
             return;
         };
@@ -6493,6 +6576,9 @@ impl Game<'_> {
         if held_shift && self.container.is_some() && self.container_quick_move(slot) {
             if let Some(key) = self.container {
                 self.world.modified.insert((key.0 >> 4, key.2 >> 4));
+            }
+            if matches!(self.container_kind(), Some(BlockEntity::Mod { .. })) && slot >= 300 {
+                self.mod_menu_click((slot - 300) as u32, 0);
             }
             return;
         }
@@ -6646,6 +6732,9 @@ impl Game<'_> {
                 .and_then(|k| self.world.block_entities.get_mut(&k))
         {
             f.input_clicked(self.res.recipes(), before);
+        }
+        if matches!(self.container_kind(), Some(BlockEntity::Mod { .. })) && slot >= 300 {
+            self.mod_menu_click((slot - 300) as u32, u8::from(right));
         }
     }
     /// `Camera.setRotation`: the camera's orientation, turned round in

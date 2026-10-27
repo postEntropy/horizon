@@ -1280,7 +1280,16 @@ impl Game<'_> {
                 }
             }
             None => {
-                self.world.block_entities.remove(&pos);
+                let mod_entity_still_matches = self
+                    .world
+                    .block_entities
+                    .get(&pos)
+                    .is_some_and(|entity| {
+                        matches!(entity, BlockEntity::Mod { block, .. } if block == name.as_ref())
+                    });
+                if !mod_entity_still_matches {
+                    self.world.block_entities.remove(&pos);
+                }
             }
         }
     }
@@ -4745,6 +4754,32 @@ impl Game<'_> {
             .as_ref()
             .and_then(|r| r.use_target)
             .map(|t| (t[0], t[1], t[2]));
+        if let Some((x, y, z)) = target {
+            let block = self
+                .res
+                .facts()
+                .get(self.world.block(x, y, z))
+                .name
+                .to_string();
+            if !block.starts_with("minecraft:") {
+                let _ = self.ensure_mod_block_entity([x, y, z], &block);
+            }
+        }
+        let mod_block_entity = target
+            .filter(|p| {
+                matches!(
+                    self.world.block_entities.get(p),
+                    Some(BlockEntity::Mod { .. })
+                )
+            })
+            .or_else(|| {
+                self.container.filter(|p| {
+                    matches!(
+                        self.world.block_entities.get(p),
+                        Some(BlockEntity::Mod { .. })
+                    )
+                })
+            });
         if menu == "minecraft:lectern" {
             // LecternScreen: the book and page come in the menu's content and data.
             if let Some(r) = self.remote.as_mut() {
@@ -4839,7 +4874,12 @@ impl Game<'_> {
         }
         self.craft_size = if menu == "minecraft:crafting" { 3 } else { 2 };
         self.container = None;
-        if let Some(entity) = entity {
+        if let Some(pos) = mod_block_entity {
+            // Keep the mod-owned slots and its screen widgets attached to the
+            // clicked machine; the generic menu packet only supplies the
+            // authoritative slot updates.
+            self.container = Some(pos);
+        } else if let Some(entity) = entity {
             // The clicked block shows the menu when it holds that container;
             // an ender chest's or a double chest's slots are no one block's,
             // so they go under a key no block has.
@@ -4855,6 +4895,20 @@ impl Game<'_> {
         }
         self.screen = Screen::Inventory;
         self.capture(false);
+        // The server confirms the machine opened with an ordinary container
+        // packet. Now recreate its declared client UI and keep the local mod
+        // block entity as the menu backing store for the incoming slot data.
+        if let Some((x, y, z)) = mod_block_entity {
+            let pos = [x, y, z];
+            let block = self
+                .res
+                .facts()
+                .get(self.world.block(x, y, z))
+                .name
+                .to_string();
+            let _ = self.ensure_mod_block_entity(pos, &block);
+            let _ = self.mod_use_block(pos, [0; 3], None);
+        }
     }
     /// `ClientPacketListener.handleMountScreenOpen`: a horse's or llama's
     /// inventory; for another entity the window is closed again.

@@ -1802,7 +1802,8 @@ fn apply_biome_modifiers(base: &Path, overlay: &Overlay<'_>, modifiers: &[String
             let Some(biomes_val) = doc.get("includeBiomes") else {
                 continue;
             };
-            let mut target_biomes = resolve_biome_selector(biomes_val, &raw_biome_tags, &known_biomes);
+            let mut target_biomes =
+                resolve_biome_selector(biomes_val, &raw_biome_tags, &known_biomes);
             if let Some(denied) = doc.get("excludeBiomes") {
                 let denied_set = resolve_biome_selector(denied, &raw_biome_tags, &known_biomes);
                 target_biomes.retain(|b| !denied_set.contains(b));
@@ -2459,7 +2460,10 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
                     }
                 } else if let Some(template) = file
                     .strip_prefix("data/")
-                    .and_then(|r| r.split_once("/structure/").or_else(|| r.split_once("/structures/")))
+                    .and_then(|r| {
+                        r.split_once("/structure/")
+                            .or_else(|| r.split_once("/structures/"))
+                    })
                     .filter(|(_, path)| path.ends_with(".nbt"))
                 {
                     // The worldgen loader's templates: worldgen/structure/<ns>/<path>.nbt.

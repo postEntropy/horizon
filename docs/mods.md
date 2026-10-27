@@ -12,8 +12,8 @@ folder, loads no runtime and plays exactly like vanilla 26.3.
 
 | Part | Where | State |
 |---|---|---|
-| The contract (WIT) | `crates/horizon-mod-sdk/wit/horizon.wit` | 0.1: log, game-read, chat, hud, storage; tick, frame, chat and command hooks. 0.4 preview: block entities (runtime only, not in the game yet) |
-| SDK for mod authors | `crates/horizon-mod-sdk` | 0.1 |
+| The contract (WIT) | `crates/horizon-mod-sdk/wit/horizon.wit` | API lines 0.1–0.5 are declared; see the [completeness audit](api/completeness-audit.md) for runtime and game status |
+| SDK for mod authors | `crates/horizon-mod-sdk` | SDK bindings for API lines 0.1–0.5; end-to-end support varies by capability |
 | Example mod | `crates/horizon-mod-sdk/examples/coords-hud` | coordinates, facing and time HUD, `/where`, `/coords` |
 | Runtime | `crates/horizon-mods` | wasmtime 36 LTS, component model |
 | Authoring tool | `crates/cargo-horizon-mod` | `cargo horizon-mod new / build / run` |
