@@ -165,7 +165,18 @@ pub fn carried(work: &Path) -> Vec<PathBuf> {
         .map(|e| e.path().join("carry"))
         .filter(|c| c.join("horizon-mod.toml").is_file())
         .collect();
-    mods.sort();
+    // A pack-file archive can have the same data namespace as its owning mod.
+    // Keep that mod first so a namespace clash never turns the data pack into
+    // the winner and prevents the mod's content from loading.
+    mods.sort_by_key(|carry| {
+        (
+            carry
+                .parent()
+                .and_then(Path::file_name)
+                .is_some_and(|name| name.to_string_lossy().starts_with("datapack_")),
+            carry.clone(),
+        )
+    });
     mods
 }
 

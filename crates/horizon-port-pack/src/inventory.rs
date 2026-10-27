@@ -90,13 +90,22 @@ pub fn build(pack: &Pack, cache: &Cache, work: &Path) -> Vec<Record> {
             .filter_map(|c| c.as_str().map(str::to_owned))
             .collect();
         let stem = f.file_name().trim_end_matches(".jar").to_owned();
-        let key = info
-            .as_ref()
-            .map(|i| i.mod_id.clone())
-            .filter(|k| !k.is_empty())
-            .or_else(|| f.mod_id.clone())
-            .or_else(|| Some(p("slug")).filter(|s| !s.is_empty()))
-            .unwrap_or(stem);
+        let key = if f.kind() == "datapacks" {
+            // A data pack archive is not a mod jar: its filename or data
+            // namespace can match a real mod in the same pack. Keep its
+            // carry directory distinct so it cannot overwrite that mod.
+            format!(
+                "datapack_{:.12}",
+                crate::import::sha1_hex(f.path.as_bytes())
+            )
+        } else {
+            info.as_ref()
+                .map(|i| i.mod_id.clone())
+                .filter(|k| !k.is_empty())
+                .or_else(|| f.mod_id.clone())
+                .or_else(|| Some(p("slug")).filter(|s| !s.is_empty()))
+                .unwrap_or(stem)
+        };
         let (mut client, mut server) = match project {
             Some(_) if f.client.is_empty() => (p("client_side"), p("server_side")),
             _ => (f.client.clone(), f.server.clone()),

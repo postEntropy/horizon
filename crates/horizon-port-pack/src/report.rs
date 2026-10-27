@@ -250,6 +250,9 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     let count = |k: &str| carry[k].as_object().map_or(0, |o| o.len());
     let (blocks, items) = (count("blocks"), carry["items"].as_u64().unwrap_or(0));
     let (left_blocks, left_items) = (count("blocks_unknown"), count("items_unknown"));
+    let copied = carry["copied"].as_u64().unwrap_or(0);
+    let outside = carry["outside"].as_array().map_or(0, Vec::len);
+    let unreadable = count("unreadable");
     let worldgen = carry["worldgen"].as_u64().unwrap_or(0);
     let sum_map = |k: &str| -> u64 {
         carry["worldgen_types"][k]
@@ -327,6 +330,12 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     if wg_lost > 0 {
         gaps.push(format!("{wg_lost} worldgen rules lost"));
     }
+    if outside > 0 {
+        gaps.push(format!("{outside} files outside supported namespaces"));
+    }
+    if unreadable > 0 {
+        gaps.push(format!("{unreadable} unreadable files left out"));
+    }
     gaps.extend(harness_gaps);
     if tier != "data" {
         gaps.push("needs mod.wasm".into());
@@ -341,6 +350,16 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
                 Status::Partial,
                 format!("{worldgen} worldgen files carried; {}", gaps.join("; ")),
             ));
+        }
+        if copied > 0 {
+            return if gaps.is_empty() {
+                Some((Status::Ported, format!("{copied} content files carried")))
+            } else {
+                Some((
+                    Status::Partial,
+                    format!("{copied} content files carried; {}", gaps.join("; ")),
+                ))
+            };
         }
         let what = if tier != "data" {
             "assets/data carried; needs mod.wasm".into()
@@ -372,7 +391,14 @@ pub fn build(records: &[Record], work: &Path) -> Vec<Row> {
     let mut rows: Vec<Row> = records
         .iter()
         .map(|r| {
-            let (status, reason) = if let Some(status) = pack_file_status(r, work) {
+            let data_pack_carry = if r.path.split('/').next() == Some("datapacks") {
+                carried(work, &r.key, &r.tier)
+            } else {
+                None
+            };
+            let (status, reason) = if let Some(status) = data_pack_carry {
+                status
+            } else if let Some(status) = pack_file_status(r, work) {
                 status
             } else if r.class == "unknown" {
                 let why = if r.jar.is_some() {
