@@ -798,6 +798,28 @@ fn instance(dir: &Path) -> Result<Pack, String> {
             }
         }
     }
+    // CurseForge instances keep the original pack manifest beside the
+    // installed jars. Use it for accurate report metadata when this is not
+    // a Prism/MultiMC instance (which has the more direct mmc-pack.json).
+    if pack.minecraft.is_empty()
+        && let Ok(text) = fs::read_to_string(dir.join("manifest.json"))
+    {
+        let manifest: Value =
+            serde_json::from_str(&text).map_err(|e| format!("manifest.json: {e}"))?;
+        pack.minecraft = str_of(&manifest["minecraft"], "version");
+        let primary = manifest["minecraft"]["modLoaders"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|loader| loader["primary"].as_bool().unwrap_or(true))
+            .map(|loader| str_of(loader, "id"))
+            .unwrap_or_default();
+        if !primary.is_empty() {
+            let (loader, version) = primary.split_once('-').unwrap_or((&primary, ""));
+            pack.loader = loader.to_owned();
+            pack.loader_version = version.to_owned();
+        }
+    }
     let game = [".minecraft", "minecraft", "."]
         .iter()
         .map(|g| dir.join(g))
