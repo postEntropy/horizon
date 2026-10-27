@@ -2467,6 +2467,24 @@ impl Overlay<'_> {
         fs::write(path, bytes)?;
         Ok(())
     }
+
+    /// Reuse an installed directory mod's asset inode when possible. Carries
+    /// live outside the cache, so copying them into every content root wastes
+    /// space; cross-filesystem sources fall back to a regular copy.
+    fn link_or_copy(&self, rel: &str, source: &Path) -> Result<()> {
+        let rel = Path::new(rel);
+        if let Some(parent) = rel.parent() {
+            self.dir(parent)?;
+        }
+        let path = self.out.join(rel);
+        if fs::symlink_metadata(&path).is_ok() {
+            fs::remove_file(&path)?;
+        }
+        if fs::hard_link(source, &path).is_err() {
+            fs::copy(source, path)?;
+        }
+        Ok(())
+    }
 }
 #[cfg(unix)]
 fn link(target: &Path, at: &Path) -> std::io::Result<()> {
@@ -2731,9 +2749,9 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
         let declarations = format!("data/{}/horizon/", m.id);
         let mut reader = m.content.reader()?;
         for file in &m.content.files {
-            let bytes = reader.read(file)?;
             let is_tag = file.starts_with("data/") && file.contains("/tags/");
             if is_tag && file.ends_with(".json") {
+                let bytes = reader.read(file)?;
                 let doc: J = serde_json::from_slice(&bytes).map_err(|e| format!("{file}: {e}"))?;
                 let Some(J::Arr(values)) = doc.get("values") else {
                     return Err(format!("{}: {file}: no values", m.id).into());
@@ -2744,6 +2762,11 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
                 let merge = tags.entry(file.clone()).or_default();
                 warnings.extend(merge.add(&m.id, file, replace, shared, values));
             } else if !file.starts_with(&declarations) {
+                if file.starts_with("assets/") && m.content.source().is_dir() {
+                    overlay.link_or_copy(file, &m.content.source().join(file))?;
+                    continue;
+                }
+                let bytes = reader.read(file)?;
                 if horizon_mods::content::minecraft_registry_addition(file) {
                     if let Some(previous) = shared_registry_files.get(file) {
                         warnings.push(format!(
