@@ -67,6 +67,7 @@ impl WorldRequest {
             }),
             creative,
             day_time: 0,
+            dimension: "minecraft:overworld".into(),
             health: 20.0,
             food: 20,
             saturation: 5.0,
