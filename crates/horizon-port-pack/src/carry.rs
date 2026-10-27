@@ -579,7 +579,10 @@ fn shared_tag(root: &str, ns: &str, rest: &str) -> bool {
 /// to `outside/`, `None` not carried (code, metadata).
 fn place(name: &str, owned: &[&str]) -> Option<bool> {
     let (root, ns, rest) = split(name)?;
-    Some(owned.contains(&ns) || shared_tag(root, ns, rest))
+    let shared_registry = root == "data"
+        && ns == "minecraft"
+        && horizon_mods::content::minecraft_registry_addition(name);
+    Some(owned.contains(&ns) || shared_tag(root, ns, rest) || shared_registry)
 }
 
 /// Namespaces no carried mod claims: vanilla's, the convention tags', the
@@ -1339,7 +1342,7 @@ fn unregistered_recipes(
             }
         }
     }
-    for ns in owned {
+    for ns in owned.iter().copied().chain(["minecraft"]) {
         let dir = inside.join(format!("data/{ns}/recipe"));
         let mut stack = vec![dir.clone()];
         while let Some(d) = stack.pop() {

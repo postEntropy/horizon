@@ -162,7 +162,7 @@ frame, chat and command hooks. Server mods do not run yet. What a content pack n
 |---|---|---|---|---|
 | Block registry: ids, states, properties, shapes, sounds, light | — | data and up (all 331) | **0.2** | declared in `data/<mod>/horizon/block/*.json`, each from a vanilla *template* block (below) |
 | Item registry, block items | — | data and up | **0.2** | `data/<mod>/horizon/item/*.json`, from a vanilla template item |
-| Recipes, loot tables, tags, advancements, lang, blockstates, models, textures, sounds in the mod's namespace | vanilla namespace only | data and up | **0.2** | the 26.3 data-pack and resource-pack formats, as they are |
+| Recipes, loot tables, tags, advancements, lang, blockstates, models, textures, sounds | mod namespace, plus vanilla recipe/advancement/loot-table ids and tag additions | data and up | **0.2** | the 26.3 data-pack and resource-pack formats, as they are |
 | Worldgen JSON: biomes, features, structures, template pools, processors, carvers, noise parameters, density functions, noise settings, world presets, structure NBT | vanilla bundle only | about 30 data-tier structure and biome mods | 0.2.x | carried into `worldgen/` bundles; biome, noise, density and carver registries are checked before use |
 | Block and item behaviour callbacks: use, place, break, attack, random tick, scheduled tick, neighbour change, entity inside | — | logic and up (253) | **0.3** | `server` interface; hooks per registered id, budgeted |
 | Server events, typed commands, game rules | — | logic and up, server-only (11) | **0.3** | `server` interface |
@@ -235,7 +235,9 @@ How the game loads them, without touching vanilla's path:
 - **Vanilla state ids do not move.** Mod states are appended after vanilla's, mods in id order,
   so the same mod set gives the same ids. Saves store block names, so ids never reach the disk.
 - Loaders that read only `data/minecraft/` (recipes, loot, tags) read every namespace, as
-  vanilla does. With no mods there is only `minecraft`, so nothing changes.
+  vanilla does. Carried mods can add recipe, advancement and loot-table ids directly there;
+  duplicate paths follow mod load order and are reported. With no mods there is only `minecraft`,
+  so nothing changes.
 - **Namespaces.** A mod's files go under its id, and under the namespaces its manifest lists
   when its Java original ships them so (`namespaces = ["kaisyn", "towns_and_towers"]` for Towns
   and Towers, mod id `t_and_t`; docs/mods.md). No namespace has two owners: a mod whose id or

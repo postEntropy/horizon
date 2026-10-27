@@ -4,8 +4,8 @@
 //!
 //! Content is data, not code: nothing here runs in the sandbox. What a mod
 //! may add is fenced instead. Its own namespaces (its id and the ones its
-//! manifest lists), plus additions to vanilla tags and to the convention
-//! tags (`c`, which NeoForge and Fabric mods share). Paths are plain, files
+//! manifest lists), plus additions to vanilla tags, selected vanilla data
+//! registries, and convention tags (`c`, which NeoForge and Fabric mods share). Paths are plain, files
 //! and totals are capped, vanilla ids cannot be redefined, and no two mods
 //! share a namespace ([`clash`]).
 use crate::manifest::{Capability, MANIFEST, Manifest};
@@ -45,6 +45,18 @@ pub fn check_path(name: &str) -> Result<(), String> {
         return Err(bad());
     }
     Ok(())
+}
+
+/// Shared vanilla registries where mods may add resource ids without owning
+/// the reserved `minecraft` namespace.
+pub fn minecraft_registry_addition(path: &str) -> bool {
+    let Some(rest) = path.strip_prefix("data/minecraft/") else {
+        return false;
+    };
+    rest.ends_with(".json")
+        && ["recipe/", "advancement/", "loot_table/"]
+            .iter()
+            .any(|kind| rest.starts_with(kind))
 }
 
 /// A vanilla identifier, `minecraft:path`.
@@ -313,10 +325,12 @@ impl Content {
             // Vanilla's own files stay vanilla's; a mod may only add to its
             // tags, and to the convention tags mods share.
             let shared = matches!(namespace, "minecraft" | "c");
-            let allowed = owned || (top == "data" && shared && rest.starts_with("tags/"));
+            let allowed = owned
+                || (top == "data" && shared && rest.starts_with("tags/"))
+                || (namespace == "minecraft" && minecraft_registry_addition(name));
             if !allowed {
                 return Err(format!(
-                    "{name}: a mod adds files in its own namespaces ({top}/{id}/ and those listed in namespaces) or to vanilla and convention (c) tags"
+                    "{name}: a mod adds files in its own namespaces ({top}/{id}/ and those listed in namespaces), vanilla tags, or vanilla recipes, advancements and loot tables"
                 ));
             }
             if !own && top == "data" && rest.starts_with("horizon/") {

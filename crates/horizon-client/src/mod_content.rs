@@ -2503,6 +2503,7 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
     tables(base, &plan, &overlay)?;
     // Mod files, and every tag addition gathered per tag file.
     let mut tags: BTreeMap<String, TagMerge> = BTreeMap::new();
+    let mut shared_registry_files: BTreeMap<String, String> = BTreeMap::new();
     let mut warnings = Vec::new();
     let mut worldgen: BTreeMap<&str, Vec<(String, String)>> = BTreeMap::new();
     let mut additions: BTreeMap<&str, Vec<Addition>> = BTreeMap::new();
@@ -2524,6 +2525,17 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
                 let merge = tags.entry(file.clone()).or_default();
                 warnings.extend(merge.add(&m.id, file, replace, shared, values));
             } else if !file.starts_with(&declarations) {
+                if horizon_mods::content::minecraft_registry_addition(file) {
+                    if let Some(previous) = shared_registry_files.get(file) {
+                        warnings.push(format!(
+                            "mods {previous} and {} both add {file}; {} wins by load order",
+                            m.id, m.id
+                        ));
+                    } else if base.join(file).is_file() {
+                        warnings.push(format!("mod {} replaces vanilla {file}", m.id));
+                    }
+                    shared_registry_files.insert(file.clone(), m.id.clone());
+                }
                 overlay.write(file, &bytes)?;
                 if let Some((bundle, id)) = worldgen_entry(file) {
                     let text = String::from_utf8(bytes).map_err(|e| format!("{file}: {e}"))?;

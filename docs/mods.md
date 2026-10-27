@@ -292,8 +292,11 @@ blocks and items by declaring them in `data/<id>/horizon/block/*.json` and
 
 The fence: files go in the mod's own namespaces (`assets/<id>/`,
 `data/<id>/`, and those its manifest lists), plus additions to vanilla tags
-(`data/minecraft/tags/`) and to the convention tags NeoForge and Fabric mods
-share (`data/c/tags/`).
+(`data/minecraft/tags/`), to the vanilla recipe, advancement and loot-table
+registries, and to the convention tags NeoForge and Fabric mods share
+(`data/c/tags/`). Those registry files add their own ids; they cannot claim
+the `minecraft` namespace. If two mods define the same path, the later mod
+in load order wins and the game logs the collision.
 Templates and `sounds` name vanilla blocks; unknown keys are refused.
 
 Some Java mods ship their files under other names than their mod id (Towns
