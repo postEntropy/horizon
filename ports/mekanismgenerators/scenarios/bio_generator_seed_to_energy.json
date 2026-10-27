@@ -1,0 +1,29 @@
+[
+  {
+    "name": "bio_generator_consumes_seed_and_generates_energy_across_reload",
+    "block": "mekanismgenerators:bio_generator",
+    "dimension": "minecraft:overworld",
+    "x": 0,
+    "y": 64,
+    "z": 0,
+    "ticks": 205,
+    "reload_at": [100],
+    "slots": {
+      "0": ["minecraft:wheat_seeds", 1]
+    },
+    "energy": {
+      "stored": 0,
+      "capacity": 100000,
+      "max_receive": 100000,
+      "max_extract": 100000
+    },
+    "expect_final": {
+      "slots": {},
+      "energy": {
+        "stored": 16000,
+        "capacity": 100000
+      },
+      "saved_progress": 0
+    }
+  }
+]
