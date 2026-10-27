@@ -1321,16 +1321,18 @@ const TAG_BUNDLES: [&str; 2] = ["block-tags.json", "worldgen/block_tags.json"];
 /// The worldgen loader's bundle of biome tags.
 const BIOME_TAGS: &str = "worldgen/biome_tags.json";
 /// Worldgen registries a content mod may add to, and the bundle the
-/// worldgen loader reads each from (id → the file's text): what structure
-/// mods hold. Biomes, noise and density functions change the terrain and
-/// are not read from mods.
-const WORLDGEN_BUNDLES: [(&str, &str); 6] = [
+/// worldgen loader reads each from (id → the file's text).
+const WORLDGEN_BUNDLES: [(&str, &str); 10] = [
     ("structure", "worldgen/structures.json"),
     ("structure_set", "worldgen/structure_sets.json"),
     ("template_pool", "worldgen/template_pools.json"),
     ("processor_list", "worldgen/processor_lists.json"),
     ("configured_feature", "worldgen/features.json"),
     ("placed_feature", "worldgen/placed_features.json"),
+    ("noise", "worldgen/noises.json"),
+    ("density_function", "worldgen/densities.json"),
+    ("noise_settings", "worldgen/settings.json"),
+    ("world_preset", "worldgen/world_presets.json"),
 ];
 
 /// A mod file that adds to a worldgen bundle: (bundle, id).
@@ -2553,6 +2555,28 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
                 .map_err(|e| format!("{bundle}: {e}"))?;
         }
         overlay.write(bundle, &serde_json::to_vec(&doc)?)?;
+    }
+    // Density references are resolved when a terrain generator is built. Do
+    // the same registry compilation here so an unsupported or broken mod
+    // entry is reported while building the content root, before a world
+    // starts generation.
+    if worldgen.contains_key("worldgen/noises.json")
+        || worldgen.contains_key("worldgen/densities.json")
+    {
+        let bundle = |name: &str| -> Result<BTreeMap<String, String>> {
+            let overlaid = overlay.out.join(name);
+            let path = if overlaid.exists() {
+                overlaid
+            } else {
+                base.join(name)
+            };
+            Ok(serde_json::from_slice(&fs::read(path)?)?)
+        };
+        let noises = bundle("worldgen/noises.json")?;
+        let densities = bundle("worldgen/densities.json")?;
+        horizon_world::worldgen::density::DensityRegistry::from_json(&noises, &densities).map_err(
+            |e| std::io::Error::other(format!("invalid mod worldgen noise/density registry: {e}")),
+        )?;
     }
     apply_biome_modifiers(base, &overlay, &biome_modifiers)?;
     // A block without its own blockstate looks like its template, so every
