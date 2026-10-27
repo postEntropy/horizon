@@ -6,7 +6,7 @@
 use crate::inventory::Record;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeMap, fmt::Write, path::Path};
+use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -110,6 +110,49 @@ fn not_needed(class: &str) -> &'static str {
     }
 }
 
+fn datapack_inventory(path: &Path) -> Result<(usize, usize), String> {
+    let file = File::open(path).map_err(|e| e.to_string())?;
+    let archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    if !archive.file_names().any(|name| name == "pack.mcmeta") {
+        return Err("missing pack.mcmeta".into());
+    }
+    let mut supported = 0;
+    let mut other_data = 0;
+    for name in archive.file_names() {
+        if name.ends_with('/') {
+            continue;
+        }
+        let Some(rest) = name.strip_prefix("data/") else {
+            continue;
+        };
+        let mut parts = rest.split('/');
+        let (Some(namespace), Some(kind)) = (parts.next(), parts.next()) else {
+            other_data += 1;
+            continue;
+        };
+        if namespace.is_empty() || parts.next().is_none() {
+            other_data += 1;
+            continue;
+        }
+        let supported_kind = match kind {
+            "function" => parts.next().is_some() && name.ends_with(".mcfunction"),
+            "predicate" | "item_modifier" => parts.next().is_some() && name.ends_with(".json"),
+            "tags" => {
+                parts.next() == Some("function")
+                    && parts.next().is_some()
+                    && name.ends_with(".json")
+            }
+            _ => false,
+        };
+        if supported_kind {
+            supported += 1;
+        } else {
+            other_data += 1;
+        }
+    }
+    Ok((supported, other_data))
+}
+
 /// Pack files are installed directly in the profile, not carried as mod
 /// manifests. Report their actual runtime support instead of treating their
 /// archive as a missing data-tier mod jar.
@@ -118,26 +161,36 @@ fn pack_file_status(record: &Record, work: &Path) -> Option<(Status, String)> {
     if !matches!(kind, "resourcepacks" | "shaderpacks" | "datapacks") {
         return None;
     }
-    let installed = if crate::import::validate_relative(&record.path).is_ok() {
-        Path::new(&record.path).file_name().is_some_and(|name| {
+    let installed_path = if crate::import::validate_relative(&record.path).is_ok() {
+        Path::new(&record.path).file_name().and_then(|name| {
             ["pack-overrides", "home"]
                 .iter()
-                .any(|root| work.join(root).join(kind).join(name).is_file())
+                .map(|root| work.join(root).join(kind).join(name))
+                .find(|path| path.is_file())
         })
     } else {
-        false
+        None
     };
+    let installed = installed_path.is_some();
     let reason = match (kind, installed) {
-        ("resourcepacks", true) => "resource pack installed and enabled in the profile",
-        ("resourcepacks", false) => "resource pack not fetched or installed yet",
+        ("resourcepacks", true) => "resource pack installed and enabled in the profile".to_owned(),
+        ("resourcepacks", false) => "resource pack not fetched or installed yet".to_owned(),
         ("shaderpacks", true) => {
             "shader pack installed; Horizon does not apply shader packs in the renderer yet"
+                .to_owned()
         }
-        ("shaderpacks", false) => "shader pack not fetched or installed yet",
-        ("datapacks", true) => {
-            "data pack installed for new worlds; Horizon supports functions, function tags, predicates and item modifiers, but not its other data yet"
-        }
-        ("datapacks", false) => "data pack not fetched or installed yet",
+        ("shaderpacks", false) => "shader pack not fetched or installed yet".to_owned(),
+        ("datapacks", true) => match installed_path
+            .as_deref()
+            .and_then(|path| datapack_inventory(path).ok())
+        {
+            Some((supported, other)) => format!(
+                "data pack installed for new worlds; {supported} files in supported function, function-tag, predicate or item-modifier kinds; {other} other data files are not applied yet"
+            ),
+            None => "data pack file installed but invalid (unreadable ZIP or missing pack.mcmeta)"
+                .to_owned(),
+        },
+        ("datapacks", false) => "data pack not fetched or installed yet".to_owned(),
         _ => unreachable!(),
     };
     let status = match (kind, installed) {
@@ -146,7 +199,7 @@ fn pack_file_status(record: &Record, work: &Path) -> Option<(Status, String)> {
         (_, false) => Status::NotYet,
         _ => unreachable!(),
     };
-    Some((status, reason.to_owned()))
+    Some((status, reason))
 }
 
 /// A carried-over mod: ported when its content is complete (data tier with no
