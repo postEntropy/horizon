@@ -672,6 +672,10 @@ Two cases the oracle fills in:
     `add_template_pool_elements` modifiers whose load conditions hold for the mods ported
     along, and from CTOV's Java registration: its 21 village types and 11 outposts join
     vanilla's `villages` and `pillager_outposts` with the mod's default weights.
+  - **Lithostitched pool wrappers.** `limited`, `guaranteed` and nested `delegating` elements
+    now carry their wrapped element instead of making the whole template pool unreadable. The
+    wrapper's selection rule is not implemented yet and is counted by name in `rules_lost`;
+    ATM10's CTOV has 134 such elements.
   - **YUNG's API** (#839, #846 in the game; #840, #847 in carry). `yungsapi:yung_jigsaw` and its
     elements become vanilla's jigsaw and single element, with their rules under
     `horizon:yungsapi`. The game assembles them as YUNG's `JigsawManager` does: priority

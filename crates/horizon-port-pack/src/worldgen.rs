@@ -615,6 +615,9 @@ fn upgrade_types(
                 }
             }
             for element in elements {
+                if unwrap_lithostitched_pool_element(element, lost) {
+                    changed = true;
+                }
                 let Some(t) = element["element_type"].as_str() else {
                     continue;
                 };
@@ -651,6 +654,36 @@ fn upgrade_types(
     };
     report.mapped += usize::from(changed);
     changed
+}
+
+/// Lithostitched wraps a pool element to limit or guarantee how often the
+/// delegate is selected. Horizon can load the delegate as vanilla's element,
+/// but does not implement those selection rules yet; record each lost rule.
+/// Delegating wrappers can contain another wrapper, so unwrap recursively.
+fn unwrap_lithostitched_pool_element(
+    element: &mut Value,
+    lost: &mut BTreeMap<String, usize>,
+) -> bool {
+    let Some(kind) = element["element_type"].as_str() else {
+        return false;
+    };
+    if !matches!(
+        kind,
+        "lithostitched:limited" | "lithostitched:guaranteed" | "lithostitched:delegating"
+    ) {
+        return false;
+    }
+    let Some(delegate) = element
+        .get("delegate")
+        .filter(|value| !value.is_null())
+        .cloned()
+    else {
+        return false;
+    };
+    *lost.entry(kind.to_owned()).or_default() += 1;
+    *element = delegate;
+    unwrap_lithostitched_pool_element(element, lost);
+    true
 }
 
 /// YUNG's API's jigsaw as vanilla's, laid out by its own assembler in the
