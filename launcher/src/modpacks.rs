@@ -13,7 +13,7 @@ use horizon_port_pack::{
     pipeline::{self, Log},
     report::{Row, Status},
 };
-use std::fs;
+use std::{collections::HashSet, fs};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -158,10 +158,22 @@ pub fn list() -> Vec<Imported> {
 
 /// The carried-over mods in a work folder (`mods/<id>/carry/` with its manifest).
 pub fn carried(work: &Path) -> Vec<PathBuf> {
+    // A previous import may have left carried mods behind after their jar was
+    // removed, changed, or failed its digest check. Only load carries whose
+    // current pack record still has a usable jar.
+    let active: HashSet<String> = pipeline::read_json::<
+        Vec<horizon_port_pack::inventory::Record>,
+    >(&work.join("inventory.json"))
+    .unwrap_or_default()
+    .into_iter()
+    .filter(|record| record.jar.is_some() && pipeline::portable(record))
+    .map(|record| record.key)
+    .collect();
     let mut mods: Vec<PathBuf> = fs::read_dir(work.join("mods"))
         .into_iter()
         .flatten()
         .flatten()
+        .filter(|entry| active.contains(&entry.file_name().to_string_lossy().to_string()))
         .map(|e| e.path().join("carry"))
         .filter(|c| c.join("horizon-mod.toml").is_file())
         .collect();
