@@ -39,6 +39,10 @@ pub struct Report {
     /// `outside/` too, with why: a path vanilla does not read (upper case),
     /// JSON that does not parse.
     pub unreadable: BTreeMap<String, String>,
+    /// Missing model identifiers repaired from a unique same-namespace basename.
+    pub model_aliases: BTreeMap<String, String>,
+    /// Model identifiers that still have no unique model file to carry.
+    pub models_unresolved: BTreeMap<String, String>,
     pub recipes_upgraded: usize,
     pub loot_tables_upgraded: usize,
     /// Advancements whose criteria were rewritten ([`upgrade_advancement`]).
@@ -2011,6 +2015,15 @@ fn carry_kind(
             report.items += 1;
         }
     }
+    let model_namespaces: BTreeSet<String> = owned
+        .iter()
+        .chain(&contributes)
+        .map(|namespace| (*namespace).to_owned())
+        .collect();
+    let (model_aliases, models_unresolved) =
+        repair_missing_model_paths(&inside.join("assets"), &model_namespaces)?;
+    report.model_aliases = model_aliases;
+    report.models_unresolved = models_unresolved;
     let owned: Vec<String> = owned.iter().map(|n| n.to_string()).collect();
     let owned: Vec<&str> = owned.iter().map(String::as_str).collect();
     unregistered_recipes(&inside, &outside, id, &owned, &mut report)?;
@@ -2189,10 +2202,226 @@ fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     fs::write(path, bytes).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// Repair resource locations that omit a subdirectory when the namespace has
+/// exactly one model with that basename. Ambiguous names are left untouched.
+fn repair_missing_model_paths(
+    assets: &Path,
+    namespaces: &BTreeSet<String>,
+) -> Result<(BTreeMap<String, String>, BTreeMap<String, String>), String> {
+    fn json_files(root: &Path) -> Vec<std::path::PathBuf> {
+        let mut files = Vec::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(dir) = pending.pop() {
+            let Ok(entries) = fs::read_dir(dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending.push(path);
+                } else if path.extension().is_some_and(|ext| ext == "json") {
+                    files.push(path);
+                }
+            }
+        }
+        files.sort();
+        files
+    }
+    fn collect_refs(value: &Value, field: &str, namespace: &str, out: &mut BTreeSet<String>) {
+        match value {
+            Value::Object(object) => {
+                for (key, value) in object {
+                    if key == field
+                        && let Some(reference) = value.as_str()
+                    {
+                        let reference = reference.trim_start_matches('#');
+                        if !reference.is_empty() {
+                            out.insert(if reference.contains(':') {
+                                reference.to_owned()
+                            } else {
+                                format!("{namespace}:{reference}")
+                            });
+                        }
+                    }
+                    collect_refs(value, field, namespace, out);
+                }
+            }
+            Value::Array(values) => {
+                for value in values {
+                    collect_refs(value, field, namespace, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let files = json_files(assets);
+    let mut models = BTreeMap::<(String, String, String), Vec<std::path::PathBuf>>::new();
+    let mut references = BTreeSet::new();
+    for file in &files {
+        let Ok(relative) = file.strip_prefix(assets) else {
+            continue;
+        };
+        let mut components = relative.components();
+        let Some(namespace) = components.next().and_then(|p| p.as_os_str().to_str()) else {
+            continue;
+        };
+        let rest = components.as_path();
+        if rest.starts_with("models") {
+            let mut model_components = rest.components();
+            let _ = model_components.next();
+            let Some(model_type) = model_components.next().and_then(|p| p.as_os_str().to_str())
+            else {
+                continue;
+            };
+            let Some(stem) = file.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            models
+                .entry((namespace.to_owned(), model_type.to_owned(), stem.to_owned()))
+                .or_default()
+                .push(file.clone());
+        } else if rest.starts_with("blockstates")
+            && let Ok(bytes) = fs::read(file)
+            && let Ok(value) = serde_json::from_slice::<Value>(&bytes)
+        {
+            collect_refs(&value, "model", namespace, &mut references);
+        }
+    }
+
+    let mut aliases = BTreeMap::new();
+    let mut unresolved = BTreeMap::new();
+    let mut visited = BTreeSet::new();
+    while let Some(reference) = references.pop_first() {
+        if !visited.insert(reference.clone()) {
+            continue;
+        }
+        let (namespace, path) = reference
+            .split_once(':')
+            .unwrap_or(("minecraft", reference.as_str()));
+        if !namespaces.contains(namespace) {
+            continue;
+        }
+        if namespace.is_empty()
+            || path.is_empty()
+            || path
+                .split('/')
+                .any(|part| part.is_empty() || part == "." || part == "..")
+        {
+            continue;
+        }
+        let namespace = namespace.to_owned();
+        let target = assets
+            .join(&namespace)
+            .join("models")
+            .join(format!("{path}.json"));
+        let source = if target.is_file() {
+            target.clone()
+        } else {
+            let basename = Path::new(path).file_stem().and_then(|s| s.to_str());
+            let model_type = path.split('/').next().unwrap_or_default();
+            let candidates = basename
+                .and_then(|name| {
+                    models.get(&(namespace.clone(), model_type.to_owned(), name.to_owned()))
+                })
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            match candidates {
+                [source] => {
+                    let bytes =
+                        fs::read(source).map_err(|e| format!("{}: {e}", source.display()))?;
+                    write(&target, &bytes)?;
+                    let source_path = source
+                        .strip_prefix(assets.join(&namespace).join("models"))
+                        .map_err(|e| e.to_string())?;
+                    aliases.insert(
+                        reference,
+                        format!(
+                            "{namespace}:{}",
+                            source_path
+                                .with_extension("")
+                                .to_string_lossy()
+                                .replace('\\', "/")
+                        ),
+                    );
+                    source.clone()
+                }
+                [] => {
+                    unresolved.insert(
+                        reference,
+                        "no same-namespace model with this basename".into(),
+                    );
+                    continue;
+                }
+                _ => {
+                    unresolved.insert(
+                        reference,
+                        format!(
+                            "{} same-namespace models share this basename",
+                            candidates.len()
+                        ),
+                    );
+                    continue;
+                }
+            }
+        };
+        if let Ok(bytes) = fs::read(source)
+            && let Ok(value) = serde_json::from_slice::<Value>(&bytes)
+        {
+            collect_refs(&value, "parent", &namespace, &mut references);
+        }
+    }
+    Ok((aliases, unresolved))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn repairs_only_unique_missing_model_paths() {
+        let root =
+            std::env::temp_dir().join(format!("horizon-model-aliases-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let assets = root.join("assets");
+        write(
+            &assets.join("gem/blockstates/lamp.json"),
+            br#"{"variants":{"":{"model":"gem:block/lamp"}}}"#,
+        )
+        .unwrap();
+        write(
+            &assets.join("gem/models/block/doors/lamp.json"),
+            br#"{"parent":"gem:block/base"}"#,
+        )
+        .unwrap();
+        write(
+            &assets.join("gem/models/block/templates/base.json"),
+            br#"{"parent":"minecraft:block/cube_all"}"#,
+        )
+        .unwrap();
+        write(&assets.join("gem/models/item/lamp.json"), br#"{}"#).unwrap();
+        write(
+            &assets.join("gem/blockstates/door.json"),
+            br#"{"variants":{"":{"model":"gem:block/door"}}}"#,
+        )
+        .unwrap();
+        write(&assets.join("gem/models/block/one/door.json"), br#"{}"#).unwrap();
+        write(&assets.join("gem/models/block/two/door.json"), br#"{}"#).unwrap();
+
+        let namespaces = BTreeSet::from(["gem".to_owned()]);
+        let (aliases, unresolved) = repair_missing_model_paths(&assets, &namespaces).unwrap();
+        assert_eq!(aliases.len(), 2);
+        assert_eq!(aliases["gem:block/lamp"], "gem:block/doors/lamp");
+        assert_eq!(aliases["gem:block/base"], "gem:block/templates/base");
+        assert!(unresolved["gem:block/door"].contains("2 same-namespace models"));
+        assert_eq!(
+            fs::read(assets.join("gem/models/block/lamp.json")).unwrap(),
+            fs::read(assets.join("gem/models/block/doors/lamp.json")).unwrap()
+        );
+        assert!(!assets.join("gem/models/block/door.json").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
 
     /// YUNG's pools carry comments, which Minecraft's lenient reader skips;
     /// the carry holds them as plain JSON. A comment marker inside a string

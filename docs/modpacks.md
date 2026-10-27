@@ -377,7 +377,9 @@ are listed as `recipes_unregistered`; a cross-mod recipe stays when its output m
 Without `--resources`, vanilla item outputs cannot be checked. Files of
 the mod's own content that the game's content loader would refuse whole also go to `outside/`,
 listed with the reason in the report's `unreadable`: paths vanilla does not read (upper case),
-and JSON that does not parse. Vanilla skips them one by one. A vanilla or convention tag
+and JSON that does not parse. Missing blockstate or parent model paths are repaired only when
+the same namespace has exactly one model file with that basename; `carry-report.json` records
+the aliases and any references still unresolved. Vanilla skips unreadable files one by one. A vanilla or convention tag
 with `"replace": true` is carried as it is: the game honours it as a data pack's, with a warning
 (docs/mods.md); Towns and Towers' seven `minecraft:has_structure/*` biome tags are such.
 A byte-order mark is dropped. For ATM10's 42 mods that is 6 files in 4 mods, and the 42 load as

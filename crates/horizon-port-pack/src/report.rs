@@ -284,6 +284,8 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     let copied = carry["copied"].as_u64().unwrap_or(0);
     let outside = carry["outside"].as_array().map_or(0, Vec::len);
     let unreadable = count("unreadable");
+    let model_aliases = count("model_aliases");
+    let models_unresolved = count("models_unresolved");
     let recipes_unregistered = carry["recipes_unregistered"].as_array().map_or(0, Vec::len);
     let worldgen = carry["worldgen"].as_u64().unwrap_or(0);
     let sum_map = |k: &str| -> u64 {
@@ -350,6 +352,9 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     if unreadable > 0 {
         gaps.push(format!("{unreadable} unreadable files left out"));
     }
+    if models_unresolved > 0 {
+        gaps.push(format!("{models_unresolved} unresolved model references"));
+    }
     if recipes_unregistered > 0 {
         gaps.push(format!(
             "{recipes_unregistered} recipes left out (result item is not registered)"
@@ -363,6 +368,9 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
         } else {
             format!("ported-wasm ({blocks} blocks, {items} items, mod.wasm)")
         };
+        if model_aliases > 0 {
+            summary.push_str(&format!("; {model_aliases} model paths repaired"));
+        }
         if gaps.is_empty() {
             if harness.is_some() {
                 summary.push_str("; harness green");
@@ -404,6 +412,9 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
         return Some((Status::Partial, what));
     }
     let mut summary = format!("{blocks} blocks, {items} items");
+    if model_aliases > 0 {
+        summary.push_str(&format!("; {model_aliases} model paths repaired"));
+    }
     if own_code > 0 {
         let _ = write!(
             summary,
