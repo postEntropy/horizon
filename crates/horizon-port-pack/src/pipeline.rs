@@ -5,7 +5,7 @@ use crate::{carry, fetch, import, inventory, modrinth, oracle, report};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 /// Where a step's lines go: the terminal, or the launcher's log.
@@ -230,11 +230,206 @@ pub fn carry(
             Err(e) => log(format!("{}: {e}", r.key)),
         }
     }
+    let merged_datapacks = merge_datapack_namespaces(work, &records, log)?;
+    if merged_datapacks > 0 {
+        log(format!(
+            "merged {merged_datapacks} data pack namespace(s) into their existing content owner"
+        ));
+    }
     log(format!(
         "{done} mods carried over into {}",
         work.join("mods").display()
     ));
     Ok(done)
+}
+
+fn merge_datapack_namespaces(
+    work: &Path,
+    records: &[inventory::Record],
+    log: Log,
+) -> Result<usize, String> {
+    let mods_root = work.join("mods");
+    let Ok(dir) = fs::read_dir(&mods_root) else {
+        return Ok(0);
+    };
+    let mut entries: Vec<_> = dir
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("{}: {e}", mods_root.display()))?;
+    entries.sort_by_key(fs::DirEntry::file_name);
+    let datapack_keys: BTreeSet<&str> = records
+        .iter()
+        .filter(|record| record.path.split('/').next() == Some("datapacks"))
+        .map(|record| record.key.as_str())
+        .collect();
+    let mut owners = BTreeMap::<String, PathBuf>::new();
+    for entry in &entries {
+        let key = entry.file_name().to_string_lossy().into_owned();
+        if datapack_keys.contains(key.as_str()) {
+            continue;
+        }
+        let carry = entry.path().join("carry");
+        let Ok(text) = fs::read_to_string(carry.join(horizon_mods::manifest::MANIFEST)) else {
+            continue;
+        };
+        let Ok(manifest) = horizon_mods::Manifest::parse(&text) else {
+            continue;
+        };
+        for namespace in std::iter::once(manifest.id).chain(manifest.namespaces) {
+            owners.entry(namespace).or_insert_with(|| carry.clone());
+        }
+    }
+
+    let mut datapacks: Vec<_> = records
+        .iter()
+        .filter(|record| record.path.split('/').next() == Some("datapacks"))
+        .collect();
+    // DataPackLoader uses file-name order when no explicit level order exists.
+    datapacks.sort_by(|a, b| a.path.cmp(&b.path));
+    let mut merged = 0;
+    for record in datapacks {
+        let carry = mods_root.join(&record.key).join("carry");
+        let manifest_path = carry.join(horizon_mods::manifest::MANIFEST);
+        let Ok(text) = fs::read_to_string(&manifest_path) else {
+            continue;
+        };
+        let Ok(mut manifest) = horizon_mods::Manifest::parse(&text) else {
+            continue;
+        };
+        let owned: Vec<String> = std::iter::once(manifest.id.clone())
+            .chain(manifest.namespaces.iter().cloned())
+            .collect();
+        let conflicts: BTreeMap<String, PathBuf> = owned
+            .iter()
+            .filter_map(|namespace| {
+                owners
+                    .get(namespace)
+                    .filter(|owner| *owner != &carry)
+                    .map(|owner| (namespace.clone(), owner.clone()))
+            })
+            .collect();
+        if conflicts.is_empty() {
+            for namespace in owned {
+                owners.entry(namespace).or_insert_with(|| carry.clone());
+            }
+            continue;
+        }
+
+        for (namespace, owner) in &conflicts {
+            merge_namespace_tree(&carry, owner, namespace)?;
+            merged += 1;
+            log(format!(
+                "{}: merged namespace {namespace} into {}",
+                record.key,
+                owner.display()
+            ));
+        }
+
+        let id_conflicts = conflicts.contains_key(&manifest.id);
+        manifest.namespaces.retain(|ns| !conflicts.contains_key(ns));
+        if id_conflicts {
+            manifest.id = record.key.clone();
+        }
+        let mut value: toml::Value = toml::from_str(&text).map_err(|e| e.to_string())?;
+        value["id"] = toml::Value::String(manifest.id.clone());
+        value["namespaces"] = toml::Value::Array(
+            manifest
+                .namespaces
+                .iter()
+                .cloned()
+                .map(toml::Value::String)
+                .collect(),
+        );
+        let updated = toml::to_string_pretty(&value).map_err(|e| e.to_string())?;
+        horizon_mods::Manifest::parse(&updated)?;
+        fs::write(&manifest_path, updated)
+            .map_err(|e| format!("{}: {e}", manifest_path.display()))?;
+        for namespace in std::iter::once(manifest.id).chain(manifest.namespaces) {
+            owners.entry(namespace).or_insert_with(|| carry.clone());
+        }
+    }
+    Ok(merged)
+}
+
+fn merge_namespace_tree(source: &Path, destination: &Path, namespace: &str) -> Result<(), String> {
+    fn copy_tree(source: &Path, destination: &Path, source_root: &Path) -> Result<(), String> {
+        let mut entries: Vec<_> = fs::read_dir(source)
+            .map_err(|e| format!("{}: {e}", source.display()))?
+            .flatten()
+            .collect();
+        entries.sort_by_key(fs::DirEntry::file_name);
+        for entry in entries {
+            let source_path = entry.path();
+            let metadata = fs::symlink_metadata(&source_path)
+                .map_err(|e| format!("{}: {e}", source_path.display()))?;
+            if metadata.file_type().is_symlink() {
+                continue;
+            }
+            let target = destination.join(entry.file_name());
+            if metadata.is_dir() {
+                fs::create_dir_all(&target).map_err(|e| format!("{}: {e}", target.display()))?;
+                copy_tree(&source_path, &target, source_root)?;
+            } else if metadata.is_file() {
+                let relative = source_path
+                    .strip_prefix(source_root)
+                    .map_err(|e| e.to_string())?;
+                if target.exists() && relative.starts_with("tags") {
+                    merge_tag_file(&source_path, &target)?;
+                } else {
+                    if let Some(parent) = target.parent() {
+                        fs::create_dir_all(parent)
+                            .map_err(|e| format!("{}: {e}", parent.display()))?;
+                    }
+                    fs::copy(&source_path, &target).map_err(|e| {
+                        format!("{} -> {}: {e}", source_path.display(), target.display())
+                    })?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    for top in ["assets", "data"] {
+        let from = source.join(top).join(namespace);
+        if !from.is_dir() {
+            continue;
+        }
+        let to = destination.join(top).join(namespace);
+        fs::create_dir_all(&to).map_err(|e| format!("{}: {e}", to.display()))?;
+        copy_tree(&from, &to, &from)?;
+    }
+    Ok(())
+}
+
+fn merge_tag_file(source: &Path, destination: &Path) -> Result<(), String> {
+    let incoming: serde_json::Value = serde_json::from_slice(
+        &fs::read(source).map_err(|e| format!("{}: {e}", source.display()))?,
+    )
+    .map_err(|e| format!("{}: {e}", source.display()))?;
+    if incoming["replace"] == true {
+        fs::copy(source, destination)
+            .map_err(|e| format!("{} -> {}: {e}", source.display(), destination.display()))?;
+        return Ok(());
+    }
+    let previous: serde_json::Value = serde_json::from_slice(
+        &fs::read(destination).map_err(|e| format!("{}: {e}", destination.display()))?,
+    )
+    .map_err(|e| format!("{}: {e}", destination.display()))?;
+    let mut values = previous["values"].as_array().cloned().unwrap_or_default();
+    for value in incoming["values"].as_array().into_iter().flatten() {
+        if !values.contains(value) {
+            values.push(value.clone());
+        }
+    }
+    let mut merged = incoming;
+    merged["values"] = serde_json::Value::Array(values);
+    if let Some(object) = merged.as_object_mut() {
+        object.remove("replace");
+    }
+    fs::write(
+        destination,
+        serde_json::to_vec_pretty(&merged).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| format!("{}: {e}", destination.display()))
 }
 
 /// Which carried-over mods (`mods/<key>/carry` folders) the game loads together, in the order

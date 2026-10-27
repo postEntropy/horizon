@@ -76,7 +76,7 @@ pub fn build(pack: &Pack, cache: &Cache, work: &Path) -> Vec<Record> {
     let mut project_deps: Vec<Vec<String>> = Vec::new();
     for f in &pack.files {
         let jar = jar_of(f.jar.as_ref(), f.file_name(), work);
-        let info = jar.as_deref().and_then(|j| jar::read(j).ok());
+        let mut info = jar.as_deref().and_then(|j| jar::read(j).ok());
         let sha1 = f.sha1.as_deref().unwrap_or("");
         let project = cache.project_of(sha1);
         let p = |k: &str| project.and_then(|p| p[k].as_str()).unwrap_or("").to_owned();
@@ -106,6 +106,15 @@ pub fn build(pack: &Pack, cache: &Cache, work: &Path) -> Vec<Record> {
                 .or_else(|| Some(p("slug")).filter(|s| !s.is_empty()))
                 .unwrap_or(stem)
         };
+        // Data pack filenames (especially archived override folders) are not
+        // necessarily valid Horizon mod ids. Give their synthetic carry a
+        // stable valid id; carry::namespaces_claimed discovers the real data/
+        // namespaces from the archive and puts them in the manifest.
+        if f.kind() == "datapacks" {
+            if let Some(info) = &mut info {
+                info.mod_id.clone_from(&key);
+            }
+        }
         let (mut client, mut server) = match project {
             Some(_) if f.client.is_empty() => (p("client_side"), p("server_side")),
             _ => (f.client.clone(), f.server.clone()),
