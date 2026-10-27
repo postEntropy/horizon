@@ -105,6 +105,7 @@ impl Mod for Machines {
     }
     fn on_block(&mut self, event: BlockEvent) -> EventOutcome {
         if event.action == BlockAction::UseWithoutItem {
+            let face = server::get_block_face().unwrap_or_default();
             let _ = ui::open_screen(&ScreenSpec {
                 id: "test_machine:smelter_menu".into(),
                 title: "Smelter".into(),
@@ -122,6 +123,19 @@ impl Mod for Machines {
                     max_value: 100,
                 }],
             });
+            ui::set_backgrounds(
+                "test_machine:smelter_menu",
+                &[ui::ScreenBackground {
+                    texture: "test_machine:smelter".into(),
+                    x: 0,
+                    y: 0,
+                    width: 176,
+                    height: 166,
+                }],
+            );
+            if face != "north" {
+                return EventOutcome::Pass;
+            }
             return EventOutcome::Consume;
         }
         EventOutcome::Pass

@@ -295,6 +295,7 @@ Capability `server` (API 0.3): server-side world queries and mutations during bl
 | `play-sound` | `func(dimension: string, pos: block-pos, sound: string, volume: f32, pitch: f32)` | Plays sound `sound` at `pos` in `dimension`. |
 | `get-rule` | `func(name: string) -> option<string>` | Reads a game rule value as text (`true`, `false`, or integer). |
 | `set-rule` | `func(name: string, value: string) -> result<_, string>` | Sets a game rule value as text. |
+| `get-block-face` | `func() -> option<string>` | Hit face of the block for the current block callback, if available. |
 
 ## `keys`
 
@@ -431,7 +432,6 @@ Capability `ui` (API 0.4): declarative container menus and screens.
 
 | Case | |
 | --- | --- |
-| `background` |  |
 | `slot` |  |
 | `progress-arrow` |  |
 | `flame` |  |
@@ -464,9 +464,22 @@ Capability `ui` (API 0.4): declarative container menus and screens.
 | `height` | `u32` | Height in pixels. |
 | `widgets` | `list<widget>` | Widgets drawn by the game. |
 
+### record `screen-background`
+
+A textured region drawn behind the widgets in a screen.
+
+| Field | Type | |
+| --- | --- | --- |
+| `texture` | `string` | Sprite identifier from the mod or vanilla atlas. |
+| `x` | `s32` | X offset in screen pixels. |
+| `y` | `s32` | Y offset in screen pixels. |
+| `width` | `u32` | Width in pixels. |
+| `height` | `u32` | Height in pixels. |
+
 | Function | Signature | What it does |
 | --- | --- | --- |
 | `open-screen` | `func(spec: screen-spec) -> result<_, string>` | Opens or updates a declarative container screen for the player. |
+| `set-backgrounds` | `func(screen-id: string, backgrounds: list<screen-background>)` | Sets the textured regions for the currently open screen. |
 | `close-screen` | `func()` | Closes the mod's open screen, if any. |
 | `set-slot` | `func(screen-id: string, slot: u32, id: string, count: u32)` | Updates slot `slot` in the open screen with `id` and `count`. |
 | `set-gauge` | `func(screen-id: string, widget-id: u32, value: u64, max-value: u64, text: string)` | Updates widget `widget-id`'s value/max-value/text in the open screen. |
@@ -589,7 +602,6 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `x` | `s32` | Block X coordinate. |
 | `y` | `s32` | Block Y coordinate. |
 | `z` | `s32` | Block Z coordinate. |
-| `face` | `string` | Hit face (`down`, `up`, `north`, `south`, `west`, `east`), empty when unavailable. |
 | `state` | `string` | Block state string (`<mod>:<block>[...]`). |
 | `actor` | `string` | Player name or entity id, if triggered by one. |
 | `held-item` | `string` | Held item id, if any. |

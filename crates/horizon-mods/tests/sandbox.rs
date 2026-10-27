@@ -661,19 +661,24 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     );
 
     // 4. Block, item, and server callbacks + server mutations + UI menus + net packets (API 0.3 & 0.4)
-    let outcome = mods.block_event(BlockEvent {
-        action: BlockAction::UseWithoutItem,
-        dimension: "minecraft:overworld".into(),
-        x: 0,
-        y: 64,
-        z: 0,
-        face: String::new(),
-        state: "test_machine:smelter[lit=false]".into(),
-        actor: "Player".into(),
-        held_item: String::new(),
-    });
+    let outcome = mods.block_event(
+        BlockEvent {
+            action: BlockAction::UseWithoutItem,
+            dimension: "minecraft:overworld".into(),
+            x: 0,
+            y: 64,
+            z: 0,
+            state: "test_machine:smelter[lit=false]".into(),
+            actor: "Player".into(),
+            held_item: String::new(),
+        },
+        "north".into(),
+    );
     assert_eq!(outcome, EventOutcome::Consume);
     assert_eq!(mods.open_screens().count(), 1);
+    let (_, backgrounds) = mods.open_screen_backgrounds().next().unwrap();
+    assert_eq!(backgrounds.len(), 1);
+    assert_eq!(backgrounds[0].texture, "test_machine:smelter");
     let _ = mods.drain();
 
     mods.menu_click("test_machine:smelter_menu", 0, 1);

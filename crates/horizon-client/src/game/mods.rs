@@ -23,12 +23,21 @@ pub(super) struct ModScreenView {
     pub(super) title: String,
     pub(super) width: u32,
     pub(super) height: u32,
+    pub(super) backgrounds: Vec<ModScreenBackground>,
     pub(super) widgets: Vec<ModWidgetView>,
+}
+#[derive(Clone, Debug)]
+#[cfg_attr(not(feature = "mods"), allow(dead_code))]
+pub(super) struct ModScreenBackground {
+    pub(super) texture: String,
+    pub(super) x: i32,
+    pub(super) y: i32,
+    pub(super) width: u32,
+    pub(super) height: u32,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(not(feature = "mods"), allow(dead_code))]
 pub(super) enum ModWidgetKind {
-    Background,
     Slot,
     ProgressArrow,
     Flame,
@@ -949,30 +958,33 @@ impl Game<'_> {
                 }
             }
         }
-        let outcome = self.mods.mods.block_event(BlockEvent {
-            action: if held_item.is_some() {
-                BlockAction::UseItemOn
-            } else {
-                BlockAction::UseWithoutItem
+        let face = match face {
+            [0, -1, 0] => "down",
+            [0, 1, 0] => "up",
+            [0, 0, -1] => "north",
+            [0, 0, 1] => "south",
+            [-1, 0, 0] => "west",
+            [1, 0, 0] => "east",
+            _ => "",
+        }
+        .to_owned();
+        let outcome = self.mods.mods.block_event(
+            BlockEvent {
+                action: if held_item.is_some() {
+                    BlockAction::UseItemOn
+                } else {
+                    BlockAction::UseWithoutItem
+                },
+                dimension: self.dim.id().to_owned(),
+                x: pos[0],
+                y: pos[1],
+                z: pos[2],
+                state: name,
+                actor: String::new(),
+                held_item: held_item.unwrap_or_default().to_owned(),
             },
-            dimension: self.dim.id().to_owned(),
-            x: pos[0],
-            y: pos[1],
-            z: pos[2],
-            face: match face {
-                [0, -1, 0] => "down",
-                [0, 1, 0] => "up",
-                [0, 0, -1] => "north",
-                [0, 0, 1] => "south",
-                [-1, 0, 0] => "west",
-                [1, 0, 0] => "east",
-                _ => "",
-            }
-            .to_owned(),
-            state: name,
-            actor: String::new(),
-            held_item: held_item.unwrap_or_default().to_owned(),
-        });
+            face,
+        );
         let opened_screen = self.mods.mods.open_screens().next().is_some();
         self.show_mod_output();
         self.mod_save_block_entity(pos);
@@ -1037,14 +1049,31 @@ impl Game<'_> {
         self.show_mod_output();
     }
     pub(super) fn mod_screen_view(&self) -> Option<ModScreenView> {
-        let (_, spec) = self.mods.mods.open_screens().next()?;
+        let (mod_id, spec) = self.mods.mods.open_screens().next()?;
+        let backgrounds = self
+            .mods
+            .mods
+            .open_screen_backgrounds()
+            .find(|(owner, _)| *owner == mod_id)
+            .map(|(_, backgrounds)| {
+                backgrounds
+                    .iter()
+                    .map(|background| ModScreenBackground {
+                        texture: background.texture.clone(),
+                        x: background.x,
+                        y: background.y,
+                        width: background.width,
+                        height: background.height,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         let widgets = spec
             .widgets
             .iter()
             .map(|w| ModWidgetView {
                 id: w.id,
                 kind: match w.kind {
-                    horizon_mods::WidgetKind::Background => ModWidgetKind::Background,
                     horizon_mods::WidgetKind::Slot => ModWidgetKind::Slot,
                     horizon_mods::WidgetKind::ProgressArrow => ModWidgetKind::ProgressArrow,
                     horizon_mods::WidgetKind::Flame => ModWidgetKind::Flame,
@@ -1066,6 +1095,7 @@ impl Game<'_> {
             title: spec.title.clone(),
             width: spec.width,
             height: spec.height,
+            backgrounds,
             widgets,
         })
     }
@@ -1099,22 +1129,22 @@ impl Game<'_> {
         let width = screen.width as f32;
         let height = screen.height as f32;
         let has_background = screen
-            .widgets
+            .backgrounds
             .iter()
-            .any(|w| w.kind == ModWidgetKind::Background && atlas.sprites.contains_key(&w.text));
+            .any(|background| atlas.sprites.contains_key(&background.texture));
         if has_background {
-            for w in screen
-                .widgets
+            for background in screen
+                .backgrounds
                 .iter()
-                .filter(|w| w.kind == ModWidgetKind::Background)
+                .filter(|background| atlas.sprites.contains_key(&background.texture))
             {
                 batch.sprite_scaled(
                     atlas,
-                    &w.text,
-                    ox + w.x as f32,
-                    oy + w.y as f32,
-                    w.width as f32,
-                    w.height as f32,
+                    &background.texture,
+                    ox + background.x as f32,
+                    oy + background.y as f32,
+                    background.width as f32,
+                    background.height as f32,
                     u32::MAX,
                 );
             }
@@ -1179,7 +1209,6 @@ impl Game<'_> {
                 (w.value as f32 / w.max_value as f32).clamp(0.0, 1.0)
             };
             match w.kind {
-                ModWidgetKind::Background => {}
                 ModWidgetKind::Slot => {
                     let mek_slot = match w.text.as_str() {
                         "Input" => Some("mekanism/gui/slot/input"),

@@ -256,6 +256,8 @@ interface server {
     get-rule: func(name: string) -> option<string>;
     /// Sets a game rule value as text.
     set-rule: func(name: string, value: string) -> result<_, string>;
+    /// Hit face of the block for the current block callback, if available.
+    get-block-face: func() -> option<string>;
 }
 
 /// Capability `keys` (API 0.3): mod keybindings shown in the Controls screen.
@@ -401,7 +403,6 @@ interface capabilities {
 /// Capability `ui` (API 0.4): declarative container menus and screens.
 interface ui {
     enum widget-kind {
-        background,
         slot,
         progress-arrow,
         flame,
@@ -442,8 +443,23 @@ interface ui {
         /// Widgets drawn by the game.
         widgets: list<widget>,
     }
+    /// A textured region drawn behind the widgets in a screen.
+    record screen-background {
+        /// Sprite identifier from the mod or vanilla atlas.
+        texture: string,
+        /// X offset in screen pixels.
+        x: s32,
+        /// Y offset in screen pixels.
+        y: s32,
+        /// Width in pixels.
+        width: u32,
+        /// Height in pixels.
+        height: u32,
+    }
     /// Opens or updates a declarative container screen for the player.
     open-screen: func(spec: screen-spec) -> result<_, string>;
+    /// Sets the textured regions for the currently open screen.
+    set-backgrounds: func(screen-id: string, backgrounds: list<screen-background>);
     /// Closes the mod's open screen, if any.
     close-screen: func();
     /// Updates slot `slot` in the open screen with `id` and `count`.
@@ -573,8 +589,6 @@ interface logic {
         y: s32,
         /// Block Z coordinate.
         z: s32,
-        /// Hit face (`down`, `up`, `north`, `south`, `west`, `east`), empty when unavailable.
-        face: string,
         /// Block state string (`<mod>:<block>[...]`).
         state: string,
         /// Player name or entity id, if triggered by one.

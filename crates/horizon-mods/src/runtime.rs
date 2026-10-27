@@ -63,7 +63,7 @@ pub use machine_bindings::{
         render::{BoxShape, GhostBlock},
         server::{BlockPos, ItemDrop},
         target::{BlockHit, EntityHit},
-        ui::{ScreenSpec, Widget, WidgetKind},
+        ui::{ScreenBackground, ScreenSpec, Widget, WidgetKind},
     },
 };
 
@@ -331,7 +331,10 @@ struct State {
     keys_pressed: HashSet<String>,
     /// Capability `ui`: open declarative screen and its slot contents.
     open_screen: Option<ScreenSpec>,
+    screen_backgrounds: Vec<ScreenBackground>,
     screen_slots: BTreeMap<u32, (String, u32)>,
+    /// Hit face exposed only while dispatching a block callback.
+    active_block_face: Option<String>,
     /// Capability `render`: declarative 3D boxes and ghost blocks.
     shapes: Vec<BoxShape>,
     ghost_blocks: Vec<GhostBlock>,
@@ -497,7 +500,9 @@ impl Mods {
             keys_down: HashSet::new(),
             keys_pressed: HashSet::new(),
             open_screen: None,
+            screen_backgrounds: Vec::new(),
             screen_slots: BTreeMap::new(),
+            active_block_face: None,
             shapes: Vec::new(),
             ghost_blocks: Vec::new(),
             vanilla_hooks: Vec::new(),
@@ -857,7 +862,7 @@ impl Mods {
     }
 
     /// Dispatches a block callback (API 0.3) to the mod that registered the block.
-    pub fn block_event(&mut self, event: BlockEvent) -> EventOutcome {
+    pub fn block_event(&mut self, event: BlockEvent, face: String) -> EventOutcome {
         let block_id = event
             .state
             .split_once('[')
@@ -869,10 +874,18 @@ impl Mods {
         }) else {
             return EventOutcome::Pass;
         };
-        self.call(i, FUEL_EVENT, |m, s| {
-            machine_of(m)?.horizon_mods_logic().call_on_block(s, &event)
-        })
-        .unwrap_or(EventOutcome::Pass)
+        if let Some(run) = self.entries[i].run.as_mut() {
+            run.store.data_mut().active_block_face = (!face.is_empty()).then_some(face);
+        }
+        let outcome = self
+            .call(i, FUEL_EVENT, |m, s| {
+                machine_of(m)?.horizon_mods_logic().call_on_block(s, &event)
+            })
+            .unwrap_or(EventOutcome::Pass);
+        if let Some(run) = self.entries[i].run.as_mut() {
+            run.store.data_mut().active_block_face = None;
+        }
+        outcome
     }
 
     /// Dispatches an item callback (API 0.3) to the mod that registered the item.
@@ -1039,6 +1052,15 @@ impl Mods {
             let run = e.run.as_ref()?;
             let s = run.store.data();
             Some((s.id.as_str(), s.open_screen.as_ref()?))
+        })
+    }
+    /// Textured regions for each mod's currently open declarative screen.
+    pub fn open_screen_backgrounds(&self) -> impl Iterator<Item = (&str, &[ScreenBackground])> {
+        self.entries.iter().filter_map(|e| {
+            let run = e.run.as_ref()?;
+            let s = run.store.data();
+            s.open_screen.as_ref()?;
+            Some((s.id.as_str(), s.screen_backgrounds.as_slice()))
         })
     }
     /// The game's container closed a mod-owned screen.
@@ -1838,6 +1860,9 @@ impl config::Host for State {
 }
 
 impl server::Host for State {
+    fn get_block_face(&mut self) -> Option<String> {
+        self.active_block_face.clone()
+    }
     fn get_block(&mut self, dimension: String, pos: BlockPos) -> Option<String> {
         self.shared
             .lock()
@@ -2186,6 +2211,7 @@ impl ui::Host for State {
             ));
         }
         self.open_screen = Some(spec.clone());
+        self.screen_backgrounds.clear();
         self.out.push(Output::ScreenOpened {
             mod_id: self.id.clone(),
             spec,
@@ -2194,9 +2220,19 @@ impl ui::Host for State {
     }
     fn close_screen(&mut self) {
         if self.open_screen.take().is_some() {
+            self.screen_backgrounds.clear();
             self.out.push(Output::ScreenClosed {
                 mod_id: self.id.clone(),
             });
+        }
+    }
+    fn set_backgrounds(&mut self, screen_id: String, backgrounds: Vec<ScreenBackground>) {
+        if self
+            .open_screen
+            .as_ref()
+            .is_some_and(|sc| sc.id == screen_id)
+        {
+            self.screen_backgrounds = backgrounds.into_iter().take(16).collect();
         }
     }
     fn set_slot(&mut self, screen_id: String, slot: u32, id: String, count: u32) {
