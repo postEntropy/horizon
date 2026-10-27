@@ -1126,11 +1126,15 @@ fn place(name: &str, owned: &[&str], contributes: &[&str]) -> Option<bool> {
     let shared_registry = root == "data"
         && ns == "minecraft"
         && horizon_mods::content::minecraft_registry_addition(name);
+    let shared_resource = root == "assets"
+        && ns == "minecraft"
+        && horizon_mods::content::minecraft_resource_addition(name);
     Some(
         owned.contains(&ns)
             || contributes.contains(&ns)
             || shared_tag(root, ns, rest)
-            || shared_registry,
+            || shared_registry
+            || shared_resource,
     )
 }
 

@@ -5,9 +5,10 @@
 //! Content is data, not code: nothing here runs in the sandbox. What a mod
 //! may add is fenced instead. Its own namespaces (its id and the ones its
 //! manifest lists), plus additions to vanilla tags, selected vanilla data
-//! registries, and convention tags (`c`, which NeoForge and Fabric mods share). Paths are plain, files
-//! and totals are capped, vanilla ids cannot be redefined, and no two mods
-//! share a namespace ([`clash`]).
+//! registries and mergeable vanilla resources, and convention tags (`c`, which
+//! NeoForge and Fabric mods share). Paths are plain, files and totals are
+//! capped, vanilla ids cannot be redefined, and no two mods share a namespace
+//! ([`clash`]).
 use crate::manifest::{Capability, MANIFEST, Manifest};
 use serde::Deserialize;
 use std::{
@@ -57,6 +58,24 @@ pub fn minecraft_registry_addition(path: &str) -> bool {
         && ["recipe/", "advancement/", "loot_table/"]
             .iter()
             .any(|kind| rest.starts_with(kind))
+}
+
+/// Shared vanilla resource files whose definitions merge across packs rather
+/// than replacing one another. Keep this in step with `packs::merge_kind`.
+pub fn minecraft_resource_addition(path: &str) -> bool {
+    let Some(rest) = path.strip_prefix("assets/minecraft/") else {
+        return false;
+    };
+    if rest == "sounds.json" {
+        return true;
+    }
+    let Some(json) = rest.strip_suffix(".json") else {
+        return false;
+    };
+    let Some((kind, name)) = json.split_once('/') else {
+        return false;
+    };
+    !name.is_empty() && matches!(kind, "lang" | "font" | "atlases")
 }
 
 /// A vanilla identifier, `minecraft:path`.
@@ -337,10 +356,11 @@ impl Content {
             let allowed = owned
                 || contributes
                 || (top == "data" && shared && rest.starts_with("tags/"))
-                || (namespace == "minecraft" && minecraft_registry_addition(name));
+                || (namespace == "minecraft" && minecraft_registry_addition(name))
+                || minecraft_resource_addition(name);
             if !allowed {
                 return Err(format!(
-                    "{name}: a mod adds files in its own namespaces ({top}/{id}/ and those listed in namespaces), vanilla tags, or vanilla recipes, advancements and loot tables"
+                    "{name}: a mod adds files in its own namespaces ({top}/{id}/ and those listed in namespaces), vanilla tags and registries, or mergeable vanilla resources"
                 ));
             }
             if !own && top == "data" && rest.starts_with("horizon/") {
