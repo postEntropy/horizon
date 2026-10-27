@@ -253,6 +253,7 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     let copied = carry["copied"].as_u64().unwrap_or(0);
     let outside = carry["outside"].as_array().map_or(0, Vec::len);
     let unreadable = count("unreadable");
+    let recipes_unregistered = carry["recipes_unregistered"].as_array().map_or(0, Vec::len);
     let worldgen = carry["worldgen"].as_u64().unwrap_or(0);
     let sum_map = |k: &str| -> u64 {
         carry["worldgen_types"][k]
@@ -335,6 +336,11 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     }
     if unreadable > 0 {
         gaps.push(format!("{unreadable} unreadable files left out"));
+    }
+    if recipes_unregistered > 0 {
+        gaps.push(format!(
+            "{recipes_unregistered} recipes left out (result item is not registered)"
+        ));
     }
     gaps.extend(harness_gaps);
     if tier != "data" {

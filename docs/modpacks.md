@@ -352,9 +352,14 @@ classes come from the reviewed table, Modrinth categories and sides; with jars, 
 only): content 54, library 33, client-ui 26, performance 25, other 14, unknown 2, server-only 1;
 40 rows matched the reviewed ATM10 table; three dependency layers (93 / 57 / 5).
 
-`carry` copies a jar's `assets/<id>/`, `data/<id>/`, `data/minecraft/tags/` and `data/c/tags/`
-into `mods/<id>/carry/`, a folder content mod (API 0.2) the game loads with `--dev-mod`, and
-keeps what a content mod may not hold (other namespaces, vanilla data) in `outside/`. Files of
+`carry` copies a jar's `assets/<id>/`, `data/<id>/`, additions to vanilla recipes, advancements,
+loot tables and tags, and `data/c/tags/` into `mods/<id>/carry/`, a folder content mod (API 0.2)
+the game loads with `--dev-mod`, and keeps what a content mod may not hold (other namespaces,
+unsupported vanilla data) in `outside/`. After all selected jars are carried, the pack-wide pass
+checks recipe outputs against the prepared vanilla item registry and every carried mod's item and
+block declarations. Recipes for missing optional mods or undeclared items move to `outside/` and
+are listed as `recipes_unregistered`; a cross-mod recipe stays when its output mod is carried.
+Without `--resources`, vanilla item outputs cannot be checked. Files of
 the mod's own content that the game's content loader would refuse whole also go to `outside/`,
 listed with the reason in the report's `unreadable`: paths vanilla does not read (upper case),
 and JSON that does not parse. Vanilla skips them one by one. A vanilla or convention tag

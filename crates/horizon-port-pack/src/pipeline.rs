@@ -2,6 +2,7 @@
 //! them. Each one reads what the earlier steps wrote and says what it did
 //! through `log`, one line at a time.
 use crate::{carry, fetch, import, inventory, modrinth, oracle, report};
+use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -241,11 +242,242 @@ pub fn carry(
             "merged {merged_datapacks} data pack namespace(s) into their existing content owner"
         ));
     }
+    let recipes_excluded = validate_carried_recipes(work, resources, log)?;
+    if recipes_excluded > 0 {
+        log(format!(
+            "{recipes_excluded} recipes excluded: their result item is not registered by vanilla or a carried mod"
+        ));
+    }
     log(format!(
         "{done} mods carried over into {}",
         work.join("mods").display()
     ));
     Ok(done)
+}
+
+/// Item ids available to the content root built from the carries in `<work>`.
+/// Only API declarations add mod items; custom Java-registered items that have
+/// no carried declaration are deliberately absent from this set.
+fn carried_item_ids(
+    work: &Path,
+    resources: Option<&Path>,
+    log: Log,
+) -> Result<BTreeSet<String>, String> {
+    let mut known = BTreeSet::new();
+    if let Some(resources) = resources {
+        let items: Value = read_json(&resources.join("items.json"))?;
+        let items = items.as_object().ok_or_else(|| {
+            format!(
+                "{}: no item registry",
+                resources.join("items.json").display()
+            )
+        })?;
+        known.extend(items.keys().cloned());
+    }
+    let mods = work.join("mods");
+    let entries = match fs::read_dir(&mods) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(known),
+        Err(error) => return Err(format!("{}: {error}", mods.display())),
+    };
+    let mut folders: Vec<_> = entries.flatten().map(|entry| entry.path()).collect();
+    folders.sort();
+    let mut owners: Vec<(String, Vec<String>)> = Vec::new();
+    for folder in folders {
+        let carry = folder.join("carry");
+        if !carry.join(horizon_mods::manifest::MANIFEST).is_file() {
+            continue;
+        }
+        let package = match horizon_mods::Package::read(&carry) {
+            Ok(package) => package,
+            Err(error) => {
+                log(format!(
+                    "{}: item validation skips content that cannot load: {error}",
+                    folder.file_name().unwrap_or_default().to_string_lossy()
+                ));
+                continue;
+            }
+        };
+        let content = match horizon_mods::Content::read(&carry, &package.manifest) {
+            Ok(content) => content,
+            Err(error) => {
+                log(format!(
+                    "{}: item validation skips content that cannot load: {error}",
+                    folder.file_name().unwrap_or_default().to_string_lossy()
+                ));
+                continue;
+            }
+        };
+        let own = (package.manifest.id.as_str(), content.namespaces.as_slice());
+        if let Some(error) = owners
+            .iter()
+            .find_map(|(id, namespaces)| horizon_mods::content::clash((id, namespaces), own))
+        {
+            log(format!(
+                "{}: item validation skips content that cannot load: {error}",
+                package.manifest.id
+            ));
+            continue;
+        }
+        owners.push((package.manifest.id.clone(), content.namespaces.clone()));
+        known.extend(content.items.into_iter().map(|item| item.id));
+        known.extend(
+            content
+                .blocks
+                .into_iter()
+                .filter(|block| block.item)
+                .map(|block| block.id),
+        );
+    }
+    Ok(known)
+}
+
+/// Sorted JSON files below a declaration or recipe directory, without
+/// following symlinks in a user-owned mod folder.
+fn json_files(root: &Path) -> Result<Vec<PathBuf>, String> {
+    fn visit(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
+        let entries = match fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(format!("{}: {error}", dir.display())),
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let metadata = fs::symlink_metadata(&path)
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            if metadata.file_type().is_symlink() {
+                continue;
+            }
+            if metadata.is_dir() {
+                visit(&path, files)?;
+            } else if metadata.is_file() && path.extension().is_some_and(|ext| ext == "json") {
+                files.push(path);
+            }
+        }
+        Ok(())
+    }
+    let mut files = Vec::new();
+    visit(root, &mut files)?;
+    files.sort();
+    Ok(files)
+}
+
+fn recipe_files(data: &Path) -> Result<Vec<PathBuf>, String> {
+    let entries = match fs::read_dir(data) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(format!("{}: {error}", data.display())),
+    };
+    let mut files = Vec::new();
+    for entry in entries.flatten() {
+        let namespace = entry.path();
+        let metadata = fs::symlink_metadata(&namespace)
+            .map_err(|error| format!("{}: {error}", namespace.display()))?;
+        if metadata.is_dir() && !metadata.file_type().is_symlink() {
+            files.extend(json_files(&namespace.join("recipe"))?);
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+/// Excludes recipes whose output is absent from the vanilla item registry and
+/// every carried mod's declarations. This is pack-wide so cross-mod recipes
+/// work when their output mod is carried, while optional integrations with a
+/// missing output mod are reported instead of loading an empty result.
+fn validate_carried_recipes(
+    work: &Path,
+    resources: Option<&Path>,
+    log: Log,
+) -> Result<usize, String> {
+    let known = carried_item_ids(work, resources, log)?;
+    let mods = work.join("mods");
+    let entries = match fs::read_dir(&mods) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => return Err(format!("{}: {error}", mods.display())),
+    };
+    let mut excluded = 0;
+    for entry in entries.flatten() {
+        let folder = entry.path();
+        let carry = folder.join("carry");
+        let report_path = folder.join("carry-report.json");
+        if !report_path.is_file() || !carry.join("horizon-mod.toml").is_file() {
+            continue;
+        }
+        let mut report: Value = read_json(&report_path)?;
+        let mut mod_excluded = Vec::new();
+        for recipe_path in recipe_files(&carry.join("data"))? {
+            let recipe: Value = match fs::read(&recipe_path)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            {
+                Some(recipe) => recipe,
+                None => continue,
+            };
+            let result = recipe["result"]
+                .as_str()
+                .or_else(|| recipe["result"]["id"].as_str())
+                .or_else(|| recipe["result"]["item"].as_str());
+            let Some(result) = result else {
+                continue;
+            };
+            let id = if result.contains(':') {
+                result.to_owned()
+            } else {
+                format!("minecraft:{result}")
+            };
+            if known.contains(&id) {
+                continue;
+            }
+            if id.starts_with("minecraft:") && resources.is_none() {
+                continue;
+            }
+            let relative = recipe_path
+                .strip_prefix(&carry)
+                .map_err(|error| error.to_string())?;
+            let outside = folder.join("outside").join(relative);
+            if let Some(parent) = outside.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|error| format!("{}: {error}", parent.display()))?;
+            }
+            if outside.exists() {
+                fs::remove_file(&outside)
+                    .map_err(|error| format!("{}: {error}", outside.display()))?;
+            }
+            fs::rename(&recipe_path, &outside)
+                .map_err(|error| format!("{}: {error}", recipe_path.display()))?;
+            mod_excluded.push(relative.to_string_lossy().into_owned());
+        }
+        if mod_excluded.is_empty() {
+            continue;
+        }
+        mod_excluded.sort();
+        let copied = report["copied"].as_u64().unwrap_or(0);
+        report["copied"] = Value::from(copied.saturating_sub(mod_excluded.len() as u64));
+        let listed = report["recipes_unregistered"]
+            .as_array_mut()
+            .ok_or_else(|| {
+                format!(
+                    "{}: recipes_unregistered is not an array",
+                    report_path.display()
+                )
+            })?;
+        for path in &mod_excluded {
+            if !listed.iter().any(|value| value.as_str() == Some(path)) {
+                listed.push(Value::String(path.clone()));
+            }
+        }
+        listed.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+        write_json(&report_path, &report)?;
+        excluded += mod_excluded.len();
+        log(format!(
+            "{}: {} recipes use items absent from the vanilla and carried registries",
+            folder.file_name().unwrap_or_default().to_string_lossy(),
+            mod_excluded.len()
+        ));
+    }
+    Ok(excluded)
 }
 
 fn merge_datapack_namespaces(
