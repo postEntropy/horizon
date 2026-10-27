@@ -1272,7 +1272,7 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
             json(serde_json::json!({
                 "pack": p.slug, "name": p.title(), "summary": p.summary(),
                 "counts": Status::ALL.iter().map(|s| (s.label(), p.count(*s))).collect::<std::collections::BTreeMap<_, _>>(),
-                "portable": p.portable, "inspectable": p.inspectable,
+                "portable": p.portable, "inspectable": p.inspectable, "assets": p.assets,
                 "ported_mods": p.mods.len(), "jars": p.jars(),
                 "report": p.work.join("coverage.md"),
             }));
@@ -1285,9 +1285,10 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
                 counts.join(", ")
             );
             println!(
-                "  {} portable, {} unclassified candidates, {} carried over",
+                "  {} portable, {} unclassified candidates, {} pack assets, {} carried over",
                 p.portable,
                 p.inspectable,
+                p.assets,
                 p.mods.len()
             );
             if let Some(jars) = p.jars() {

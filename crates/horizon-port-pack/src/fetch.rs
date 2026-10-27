@@ -93,6 +93,13 @@ pub fn fetch(
     log: Log,
 ) -> Result<Fetched, String> {
     let pack: Pack = read_json(&work.join("pack.json"))?;
+    for file in &pack.files {
+        crate::import::validate_relative(&file.path)?;
+        let name = file.file_name();
+        if name == "." || name == ".." || name.contains('\\') {
+            return Err(format!("unsafe pack file name: {name}"));
+        }
+    }
     let cache = Cache::load(&work.join("modrinth.json"));
     let files: HashMap<&str, &PackFile> = pack.files.iter().map(|f| (f.path.as_str(), f)).collect();
     let jars = work.join("jars");

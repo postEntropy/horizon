@@ -52,6 +52,8 @@ pub struct Imported {
     pub portable: usize,
     /// Unknown records whose jars can be fetched and inspected before carrying over.
     pub inspectable: usize,
+    /// Resource and shader packs fetched into this profile.
+    pub assets: usize,
 }
 
 impl Imported {
@@ -135,6 +137,10 @@ pub fn load(work: &Path) -> Result<Imported, String> {
             .iter()
             .filter(|r| r.class == "unknown" && r.jar.is_none())
             .count(),
+        assets: records
+            .iter()
+            .filter(|r| matches!(r.path.split('/').next(), Some("resourcepacks" | "shaderpacks")))
+            .count(),
     })
 }
 
@@ -179,8 +185,9 @@ pub fn import(path: &Path, log: Log) -> Result<Imported, String> {
     log(format!("Importing {name} into {}", work.display()));
     pipeline::import(path, &work, log)?;
     let applied = merge_pack_overrides(&work)?;
-    if applied > 0 {
-        log(format!("{applied} pack configuration files copied to its profile"));
+    enable_new_resource_packs(&profile_home(&work), &applied)?;
+    if !applied.is_empty() {
+        log(format!("{} pack files copied to its profile", applied.len()));
     }
     pipeline::inventory(&work, false, log)?;
     pipeline::report(&work, log)?;
@@ -196,6 +203,8 @@ pub fn port(
     log: Log,
 ) -> Result<Imported, String> {
     pipeline::port(work, resources, from, log)?;
+    let applied = merge_pack_overrides(work)?;
+    enable_new_resource_packs(&profile_home(work), &applied)?;
     load(work)
 }
 
@@ -208,7 +217,7 @@ pub fn import_and_port(
     log: Log,
 ) -> Result<Imported, String> {
     let pack = import(path, log)?;
-    if pack.portable == 0 && pack.inspectable == 0 {
+    if pack.portable == 0 && pack.inspectable == 0 && pack.assets == 0 {
         return Ok(pack);
     }
     port(&pack.work, resources, None, log)
@@ -255,18 +264,20 @@ pub fn profile_home(work: &Path) -> PathBuf {
 
 /// Adds pack configs/scripts to the isolated profile without replacing files
 /// the player already customized on an earlier import.
-fn merge_pack_overrides(work: &Path) -> Result<usize, String> {
+fn merge_pack_overrides(work: &Path) -> Result<Vec<PathBuf>, String> {
     let source = work.join("pack-overrides");
     if !source.is_dir() {
-        return Ok(0);
+        return Ok(Vec::new());
     }
     let home = profile_home(work);
     fs::create_dir_all(&home).map_err(|e| format!("{}: {e}", home.display()))?;
-    merge_tree(&source, &source, &home)
+    let mut copied = merge_tree(&source, &source, &home)?;
+    copied.sort();
+    Ok(copied)
 }
 
-fn merge_tree(root: &Path, source: &Path, destination: &Path) -> Result<usize, String> {
-    let mut copied = 0;
+fn merge_tree(root: &Path, source: &Path, destination: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut copied = Vec::new();
     for entry in fs::read_dir(source).map_err(|e| format!("{}: {e}", source.display()))? {
         let path = entry.map_err(|e| e.to_string())?.path();
         let metadata = fs::symlink_metadata(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -279,15 +290,66 @@ fn merge_tree(root: &Path, source: &Path, destination: &Path) -> Result<usize, S
         let target = destination.join(relative);
         if metadata.is_dir() {
             fs::create_dir_all(&target).map_err(|e| format!("{}: {e}", target.display()))?;
-            copied += merge_tree(root, &path, destination)?;
+            copied.extend(merge_tree(root, &path, destination)?);
         } else if metadata.is_file() && !target.exists() {
             let parent = target.parent().ok_or_else(|| format!("{}: no parent", target.display()))?;
             fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
             fs::copy(&path, &target).map_err(|e| format!("{}: {e}", target.display()))?;
-            copied += 1;
+            copied.push(relative.to_path_buf());
         }
     }
     Ok(copied)
+}
+
+fn enable_new_resource_packs(home: &Path, files: &[PathBuf]) -> Result<(), String> {
+    let ids: Vec<String> = files
+        .iter()
+        .filter_map(|path| {
+            let mut parts = path.components();
+            (parts.next()?.as_os_str() == "resourcepacks")
+                .then(|| parts.next().map(|name| format!("file/{}", name.as_os_str().to_string_lossy())))
+                .flatten()
+        })
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let options_path = home.join("options.txt");
+    let existing = match fs::read_to_string(&options_path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(format!("{}: {error}", options_path.display())),
+    };
+    let mut lines: Vec<String> = existing.lines().map(str::to_owned).collect();
+    let index = lines.iter().position(|line| line.starts_with("resourcePacks:"));
+    let mut selected = if let Some(index) = index {
+        let value = lines[index]
+            .split_once(':')
+            .map(|(_, value)| value.trim())
+            .ok_or_else(|| format!("{}: malformed resourcePacks setting", options_path.display()))?;
+        serde_json::from_str::<Vec<String>>(value)
+            .map_err(|e| format!("{}: resourcePacks: {e}", options_path.display()))?
+    } else {
+        vec!["vanilla".into()]
+    };
+    for id in ids {
+        if !selected.contains(&id) {
+            selected.push(id);
+        }
+    }
+    let setting = format!("resourcePacks:{}", serde_json::to_string(&selected).map_err(|e| e.to_string())?);
+    if let Some(index) = index {
+        lines[index] = setting;
+    } else {
+        lines.push(setting);
+    }
+    let mut text = lines.join("\n");
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    fs::write(&options_path, text).map_err(|e| format!("{}: {e}", options_path.display()))
 }
 
 /// Turns the game's command into this pack's profile: its own home (the player's options.txt
@@ -295,10 +357,13 @@ fn merge_tree(root: &Path, source: &Path, destination: &Path) -> Result<usize, S
 pub fn apply_profile(cmd: &mut Command, work: &Path) -> Result<(), String> {
     // Only mods that load together: the game would refuse the later of two sharing a namespace.
     let (mods, _) = pipeline::loadable(&carried(work));
-    if mods.is_empty() {
+    let home = profile_home(work);
+    let has_pack_files = ["resourcepacks", "shaderpacks", "config", "defaultconfigs", "kubejs"]
+        .iter()
+        .any(|folder| home.join(folder).is_dir());
+    if mods.is_empty() && !has_pack_files {
         return Err("Nothing is ported yet: port the pack first.".into());
     }
-    let home = profile_home(work);
     fs::create_dir_all(&home).map_err(|e| format!("{}: {e}", home.display()))?;
     let options = home.join("options.txt");
     let own = backend::game_home().join("options.txt");

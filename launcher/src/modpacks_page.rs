@@ -265,13 +265,16 @@ impl Launcher {
         let can_play = self.selected().is_some_and(|tag| backend::is_prepared(tag));
         let running = self.client.is_some() || self.starting_client.is_some();
         let mut buttons = div().flex().flex_wrap().items_center().gap(px(8.));
-        let play_label = if p.mods.is_empty() {
+        let can_play_assets = p.assets > 0 || !p.pack.overrides.is_empty();
+        let play_label = if p.mods.is_empty() && p.assets > 0 {
+            format!("Play with {} pack files", p.assets)
+        } else if p.mods.is_empty() {
             "Play".to_string()
         } else {
             format!("Play with {} mods", p.mods.len())
         };
         let mut play = button("pack-play", play_label, Kind::Primary, &t);
-        if p.mods.is_empty() || !can_play || running || self.pack_busy {
+        if (p.mods.is_empty() && !can_play_assets) || !can_play || running || self.pack_busy {
             play = disabled(play);
         } else {
             let work = p.work.clone();
@@ -280,22 +283,28 @@ impl Launcher {
                 cx.notify();
             }));
         }
-        let port_count = p.portable + p.inspectable;
-        let port_label = if p.inspectable > 0 {
-            format!("Analyze and port {port_count} mods")
-        } else {
-            format!("Port {} mods", p.portable)
+        let mod_count = p.portable + p.inspectable;
+        let port_count = mod_count + p.assets;
+        let port_label = match (mod_count, p.assets, p.inspectable) {
+            (0, assets, _) => format!("Fetch and enable {assets} pack files"),
+            (mods, assets, _) if assets > 0 => format!("Port {mods} mods + {assets} pack files"),
+            (mods, 0, inspectable) if inspectable > 0 => format!("Analyze and port {mods} mods"),
+            (mods, 0, _) => format!("Port {mods} mods"),
+            (mods, assets, _) => format!("Port {mods} mods + {assets} pack files"),
         };
         let mut port = button("pack-port", port_label, Kind::Secondary, &t);
         let mut from = button("pack-from", "Use jars from my instance…", Kind::Ghost, &t);
         if self.pack_busy || port_count == 0 {
             port = disabled(port);
-            from = disabled(from);
         } else {
             port = port.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                 this.port_pack(false, cx);
                 cx.notify();
             }));
+        }
+        if self.pack_busy || mod_count == 0 {
+            from = disabled(from);
+        } else {
             from = from.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                 this.port_pack(true, cx);
                 cx.notify();
@@ -337,11 +346,12 @@ impl Launcher {
         }));
         buttons = buttons.child(play).child(port).child(from).child(remove);
         let mut notes = vec![format!(
-            "Port gets jars for {} content mods (tiers 0.2–0.5) and inspects {} unclassified \
-             candidates using their loader metadata and files. It uses the pack's links, \
-             Modrinth, CurseForge when configured, or your folder. Carried mods stay here, in {}.",
+            "Port gets jars for {} content mods (tiers 0.2–0.5), inspects {} unclassified \
+             candidates, and fetches {} resource/shader packs. New resource packs are enabled \
+             in this profile. Carried mods and pack files stay here, in {}.",
             p.portable,
             p.inspectable,
+            p.assets,
             short(&p.work)
         )];
         if let Some(jars) = p.jars() {

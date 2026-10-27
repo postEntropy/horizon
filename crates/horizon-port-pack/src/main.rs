@@ -54,7 +54,7 @@ fn main() -> ExitCode {
                 let only = rest();
                 let want = |r: &Record| {
                     if only.is_empty() {
-                        pipeline::inspectable(r)
+                        pipeline::fetchable(r)
                     } else {
                         only.contains(&r.key)
                     }

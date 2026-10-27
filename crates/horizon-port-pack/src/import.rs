@@ -398,7 +398,7 @@ fn tracked_path(path: &str) -> bool {
     )
 }
 
-fn validate_relative(path: &str) -> Result<(), String> {
+pub(crate) fn validate_relative(path: &str) -> Result<(), String> {
     let path = Path::new(path);
     if path.as_os_str().is_empty()
         || path
@@ -530,18 +530,30 @@ pub fn mrpack(index: &Value, names: &[String]) -> Pack {
         .as_array()
         .into_iter()
         .flatten()
-        .map(|f| PackFile {
-            path: str_of(f, "path"),
-            sha1: f["hashes"]["sha1"].as_str().map(str::to_owned),
-            client: str_of(&f["env"], "client"),
-            server: str_of(&f["env"], "server"),
-            downloads: f["downloads"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|d| d.as_str().map(str::to_owned))
-                .collect(),
-            ..PackFile::default()
+        .map(|f| {
+            let sha1 = f["hashes"]["sha1"].as_str().map(str::to_owned);
+            let (hash_format, hash) = if let Some(hash) = &sha1 {
+                (Some("sha1".to_owned()), Some(hash.clone()))
+            } else if let Some(hash) = f["hashes"]["sha512"].as_str() {
+                (Some("sha512".to_owned()), Some(hash.to_owned()))
+            } else {
+                (None, None)
+            };
+            PackFile {
+                path: str_of(f, "path"),
+                sha1,
+                hash,
+                hash_format,
+                client: str_of(&f["env"], "client"),
+                server: str_of(&f["env"], "server"),
+                downloads: f["downloads"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|d| d.as_str().map(str::to_owned))
+                    .collect(),
+                ..PackFile::default()
+            }
         })
         .collect();
     Pack {

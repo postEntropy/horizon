@@ -323,6 +323,16 @@ pub fn inspectable(r: &inventory::Record) -> bool {
     portable(r) || r.class == "unknown"
 }
 
+/// Resource and shader packs are carried into the profile as files, not as
+/// `.hmod` content. Fetch them alongside content mods so a pack can load them.
+pub fn fetchable(r: &inventory::Record) -> bool {
+    inspectable(r)
+        || matches!(
+            r.path.split('/').next(),
+            Some("resourcepacks" | "shaderpacks")
+        )
+}
+
 /// Everything after the import, for the portable mods: their jars (`fetch`,
 /// from `from` when the player has them), the inventory again with the jars
 /// read, the carry-over and the report. `resources` is the prepared
@@ -337,10 +347,11 @@ pub fn port(
         Ok(r) => r,
         Err(_) => inventory(work, false, log)?,
     };
-    let fetched = fetch::fetch(work, &records, from, &inspectable, log)?;
+    let fetched = fetch::fetch(work, &records, from, &fetchable, log)?;
     // The jars tell classes and tiers better than metadata alone. Unknown
     // candidates are included so their manifests and file census can classify.
     let records = inventory(work, false, log)?;
+    stage_profile_assets(work, &records, log)?;
     let only: Vec<String> = records
         .iter()
         .filter(|r| portable(r) && r.jar.is_some())
@@ -352,6 +363,42 @@ pub fn port(
         carry(work, resources, &only, log)?;
     }
     Ok((fetched, report(work, log)?))
+}
+
+fn stage_profile_assets(
+    work: &Path,
+    records: &[inventory::Record],
+    log: Log,
+) -> Result<(), String> {
+    for record in records.iter().filter(|r| {
+        matches!(
+            r.path.split('/').next(),
+            Some("resourcepacks" | "shaderpacks")
+        )
+    }) {
+        let Some(source) = record.jar.as_ref().filter(|path| path.is_file()) else {
+            continue;
+        };
+        let Some(name) = record.path.rsplit('/').next() else {
+            continue;
+        };
+        if name.is_empty()
+            || name == "."
+            || name == ".."
+            || name.contains('/')
+            || name.contains('\\')
+        {
+            continue;
+        }
+        let kind = record.path.split('/').next().unwrap_or_default();
+        let destination = work.join("pack-overrides").join(kind).join(name);
+        let parent = destination.parent().ok_or("asset path has no parent")?;
+        fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        fs::copy(source, &destination)
+            .map_err(|e| format!("{} -> {}: {e}", source.display(), destination.display()))?;
+        log(format!("{}: staged for the profile", record.path));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
