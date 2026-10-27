@@ -1458,6 +1458,19 @@ fn normalize_worldgen_entry(bundle: &str, text: &str) -> String {
             _ => {}
         }
         flatten_config_recursive(&mut doc, &mut changed);
+    } else if bundle == "worldgen/carvers.json" {
+        flatten_config_recursive(&mut doc, &mut changed);
+        if let Some(object) = doc.as_object_mut()
+            && let Some(y_scale) = object.remove("yScale")
+        {
+            if object.get("type").and_then(Value::as_str) == Some("minecraft:canyon") {
+                let shape = object.entry("shape").or_insert_with(|| json!({}));
+                if let Some(shape) = shape.as_object_mut() {
+                    shape.entry("y_scale").or_insert(y_scale);
+                }
+            }
+            changed = true;
+        }
     } else if bundle == "worldgen/biomes.json" {
         if let Some(object) = doc.as_object_mut() {
             if let Some(stages) = object.get_mut("carvers").and_then(Value::as_object_mut) {
@@ -2670,6 +2683,45 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
             doc.set(&id, J::Str(merged));
         }
         overlay.write(BIOME_TAGS, &serde_json::to_vec(&doc)?)?;
+    }
+    if let Some(carvers) = worldgen.get_mut("worldgen/carvers.json") {
+        let vanilla: BTreeMap<String, String> =
+            serde_json::from_slice(&fs::read(base.join("worldgen/carvers.json"))?)?;
+        for (_, text) in carvers {
+            let Ok(mut value) = serde_json::from_str::<serde_json::Value>(text) else {
+                continue;
+            };
+            let defaults = match value.get("type").and_then(serde_json::Value::as_str) {
+                Some("minecraft:cave") => vanilla.get("minecraft:cave"),
+                Some("minecraft:canyon") => vanilla.get("minecraft:canyon"),
+                _ => None,
+            };
+            let (Some(defaults), Some(target)) = (defaults, value.as_object_mut()) else {
+                continue;
+            };
+            let defaults: serde_json::Value = serde_json::from_str(defaults)?;
+            if let Some(defaults) = defaults.as_object() {
+                for (key, default) in defaults {
+                    if key == "shape"
+                        && let (Some(target_shape), Some(default_shape)) = (
+                            target
+                                .get_mut(key)
+                                .and_then(serde_json::Value::as_object_mut),
+                            default.as_object(),
+                        )
+                    {
+                        for (shape_key, shape_default) in default_shape {
+                            target_shape
+                                .entry(shape_key.clone())
+                                .or_insert_with(|| shape_default.clone());
+                        }
+                        continue;
+                    }
+                    target.entry(key.clone()).or_insert_with(|| default.clone());
+                }
+            }
+            *text = serde_json::to_string(&value)?;
+        }
     }
     // Structures and the pools, sets, processors and features they use, then
     // what mods add to sets and pools, in mod and file order.

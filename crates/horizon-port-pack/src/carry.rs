@@ -795,6 +795,9 @@ fn upgrade_density_function(value: &mut Value) -> bool {
     if matches!(kind.as_str(), "cache_2d" | "flat_cache" | "cache_once") {
         object.insert("type".into(), json!("minecraft:cache"));
         changed = true;
+    } else if kind == "twilightforest:sqrt" {
+        object.insert("type".into(), json!("minecraft:sqrt"));
+        changed = true;
     } else if kind == "shifted_noise" {
         object.insert("type".into(), json!("minecraft:noise"));
         changed = true;
