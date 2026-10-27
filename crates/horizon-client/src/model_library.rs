@@ -10,6 +10,7 @@ pub(crate) struct ParsedModels {
 impl ParsedModels {
     /// Every `models/**.json` of a namespace directory, by identifier.
     pub(crate) fn load(root: &Path) -> Self {
+        let started = std::time::Instant::now();
         let Ok(namespaces) = fs::read_dir(root.join("assets")) else {
             return Self::default();
         };
@@ -52,6 +53,8 @@ impl ParsedModels {
                 }
             }
         }
+        let files_found = files.len();
+        let parse_started = std::time::Instant::now();
         let parsed = crate::par::par_map(&files, |(_, path)| {
             let text = fs::read_to_string(path).ok()?;
             CuboidModel::from_json(&text).ok().map(Arc::new)
@@ -61,6 +64,12 @@ impl ParsedModels {
             .zip(parsed)
             .filter_map(|((id, _), model)| Some((id, model?)))
             .collect();
+        log::info!(
+            "Horizon: discovered {files_found} model files in {:.2}s, parsed in {:.2}s (total {:.2}s)",
+            parse_started.duration_since(started).as_secs_f32(),
+            parse_started.elapsed().as_secs_f32(),
+            started.elapsed().as_secs_f32()
+        );
         Self { models }
     }
 

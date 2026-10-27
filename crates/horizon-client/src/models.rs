@@ -68,8 +68,15 @@ pub(crate) fn prepare_with_models(
     sprites: &mut Sprites,
     models: &crate::model_library::ParsedModels,
 ) -> Result<PreparedModels> {
+    let started = std::time::Instant::now();
     let facts: std::collections::BTreeMap<String, Value> =
         serde_json::from_slice(&std::fs::read(root.join("model-states.json"))?)?;
+    log::info!(
+        "Horizon: decoded model-state table in {:.2}s ({} blocks)",
+        started.elapsed().as_secs_f32(),
+        facts.len()
+    );
+    let bind_started = std::time::Instant::now();
     let blocks: Vec<&str> = facts
         .keys()
         .filter(|name| registry.default_state(name).is_some())
@@ -77,6 +84,10 @@ pub(crate) fn prepare_with_models(
         .collect();
     let catalog =
         StateModels::from_facts_with_models(root, registry, &blocks, sprites, &facts, models)?;
+    log::info!(
+        "Horizon: model-state catalog prepared in {:.2}s",
+        bind_started.elapsed().as_secs_f32()
+    );
     let mut placements = Vec::new();
     let mut states = Vec::new();
     for (index, (name, properties)) in GALLERY.iter().enumerate() {

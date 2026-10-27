@@ -84,6 +84,7 @@ impl StateModels {
         facts: &BTreeMap<String, Value>,
         models: &crate::model_library::ParsedModels,
     ) -> Result<Self> {
+        let started = std::time::Instant::now();
         let mut choices = Vec::new();
         let mut states = BTreeMap::new();
         let mut variants = BTreeSet::new();
@@ -203,6 +204,7 @@ impl StateModels {
             }
             choices.push(CompiledChoices::new(&definition)?);
         }
+        let states_ready = std::time::Instant::now();
         let names: Vec<String> = variants.iter().map(|(name, _, _)| name.clone()).collect();
         let library = match models.block_library(root, names.clone()) {
             Ok(library) => library,
@@ -211,6 +213,7 @@ impl StateModels {
                 models.block_library_or_missing(root, names)?
             }
         };
+        let library_ready = std::time::Instant::now();
         let mut baked = BTreeMap::new();
         for (name, turns, lock) in variants {
             let model = match library.resolve(&name) {
@@ -270,6 +273,14 @@ impl StateModels {
                 },
             );
         }
+        log::info!(
+            "Horizon: bound {} model states / {} variants in {:.2}s, resolved models in {:.2}s, baked models and loaded sprites in {:.2}s",
+            states.len(),
+            baked.len(),
+            states_ready.duration_since(started).as_secs_f32(),
+            library_ready.duration_since(states_ready).as_secs_f32(),
+            library_ready.elapsed().as_secs_f32()
+        );
         Ok(Self {
             choices,
             states,

@@ -11948,6 +11948,7 @@ impl<'a> Game<'a> {
         audio: Audio,
         prepared: Option<GameCpuResources>,
     ) -> Result<Self> {
+        let new_started = Instant::now();
         let root = options.resources.clone();
         let registry = pack.assets.registry;
         // Until a world is opened the streamer is idle.
@@ -11966,12 +11967,21 @@ impl<'a> Game<'a> {
         let prepared = prepared
             .map(Ok)
             .unwrap_or_else(|| GameCpuResources::load(&root))?;
+        log::info!(
+            "Horizon: game CPU resources ready in {:.2}s",
+            new_started.elapsed().as_secs_f32()
+        );
         let world = World::new(res.facts().air, 0);
         let creative = options.creative;
         let inventory = vec![None; 36];
         let now = Instant::now();
         let look = options.look;
+        let particles_started = Instant::now();
         let particles = horizon_client::particles::ParticleEngine::new(&root, &gui.atlas.sprites);
+        log::info!(
+            "Horizon: particle resources loaded in {:.2}s",
+            particles_started.elapsed().as_secs_f32()
+        );
         Ok(Game {
             res: res.clone(),
             rest_loader: None,
@@ -12305,23 +12315,52 @@ struct GameCpuResources {
 }
 impl GameCpuResources {
     fn load(root: &std::path::Path) -> Result<Self> {
+        let started = Instant::now();
         let document = horizon_client::mobs::EntityModelDocument::load(root).ok();
         let model = |key| document.as_ref().and_then(|document| document.model(key));
+        let model_started = Instant::now();
+        let painting_variants = paintings::PaintingVariants::load(root);
+        let frame_model = frames::bake_frame(root, "item_frame");
+        let glow_frame_model = frames::bake_frame(root, "glow_item_frame");
+        let map_frame_model = frames::bake_frame(root, "item_frame_map");
+        let glow_map_frame_model = frames::bake_frame(root, "glow_item_frame_map");
+        let armor_stand_assets = armor_stands::ArmorStandAssets::load(root, document.as_ref());
+        let waypoint_styles = horizon_client::locator_bar::WaypointStyles::load(root);
+        let boat_models = boats::BoatModels::load(document.as_ref());
+        let cart_models = minecarts::CartModels::load(document.as_ref());
+        let crystal_model = model("minecraft:end_crystal#main");
+        let dragon_model = model("minecraft:ender_dragon#main");
+        let arrow_model = model("minecraft:arrow#main");
+        let trident_model = model("minecraft:trident#main");
+        log::info!(
+            "Horizon: entity and display models prepared in {:.2}s",
+            model_started.elapsed().as_secs_f32()
+        );
+        let creative_started = Instant::now();
+        let creative_screen = Creative::load(root)?;
+        log::info!(
+            "Horizon: creative inventory prepared in {:.2}s",
+            creative_started.elapsed().as_secs_f32()
+        );
+        log::info!(
+            "Horizon: game CPU resource bundle ready in {:.2}s",
+            started.elapsed().as_secs_f32()
+        );
         Ok(Self {
-            painting_variants: paintings::PaintingVariants::load(root),
-            frame_model: frames::bake_frame(root, "item_frame"),
-            glow_frame_model: frames::bake_frame(root, "glow_item_frame"),
-            map_frame_model: frames::bake_frame(root, "item_frame_map"),
-            glow_map_frame_model: frames::bake_frame(root, "glow_item_frame_map"),
-            armor_stand_assets: armor_stands::ArmorStandAssets::load(root, document.as_ref()),
-            waypoint_styles: horizon_client::locator_bar::WaypointStyles::load(root),
-            boat_models: boats::BoatModels::load(document.as_ref()),
-            cart_models: minecarts::CartModels::load(document.as_ref()),
-            crystal_model: model("minecraft:end_crystal#main"),
-            dragon_model: model("minecraft:ender_dragon#main"),
-            arrow_model: model("minecraft:arrow#main"),
-            trident_model: model("minecraft:trident#main"),
-            creative_screen: Creative::load(root)?,
+            painting_variants,
+            frame_model,
+            glow_frame_model,
+            map_frame_model,
+            glow_map_frame_model,
+            armor_stand_assets,
+            waypoint_styles,
+            boat_models,
+            cart_models,
+            crystal_model,
+            dragon_model,
+            arrow_model,
+            trident_model,
+            creative_screen,
         })
     }
 }
@@ -12878,8 +12917,13 @@ fn load_world_rest(
     let threads = resources.threads();
     let registry_owner = assets;
     progress.set(6);
+    let mob_started = Instant::now();
     let mob_data = horizon_client::mobs::MobData::load(root, facts);
     horizon_client::mobs::trial_spawner::load_registry(root);
+    log::info!(
+        "Horizon: mob metadata loaded in {:.2}s",
+        mob_started.elapsed().as_secs_f32()
+    );
 
     let items_started = Instant::now();
     let items = Items::load(root, assets.registry, facts)?;
@@ -12904,38 +12948,79 @@ fn load_world_rest(
     let animate =
         horizon_client::animate_tick::AnimateTables::load(root, registry_owner.registry, biomes)?;
     let fog = horizon_client::fog::FogTables::load(root, biomes);
+    let entity_started = Instant::now();
+    let providers = Providers::load(root);
+    let block_entity_render = horizon_client::block_entity_render::BlockEntityRenderer::load(
+        root,
+        registry_owner.registry,
+    )?;
+    log::info!(
+        "Horizon: providers and block-entity render tables loaded in {:.2}s",
+        entity_started.elapsed().as_secs_f32()
+    );
+    let environment_started = Instant::now();
+    let music = horizon_client::music::MusicTables::load(root);
+    let ambient = horizon_client::ambience::AmbientTables::load(root);
+    let nether_environment = Environment::load_dimension(root, "the_nether", false)?;
+    let end_environment = Environment::load_dimension(root, "the_end", false)?;
+    log::info!(
+        "Horizon: music, ambience and dimension tables loaded in {:.2}s",
+        environment_started.elapsed().as_secs_f32()
+    );
+    let gameplay_started = Instant::now();
+    let behaviours_started = Instant::now();
+    let behaviours = Behaviours::load_with_gameplay(
+        registry_owner.registry,
+        root,
+        behaviour_json,
+        gameplay_projection,
+    )?;
+    log::info!(
+        "Horizon: behaviour tables loaded in {:.2}s",
+        behaviours_started.elapsed().as_secs_f32()
+    );
+    let mob_types_started = Instant::now();
+    let mob_types = MobTypes::load(root)?
+        .types
+        .into_iter()
+        .map(|(k, v)| (k, Arc::new(v)))
+        .collect();
+    log::info!(
+        "Horizon: mob types loaded in {:.2}s",
+        mob_types_started.elapsed().as_secs_f32()
+    );
+    let player_models_started = Instant::now();
+    let player_type = perspective::player_type(root);
+    let player_arm = horizon_client::mobs::load_model(root, "minecraft:player#main")
+        .and_then(|m| m.children.into_iter().find(|c| c.name == "right_arm"));
+    let spin_attack = horizon_client::mobs::load_model(root, "minecraft:spin_attack#main");
+    log::info!(
+        "Horizon: player model setup took {:.2}s",
+        player_models_started.elapsed().as_secs_f32()
+    );
+    log::info!(
+        "Horizon: behaviours, mob types and player models loaded in {:.2}s",
+        gameplay_started.elapsed().as_secs_f32()
+    );
     Ok(WorldRest {
         stations,
         items,
         recipes,
         transformers,
-        providers: Providers::load(root),
-        block_entity_render: horizon_client::block_entity_render::BlockEntityRenderer::load(
-            root,
-            registry_owner.registry,
-        )?,
+        providers,
+        block_entity_render,
         animate,
         fog,
-        music: horizon_client::music::MusicTables::load(root),
-        ambient: horizon_client::ambience::AmbientTables::load(root),
-        nether_environment: Environment::load_dimension(root, "the_nether", false)?,
-        end_environment: Environment::load_dimension(root, "the_end", false)?,
-        behaviours: Behaviours::load_with_gameplay(
-            registry_owner.registry,
-            root,
-            behaviour_json,
-            gameplay_projection,
-        )?,
-        mob_types: MobTypes::load(root)?
-            .types
-            .into_iter()
-            .map(|(k, v)| (k, Arc::new(v)))
-            .collect(),
+        music,
+        ambient,
+        nether_environment,
+        end_environment,
+        behaviours,
+        mob_types,
         mob_data,
-        player_type: perspective::player_type(root),
-        player_arm: horizon_client::mobs::load_model(root, "minecraft:player#main")
-            .and_then(|m| m.children.into_iter().find(|c| c.name == "right_arm")),
-        spin_attack: horizon_client::mobs::load_model(root, "minecraft:spin_attack#main"),
+        player_type,
+        player_arm,
+        spin_attack,
     })
 }
 

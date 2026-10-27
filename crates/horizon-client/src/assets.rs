@@ -102,6 +102,7 @@ fn invalid(message: &str) -> io::Error {
 }
 impl Assets {
     pub fn load(root: &Path) -> Result<Self> {
+        let started = std::time::Instant::now();
         let manifest: Value = serde_json::from_reader(BufReader::new(File::open(
             root.join("horizon-resources.json"),
         )?))?;
@@ -178,6 +179,11 @@ impl Assets {
         // Chunks hold every state of this registry: content mods can take it
         // past vanilla's 16-bit global palette.
         crate::chunk::set_block_states(registry.len());
+        log::info!(
+            "Horizon: registry and terrain facts loaded in {:.2}s ({} block states)",
+            started.elapsed().as_secs_f32(),
+            registry.len()
+        );
         let registry: &'static BlockRegistry = Box::leak(Box::new(registry));
         Ok(Self {
             registry,
@@ -195,13 +201,24 @@ impl Assets {
 }
 impl RenderAssets {
     pub fn load(root: &Path, assets: &Assets) -> Result<Self> {
+        let started = std::time::Instant::now();
         let registry = assets.registry;
         let mut sprites = crate::sprites::Sprites::default();
         for name in MATERIALS {
             sprites.insert(root, &format!("minecraft:block/{name}"))?;
         }
+        let models_started = std::time::Instant::now();
         let parsed = crate::model_library::ParsedModels::load(root);
+        log::info!(
+            "Horizon: parsed model resources in {:.2}s",
+            models_started.elapsed().as_secs_f32()
+        );
+        let bake_started = std::time::Instant::now();
         let models = crate::models::prepare_with_models(root, registry, &mut sprites, &parsed)?;
+        log::info!(
+            "Horizon: blockstate binding and model baking took {:.2}s",
+            bake_started.elapsed().as_secs_f32()
+        );
         let model_library = parsed.into_item_library();
         // Fluids are drawn by the fluid renderer, not block models; breaking
         // progress uses the destroy-stage overlays.
@@ -217,7 +234,14 @@ impl RenderAssets {
         for stage in 0..10 {
             sprites.insert(root, &format!("minecraft:block/destroy_stage_{stage}"))?;
         }
+        let finish_started = std::time::Instant::now();
         sprites.finish();
+        log::info!(
+            "Horizon: finalized {} sprite layers in {:.2}s (asset render stage {:.2}s)",
+            sprites.count(),
+            finish_started.elapsed().as_secs_f32(),
+            started.elapsed().as_secs_f32()
+        );
         Ok(Self {
             sprite_size: sprites.size,
             sprite_minimum_size: sprites.minimum_size,

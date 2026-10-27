@@ -282,9 +282,13 @@ impl BlockFacts {
         behaviours: &Value,
         callback: impl FnOnce(&[decode::Entry<'_>]) -> Result<T>,
     ) -> Result<(Self, T)> {
+        let started = std::time::Instant::now();
         let bytes = fs::read(root.join("gameplay-facts.json"))?;
+        let parsed_at = std::time::Instant::now();
         serde_json::from_slice::<decode::Validate>(&bytes)?;
+        let validated_at = std::time::Instant::now();
         let raw: decode::Gameplay<'_> = serde_json::from_slice(&bytes)?;
+        let decoded_at = std::time::Instant::now();
         let entries = raw
             .states
             .0
@@ -430,6 +434,15 @@ impl BlockFacts {
                     .ok_or("missing block behaviour class chain")?,
             });
         }
+        let states_ready = std::time::Instant::now();
+        log::info!(
+            "Horizon: gameplay facts read {:.2}s, validated {:.2}s, decoded {:.2}s, projected {} states in {:.2}s",
+            parsed_at.duration_since(started).as_secs_f32(),
+            validated_at.duration_since(parsed_at).as_secs_f32(),
+            decoded_at.duration_since(validated_at).as_secs_f32(),
+            states.len(),
+            states_ready.duration_since(decoded_at).as_secs_f32()
+        );
         let extra = callback(entries)?;
         Ok((
             Self {
