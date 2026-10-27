@@ -14,6 +14,7 @@ pub mod import;
 pub mod inventory;
 pub mod jar;
 pub mod modrinth;
+pub mod net;
 pub mod oracle;
 pub mod pipeline;
 pub mod processors;

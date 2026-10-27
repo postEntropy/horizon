@@ -163,7 +163,7 @@ frame, chat and command hooks. Server mods do not run yet. What a content pack n
 | Block registry: ids, states, properties, shapes, sounds, light | — | data and up (all 331) | **0.2** | declared in `data/<mod>/horizon/block/*.json`, each from a vanilla *template* block (below) |
 | Item registry, block items | — | data and up | **0.2** | `data/<mod>/horizon/item/*.json`, from a vanilla template item |
 | Recipes, loot tables, tags, advancements, lang, blockstates, models, textures, sounds in the mod's namespace | vanilla namespace only | data and up | **0.2** | the 26.3 data-pack and resource-pack formats, as they are |
-| Worldgen JSON: features, structures, template pools, processors, carvers, noise parameters, density functions, noise settings, world presets, structure NBT, biome additions | vanilla bundle only | about 30 data-tier structure and biome mods | 0.2.x | carried into `worldgen/` bundles; noise, density and carver registries are compiled before use |
+| Worldgen JSON: biomes, features, structures, template pools, processors, carvers, noise parameters, density functions, noise settings, world presets, structure NBT | vanilla bundle only | about 30 data-tier structure and biome mods | 0.2.x | carried into `worldgen/` bundles; biome, noise, density and carver registries are checked before use |
 | Block and item behaviour callbacks: use, place, break, attack, random tick, scheduled tick, neighbour change, entity inside | — | logic and up (253) | **0.3** | `server` interface; hooks per registered id, budgeted |
 | Server events, typed commands, game rules | — | logic and up, server-only (11) | **0.3** | `server` interface |
 | Config: typed schema in the manifest, per world and per server, a settings page | — | most mods with code | **0.3** | `config` + the Options > Mods page |
@@ -249,13 +249,14 @@ How the game loads them, without touching vanilla's path:
   size and mtime. Adding, removing or editing a mod, or a new build of Horizon, rebuilds it. For
   ATM10's 40 data-tier mods the build takes about a minute of the first start on a busy machine.
 - **Worldgen.** Mods' structures, structure sets, template pools, processor lists, configured and
-  placed features, configured carvers, noise parameters, density functions, noise settings and
-  world presets join the `worldgen/*.json` bundles. Noise, density and carver registries are
-  compiled before the root is accepted.
-  Their structure templates go under
+  placed features, configured carvers, noise parameters, density functions, noise settings, world
+  presets and biomes join the `worldgen/*.json` bundles. Biome, noise, density and carver entries
+  are checked before the root is accepted. Legacy biome spawners and staged carvers are upgraded
+  to the 26.3 shape; vanilla biome ids stay stable and mod biomes are appended deterministically.
+  Structure templates go under
   `worldgen/structure/<ns>/`. Their biome tags are merged into `worldgen/biome_tags.json`, minus
-  the biomes and tags Horizon does not have. Mod biome definitions are not loaded yet; terrain
-  codecs the Horizon generator does not support can still reject a carried setting.
+  the biomes and tags Horizon does not have. Modded biome source parameter lists and terrain
+  codecs the Horizon generator does not support remain gaps.
 - **Limits.** Chunk sections size their global palette to the registry: 16 bits for vanilla's
   35,723 states (the same chunks, saves and packets as before), one more bit each time content
   mods double it, up to 2^20 states (1,048,576). Past that the content root is refused with the
@@ -1022,9 +1023,9 @@ In scope (each is a PR or a small stack):
    the full ATM10 on NeoForge as the reference row.
 
 Out of scope for that date, and next in order: the rest of worldgen carry-over (mods'
-structures, sets, pools, features, noises, density functions and settings now join the generator
-bundles, see step 4; mod biome definitions and the structure types written in Java such as YUNG's
-and Formations' still need runtime support),
+structures, sets, pools, features, biomes, noises, density functions and settings now join the
+generator bundles, see step 4; modded biome source parameter lists and the structure types written
+in Java such as YUNG's and Formations' still need runtime support),
 behaviour callbacks and server events (0.3), block entities, menus, capabilities and net
 (0.4), the first agent-ported logic-tier mod as the pilot of step 5, then machines. Porting all
 of ATM10 is a campaign. Each step publishes its coverage number; we make no claim beyond what

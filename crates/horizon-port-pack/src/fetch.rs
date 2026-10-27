@@ -201,7 +201,9 @@ pub fn fetch(
     if let Some((dest, url)) = crate::worldgen::loader_jar(work, &pack.loader, &pack.loader_version)
         .filter(|(dest, _)| !dest.exists())
     {
-        let sha1 = ureq::get(&format!("{url}.sha1"))
+        let checksum = format!("{url}.sha1");
+        let sha1 = crate::net::agent(&checksum)
+            .get(&checksum)
             .set("User-Agent", modrinth::AGENT)
             .call()
             .ok()
@@ -277,7 +279,8 @@ pub fn url_of(file: &PackFile, cache: &Cache) -> Option<String> {
 
 /// Downloads `url` to `dest`, kept only if its SHA-1 is `sha1`.
 fn download(url: &str, file: &PackFile, dest: &Path) -> Result<(), String> {
-    let response = ureq::get(url)
+    let response = crate::net::agent(url)
+        .get(url)
         .set("User-Agent", modrinth::AGENT)
         .call()
         .map_err(|e| format!("{url}: {e}"))?;
@@ -311,7 +314,9 @@ fn curseforge_files(
     unique.sort_unstable();
     unique.dedup();
     for chunk in unique.chunks(50) {
-        let response = ureq::post(&format!("{CURSEFORGE_API}/mods/files"))
+        let endpoint = format!("{CURSEFORGE_API}/mods/files");
+        let response = crate::net::agent(&endpoint)
+            .post(&endpoint)
             .set("x-api-key", key)
             .set("Accept", "application/json")
             .set("Content-Type", "application/json")
@@ -387,7 +392,8 @@ fn curseforge_error(error: ureq::Error) -> String {
 
 fn curseforge_download_url(project: u64, file: u64, key: &str) -> Result<String, String> {
     let url = format!("{CURSEFORGE_API}/mods/{project}/files/{file}/download-url");
-    let response = ureq::get(&url)
+    let response = crate::net::agent(&url)
+        .get(&url)
         .set("x-api-key", key)
         .set("Accept", "application/json")
         .call()
@@ -410,7 +416,7 @@ fn download_with_key(url: &str, sha1: Option<&str>, dest: &Path, key: &str) -> R
     if !url.starts_with("https://edge.forgecdn.net/files/") {
         return Err("refusing to send the CurseForge key to a non-CurseForge host".into());
     }
-    let agent = ureq::AgentBuilder::new().redirects(0).build();
+    let agent = crate::net::agent_no_redirects(url);
     let response = agent
         .get(url)
         .set("User-Agent", modrinth::AGENT)

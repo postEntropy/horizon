@@ -1322,7 +1322,7 @@ const TAG_BUNDLES: [&str; 2] = ["block-tags.json", "worldgen/block_tags.json"];
 const BIOME_TAGS: &str = "worldgen/biome_tags.json";
 /// Worldgen registries a content mod may add to, and the bundle the
 /// worldgen loader reads each from (id → the file's text).
-const WORLDGEN_BUNDLES: [(&str, &str); 11] = [
+const WORLDGEN_BUNDLES: [(&str, &str); 12] = [
     ("structure", "worldgen/structures.json"),
     ("structure_set", "worldgen/structure_sets.json"),
     ("template_pool", "worldgen/template_pools.json"),
@@ -1334,6 +1334,7 @@ const WORLDGEN_BUNDLES: [(&str, &str); 11] = [
     ("density_function", "worldgen/densities.json"),
     ("noise_settings", "worldgen/settings.json"),
     ("world_preset", "worldgen/world_presets.json"),
+    ("biome", "worldgen/biomes.json"),
 ];
 
 /// A mod file that adds to a worldgen bundle: (bundle, id).
@@ -1420,6 +1421,81 @@ fn normalize_worldgen_entry(bundle: &str, text: &str) -> String {
             _ => {}
         }
         flatten_config_recursive(&mut doc, &mut changed);
+    } else if bundle == "worldgen/biomes.json" {
+        if let Some(object) = doc.as_object_mut() {
+            if let Some(stages) = object.get_mut("carvers").and_then(Value::as_object_mut) {
+                let mut ordered = Vec::new();
+                for stage in ["air", "liquid"] {
+                    if let Some(entries) = stages.remove(stage).and_then(|v| v.as_array().cloned())
+                    {
+                        ordered.extend(entries);
+                    }
+                }
+                for entries in stages.values_mut().filter_map(Value::as_array_mut) {
+                    ordered.append(entries);
+                }
+                object.insert("carvers".into(), Value::Array(ordered));
+                changed = true;
+            }
+            let spawners = object.remove("spawners");
+            let spawn_costs = object.remove("spawn_costs");
+            if spawners.is_some() || spawn_costs.is_some() {
+                let mut categories = serde_json::Map::new();
+                if let Some(spawners) = spawners.as_ref().and_then(Value::as_object) {
+                    for (category, entries) in spawners {
+                        let converted = entries
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .map(|entry| {
+                                let mut entry = entry.clone();
+                                let min = entry
+                                    .get("minCount")
+                                    .or_else(|| entry.get("min_count"))
+                                    .and_then(Value::as_u64)
+                                    .unwrap_or(1);
+                                let max = entry
+                                    .get("maxCount")
+                                    .or_else(|| entry.get("max_count"))
+                                    .and_then(Value::as_u64)
+                                    .unwrap_or(min);
+                                if let Some(entry) = entry.as_object_mut() {
+                                    entry.remove("minCount");
+                                    entry.remove("maxCount");
+                                    entry.remove("min_count");
+                                    entry.remove("max_count");
+                                    entry.insert(
+                                        "count".into(),
+                                        if min == max {
+                                            Value::from(min)
+                                        } else {
+                                            json!({
+                                                "type": "minecraft:uniform",
+                                                "min_inclusive": min,
+                                                "max_inclusive": max,
+                                            })
+                                        },
+                                    );
+                                }
+                                entry
+                            })
+                            .collect();
+                        categories.insert(category.clone(), Value::Array(converted));
+                    }
+                }
+                let natural = json!({
+                    "spawn_costs": spawn_costs.unwrap_or_else(|| json!({})),
+                    "spawns_by_category": categories,
+                });
+                let attributes = object.entry("attributes").or_insert_with(|| json!({}));
+                if let Some(attributes) = attributes.as_object_mut() {
+                    attributes
+                        .entry("minecraft:gameplay/natural_mob_spawns")
+                        .or_insert(natural);
+                }
+                changed = true;
+            }
+        }
     } else if bundle == "worldgen/placed_features.json"
         && let Some(placement) = doc.get_mut("placement").and_then(Value::as_array_mut)
     {
@@ -2452,6 +2528,12 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
                 if let Some((bundle, id)) = worldgen_entry(file) {
                     let text = String::from_utf8(bytes).map_err(|e| format!("{file}: {e}"))?;
                     let text = normalize_worldgen_entry(bundle, &text);
+                    if bundle == "worldgen/biomes.json" {
+                        // Biomes::load reads the source biome file as well
+                        // as the registry bundle; keep both representations
+                        // on the same migrated 26.3 data.
+                        overlay.write(file, text.as_bytes())?;
+                    }
                     let entries = worldgen.entry(bundle).or_default();
                     match Addition::read(bundle, &text).map_err(|e| format!("{file}: {e}"))? {
                         Some(addition) => additions.entry(bundle).or_default().push(addition),
@@ -2592,6 +2674,31 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
         })?;
     }
     apply_biome_modifiers(base, &overlay, &biome_modifiers)?;
+    if worldgen.contains_key("worldgen/biomes.json") {
+        let bundle = |name: &str| -> Result<BTreeMap<String, String>> {
+            let overlaid = overlay.out.join(name);
+            let path = if overlaid.exists() {
+                overlaid
+            } else {
+                base.join(name)
+            };
+            Ok(serde_json::from_slice(&fs::read(path)?)?)
+        };
+        let biomes = bundle("worldgen/biomes.json")?;
+        let carvers = bundle("worldgen/carvers.json")?;
+        let carvers = horizon_world::worldgen::carver::CarverCatalog::from_json(&carvers)
+            .map_err(|e| std::io::Error::other(format!("invalid mod worldgen carvers: {e}")))?;
+        for (id, text) in biomes {
+            horizon_world::worldgen::biome_temperature::BiomeTemperatureSettings::from_json(&text)
+                .map_err(|e| std::io::Error::other(format!("invalid worldgen biome {id}: {e}")))?;
+            let value: serde_json::Value = serde_json::from_str(&text)?;
+            carvers
+                .decode_set(&value["carvers"].to_string())
+                .map_err(|e| {
+                    std::io::Error::other(format!("invalid carvers for worldgen biome {id}: {e}"))
+                })?;
+        }
+    }
     // A block without its own blockstate looks like its template, so every
     // state still has a model.
     for m in mods {

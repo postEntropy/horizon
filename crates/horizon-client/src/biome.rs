@@ -83,21 +83,41 @@ impl Biomes {
         let grass = colormap(root, "grass")?;
         let foliage = colormap(root, "foliage")?;
         let dry = colormap(root, "dry_foliage")?;
+        let bundle = root.join("worldgen/biomes.json");
+        let mut entries: Vec<(String, String)> = if bundle.is_file() {
+            serde_json::from_slice::<HashMap<String, String>>(&fs::read(bundle)?)?
+                .into_iter()
+                .collect()
+        } else {
+            let mut paths: Vec<_> = fs::read_dir(root.join("data/minecraft/worldgen/biome"))?
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|e| e == "json"))
+                .collect();
+            paths.sort();
+            paths
+                .into_iter()
+                .map(|path| {
+                    let name = format!(
+                        "minecraft:{}",
+                        path.file_stem()
+                            .map(|s| s.to_string_lossy())
+                            .unwrap_or_default()
+                    );
+                    Ok((name, fs::read_to_string(path)?))
+                })
+                .collect::<std::io::Result<Vec<_>>>()?
+        };
+        // Keep vanilla's biome ids unchanged when mods are installed, then
+        // append mod biomes deterministically for saves and network registries.
+        entries.sort_by(|a, b| {
+            b.0.starts_with("minecraft:")
+                .cmp(&a.0.starts_with("minecraft:"))
+                .then_with(|| a.0.cmp(&b.0))
+        });
         let mut list = Vec::new();
-        let mut names: Vec<_> = fs::read_dir(root.join("data/minecraft/worldgen/biome"))?
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|e| e == "json"))
-            .collect();
-        names.sort();
-        for path in names {
-            let name = format!(
-                "minecraft:{}",
-                path.file_stem()
-                    .and_then(|s| s.to_str())
-                    .ok_or("bad biome")?
-            );
-            let v: Value = serde_json::from_slice(&fs::read(&path)?)?;
+        for (name, text) in entries {
+            let v: Value = serde_json::from_str(&text)?;
             let effects = &v["effects"];
             let attributes = &v["attributes"];
             let temperature = v["temperature"].as_f64().unwrap_or(0.5) as f32;
