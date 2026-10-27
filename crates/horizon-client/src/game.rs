@@ -10976,6 +10976,7 @@ impl ApplicationHandler for Game<'_> {
         let window = match event_loop.create_window(
             attributes
                 .with_inner_size(winit::dpi::LogicalSize::new(size[0], size[1]))
+                .with_visible(!self.options.offscreen)
                 .with_fullscreen(fullscreen.then_some(winit::window::Fullscreen::Borderless(None))),
         ) {
             Ok(w) => Arc::new(w),
@@ -13201,6 +13202,7 @@ impl Loading {
         let window = match event_loop.create_window(
             attributes
                 .with_inner_size(winit::dpi::LogicalSize::new(size[0], size[1]))
+                .with_visible(!self.options.as_ref().is_some_and(|o| o.offscreen))
                 .with_fullscreen(fullscreen.then_some(winit::window::Fullscreen::Borderless(None))),
         ) {
             Ok(w) => Arc::new(w),

@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize, de};
 use std::{
     collections::BTreeMap,
     fmt, fs,
+    io::{BufWriter, Write},
     ops::Range,
     path::{Path, PathBuf},
 };
@@ -2456,6 +2457,13 @@ impl Overlay<'_> {
         Ok(())
     }
     fn write(&self, rel: &str, bytes: &[u8]) -> Result<()> {
+        let mut file = self.create(rel)?;
+        file.write_all(bytes)?;
+        Ok(())
+    }
+
+    /// Replace a linked base file and stream a generated table into the overlay.
+    fn create(&self, rel: &str) -> Result<fs::File> {
         let rel = Path::new(rel);
         if let Some(parent) = rel.parent() {
             self.dir(parent)?;
@@ -2464,8 +2472,7 @@ impl Overlay<'_> {
         if fs::symlink_metadata(&path).is_ok() {
             fs::remove_file(&path)?;
         }
-        fs::write(path, bytes)?;
-        Ok(())
+        Ok(fs::File::create(path)?)
     }
 
     /// Reuse an installed directory mod's asset inode when possible. Carries
@@ -2681,18 +2688,22 @@ fn tables(base: &Path, plan: &Plan, overlay: &Overlay<'_>) -> Result<()> {
     }
     let table = |name: &str| -> Result<()> {
         let path = base.join(name);
-        let bytes = if JSON_TABLES.contains(&name) {
+        if JSON_TABLES.contains(&name) {
             let mut doc = read_json(&path)?;
             plan.json(name, &mut doc)
                 .map_err(|e| format!("{name}: {e}"))?;
-            serde_json::to_vec(&doc)?
+            let mut writer = BufWriter::new(overlay.create(name)?);
+            serde_json::to_writer(&mut writer, &doc)?;
+            writer.flush()?;
         } else {
             let (mut named, _) = nbt::read_named(&fs::read(&path)?, Limits::tables())
                 .map_err(|e| format!("{name}: {e}"))?;
             plan.nbt(&mut named.tag);
-            nbt::write_named(&named, Limits::tables()).map_err(|e| format!("{name}: {e}"))?
-        };
-        overlay.write(name, &bytes)
+            let bytes =
+                nbt::write_named(&named, Limits::tables()).map_err(|e| format!("{name}: {e}"))?;
+            overlay.write(name, &bytes)?;
+        }
+        Ok(())
     };
     let next = std::sync::atomic::AtomicUsize::new(0);
     let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
