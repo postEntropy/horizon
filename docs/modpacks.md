@@ -254,7 +254,8 @@ How the game loads them, without touching vanilla's path:
   placed features, configured carvers, noise parameters, density functions, noise settings, world
   presets and biomes join the `worldgen/*.json` bundles. Biome, noise, density and carver entries
   are checked before the root is accepted. Legacy biome spawners and staged carvers are upgraded
-  to the 26.3 shape; vanilla biome ids stay stable and mod biomes are appended deterministically.
+  to the 26.3 shape; weighted random block replacements become a native Horizon processor.
+  Vanilla biome ids stay stable and mod biomes are appended deterministically.
   Structure templates go under
   `worldgen/structure/<ns>/`. Their biome tags are merged into `worldgen/biome_tags.json`, minus
   the biomes and tags Horizon does not have. Modded biome source parameter lists and terrain

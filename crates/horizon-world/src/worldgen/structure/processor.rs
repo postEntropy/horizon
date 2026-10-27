@@ -295,6 +295,13 @@ pub enum Processor {
     /// `horizon:block_swap` (Lithostitched's `block_swap`): blocks by name
     /// become others, keeping the properties both have.
     BlockSwap(std::collections::BTreeMap<String, String>),
+    /// A matching block has a chance to become one of several replacement
+    /// blocks, keeping state properties the replacement also has.
+    RandomBlockSwap {
+        input: String,
+        outputs: Vec<String>,
+        probability: f32,
+    },
     /// `horizon:apply_random` (Lithostitched's `apply_random`): a processor
     /// list drawn by weight runs on the block.
     ApplyRandom(Box<lithostitched::ApplyRandom>),
@@ -800,6 +807,43 @@ impl Processor {
                     })
                     .collect::<Result<_, DecodeError>>()?,
             ),
+            "horizon:random_block_swap" => {
+                let input = value["input_block"]
+                    .as_str()
+                    .ok_or(DecodeError::Field("random_block_swap input_block"))?;
+                let outputs = if let Some(output) = value["output_block"].as_str() {
+                    vec![output.to_owned()]
+                } else {
+                    value["output_blocks"]
+                        .as_array()
+                        .ok_or(DecodeError::Field("random_block_swap output_blocks"))?
+                        .iter()
+                        .map(|output| {
+                            output
+                                .as_str()
+                                .map(str::to_owned)
+                                .ok_or(DecodeError::Field("random_block_swap output block"))
+                        })
+                        .collect::<Result<Vec<_>, _>>()?
+                };
+                if outputs.is_empty() {
+                    return Err(DecodeError::Field("random_block_swap output_blocks"));
+                }
+                let probability = float(value, "probability")?;
+                if !(0.0..=1.0).contains(&probability) {
+                    return Err(DecodeError::Field("random_block_swap probability"));
+                }
+                Self::RandomBlockSwap {
+                    input: super::super::tags::identifier(input)?.to_string(),
+                    outputs: outputs
+                        .iter()
+                        .map(|output| {
+                            super::super::tags::identifier(output).map(|id| id.to_string())
+                        })
+                        .collect::<Result<_, _>>()?,
+                    probability,
+                }
+            }
             "horizon:count_cap" => Self::CountCap(Box::new(CountCap::decode(value, state)?)),
             "horizon:apply_random" => Self::ApplyRandom(Box::new(
                 lithostitched::ApplyRandom::decode(value, resources, bindings)?,
@@ -1146,6 +1190,29 @@ fn process_block<W: PlacementContext>(
                 Some(state) => BlockInfo { state, ..info },
                 None => info,
             })
+        }
+        Processor::RandomBlockSwap {
+            input,
+            outputs,
+            probability,
+        } => {
+            if name(info.state) != input {
+                Some(info)
+            } else {
+                let output = settings.with_random(info.pos, |random| {
+                    if random.float() >= *probability {
+                        return None;
+                    }
+                    let index = random.int(outputs.len() as i32) as usize;
+                    outputs.get(index)
+                });
+                Some(
+                    match output.and_then(|block| with_properties_of(registry, block, info.state)) {
+                        Some(state) => BlockInfo { state, ..info },
+                        None => info,
+                    },
+                )
+            }
         }
         Processor::CountCap(cap) => match cap.blocks.contains(name(info.state)) {
             true => {

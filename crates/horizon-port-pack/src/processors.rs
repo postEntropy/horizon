@@ -603,6 +603,33 @@ fn as_data(kind: &str, p: &Value, data: &ProcessorData) -> Option<Vec<Value>> {
             p["blocks"].as_object()?;
             vec![json!({"processor_type": "horizon:block_swap", "blocks": p["blocks"]})]
         }
+        "repurposed_structures:random_replace_with_properties_processor" => {
+            let input = p["input_block"].as_str()?;
+            let probability = p["probability"].as_f64()?;
+            if !(0.0..=1.0).contains(&probability) {
+                return None;
+            }
+            let mut replacement = json!({
+                "processor_type": "horizon:random_block_swap",
+                "input_block": input,
+                "probability": probability
+            });
+            if let Some(output) = p.get("output_block") {
+                output.as_str()?;
+                replacement["output_block"] = output.clone();
+            } else if let Some(outputs) = p.get("output_blocks") {
+                if !outputs
+                    .as_array()
+                    .is_some_and(|items| !items.is_empty() && items.iter().all(Value::is_string))
+                {
+                    return None;
+                }
+                replacement["output_blocks"] = outputs.clone();
+            } else {
+                return None;
+            }
+            vec![replacement]
+        }
         "lithostitched:set_block" => {
             // A simple or weighted state provider, the block entity left as
             // it is.
