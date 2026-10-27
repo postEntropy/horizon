@@ -75,6 +75,8 @@ pub struct Pack<'a> {
 const TEMPLATES: &[(&str, &str)] = &[
     ("", "minecraft:stone"),
     ("axis", "minecraft:oak_log"),
+    ("facing,part", "minecraft:red_bed"),
+    ("part", "minecraft:red_bed"),
     ("type,waterlogged", "minecraft:oak_slab"),
     ("facing,half,shape,waterlogged", "minecraft:oak_stairs"),
     ("facing,half,hinge,open,powered", "minecraft:oak_door"),
@@ -91,9 +93,12 @@ const TEMPLATES: &[(&str, &str)] = &[
     ("facing,in_wall,open,powered", "minecraft:oak_fence_gate"),
     ("face,facing,powered", "minecraft:oak_button"),
     ("powered", "minecraft:oak_pressure_plate"),
+    ("powered,shape,waterlogged", "minecraft:powered_rail"),
     ("facing", "minecraft:carved_pumpkin"),
     ("facing,lit", "minecraft:furnace"),
     ("lit", "minecraft:redstone_lamp"),
+    ("hanging,waterlogged", "minecraft:lantern"),
+    ("hanging", "minecraft:lantern"),
     ("waterlogged", "minecraft:chain"),
     ("age", "minecraft:wheat"),
     ("distance,persistent,waterlogged", "minecraft:oak_leaves"),
@@ -140,6 +145,12 @@ pub fn block_template(name: &str, blockstate: &Value) -> Option<&'static str> {
         return Some("minecraft:redstone_lamp");
     }
     if props == BTreeSet::from(["facing".into(), "powered".into()]) {
+        return Some("minecraft:observer");
+    }
+    if props == BTreeSet::from(["facing".into()])
+        && (values(blockstate, "facing").contains("up")
+            || values(blockstate, "facing").contains("down"))
+    {
         return Some("minecraft:observer");
     }
     if props == BTreeSet::from(["mode".into()]) || props == BTreeSet::from(["storage".into()]) {
@@ -230,6 +241,70 @@ fn reduce_blockstate(blockstate: &mut Value) -> Option<&'static str> {
 /// carried blockstates can select the right model while the block copies a
 /// vanilla state schema.
 fn adapt_blockstate_properties(blockstate: &mut Value) -> bool {
+    let mut changed = false;
+    let cardinal = BTreeSet::from(["north", "east", "south", "west"]);
+    let six_way = BTreeSet::from(["north", "east", "south", "west", "up", "down"]);
+    for (source, domain) in [("direction", &six_way), ("subfacing", &cardinal)] {
+        let actual = values(blockstate, source);
+        if !actual.is_empty() && actual.iter().all(|value| domain.contains(value.as_str())) {
+            changed |= map_state_property(blockstate, source, |value| {
+                domain
+                    .contains(value)
+                    .then(|| vec![("facing".to_owned(), value.to_owned())])
+            });
+        }
+    }
+
+    let engraved = values(blockstate, "engraved");
+    if !engraved.is_empty()
+        && engraved
+            .iter()
+            .all(|value| matches!(value.as_str(), "true" | "false"))
+    {
+        changed |= map_state_property(blockstate, "engraved", |value| {
+            matches!(value, "true" | "false").then(|| vec![("lit".to_owned(), value.to_owned())])
+        });
+    }
+
+    let parts = values(blockstate, "part");
+    if !parts.is_empty()
+        && parts
+            .iter()
+            .all(|value| matches!(value.as_str(), "top" | "bottom" | "upper" | "lower"))
+    {
+        changed |= map_state_property(blockstate, "part", |value| {
+            let value = match value {
+                "upper" | "top" => "top",
+                "lower" | "bottom" => "bottom",
+                _ => return None,
+            };
+            Some(vec![("half".to_owned(), value.to_owned())])
+        });
+    }
+
+    let window_states = values(blockstate, "windowstate");
+    if !window_states.is_empty()
+        && window_states.iter().all(|value| {
+            matches!(
+                value.as_str(),
+                "closed" | "locked" | "open_left" | "open_right"
+            )
+        })
+    {
+        changed |= map_state_property(blockstate, "windowstate", |value| {
+            let (open, hinge) = match value {
+                "closed" | "locked" => ("false", "left"),
+                "open_left" => ("true", "left"),
+                "open_right" => ("true", "right"),
+                _ => return None,
+            };
+            Some(vec![
+                ("open".to_owned(), open.to_owned()),
+                ("hinge".to_owned(), hinge.to_owned()),
+            ])
+        });
+    }
+
     let props = properties(blockstate);
     let alias = if props == BTreeSet::from(["active".into(), "facing".into()]) {
         if values(blockstate, "facing").contains("up")
@@ -244,23 +319,12 @@ fn adapt_blockstate_properties(blockstate: &mut Value) -> bool {
     } else {
         None
     };
-    if let Some((from, to)) = alias
-        && let Some(variants) = blockstate["variants"].as_object_mut()
-    {
-        let old = std::mem::take(variants);
-        for (key, value) in old {
-            let renamed = key
-                .split(',')
-                .map(|part| {
-                    part.strip_prefix(&format!("{from}="))
-                        .map_or_else(|| part.to_owned(), |v| format!("{to}={v}"))
-                })
-                .collect::<Vec<_>>()
-                .join(",");
-            variants.insert(renamed, value);
-        }
-        return true;
+    if let Some((from, to)) = alias {
+        changed |= map_state_property(blockstate, from, |value| {
+            Some(vec![(to.to_owned(), value.to_owned())])
+        });
     }
+    let props = properties(blockstate);
     if props == BTreeSet::from(["mode".into()]) || props == BTreeSet::from(["storage".into()]) {
         let first = blockstate["variants"]
             .as_object()
@@ -271,7 +335,130 @@ fn adapt_blockstate_properties(blockstate: &mut Value) -> bool {
             return true;
         }
     }
-    false
+    changed
+}
+
+fn map_state_property(
+    blockstate: &mut Value,
+    source: &str,
+    map_value: impl Fn(&str) -> Option<Vec<(String, String)>>,
+) -> bool {
+    let mut candidate = blockstate.clone();
+    let mut changed = false;
+    if let Some(variants) = candidate.get("variants").and_then(Value::as_object) {
+        let mut mapped = serde_json::Map::new();
+        for (selector, models) in variants {
+            let Some((selector, did_change)) = map_selector(selector, source, &map_value) else {
+                return false;
+            };
+            if let Some(existing) = mapped.get(&selector)
+                && existing != models
+            {
+                return false;
+            }
+            mapped.insert(selector, models.clone());
+            changed |= did_change;
+        }
+        candidate["variants"] = Value::Object(mapped);
+    }
+    if let Some(parts) = candidate.get_mut("multipart").and_then(Value::as_array_mut) {
+        for part in parts {
+            if let Some(when) = part.get_mut("when") {
+                let Some(did_change) = map_condition(when, source, &map_value) else {
+                    return false;
+                };
+                changed |= did_change;
+            }
+        }
+    }
+    if changed {
+        *blockstate = candidate;
+    }
+    changed
+}
+
+fn map_selector(
+    selector: &str,
+    source: &str,
+    map_value: &impl Fn(&str) -> Option<Vec<(String, String)>>,
+) -> Option<(String, bool)> {
+    if selector.is_empty() {
+        return Some((String::new(), false));
+    }
+    let mut parts = Vec::new();
+    let mut changed = false;
+    for part in selector.split(',') {
+        let (property, value) = part.split_once('=')?;
+        if property == source {
+            parts.extend(map_value(value)?);
+            changed = true;
+        } else {
+            parts.push((property.to_owned(), value.to_owned()));
+        }
+    }
+    parts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    Some((
+        parts
+            .into_iter()
+            .map(|(property, value)| format!("{property}={value}"))
+            .collect::<Vec<_>>()
+            .join(","),
+        changed,
+    ))
+}
+
+fn map_condition(
+    condition: &mut Value,
+    source: &str,
+    map_value: &impl Fn(&str) -> Option<Vec<(String, String)>>,
+) -> Option<bool> {
+    match condition {
+        Value::Object(object) => {
+            let old = std::mem::take(object);
+            let mut changed = false;
+            for (key, mut value) in old {
+                if key == source {
+                    let text = value.as_str()?;
+                    let mut mapped = BTreeMap::<String, Vec<String>>::new();
+                    for term in text.split('|') {
+                        let (negated, value) = term
+                            .strip_prefix('!')
+                            .map_or((false, term), |value| (true, value));
+                        let pairs = map_value(value)?;
+                        if pairs.len() != 1 {
+                            return None;
+                        }
+                        let (property, value) = &pairs[0];
+                        mapped
+                            .entry(property.clone())
+                            .or_default()
+                            .push(format!("{}{value}", if negated { "!" } else { "" }));
+                    }
+                    if mapped.len() != 1 {
+                        return None;
+                    }
+                    let (property, values) = mapped.into_iter().next()?;
+                    if object.contains_key(&property) {
+                        return None;
+                    }
+                    object.insert(property, Value::String(values.join("|")));
+                    changed = true;
+                } else {
+                    changed |= map_condition(&mut value, source, map_value)?;
+                    object.insert(key, value);
+                }
+            }
+            Some(changed)
+        }
+        Value::Array(values) => {
+            let mut changed = false;
+            for value in values {
+                changed |= map_condition(value, source, map_value)?;
+            }
+            Some(changed)
+        }
+        _ => Some(false),
+    }
 }
 
 /// The values a blockstate file tests a property for.
@@ -1101,11 +1288,17 @@ fn carry_kind(
                 .and_then(|b| b.strip_suffix(".json"))
                 .filter(|_| own)
             {
-                if let Ok(mut v) = serde_json::from_slice(&bytes) {
-                    if adapt_blockstate_properties(&mut v) {
-                        adapted_states.insert(b.to_owned());
-                    }
+                if let Ok(mut v) = serde_json::from_slice::<Value>(&bytes) {
+                    let original = v.clone();
+                    let mut adapted = adapt_blockstate_properties(&mut v);
                     if block_template(b, &v).is_none() && reduce_blockstate(&mut v).is_some() {
+                        adapted = true;
+                    }
+                    if block_template(b, &v).is_none() {
+                        v = original;
+                        adapted = false;
+                    }
+                    if adapted {
                         adapted_states.insert(b.to_owned());
                     }
                     bytes = serde_json::to_vec_pretty(&v).unwrap_or(bytes);

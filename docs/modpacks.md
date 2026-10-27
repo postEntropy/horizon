@@ -390,9 +390,11 @@ block's name breaking ties (`_pane`, `_gate`, `_trapdoor`). Walls and vines have
 property names; sides tested as `true` / `false` make a vine (Chipped's 11 vines, which the game
 refused as walls: their blockstates did not load). When no template matches, the carry can reduce
 custom variant properties only if removing them leaves the same model for every resulting vanilla
-state. It keeps horizontal `facing` on a directional template, or collapses an equivalent
-decoration to a full block; the report marks this as an approximation. If a custom property picks
-a different model, or the blockstate uses multipart rules, the block stays listed as unsupported.
+state. Common equivalent axes are mapped to vanilla properties first (`direction` to `facing`,
+window `open_left`/`open_right` to `open` plus `hinge`). The
+report marks these state mappings and safe collapses as approximations. If a custom property picks
+a different model and cannot map to a vanilla state, or the blockstate uses unsupported multipart
+rules, the block stays listed as unsupported.
 
 ### 1. Import
 
