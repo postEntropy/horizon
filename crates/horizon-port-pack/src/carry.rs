@@ -598,18 +598,30 @@ fn extra_namespaces(
     id: &str,
     pack_mod: &dyn Fn(&str) -> bool,
 ) -> Vec<String> {
+    // Inventory assigns data packs a synthetic `datapack_<hash>` id. Unlike
+    // a mod jar, every non-reserved namespace physically present in that
+    // archive is part of the data pack, even when its files contain no
+    // textual references that could make the heuristic below discover it.
+    let data_pack = id.starts_with("datapack_");
     let mut candidates = BTreeSet::new();
     for name in zip.file_names() {
         if let Some((_, ns, _)) = split(name)
             && ns != id
+            && ns.len() <= 64
+            && ns
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b))
             && !NOT_CLAIMED.contains(&ns)
-            && !pack_mod(ns)
+            && (data_pack || !pack_mod(ns))
         {
             candidates.insert(ns.to_owned());
         }
     }
     if candidates.is_empty() {
         return Vec::new();
+    }
+    if data_pack {
+        return candidates.into_iter().collect();
     }
     // The JSON files that could be the mod's, by namespace ("" for tag additions).
     let mut texts: Vec<(String, Vec<u8>)> = Vec::new();

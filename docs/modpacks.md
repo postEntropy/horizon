@@ -398,8 +398,11 @@ left out of the client profile.
 Data packs from that profile are copied into the `datapacks/` directory of each newly created
 world, where Horizon's world-level loader discovers them. Its command-facing loader supports
 functions, function tags, predicates and item modifiers. Standalone data packs listed as files in
-the manifest also go through carry-over, which upgrades and loads supported namespaced recipes,
-loot tables and worldgen. Data packs present only in `overrides/datapacks/` are installed in new
+the manifest also go through carry-over, which claims every valid non-reserved namespace they
+contain (including namespaces with no textual references) and upgrades supported recipes, loot
+tables and worldgen. If a data pack and carried mod share a namespace, their files are merged into
+the existing owner; data pack files take precedence and tag values follow vanilla's
+`replace`/append rules. Data packs present only in `overrides/datapacks/` are installed in new
 worlds and indexed for that same carry-over step. Existing saves are not changed.
 
 ### 2. Inventory and classification
