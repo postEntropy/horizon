@@ -322,10 +322,12 @@ impl Content {
             );
             let own = namespace == id;
             let owned = own || manifest.namespaces.iter().any(|n| n == namespace);
+            let contributes = manifest.contributes.iter().any(|n| n == namespace);
             // Vanilla's own files stay vanilla's; a mod may only add to its
             // tags, and to the convention tags mods share.
             let shared = matches!(namespace, "minecraft" | "c");
             let allowed = owned
+                || contributes
                 || (top == "data" && shared && rest.starts_with("tags/"))
                 || (namespace == "minecraft" && minecraft_registry_addition(name));
             if !allowed {
@@ -338,24 +340,38 @@ impl Content {
                     "{name}: blocks and items are declared in data/{id}/horizon/"
                 ));
             }
-            let Some(decl) = (own && top == "data")
+            let Some(decl) = (top == "data" && namespace == id)
                 .then(|| rest.strip_prefix("horizon/"))
                 .flatten()
             else {
                 continue;
             };
-            let parse = |kind: &str| -> Option<String> {
+            let parse = |kind: &str| -> Option<(String, String)> {
                 let path = decl
                     .strip_prefix(kind)?
                     .strip_prefix('/')?
                     .strip_suffix(".json")?;
-                Some(format!("{id}:{path}"))
+                let (ns, path) = path
+                    .split_once('/')
+                    .filter(|(ns, _)| manifest.contributes.iter().any(|n| n == ns))
+                    .map_or((id, path), |(ns, path)| (ns, path));
+                (!path.is_empty()).then(|| (format!("{ns}:{path}"), path.to_owned()))
             };
-            if let Some(block) = parse("block") {
+            if let Some((block, _)) = parse("block") {
+                if !block.starts_with(&format!("{id}:")) {
+                    return Err(format!(
+                        "{name}: blocks can only be declared in namespace {id}"
+                    ));
+                }
                 blocks.push((block, name.clone()));
-            } else if let Some(item) = parse("item") {
+            } else if let Some((item, _)) = parse("item") {
                 items.push((item, name.clone()));
-            } else if let Some(recipe_type) = parse("recipe_type") {
+            } else if let Some((recipe_type, _)) = parse("recipe_type") {
+                if !recipe_type.starts_with(&format!("{id}:")) {
+                    return Err(format!(
+                        "{name}: recipe types can only be declared in namespace {id}"
+                    ));
+                }
                 recipe_types.push((recipe_type, name.clone()));
             } else {
                 return Err(format!(

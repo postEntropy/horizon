@@ -324,6 +324,21 @@ its row. The game reads this content into its block and item tables
 nobody registers (a block a port left out, another mod's item) is dropped,
 so the rest of the tag still loads; vanilla would drop the whole tag.
 
+A compatibility or add-on mod may contribute files to a namespace owned by
+another enabled mod without claiming that namespace. List those namespaces in
+`contributes`; files overlay in mod load order, while block and item
+declarations remain registered by the contributing mod:
+
+```toml
+contributes = ["bibliocraft"]
+```
+
+An item added to that namespace can be declared at
+`data/<id>/horizon/item/<namespace>/<path>.json`. This permits add-on recipes
+and item models to register together without making the add-on a second owner
+of the base mod's namespace. A contribution may share paths with its owner;
+the later enabled mod wins for those files.
+
 Tags merge as a data pack's do. Every mod's file for one tag (vanilla's
 `data/minecraft/tags/`, the convention `data/c/tags/`, or another mod's) adds
 its values after vanilla's and the mods' before it, in load order. A file with

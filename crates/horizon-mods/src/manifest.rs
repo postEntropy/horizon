@@ -82,6 +82,11 @@ pub struct Manifest {
     /// that are on may share one (`content::clash`).
     #[serde(default)]
     pub namespaces: Vec<String>,
+    /// Namespaces this mod may add resource files to without owning them.
+    /// These files overlay the owning mod's namespace; ownership and clash
+    /// checks still use only `id` and `namespaces`.
+    #[serde(default)]
+    pub contributes: Vec<String>,
     /// Typed settings schema (`[config.<key>]`, API 0.3).
     #[serde(default)]
     pub config: BTreeMap<String, ConfigSchema>,
@@ -397,6 +402,11 @@ impl Manifest {
                 "{MANIFEST}: namespaces are for content, which needs capability registries"
             ));
         }
+        if !m.contributes.is_empty() && !m.capabilities.contains(&Capability::Registries) {
+            return Err(format!(
+                "{MANIFEST}: contributes is for content, which needs capability registries"
+            ));
+        }
         for (i, ns) in m.namespaces.iter().enumerate() {
             // Vanilla's namespace characters, at most as long as an id.
             let chars_ok = (1..=64).contains(&ns.len())
@@ -415,6 +425,22 @@ impl Manifest {
             }
             if *ns == m.id || m.namespaces[..i].contains(ns) {
                 return Err(format!("{MANIFEST}: namespace {ns} is listed twice"));
+            }
+        }
+        for (i, ns) in m.contributes.iter().enumerate() {
+            let chars_ok = (1..=64).contains(&ns.len())
+                && ns
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b));
+            if !chars_ok || RESERVED_NAMESPACES.contains(&ns.as_str()) {
+                return Err(format!(
+                    "{MANIFEST}: contributed namespace {ns:?} is invalid"
+                ));
+            }
+            if m.owned_namespaces().any(|owned| owned == ns) || m.contributes[..i].contains(ns) {
+                return Err(format!(
+                    "{MANIFEST}: contributed namespace {ns} is already listed"
+                ));
             }
         }
         Ok(m)

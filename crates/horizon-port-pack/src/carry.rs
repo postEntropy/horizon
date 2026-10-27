@@ -19,6 +19,8 @@ pub struct Report {
     /// Namespaces besides the mod id its content owns ([`extra_namespaces`]),
     /// listed in the manifest's `namespaces`.
     pub namespaces: Vec<String>,
+    /// Other pack mods' namespaces this mod contributes resource files to.
+    pub contributes: Vec<String>,
     /// Files outside what a content mod may hold (other namespaces, vanilla
     /// data other than tags), kept in `outside/` for review.
     pub outside: Vec<String>,
@@ -950,12 +952,34 @@ fn shared_tag(root: &str, ns: &str, rest: &str) -> bool {
 /// Where a jar entry goes: `Some(true)` inside the content mod (its own
 /// namespaces, additions to vanilla and convention tags), `Some(false)`
 /// to `outside/`, `None` not carried (code, metadata).
-fn place(name: &str, owned: &[&str]) -> Option<bool> {
+fn place(name: &str, owned: &[&str], contributes: &[&str]) -> Option<bool> {
     let (root, ns, rest) = split(name)?;
     let shared_registry = root == "data"
         && ns == "minecraft"
         && horizon_mods::content::minecraft_registry_addition(name);
-    Some(owned.contains(&ns) || shared_tag(root, ns, rest) || shared_registry)
+    Some(
+        owned.contains(&ns)
+            || contributes.contains(&ns)
+            || shared_tag(root, ns, rest)
+            || shared_registry,
+    )
+}
+
+fn contributed_namespaces(
+    zip: &mut zip::ZipArchive<fs::File>,
+    id: &str,
+    pack_mod: &dyn Fn(&str) -> bool,
+) -> Vec<String> {
+    let mut namespaces = BTreeSet::new();
+    for name in zip.file_names() {
+        if let Some((_, ns, _)) = split(name)
+            && ns != id
+            && pack_mod(ns)
+        {
+            namespaces.insert(ns.to_owned());
+        }
+    }
+    namespaces.into_iter().collect()
 }
 
 /// Namespaces no carried mod claims: vanilla's, the convention tags', the
@@ -1228,6 +1252,7 @@ fn carry_kind(
     let mut blockstates: BTreeMap<String, Value> = BTreeMap::new();
     let mut adapted_states = BTreeSet::new();
     let mut item_models = BTreeSet::new();
+    let mut contributed_item_models = BTreeSet::new();
     let mut convention = BTreeSet::new();
     let mut block_loot = BTreeSet::new();
     let mut biome_conventions = BTreeSet::new();
@@ -1236,13 +1261,19 @@ fn carry_kind(
     let mut processor_data = crate::processors::ProcessorData::read(&mut zip);
     processor_data.mark_loaded(loaded);
     report.namespaces = extra_namespaces(&mut zip, id, pack.mods, data_pack);
+    report.contributes = if data_pack {
+        Vec::new()
+    } else {
+        contributed_namespaces(&mut zip, id, pack.mods)
+    };
+    let contributes: Vec<&str> = report.contributes.iter().map(String::as_str).collect();
     let owned: Vec<&str> = std::iter::once(id.as_str())
         .chain(report.namespaces.iter().map(String::as_str))
         .collect();
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
         let name = entry.name().to_owned();
-        let Some(keep) = place(&name, &owned) else {
+        let Some(keep) = place(&name, &owned, &contributes) else {
             continue;
         };
         if name.split('/').any(|p| p == ".." || p.is_empty()) {
@@ -1271,7 +1302,9 @@ fn carry_kind(
         if keep {
             // The path in one of the mod's own namespaces; "" for tag additions.
             let (ns, rel) = match split(&name) {
-                Some((_, ns, rest)) if owned.contains(&ns) => (ns, rest),
+                Some((_, ns, rest)) if owned.contains(&ns) || contributes.contains(&ns) => {
+                    (ns, rest)
+                }
                 _ => ("", ""),
             };
             // Blocks and items are declared under the mod id only.
@@ -1427,6 +1460,12 @@ fn carry_kind(
                 .filter(|_| own)
             {
                 item_models.insert(m.to_owned());
+            } else if let Some(m) = rel
+                .strip_prefix("models/item/")
+                .and_then(|m| m.strip_suffix(".json"))
+                .filter(|_| contributes.contains(&ns))
+            {
+                contributed_item_models.insert((ns.to_owned(), m.to_owned()));
             }
         }
         write(&dest, &bytes)?;
@@ -1648,6 +1687,14 @@ fn carry_kind(
             report.items += 1;
         }
     }
+    for (ns, path) in &contributed_item_models {
+        let name = format!("{ns}/{path}");
+        let decl = inside.join(format!("data/{id}/horizon/item/{name}.json"));
+        if !decl.exists() {
+            write_decl("item", &name, &json!({"template": "minecraft:stick"}))?;
+            report.items += 1;
+        }
+    }
     let owned: Vec<String> = owned.iter().map(|n| n.to_string()).collect();
     let owned: Vec<&str> = owned.iter().map(String::as_str).collect();
     unregistered_recipes(&inside, &outside, id, &owned, &mut report)?;
@@ -1669,11 +1716,40 @@ fn carry_kind(
         let list: Vec<String> = report.namespaces.iter().map(|n| q(n)).collect();
         manifest.push_str(&format!("namespaces = [{}]\n", list.join(", ")));
     }
+    if !report.contributes.is_empty() {
+        let list: Vec<String> = report.contributes.iter().map(|n| q(n)).collect();
+        manifest.push_str(&format!("contributes = [{}]\n", list.join(", ")));
+    }
     if let Some(wasm) = &existing_wasm {
         write(&inside.join("mod.wasm"), wasm)?;
     }
     if let Some(manifest_bytes) = existing_manifest {
-        write(&inside.join("horizon-mod.toml"), &manifest_bytes)?;
+        if report.contributes.is_empty() {
+            write(&inside.join("horizon-mod.toml"), &manifest_bytes)?;
+        } else {
+            let mut manifest: toml::Value =
+                toml::from_slice(&manifest_bytes).map_err(|e| format!("horizon-mod.toml: {e}"))?;
+            let table = manifest
+                .as_table_mut()
+                .ok_or_else(|| "horizon-mod.toml: expected a table".to_owned())?;
+            let entries = table
+                .entry("contributes")
+                .or_insert_with(|| toml::Value::Array(Vec::new()))
+                .as_array_mut()
+                .ok_or_else(|| "horizon-mod.toml: contributes must be an array".to_owned())?;
+            for namespace in &report.contributes {
+                let value = toml::Value::String(namespace.clone());
+                if !entries.contains(&value) {
+                    entries.push(value);
+                }
+            }
+            write(
+                &inside.join("horizon-mod.toml"),
+                toml::to_string(&manifest)
+                    .map_err(|e| format!("horizon-mod.toml: {e}"))?
+                    .as_bytes(),
+            )?;
+        }
     } else {
         write(&inside.join("horizon-mod.toml"), manifest.as_bytes())?;
     }
