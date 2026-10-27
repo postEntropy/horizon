@@ -149,7 +149,7 @@ pub struct StructureSet {
     /// and none within `chunk_count` chunks of any of several sets
     /// (`"horizon:exclusion_zone"`: `other_sets`, `chunk_count`).
     min_distance: Option<i64>,
-    avoid: Option<Avoid>,
+    avoid: Vec<Avoid>,
     /// `"horizon:ring_sections"`: starts only in odd rings around the origin.
     rings: Option<RingSections>,
     /// `"horizon:avoid_biomes"`: no start with one of these biomes near.
@@ -165,6 +165,19 @@ struct Avoid {
     sets: Vec<String>,
     chunk_count: i32,
     their_zones: bool,
+}
+
+fn decode_avoid(value: &Value) -> Avoid {
+    Avoid {
+        sets: value["other_sets"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|s| Some(s.as_str()?.to_owned()))
+            .collect(),
+        chunk_count: value["chunk_count"].as_i64().unwrap_or(0) as i32,
+        their_zones: value["their_zones"].as_bool().unwrap_or(true),
+    }
 }
 
 /// YUNG's Better Strongholds' placement (BetterStrongholdsPlacement
@@ -456,16 +469,15 @@ impl StructureRegistry {
                 min_distance: p
                     .get("horizon:min_distance_from_world_origin")
                     .and_then(Value::as_i64),
-                avoid: p.get("horizon:exclusion_zone").map(|z| Avoid {
-                    sets: z["other_sets"]
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .filter_map(|s| Some(s.as_str()?.to_owned()))
-                        .collect(),
-                    chunk_count: z["chunk_count"].as_i64().unwrap_or(0) as i32,
-                    their_zones: z["their_zones"].as_bool().unwrap_or(true),
-                }),
+                avoid: p
+                    .get("horizon:exclusion_zones")
+                    .and_then(Value::as_array)
+                    .map(|zones| zones.iter().map(decode_avoid).collect())
+                    .or_else(|| {
+                        p.get("horizon:exclusion_zone")
+                            .map(|z| vec![decode_avoid(z)])
+                    })
+                    .unwrap_or_default(),
                 rings: p.get("horizon:ring_sections").map(RingSections::decode),
                 avoid_biomes: p
                     .get("horizon:avoid_biomes")
@@ -600,13 +612,22 @@ impl StructureRegistry {
                 return false;
             }
         }
-        if let Some(avoid) = set.avoid.as_ref().filter(|_| zones) {
-            if avoid.sets.iter().any(|other| {
-                let range = avoid.chunk_count;
-                self.has_start_in_range(other, seed, x, z, range, rings, avoid.their_zones)
-            }) {
-                return false;
-            }
+        if zones
+            && set.avoid.iter().any(|avoid| {
+                avoid.sets.iter().any(|other| {
+                    self.has_start_in_range(
+                        other,
+                        seed,
+                        x,
+                        z,
+                        avoid.chunk_count,
+                        rings,
+                        avoid.their_zones,
+                    )
+                })
+            })
+        {
+            return false;
         }
         if set.frequency < 1. && !reduce(set.reduction, seed, set.salt, x, z, set.frequency) {
             return false;

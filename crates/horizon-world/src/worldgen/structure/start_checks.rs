@@ -16,6 +16,7 @@
 //!   "terrain_range": 15,
 //!   "min_y": 60,
 //!   "max_y": 200,
+//!   "min_start_y": 37,
 //!   "repurposed": "city_nether" // or "shipwreck_nether", "stronghold_end": below
 //! }
 //! ```
@@ -62,6 +63,7 @@ pub struct StartChecks {
     terrain_range: Option<i32>,
     min_y: Option<i32>,
     max_y: Option<i32>,
+    min_start_y: Option<i32>,
     repurposed: Option<Repurposed>,
 }
 
@@ -121,6 +123,7 @@ impl StartChecks {
             terrain_range: int("terrain_range"),
             min_y: int("min_y"),
             max_y: int("max_y"),
+            min_start_y: int("min_start_y"),
             repurposed: match v.get("repurposed").and_then(Value::as_str) {
                 Some("city_nether") => Some(Repurposed::CityNether),
                 Some("shipwreck_nether") => Some(Repurposed::ShipwreckNether),
@@ -140,6 +143,9 @@ impl StartChecks {
         y: i32,
         project_to: Option<HeightmapType>,
     ) -> bool {
+        if self.min_start_y.is_some_and(|min| y < min) {
+            return false;
+        }
         let (x0, z0) = (chunk.x * 16, chunk.z * 16);
         if let Some(radius) = self.biome_radius {
             let mut section_y = y;

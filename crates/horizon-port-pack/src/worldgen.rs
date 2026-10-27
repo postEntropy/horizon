@@ -57,6 +57,9 @@ const SPREADS: [&str; 2] = [
     "moogs_structures:advanced_random_spread",
     "repurposed_structures:advanced_random_spread",
 ];
+/// Placements that use vanilla's random spread with the same general
+/// placement rules, including per-set exclusion radii.
+const BUMBLEZONE_SPREAD: &str = "the_bumblezone:advanced_random_spread";
 /// YUNG's placements: vanilla's random spread with an enhanced exclusion
 /// zone (several sets), plus, for the temples, no start near an ocean or a
 /// river, and for strongholds, starts only in odd rings around the origin.
@@ -481,6 +484,29 @@ fn upgrade_types(
     let mut unsupported = |t: &str| *report.unsupported.entry(t.to_owned()).or_default() += 1;
     let changed = match kind {
         "structure" => match v["type"].as_str() {
+            // Bumblezone's generic optimized structure uses vanilla's
+            // jigsaw fields plus a biome-radius start check. Its optional
+            // bound bypass is recorded as lost until the assembler models it.
+            Some("the_bumblezone:generic_optimized_structure") => {
+                let Some(o) = v.as_object_mut() else {
+                    return false;
+                };
+                let mut checks = serde_json::Map::new();
+                if let Some(radius) = o.remove("valid_biome_radius_check") {
+                    checks.insert("biome_radius".into(), radius);
+                }
+                if let Some(min_y) = o.remove("min_y_limit") {
+                    checks.insert("min_start_y".into(), min_y);
+                }
+                if !checks.is_empty() {
+                    o.insert("horizon:start_checks".into(), checks.into());
+                }
+                if o.remove("disable_bound_checks") == Some(Value::Bool(true)) {
+                    *lost.entry("disable_bound_checks".into()).or_default() += 1;
+                }
+                o.insert("type".into(), "minecraft:jigsaw".into());
+                true
+            }
             // Better Dungeons' small Nether dungeon is YUNG's jigsaw behind a
             // config switch that ships on.
             Some("yungsapi:yung_jigsaw" | "betterdungeons:small_nether_dungeon") => {
@@ -584,6 +610,11 @@ fn upgrade_types(
             _ => false,
         },
         "structure_set" => match v["placement"]["type"].as_str() {
+            Some(BUMBLEZONE_SPREAD) => {
+                placement_rules(&mut v["placement"], set_tags, lost);
+                v["placement"]["type"] = "minecraft:random_spread".into();
+                true
+            }
             Some(t) if SPREADS.contains(&t) => {
                 let moogs = t.starts_with("moogs_structures:");
                 let p = &mut v["placement"];
@@ -1105,6 +1136,37 @@ fn placement_rules(
         .into_iter()
         .find_map(|k| Some((k, o.remove(k)?)));
     if let Some((key, zone)) = zone {
+        if let Some(list) = zone.get("list_of_avoids").and_then(Value::as_array) {
+            let zones: Vec<Value> = list
+                .iter()
+                .filter_map(|entry| {
+                    let sets = match &entry["other_set"] {
+                        Value::String(s) => match s.strip_prefix('#') {
+                            Some(tag) => set_tags.get(tag).cloned().unwrap_or_default(),
+                            None => vec![s.clone()],
+                        },
+                        Value::Array(a) => a
+                            .iter()
+                            .filter_map(|s| Some(s.as_str()?.to_owned()))
+                            .collect(),
+                        _ => Vec::new(),
+                    };
+                    (!sets.is_empty()).then(|| {
+                        serde_json::json!({"other_sets": sets,
+                            "chunk_count": entry["chunk_count"]})
+                    })
+                })
+                .collect();
+            if zones.len() == list.len() {
+                o.insert("horizon:exclusion_zones".into(), zones.into());
+            } else {
+                *lost.entry(key.into()).or_default() += list.len() - zones.len();
+                if !zones.is_empty() {
+                    o.insert("horizon:exclusion_zones".into(), zones.into());
+                }
+            }
+            return;
+        }
         let sets: Vec<String> = match &zone["other_set"] {
             Value::String(s) => match s.strip_prefix('#') {
                 Some(tag) => set_tags.get(tag).cloned().unwrap_or_default(),
