@@ -534,6 +534,56 @@ impl<'a> Plan<'a> {
         }
     }
 
+    /// The baked model catalog binds blockstate conditions against the
+    /// registered block properties. A custom-state declaration may differ
+    /// from its vanilla template, so its model-state schema must follow the
+    /// declared axes and their registered combinations as well.
+    fn model_states(&self, map: &mut J) {
+        for b in &self.blocks {
+            if b.custom_states.is_empty() {
+                if let Some(mut v) = map.get(&b.decl.template).cloned() {
+                    for rename in &self.renames(b) {
+                        v.rename(rename, false);
+                    }
+                    map.set(&b.decl.id, v);
+                }
+                continue;
+            }
+            let schema = J::Obj(
+                b.decl
+                    .state_properties
+                    .iter()
+                    .map(|(property, values)| {
+                        (
+                            property.clone(),
+                            J::Obj(vec![(
+                                "named".into(),
+                                J::Arr(values.iter().cloned().map(J::Str).collect()),
+                            )]),
+                        )
+                    })
+                    .collect(),
+            );
+            let states = J::Arr(
+                b.custom_states
+                    .iter()
+                    .map(|properties| {
+                        J::Obj(
+                            properties
+                                .iter()
+                                .map(|(property, value)| (property.clone(), J::Str(value.clone())))
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+            );
+            map.set(
+                &b.decl.id,
+                J::Obj(vec![("schema".into(), schema), ("states".into(), states)]),
+            );
+        }
+    }
+
     /// Adds each new item's copy of its template's entry to a map by name;
     /// `components` applies the overrides (items.json).
     fn items(&self, map: &mut J, components: bool) {
@@ -606,9 +656,10 @@ impl<'a> Plan<'a> {
                     }
                 }
             }
-            "model-states.json"
-            | "landing-definitions.json"
-            | "worldgen/blocks/survival-rules.json" => self.names(doc, false),
+            "model-states.json" => self.model_states(doc),
+            "landing-definitions.json" | "worldgen/blocks/survival-rules.json" => {
+                self.names(doc, false)
+            }
             "render-definitions.json" => self.names(doc, true),
             "worldgen/blocks/survival-extra-definitions.json" => {
                 if let Some(map) = doc.at("ignition_odds") {
@@ -3110,7 +3161,9 @@ fn stamp(base: &Path, mods: &[ContentMod]) -> Result<String> {
             modified.as_nanos()
         ))
     };
-    let mut parts = vec!["horizon mod content 1".to_owned()];
+    let mut parts = vec!["horizon mod content 2".to_owned()];
+    let executable = std::env::current_exe()?;
+    parts.push(meta(&executable)?);
     let base = std::path::absolute(base)?;
     parts.push(
         String::from_utf8_lossy(&fs::read(base.join("horizon-resources.json"))?).into_owned(),
