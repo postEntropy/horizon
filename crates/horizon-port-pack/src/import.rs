@@ -121,6 +121,137 @@ pub fn import(path: &Path) -> Result<Pack, String> {
     ))
 }
 
+/// Copies pack configuration and scripts to a staging directory for the
+/// launcher profile. Content files (mods, packs and datapacks) are handled by
+/// inventory/carry instead. Existing profile files are preserved by the caller.
+pub fn extract_overrides(source: &Path, destination: &Path) -> Result<usize, String> {
+    fs::create_dir_all(destination).map_err(|e| format!("{}: {e}", destination.display()))?;
+    if source.extension().is_some_and(|ext| ext == "json") {
+        return Ok(0);
+    }
+    if source.is_dir() {
+        let root = source
+            .canonicalize()
+            .map_err(|e| format!("{}: {e}", source.display()))?;
+        let mut count = 0;
+        if root.join("pack.toml").is_file() {
+            let manifest: toml::Value = toml::from_str(
+                &fs::read_to_string(root.join("pack.toml")).map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| format!("pack.toml: {e}"))?;
+            let index_rel = manifest["index"]["file"].as_str().unwrap_or("index.toml");
+            let index_path = safe_pack_path(&root, index_rel)?;
+            let index: toml::Value =
+                toml::from_str(&fs::read_to_string(&index_path).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("index.toml: {e}"))?;
+            for entry in index["files"].as_array().into_iter().flatten() {
+                if entry["metafile"].as_bool() == Some(true) {
+                    continue;
+                }
+                let Some(relative) = entry["file"].as_str() else {
+                    continue;
+                };
+                if tracked_path(relative) || relative.ends_with(".pw.toml") {
+                    continue;
+                }
+                let input = safe_pack_path(&root, relative)?;
+                count += copy_one(&input, destination, relative)?;
+            }
+        } else {
+            let game = [".minecraft", "minecraft", "."]
+                .iter()
+                .map(|p| root.join(p))
+                .find(|p| p.join("mods").is_dir())
+                .unwrap_or_else(|| root.clone());
+            for folder in ["config", "defaultconfigs", "kubejs"] {
+                count += copy_tree(&game.join(folder), destination, &root)?;
+            }
+        }
+        return Ok(count);
+    }
+
+    let file = fs::File::open(source).map_err(|e| format!("{}: {e}", source.display()))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("{}: {e}", source.display()))?;
+    let manifest = read_json(&mut zip, "manifest.json")?;
+    let roots = if let Some(manifest) = manifest {
+        let root = manifest["overrides"].as_str().unwrap_or("overrides");
+        vec![format!("{root}/")]
+    } else {
+        vec!["overrides/".into(), "client-overrides/".into()]
+    };
+    let mut count = 0;
+    // Process base overrides first, then client overrides so the latter win.
+    for root in roots {
+        for index in 0..zip.len() {
+            let mut entry = zip.by_index(index).map_err(|e| e.to_string())?;
+            let Some(relative) = entry.name().strip_prefix(&root).map(str::to_owned) else {
+                continue;
+            };
+            if entry.is_dir() || relative.is_empty() {
+                continue;
+            }
+            validate_relative(&relative)?;
+            if entry
+                .unix_mode()
+                .is_some_and(|mode| mode & 0o170000 == 0o120000)
+            {
+                continue;
+            }
+            let mut bytes = Vec::new();
+            entry
+                .read_to_end(&mut bytes)
+                .map_err(|e| format!("{}: {e}", entry.name()))?;
+            write_override(destination, &relative, &bytes)?;
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
+fn copy_tree(source: &Path, destination: &Path, root: &Path) -> Result<usize, String> {
+    if !source.exists() {
+        return Ok(0);
+    }
+    let mut count = 0;
+    for entry in fs::read_dir(source).map_err(|e| format!("{}: {e}", source.display()))? {
+        let path = entry.map_err(|e| e.to_string())?.path();
+        let canonical = path
+            .canonicalize()
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+        if !canonical.starts_with(root) {
+            continue;
+        }
+        if canonical.is_dir() {
+            count += copy_tree(&canonical, destination, root)?;
+        } else if canonical.is_file() {
+            let rel = canonical
+                .strip_prefix(root)
+                .map_err(|e| format!("{}: {e}", canonical.display()))?
+                .to_string_lossy()
+                .replace('\\', "/");
+            count += copy_one(&canonical, destination, &rel)?;
+        }
+    }
+    Ok(count)
+}
+
+fn copy_one(source: &Path, destination: &Path, relative: &str) -> Result<usize, String> {
+    validate_relative(relative)?;
+    let bytes = fs::read(source).map_err(|e| format!("{}: {e}", source.display()))?;
+    write_override(destination, relative, &bytes)?;
+    Ok(1)
+}
+
+fn write_override(destination: &Path, relative: &str, bytes: &[u8]) -> Result<(), String> {
+    validate_relative(relative)?;
+    let target = destination.join(relative);
+    let parent = target
+        .parent()
+        .ok_or_else(|| format!("invalid override path: {relative}"))?;
+    fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    fs::write(&target, bytes).map_err(|e| format!("{}: {e}", target.display()))
+}
+
 /// Imports a Packwiz project directory. Index paths and `.pw.toml` filenames
 /// are kept relative to the pack root, and external files retain their
 /// declared URL and hash for the ordinary fetch/inventory pipeline.

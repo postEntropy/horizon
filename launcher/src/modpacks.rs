@@ -178,6 +178,10 @@ pub fn import(path: &Path, log: Log) -> Result<Imported, String> {
     let work = ports_dir().join(slug(&name));
     log(format!("Importing {name} into {}", work.display()));
     pipeline::import(path, &work, log)?;
+    let applied = merge_pack_overrides(&work)?;
+    if applied > 0 {
+        log(format!("{applied} pack configuration files copied to its profile"));
+    }
     pipeline::inventory(&work, false, log)?;
     pipeline::report(&work, log)?;
     load(&work)
@@ -247,6 +251,43 @@ pub fn remove(work: &Path) -> Result<(), String> {
 /// The profile's own game home: saves, options.txt, logs.
 pub fn profile_home(work: &Path) -> PathBuf {
     work.join("home")
+}
+
+/// Adds pack configs/scripts to the isolated profile without replacing files
+/// the player already customized on an earlier import.
+fn merge_pack_overrides(work: &Path) -> Result<usize, String> {
+    let source = work.join("pack-overrides");
+    if !source.is_dir() {
+        return Ok(0);
+    }
+    let home = profile_home(work);
+    fs::create_dir_all(&home).map_err(|e| format!("{}: {e}", home.display()))?;
+    merge_tree(&source, &source, &home)
+}
+
+fn merge_tree(root: &Path, source: &Path, destination: &Path) -> Result<usize, String> {
+    let mut copied = 0;
+    for entry in fs::read_dir(source).map_err(|e| format!("{}: {e}", source.display()))? {
+        let path = entry.map_err(|e| e.to_string())?.path();
+        let metadata = fs::symlink_metadata(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        let relative = path
+            .strip_prefix(root)
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let target = destination.join(relative);
+        if metadata.is_dir() {
+            fs::create_dir_all(&target).map_err(|e| format!("{}: {e}", target.display()))?;
+            copied += merge_tree(root, &path, destination)?;
+        } else if metadata.is_file() && !target.exists() {
+            let parent = target.parent().ok_or_else(|| format!("{}: no parent", target.display()))?;
+            fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+            fs::copy(&path, &target).map_err(|e| format!("{}: {e}", target.display()))?;
+            copied += 1;
+        }
+    }
+    Ok(copied)
 }
 
 /// Turns the game's command into this pack's profile: its own home (the player's options.txt

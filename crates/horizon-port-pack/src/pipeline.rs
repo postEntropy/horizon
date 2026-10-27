@@ -23,9 +23,11 @@ pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, Strin
 
 /// Step 1: the pack at `pack` to `<work>/pack.json`.
 pub fn import(pack: &Path, work: &Path, log: Log) -> Result<import::Pack, String> {
-    let pack = import::import(pack)?;
+    let source = pack;
+    let pack = import::import(source)?;
     fs::create_dir_all(work).map_err(|e| format!("{}: {e}", work.display()))?;
     write_json(&work.join("pack.json"), &pack)?;
+    let overrides = import::extract_overrides(source, &work.join("pack-overrides"))?;
     let mut kinds = BTreeMap::<&str, usize>::new();
     for f in &pack.files {
         *kinds.entry(f.kind()).or_default() += 1;
@@ -34,6 +36,7 @@ pub fn import(pack: &Path, work: &Path, log: Log) -> Result<import::Pack, String
         "{} ({}): Minecraft {}, {} {}; files {kinds:?}; overrides {:?}",
         pack.name, pack.format, pack.minecraft, pack.loader, pack.loader_version, pack.overrides
     ));
+    log(format!("{overrides} pack configuration files staged"));
     Ok(pack)
 }
 

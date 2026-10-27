@@ -386,7 +386,11 @@ refused as walls: their blockstates did not load).
 | Crash Assistant `modlist.json` | jar name → mod id, name, version, Modrinth SHA-1; the loader entry (NeoForge `21.1.x` is Minecraft 1.21.1). Packs such as ATM10 publish it in their repository | metadata only; jars put in `<work>/jars/` |
 
 `pack.json` holds the Minecraft version, the loader and its version, each file with its hashes
-and side, and the overrides (configs, KubeJS scripts, datapacks).
+and side, and the overrides (configs, KubeJS scripts, datapacks). The launcher stages pack
+overrides under `pack-overrides/` and copies them into the pack's isolated game home when imported;
+existing files in that home are kept so reimporting does not erase player edits. For `.mrpack`,
+`overrides/` is applied first and `client-overrides/` takes precedence. Server-only overrides are
+left out of the client profile.
 
 ### 2. Inventory and classification
 
