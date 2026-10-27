@@ -393,6 +393,9 @@ impl Game<'_> {
     ) -> Option<f32> {
         Some(amount)
     }
+    pub(super) fn mod_xp_gain(&mut self, amount: u32, _context: &str) -> u32 {
+        amount
+    }
     pub(super) fn draw_mod_panels(&self, _batch: &mut HudBatch, _corners: &mut Corners) {}
 }
 
@@ -722,7 +725,7 @@ impl Game<'_> {
         self.show_mod_output();
     }
     /// Runs the API 0.5 entity-damage hook for a player melee hit. A cancelled
-    /// hit never reaches the normal damage pipeline; otherwise mods' bounded
+    /// hit never reaches the normal damage pipeline; otherwise mods' accepted
     /// multipliers are applied before vanilla armor and damage handling.
     pub(super) fn mod_entity_damage(
         &mut self,
@@ -756,6 +759,41 @@ impl Game<'_> {
         {
             let _ = (subject, position, context);
             Some(amount)
+        }
+    }
+    pub(super) fn mod_xp_gain(&mut self, amount: u32, context: &str) -> u32 {
+        #[cfg(feature = "mods")]
+        {
+            if !self.mods.mods.is_running() {
+                return amount;
+            }
+            let position = self.player.as_ref().map_or([0; 3], |p| {
+                [
+                    p.position.x.floor() as i32,
+                    p.position.y.floor() as i32,
+                    p.position.z.floor() as i32,
+                ]
+            });
+            let (outcome, _, multiplier, _, _) = self.mods.mods.vanilla_hook(&VanillaHookEvent {
+                kind: VanillaHookKind::XpGain,
+                subject: "minecraft:player".into(),
+                dimension: self.dim.id().to_owned(),
+                x: position[0],
+                y: position[1],
+                z: position[2],
+                value: amount as f32,
+                context: context.to_owned(),
+            });
+            if outcome == EventOutcome::Cancel {
+                0
+            } else {
+                scaled_xp(amount, multiplier)
+            }
+        }
+        #[cfg(not(feature = "mods"))]
+        {
+            let _ = context;
+            amount
         }
     }
     /// A right-click on a mod-owned block. `true` means the mod handled it.
@@ -2568,5 +2606,31 @@ impl Game<'_> {
                 .collect();
             extras_hud::draw_lines(batch, &self.gui.atlas, corners, corner, &lines);
         }
+    }
+}
+
+#[cfg(any(feature = "mods", test))]
+fn scaled_xp(amount: u32, multiplier: f32) -> u32 {
+    let scaled = f64::from(amount) * f64::from(multiplier);
+    let maximum = f64::from(i32::MAX);
+    if !scaled.is_finite() || scaled >= maximum {
+        i32::MAX as u32
+    } else if scaled <= 0.0 {
+        0
+    } else {
+        scaled.round() as u32
+    }
+}
+
+#[cfg(all(test, feature = "mods"))]
+mod xp_tests {
+    use super::scaled_xp;
+
+    #[test]
+    fn xp_multipliers_round_and_saturate() {
+        assert_eq!(scaled_xp(7, 1.5), 11);
+        assert_eq!(scaled_xp(7, 0.5), 4);
+        assert_eq!(scaled_xp(7, 0.0), 0);
+        assert_eq!(scaled_xp(u32::MAX, f32::MAX), i32::MAX as u32);
     }
 }

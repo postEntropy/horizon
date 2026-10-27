@@ -74,13 +74,16 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   dimension registration/teleport, and named vanilla hooks.
 - A runtime sandbox test exercises these host-side operations.
 - `Game::attack_mob` dispatches `entity-damage` before player melee damage is
-  applied. A subscribed mod can multiply the hit or cancel it. This first
-  bridge covers the local player's melee hit path; projectile, mob, environmental
-  and other incoming damage paths do not dispatch it yet.
+  applied. A subscribed mod can multiply the hit or cancel it. This covers the
+  local player's melee hit path; projectile, mob, environmental and other
+  incoming damage paths do not dispatch it yet.
+- Orb experience and advancement reward points dispatch `xp-gain`. Mods may
+  scale the points or cancel the award. XP from other sources still needs an
+  audit against the same event.
 - No game-side dispatch was found for `tick_entities`, custom entity
-  lifecycle/interactions, registered dimensions or model animation. The other
-  named hooks (`loot-drop`, `xp-gain`, `crop-grow`, `explosion-detonate` and
-  `enchantment-level`) are also not connected to gameplay.
+  lifecycle/interactions, registered dimensions or model animation. The named
+  hooks `loot-drop`, `crop-grow`, `explosion-detonate` and
+  `enchantment-level` are not connected to gameplay.
 - Status: **partial live integration; API coverage remains incomplete**.
 
 ## Verification run

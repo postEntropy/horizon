@@ -489,7 +489,8 @@ impl Game<'_> {
         let a = &tree.list[index];
         // AdvancementRewards.grant
         if a.rewards.experience > 0 {
-            self.experience.give(a.rewards.experience);
+            let experience = self.mod_xp_gain(a.rewards.experience as u32, "minecraft:advancement");
+            self.experience.give(experience as i32);
         }
         // ServerPlayer.awardRecipesByKey: the rewards that name a recipe.
         let rewards: Vec<String> = a

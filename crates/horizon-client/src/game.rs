@@ -9008,6 +9008,10 @@ impl Game<'_> {
     /// `Player.giveExperiencePoints`, and `giveExperienceLevels`' level-up
     /// sound every fifth level (at most every 100 ticks).
     pub(super) fn give_orb_points(&mut self, gained: u32) {
+        let gained = self.mod_xp_gain(gained, "minecraft:experience_orb");
+        if gained == 0 {
+            return;
+        }
         let at = self.eye_position();
         if self.experience.give(gained as i32)
             && self.experience.level % 5 == 0

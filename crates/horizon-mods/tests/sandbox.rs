@@ -805,7 +805,7 @@ fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
     assert_eq!(mods.model_bones("block:0,64,0").len(), 1);
     assert_eq!(mods.model_draw_list("block:0,64,0").len(), 1);
 
-    // 3. Named vanilla hooks (LootDrop & EntityDamage)
+    // 3. Named vanilla hooks (loot, damage and experience)
     let (outcome, dmg_mult, _, _, loot) = mods.vanilla_hook(&VanillaHookEvent {
         kind: VanillaHookKind::LootDrop,
         subject: "minecraft:stone".into(),
@@ -838,4 +838,17 @@ fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
     });
     assert_eq!(outcome2, EventOutcome::Consume);
     assert_eq!(dmg_mult2, 0.5);
+
+    let (outcome3, _, xp_mult, _, _) = mods.vanilla_hook(&VanillaHookEvent {
+        kind: VanillaHookKind::XpGain,
+        subject: "minecraft:player".into(),
+        dimension: "minecraft:overworld".into(),
+        x: 0,
+        y: 64,
+        z: 0,
+        value: 5.0,
+        context: "minecraft:experience_orb".into(),
+    });
+    assert_eq!(outcome3, EventOutcome::Consume);
+    assert_eq!(xp_mult, 2.0);
 }
