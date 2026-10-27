@@ -198,11 +198,7 @@ impl Game<'_> {
     }
     /// The client level as item models read it.
     pub(super) fn item_level(&self) -> LevelState {
-        let dimension = match self.dim {
-            Dim::Overworld => "minecraft:overworld",
-            Dim::Nether => "minecraft:the_nether",
-            Dim::End => "minecraft:the_end",
-        };
+        let dimension = self.dim.id();
         let sky = self
             .dim_environment()
             .sample(self.world.day_time, None, None);

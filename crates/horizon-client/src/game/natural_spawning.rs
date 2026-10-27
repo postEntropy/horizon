@@ -204,10 +204,10 @@ impl SpawnLevel for GameLevel<'_, '_> {
 }
 impl NaturalLevel for GameLevel<'_, '_> {
     fn min_y(&self) -> i32 {
-        horizon_client::chunk::MIN_Y
+        self.game.dim.min_y()
     }
     fn max_y(&self) -> i32 {
-        horizon_client::chunk::MIN_Y + horizon_client::chunk::HEIGHT - 1
+        self.game.dim.max_y()
     }
     fn ambient_light(&self) -> f32 {
         match self.game.dim {

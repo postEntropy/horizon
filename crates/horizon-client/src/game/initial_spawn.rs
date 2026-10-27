@@ -6,7 +6,6 @@ use super::{Game, dispenser::entity_random};
 use horizon_client::{
     Result,
     assets::Properties,
-    chunk::{HEIGHT, MIN_Y},
     collisions::{SceneCollisions, no_collision_or_liquid},
     world::World,
     world_spawn::{
@@ -28,16 +27,18 @@ struct Columns<'a, 'r> {
     world: &'a World,
     properties: &'a Properties,
     binding: &'a BlockCollisionRegistry<'r>,
+    min_y: i32,
+    max_y: i32,
 }
 impl SpawnLevel for Columns<'_, '_> {
     fn min_y(&self) -> i32 {
-        MIN_Y
+        self.min_y
     }
     fn height(&self, kind: HeightmapType, x: i32, z: i32) -> i32 {
-        (MIN_Y..MIN_Y + HEIGHT)
+        (self.min_y..=self.max_y)
             .rev()
             .find(|&y| kind.is_opaque(self.properties.heightmap_state(self.world.block(x, y, z))))
-            .map_or(MIN_Y, |y| y + 1)
+            .map_or(self.min_y, |y| y + 1)
     }
     fn has_fluid(&self, x: i32, y: i32, z: i32) -> bool {
         use horizon_world::heightmap::HeightmapState;
@@ -74,6 +75,8 @@ impl Game<'_> {
             world: &self.world,
             properties: &self.pack.assets.properties,
             binding: self.collision,
+            min_y: self.dim.min_y(),
+            max_y: self.dim.max_y(),
         }
     }
     /// ChunkGenerator.getOrigin and getSpawnHeight of the overworld.
@@ -195,11 +198,11 @@ impl Game<'_> {
     /// down onto the ground.
     fn fixup_spawn_height(&self, pos: [i32; 3]) -> Vec3 {
         let [x, mut y, z] = pos;
-        while !self.player_fits([x, y, z]) && y < MIN_Y + HEIGHT - 1 {
+        while !self.player_fits([x, y, z]) && y < self.dim.max_y() {
             y += 1;
         }
         y -= 1;
-        while self.player_fits([x, y, z]) && y > MIN_Y {
+        while self.player_fits([x, y, z]) && y > self.dim.min_y() {
             y -= 1;
         }
         bottom_center([x, y + 1, z])

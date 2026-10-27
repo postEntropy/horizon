@@ -185,6 +185,7 @@ impl Game<'_> {
             Dim::Overworld => self.res.environment(),
             Dim::Nether => self.res.nether_environment(),
             Dim::End => self.res.end_environment(),
+            Dim::Custom(_) => self.res.environment(),
         }
     }
 

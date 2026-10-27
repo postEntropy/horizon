@@ -1591,6 +1591,14 @@ enum Dim {
     Overworld,
     Nether,
     End,
+    Custom(&'static DimensionInfo),
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct DimensionInfo {
+    id: &'static str,
+    min_y: i32,
+    height: i32,
+    logical_height: i32,
 }
 impl Dim {
     fn id(self) -> &'static str {
@@ -1598,13 +1606,15 @@ impl Dim {
             Self::Overworld => "minecraft:overworld",
             Self::Nether => "minecraft:the_nether",
             Self::End => "minecraft:the_end",
+            Self::Custom(info) => info.id,
         }
     }
     fn from_id(id: &str) -> Self {
         match id {
             "minecraft:the_nether" => Self::Nether,
             "minecraft:the_end" => Self::End,
-            _ => Self::Overworld,
+            "minecraft:overworld" => Self::Overworld,
+            _ => Self::Custom(custom_dimension(id)),
         }
     }
     /// `Level.getMinY`: the dimension type's minimum y.
@@ -1612,6 +1622,7 @@ impl Dim {
         match self {
             Self::Overworld => MIN_Y,
             Self::Nether | Self::End => 0,
+            Self::Custom(info) => info.min_y,
         }
     }
     /// `DimensionType.logicalHeight`.
@@ -1620,6 +1631,7 @@ impl Dim {
             Self::Overworld => HEIGHT,
             Self::Nether => 128,
             Self::End => 256,
+            Self::Custom(info) => info.logical_height,
         }
     }
     /// `Level.getMaxY`: the dimension type's minimum y plus height, less one.
@@ -1627,7 +1639,146 @@ impl Dim {
         match self {
             Self::Overworld => MIN_Y + HEIGHT - 1,
             Self::Nether | Self::End => 255,
+            Self::Custom(info) => info.min_y + info.height - 1,
         }
+    }
+}
+
+/// Dimension ids live for the game's lifetime because `Dim` is copied into
+/// queued network events, parked levels and command sources.
+fn dimension_infos()
+-> &'static std::sync::Mutex<std::collections::HashMap<String, &'static DimensionInfo>> {
+    use std::sync::{Mutex, OnceLock};
+    static DIMENSIONS: OnceLock<Mutex<std::collections::HashMap<String, &'static DimensionInfo>>> =
+        OnceLock::new();
+    DIMENSIONS.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+fn intern_dimension(id: &str) -> &'static DimensionInfo {
+    let mut dimensions = dimension_infos()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(info) = dimensions.get(id) {
+        return info;
+    }
+    let info = Box::leak(Box::new(DimensionInfo {
+        id: Box::leak(id.to_owned().into_boxed_str()),
+        min_y: 0,
+        height: 256,
+        logical_height: 256,
+    }));
+    dimensions.insert(id.to_owned(), info);
+    info
+}
+
+fn register_dimension_info(id: &str, min_y: i32, height: i32, logical_height: i32) {
+    let mut dimensions = dimension_infos()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(info) = dimensions.get(id) {
+        // Prepared data is loaded before worlds open; update a previous
+        // profile when a different mod set defines the same dimension id.
+        if info.min_y == min_y && info.height == height && info.logical_height == logical_height {
+            return;
+        }
+    }
+    let info = Box::leak(Box::new(DimensionInfo {
+        id: Box::leak(id.to_owned().into_boxed_str()),
+        min_y,
+        height,
+        logical_height,
+    }));
+    dimensions.insert(id.to_owned(), info);
+}
+
+fn dimension_info(id: &str) -> Option<&'static DimensionInfo> {
+    let dimensions = dimension_infos()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    dimensions.get(id).copied()
+}
+
+fn custom_dimension(id: &str) -> &'static DimensionInfo {
+    if let Some(info) = dimension_info(id) {
+        return info;
+    }
+    intern_dimension(id)
+}
+
+fn register_dimensions_from_resources(root: &std::path::Path) {
+    fn visit_dimensions(root: &std::path::Path, namespace: &str, dir: &std::path::Path) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                visit_dimensions(root, namespace, &path);
+                continue;
+            }
+            if path.extension().is_none_or(|ext| ext != "json") {
+                continue;
+            }
+            let Some(dimension) = std::fs::read(&path)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            else {
+                continue;
+            };
+            let Some(kind) = dimension.get("type").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let (type_namespace, type_path) = kind.split_once(':').unwrap_or(("minecraft", kind));
+            let dimension_dir = root.join("data").join(namespace).join("dimension");
+            let Ok(relative) = path.strip_prefix(&dimension_dir) else {
+                continue;
+            };
+            let dimension_id = format!(
+                "{namespace}:{}",
+                relative
+                    .with_extension("")
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            );
+            let type_file = root
+                .join("data")
+                .join(type_namespace)
+                .join("dimension_type")
+                .join(format!("{type_path}.json"));
+            let type_data = std::fs::read(type_file)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+            let int = |key: &str, default| {
+                type_data
+                    .as_ref()
+                    .and_then(|data| data.get(key))
+                    .and_then(serde_json::Value::as_i64)
+                    .and_then(|value| i32::try_from(value).ok())
+                    .unwrap_or(default)
+            };
+            let min_y = int("min_y", 0);
+            let height = int("height", 256);
+            let logical_height = int("logical_height", height);
+            if height > 0 {
+                register_dimension_info(&dimension_id, min_y, height, logical_height);
+            }
+        }
+    }
+
+    let data = root.join("data");
+    let Ok(namespaces) = std::fs::read_dir(data) else {
+        return;
+    };
+    for namespace in namespaces.flatten() {
+        if !namespace.file_type().is_ok_and(|kind| kind.is_dir()) {
+            continue;
+        }
+        let namespace = namespace.file_name().to_string_lossy().into_owned();
+        visit_dimensions(
+            root,
+            &namespace,
+            &root.join("data").join(&namespace).join("dimension"),
+        );
     }
 }
 fn facing_offset(facing: &str) -> [i32; 3] {
@@ -2385,6 +2536,7 @@ impl Game<'_> {
             Dim::Overworld => LevelDimension::Overworld,
             Dim::Nether => LevelDimension::Nether,
             Dim::End => LevelDimension::End,
+            Dim::Custom(_) => LevelDimension::Overworld,
         };
         let rules = self.level_rules();
         let blockers = Blockers {
@@ -12432,6 +12584,7 @@ fn load_resources(
     };
     let assets = Arc::new(assets);
     let render = Arc::new(render);
+    register_dimensions_from_resources(&root);
     // The menu bundle must come from the same root as the world bundle.
     if !ui_ready || root != requested_root {
         let ui = UiResources::load(&root, vanilla_root)?;

@@ -91,8 +91,8 @@ impl Game<'_> {
                 distant_terrain: self.lod.is_some(),
                 cloud_range_chunks: self.settings.cloud_range,
                 camera_y: camera.y,
-                // level.getMinY(): the Nether and the End start at y 0.
-                min_y: if self.dim == Dim::Overworld { MIN_Y } else { 0 },
+                // level.getMinY(): dimension types can choose their own range.
+                min_y: self.dim.min_y(),
                 flat: false,
                 forward: forward.map(|c| c as f32),
                 rain,

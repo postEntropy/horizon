@@ -61,6 +61,8 @@ pub struct SyncData {
     pub builtin: Builtin,
     /// Entry names per synchronized registry (for id lookups).
     pub dynamic: Dynamic,
+    /// Dimension id -> dimension type id from the active data pack.
+    dimensions: HashMap<String, String>,
     registries: Vec<(String, Entries)>,
     pub tags: UpdateTags,
     pub features: Vec<String>,
@@ -88,6 +90,34 @@ fn walk(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Value>) {
             out.insert(format!("{prefix}{stem}"), value);
         }
     }
+}
+
+/// Every registry entry under `data/<namespace>/<registry>/`, with its full
+/// namespaced id and deterministic order. Vanilla owns the registry key, but
+/// mods can add values to synchronized registries.
+fn read_namespaced_registry(resources: &Path, registry: &str) -> BTreeMap<String, Value> {
+    let mut out = BTreeMap::new();
+    let Ok(namespaces) = std::fs::read_dir(resources.join("data")) else {
+        return out;
+    };
+    for namespace in namespaces.flatten() {
+        if !namespace.file_type().is_ok_and(|kind| kind.is_dir()) {
+            continue;
+        }
+        let namespace = namespace.file_name().to_string_lossy().into_owned();
+        let mut entries = BTreeMap::new();
+        walk(
+            &resources.join("data").join(&namespace).join(registry),
+            "",
+            &mut entries,
+        );
+        out.extend(
+            entries
+                .into_iter()
+                .map(|(path, value)| (format!("{namespace}:{path}"), value)),
+        );
+    }
+    out
 }
 
 /// A JSON value as the NBT that vanilla's NbtOps would produce from the codec
@@ -128,16 +158,34 @@ impl SyncData {
             .and_then(|p| Builtin::load(&p).ok())
             .ok_or("registries.json not found next to the resources")?;
         let root: PathBuf = resources.join("data/minecraft");
+        let mut dimensions = HashMap::new();
         let mut registries = Vec::new();
         let mut dynamic = Dynamic::default();
         for key in SYNCHRONIZED {
             let path = key.trim_start_matches("minecraft:");
-            let mut found = BTreeMap::new();
-            walk(&root.join(path), "", &mut found);
-            let (names, json): (Vec<_>, Vec<_>) = found
-                .into_iter()
-                .map(|(n, v)| (format!("minecraft:{n}"), v))
-                .unzip();
+            let found = read_namespaced_registry(resources, path);
+            if *key == "minecraft:dimension_type" {
+                dynamic.registries.insert(
+                    (*key).to_owned(),
+                    found.keys().map(|name| (name.clone(), None)).collect(),
+                );
+                registries.push((
+                    (*key).to_owned(),
+                    Entries {
+                        names: found.keys().cloned().collect(),
+                        json: found.values().cloned().collect(),
+                    },
+                ));
+                let dimension_entries = read_namespaced_registry(resources, "dimension");
+                dimensions = dimension_entries
+                    .into_iter()
+                    .filter_map(|(id, value)| {
+                        value["type"].as_str().map(|kind| (id, kind.to_owned()))
+                    })
+                    .collect();
+                continue;
+            }
+            let (names, json): (Vec<_>, Vec<_>) = found.into_iter().unzip();
             dynamic.registries.insert(
                 (*key).to_owned(),
                 names.iter().map(|n| (n.clone(), None)).collect(),
@@ -148,6 +196,7 @@ impl SyncData {
         let mut sync = Self {
             builtin,
             dynamic,
+            dimensions,
             registries,
             tags,
             features: vec!["minecraft:vanilla".to_owned()],
@@ -170,6 +219,11 @@ impl SyncData {
             .iter()
             .position(|(n, _)| n == name)
             .map(|i| i as i32)
+    }
+
+    /// The `type` named by `data/<namespace>/dimension/<path>.json`.
+    pub fn dimension_type(&self, dimension: &str) -> Option<&str> {
+        self.dimensions.get(dimension).map(String::as_str)
     }
 
     /// ClientboundRegistryDataPacket per registry. With `known_pack` the

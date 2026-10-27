@@ -396,6 +396,12 @@ impl Game<'_> {
             .into_iter()
             .filter(|d| guests.iter().any(|g| g.dimension == d.id()))
             .collect();
+        for guest in guests {
+            let dim = Dim::from_id(&guest.dimension);
+            if !dims.contains(&dim) {
+                dims.push(dim);
+            }
+        }
         if dims.is_empty() {
             dims.push(Dim::Overworld);
         }

@@ -284,12 +284,15 @@ impl Hub {
         let chat_type = sync
             .id("minecraft:chat_type", "minecraft:chat")
             .unwrap_or(0);
+        let dimension_type_name = sync
+            .dimension_type(&config.dimension)
+            .unwrap_or(&config.dimension);
         let dimension_type = sync
-            .id("minecraft:dimension_type", &config.dimension)
+            .id("minecraft:dimension_type", dimension_type_name)
             .unwrap_or(0);
         let clock_ids = (0..sync.dynamic.len("minecraft:world_clock") as i32).collect();
         let mut encoder = encoder;
-        let d = horizon_protocol::registry::DimensionType::vanilla(&config.dimension);
+        let d = sync.dynamic.dimension(dimension_type);
         encoder.set_dimension(d.min_y, d.height, d.has_skylight);
         Self {
             lan,
@@ -2404,11 +2407,12 @@ impl Hub {
         (self.last_clock, self.last_rate, self.weather) =
             (entering.last_clock, entering.last_rate, entering.weather);
         self.config.dimension = dimension.to_owned();
+        let dimension_type_name = self.sync.dimension_type(dimension).unwrap_or(dimension);
         self.dimension_type = self
             .sync
-            .id("minecraft:dimension_type", dimension)
+            .id("minecraft:dimension_type", dimension_type_name)
             .unwrap_or(0);
-        let d = horizon_protocol::registry::DimensionType::vanilla(dimension);
+        let d = self.sync.dynamic.dimension(self.dimension_type);
         self.encoder
             .set_dimension(d.min_y, d.height, d.has_skylight);
     }
