@@ -267,24 +267,6 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     let wg_dropped = sum_map("processors_dropped");
     let wg_lost = sum_map("rules_lost");
 
-    if has_wasm {
-        let mut summary = if blocks == 0 && items == 0 && worldgen > 0 {
-            format!("ported-wasm ({worldgen} worldgen files, mod.wasm)")
-        } else {
-            format!("ported-wasm ({blocks} blocks, {items} items, mod.wasm)")
-        };
-        if harness_gaps.is_empty() {
-            if harness.is_some() {
-                summary.push_str("; harness green");
-            }
-            return Some((Status::Ported, summary));
-        }
-        return Some((
-            Status::Partial,
-            format!("{summary}; {}", harness_gaps.join("; ")),
-        ));
-    }
-
     // A class of its own is code the facts cannot show; anything else the
     // template misses (shapes, sounds) the harness also reports.
     let mut differences = 0;
@@ -343,6 +325,22 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
         ));
     }
     gaps.extend(harness_gaps);
+
+    if has_wasm {
+        let mut summary = if blocks == 0 && items == 0 && worldgen > 0 {
+            format!("ported-wasm ({worldgen} worldgen files, mod.wasm)")
+        } else {
+            format!("ported-wasm ({blocks} blocks, {items} items, mod.wasm)")
+        };
+        if gaps.is_empty() {
+            if harness.is_some() {
+                summary.push_str("; harness green");
+            }
+            return Some((Status::Ported, summary));
+        }
+        return Some((Status::Partial, format!("{summary}; {}", gaps.join("; "))));
+    }
+
     if tier != "data" {
         gaps.push("needs mod.wasm".into());
     }
@@ -622,9 +620,10 @@ mod tests {
             "{}",
             by["pending_logic"].reason
         );
-        assert_eq!(by["done_logic"].status, Status::Ported);
+        assert_eq!(by["done_logic"].status, Status::Partial);
         assert!(
-            by["done_logic"].reason.starts_with("ported-wasm"),
+            by["done_logic"].reason.starts_with("ported-wasm")
+                && by["done_logic"].reason.contains("1 blocks left out"),
             "{}",
             by["done_logic"].reason
         );
@@ -641,8 +640,8 @@ mod tests {
         assert_eq!(
             counts(&rows),
             [
-                ("ported", 3),
-                ("partial", 2),
+                ("ported", 2),
+                ("partial", 3),
                 ("not yet", 3),
                 ("not needed", 1)
             ]
