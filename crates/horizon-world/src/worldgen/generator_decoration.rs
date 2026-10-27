@@ -173,10 +173,16 @@ impl Decoration {
             *ids.entry(name.to_owned()).or_insert_with(|| {
                 let id = FeatureIdentity(names.len() as u32);
                 names.push(name.to_owned());
+                let json = Value::from(name).to_string();
                 features.push(
                     catalog
-                        .placed_feature_with_blocks(&Value::from(name).to_string(), &bindings)
-                        .map_err(|e| e.to_string()),
+                        .placed_feature_with_blocks(&json, &bindings)
+                        .map_err(|e| {
+                            let feature_type = catalog
+                                .placed_feature_type(&json)
+                                .unwrap_or_else(|_| "unknown configured feature".to_owned());
+                            format!("{feature_type}: {e}")
+                        }),
                 );
                 id
             })

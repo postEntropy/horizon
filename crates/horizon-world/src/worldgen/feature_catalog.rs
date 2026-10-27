@@ -111,6 +111,27 @@ impl FeatureCatalog {
     pub fn placed_feature(&self, json: &str) -> Result<PlacedFeatureDefinition, DecodeError> {
         self.placed_with_optional_blocks(json, None)
     }
+
+    /// Returns the configured-feature type at the root of a placed feature,
+    /// expanding named holders and compositions but leaving feature decoding
+    /// to the caller. This is useful for reporting which codec rejected a
+    /// resource without dumping the full resource JSON into logs.
+    pub fn placed_feature_type(&self, json: &str) -> Result<String, DecodeError> {
+        let value: Box<RawValue> = serde_json::from_str(json)?;
+        let expanded = self.expand_placed(
+            &value,
+            0,
+            &mut Expansion {
+                remaining: 65536,
+                active: vec![],
+            },
+        )?;
+        let placed: Object = serde_json::from_str(&expanded)?;
+        let feature: Object = serde_json::from_str(required(&placed, "feature")?.get())?;
+        identifier(&serde_json::from_str::<String>(
+            required(&feature, "type")?.get(),
+        )?)
+    }
     pub fn placed_feature_with_blocks(
         &self,
         json: &str,

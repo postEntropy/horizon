@@ -22,7 +22,7 @@ use horizon_world::{
         terrain::PreLightChunkStage,
     },
 };
-use std::{path::Path, sync::Arc};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 mod lod;
 mod structure_mobs;
 use lod::VanillaLodSampler;
@@ -105,6 +105,24 @@ impl VanillaTerrain {
                 "Horizon: {} placed features cannot run and will be skipped",
                 unsupported.len()
             );
+            let mut by_reason = BTreeMap::<String, Vec<String>>::new();
+            for (name, reason) in &unsupported {
+                by_reason
+                    .entry(reason.clone())
+                    .or_default()
+                    .push(name.clone());
+            }
+            for (reason, mut names) in by_reason {
+                names.sort();
+                let examples = names.iter().take(6).cloned().collect::<Vec<_>>().join(", ");
+                let additional = (names.len() > 6)
+                    .then(|| format!(", and {} more", names.len() - 6))
+                    .unwrap_or_default();
+                log::warn!(
+                    "Horizon: skipped {} placed features ({reason}); examples: {examples}{additional}",
+                    names.len()
+                );
+            }
             if !dir.join("blocks/block-properties.nbt").exists() {
                 log::warn!(
                     "Horizon: the worldgen bundle lacks the block behavior exports (worldgen/blocks/*.nbt); \

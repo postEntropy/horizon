@@ -60,3 +60,19 @@ fn shared_reference_expansion_is_bounded_before_building_a_large_tree() {
     );
     assert!(catalog.feature(&root).is_err());
 }
+
+#[test]
+fn placed_feature_type_reports_the_resolved_root_codec() {
+    let features = map(&[("horizon:custom", r#"{"type":"horizon:custom_feature"}"#)]);
+    let placed = map(&[(
+        "horizon:root",
+        r#"{"feature":"horizon:custom","placement":[]}"#,
+    )]);
+    let catalog =
+        FeatureCatalog::from_resources(&features, &placed, &TagDefinitions::default()).unwrap();
+
+    assert_eq!(
+        catalog.placed_feature_type(r#""horizon:root""#).unwrap(),
+        "horizon:custom_feature"
+    );
+}
