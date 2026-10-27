@@ -394,6 +394,9 @@ existing files in that home are kept so reimporting does not erase player edits.
 `overrides/` is applied first and `client-overrides/` takes precedence. Server-only overrides are
 left out of the client profile.
 
+Data packs from that profile are copied into the `datapacks/` directory of each newly created
+world, where Horizon's world-level data pack loader discovers them. Existing saves are not changed.
+
 ### 2. Inventory and classification
 
 Per jar, without decompiling:

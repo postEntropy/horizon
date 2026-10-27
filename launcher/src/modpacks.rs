@@ -358,7 +358,7 @@ pub fn apply_profile(cmd: &mut Command, work: &Path) -> Result<(), String> {
     // Only mods that load together: the game would refuse the later of two sharing a namespace.
     let (mods, _) = pipeline::loadable(&carried(work));
     let home = profile_home(work);
-    let has_pack_files = ["resourcepacks", "shaderpacks", "config", "defaultconfigs", "kubejs"]
+    let has_pack_files = ["resourcepacks", "shaderpacks", "datapacks", "config", "defaultconfigs", "kubejs"]
         .iter()
         .any(|folder| home.join(folder).is_dir());
     if mods.is_empty() && !has_pack_files {

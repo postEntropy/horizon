@@ -50,6 +50,12 @@ impl WorldRequest {
                 .unwrap_or_default();
         let existing = Level::read(&save_root);
         let created = existing.is_none();
+        // A modpack profile may provide default data packs in its game home.
+        // Minecraft stores enabled data packs per world, so seed only new
+        // saves and leave existing worlds under the player's control.
+        if created {
+            install_profile_datapacks(&std::env::current_dir()?, &save_root)?;
+        }
         let level = existing.unwrap_or_else(|| Level {
             name: name.unwrap_or(&folder).to_owned(),
             // WorldOptions.randomSeed when no seed was given.
@@ -123,6 +129,42 @@ impl WorldRequest {
             locator,
         })
     }
+}
+
+fn install_profile_datapacks(profile: &std::path::Path, world: &std::path::Path) -> Result<()> {
+    let source = profile.join("datapacks");
+    if !source.is_dir() {
+        return Ok(());
+    }
+    let destination = world.join("datapacks");
+    copy_datapack_tree(&source, &destination)
+}
+
+fn copy_datapack_tree(source: &std::path::Path, destination: &std::path::Path) -> Result<()> {
+    let entries = match std::fs::read_dir(source) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    for entry in entries {
+        let entry = entry?;
+        let source_path = entry.path();
+        let metadata = std::fs::symlink_metadata(&source_path)?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        let destination_path = destination.join(entry.file_name());
+        if metadata.is_dir() {
+            std::fs::create_dir_all(&destination_path)?;
+            copy_datapack_tree(&source_path, &destination_path)?;
+        } else if metadata.is_file() && !destination_path.exists() {
+            if let Some(parent) = destination_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(source_path, destination_path)?;
+        }
+    }
+    Ok(())
 }
 
 pub(super) struct WorldLoader {
