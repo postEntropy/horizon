@@ -118,10 +118,15 @@ fn pack_file_status(record: &Record, work: &Path) -> Option<(Status, String)> {
     if !matches!(kind, "resourcepacks" | "shaderpacks" | "datapacks") {
         return None;
     }
-    let installed = crate::import::validate_relative(&record.path).is_ok()
-        && ["pack-overrides", "home"]
-            .iter()
-            .any(|root| work.join(root).join(&record.path).is_file());
+    let installed = if crate::import::validate_relative(&record.path).is_ok() {
+        Path::new(&record.path).file_name().is_some_and(|name| {
+            ["pack-overrides", "home"]
+                .iter()
+                .any(|root| work.join(root).join(kind).join(name).is_file())
+        })
+    } else {
+        false
+    };
     let reason = match (kind, installed) {
         ("resourcepacks", true) => "resource pack installed and enabled in the profile",
         ("resourcepacks", false) => "resource pack not fetched or installed yet",
