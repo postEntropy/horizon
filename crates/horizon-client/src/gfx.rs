@@ -4509,6 +4509,30 @@ pub(crate) fn sprite_mipmap_limit(requested: u32, size: u32, minimum: u32, avail
 mod sprite_upload_tests {
     use super::*;
     #[test]
+    fn atm10_texture_count_uses_multiple_gpu_arrays() {
+        let layers = 32_629u32;
+        let arrays = layers.div_ceil(SPRITE_SPLIT);
+        assert_eq!(arrays, 16);
+
+        let enough_bindings = wgpu::Limits {
+            max_texture_array_layers: SPRITE_SPLIT,
+            max_sampled_textures_per_shader_stage: arrays + 1,
+            ..Default::default()
+        };
+        assert!(check_layers(&enough_bindings, layers).is_ok());
+
+        // Fifteen sprite arrays plus the lightmap leave the old 30,720-layer
+        // ceiling: a GPU with only sixteen sampled-texture bindings must
+        // refuse this pack with a useful error.
+        let old_ceiling = wgpu::Limits {
+            max_texture_array_layers: SPRITE_SPLIT,
+            max_sampled_textures_per_shader_stage: 16,
+            ..Default::default()
+        };
+        assert!(check_layers(&old_ceiling, layers).is_err());
+    }
+
+    #[test]
     fn real_rail_mips_do_not_change_with_larger_array_layers() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../.local/horizon-client")
