@@ -85,3 +85,30 @@ fn bound_recursive_providers_and_registry_lists_before_sampling() {
     ]);
     assert!(StateProviderCatalog::from_resources(&duplicate).is_err());
 }
+
+#[test]
+fn accepts_legacy_minecraft_state_provider_type_ids() {
+    let registry = BlockRegistry::from_nbt(&Tag::compound([
+        ("DataVersion", Tag::Int(DATA_VERSION)),
+        (
+            "states",
+            Tag::List(vec![Tag::compound([(
+                "id",
+                Tag::String("minecraft:stone".into()),
+            )])]),
+        ),
+        (
+            "defaults",
+            Tag::compound([("minecraft:stone", Tag::Int(0))]),
+        ),
+    ]))
+    .unwrap();
+    let bindings =
+        StateProviderBindings::new(&registry, BTreeSet::new(), &BTreeMap::new()).unwrap();
+
+    let simple = r#"{"type":"minecraft:simple_state_provider","state":{"id":"minecraft:stone"}}"#;
+    assert!(BlockStateProvider::from_json(simple, &bindings).is_ok());
+
+    let weighted = r#"{"type":"minecraft:weighted_state_provider","entries":[{"data":{"id":"minecraft:stone"},"weight":1}]}"#;
+    assert!(BlockStateProvider::from_json(weighted, &bindings).is_ok());
+}

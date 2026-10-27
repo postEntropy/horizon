@@ -8,7 +8,7 @@ use super::{
     },
     density::identifier,
     feature::{BasicFeature, FeatureBlocks, FeatureError, FeatureWorld},
-    number_text,
+    int_range, number_text,
     ore_feature::ScatteredOreFeature,
     placement::{
         FeaturePlacementError, FeaturePlacer, PlacementContext, PlacementModifier,
@@ -86,6 +86,12 @@ pub enum FeatureDefinition {
     SteppedColumnCluster(Box<super::projected::SteppedColumnClusterFeature>),
     FallenTree(Box<super::tree::FallenTreeFeature>),
     NoOp,
+    RandomPatch {
+        feature: Box<PlacedFeatureDefinition>,
+        tries: i32,
+        xz_spread: i32,
+        y_spread: i32,
+    },
     Template(Box<super::structure::features::TemplateFeature>),
     Fossil(Box<super::structure::features::FossilFeature>),
     WeightedChoice(OptionalWeightedList<PlacedFeatureDefinition>),
@@ -314,6 +320,34 @@ impl FeatureDefinition {
         )?)?;
         match kind.as_str() {
             "minecraft:no_op" => Ok(Self::NoOp),
+            "minecraft:random_patch" | "minecraft:no_bonemeal_flower" => {
+                let tries = int_range(required(&object, "tries")?, "patch tries", 0, 65536)?;
+                let xz_spread = int_range(
+                    required(&object, "xz_spread")?,
+                    "patch horizontal spread",
+                    0,
+                    512,
+                )?;
+                let y_spread = int_range(
+                    required(&object, "y_spread")?,
+                    "patch vertical spread",
+                    0,
+                    512,
+                )?;
+                let feature = PlacedFeatureDefinition::decode(
+                    required(&object, "feature")?.get(),
+                    depth + 1,
+                    remaining,
+                    empty_tags,
+                    blocks,
+                )?;
+                Ok(Self::RandomPatch {
+                    feature: Box::new(feature),
+                    tries,
+                    xz_spread,
+                    y_spread,
+                })
+            }
             "minecraft:template" => super::structure::features::TemplateFeature::decode(
                 json,
                 blocks.ok_or(DecodeError::Field("template bindings"))?,
@@ -1100,6 +1134,33 @@ impl FeatureDefinition {
                     }
                 }
                 fallback.place_in(&mut placer, world, random, origin, run)
+            }
+            Self::RandomPatch {
+                feature,
+                tries,
+                xz_spread,
+                y_spread,
+            } => {
+                let mut placed = false;
+                for _ in 0..*tries {
+                    if run.remaining.get() == 0 {
+                        return Err(FeatureExecutionError::WorkLimit);
+                    }
+                    run.remaining.set(run.remaining.get() - 1);
+                    let dx = random.next_int_bound(xz_spread + 1)?
+                        - random.next_int_bound(xz_spread + 1)?;
+                    let dy = random.next_int_bound(y_spread + 1)?
+                        - random.next_int_bound(y_spread + 1)?;
+                    let dz = random.next_int_bound(xz_spread + 1)?
+                        - random.next_int_bound(xz_spread + 1)?;
+                    let position = [
+                        origin[0].wrapping_add(dx),
+                        origin[1].wrapping_add(dy),
+                        origin[2].wrapping_add(dz),
+                    ];
+                    placed |= feature.place_in(&mut placer, world, random, position, run)?;
+                }
+                Ok(placed)
             }
         }
     }

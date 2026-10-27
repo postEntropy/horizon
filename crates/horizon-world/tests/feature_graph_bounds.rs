@@ -69,6 +69,16 @@ fn nested_inline_decoding_rejects_excessive_depth() {
 }
 
 #[test]
+fn decodes_legacy_patch_feature_types() {
+    for kind in ["minecraft:random_patch", "minecraft:no_bonemeal_flower"] {
+        let json = format!(
+            r#"{{"type":"{kind}","tries":10,"xz_spread":7,"y_spread":3,"feature":{{"feature":{{"type":"minecraft:no_op"}},"placement":[]}}}}"#
+        );
+        assert!(FeatureDefinition::from_json(&json).is_ok(), "{kind}");
+    }
+}
+
+#[test]
 fn modifier_expansion_without_leaf_calls_uses_the_shared_graph_budget() {
     use horizon_world::worldgen::{placement::PlacementModifier, value_provider::IntProvider};
     let feature = PlacedFeatureDefinition {

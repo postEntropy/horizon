@@ -399,10 +399,10 @@ impl BlockStateProvider {
             "minecraft:noise" | "minecraft:noise_threshold" | "minecraft:dual_noise" => {
                 Node::Noise(Box::new(NoiseProvider::decode(&object, bindings, &kind)?))
             }
-            "minecraft:simple" => {
+            "minecraft:simple" | "minecraft:simple_state_provider" => {
                 Node::Simple(bindings.state(required(&object, "state")?.get(), false)?)
             }
-            "minecraft:weighted" => {
+            "minecraft:weighted" | "minecraft:weighted_state_provider" => {
                 Node::Weighted(WeightedList::decode(required(&object, "entries")?, |v| {
                     bindings.state(v.get(), false)
                 })?)
