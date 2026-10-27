@@ -110,6 +110,40 @@ fn not_needed(class: &str) -> &'static str {
     }
 }
 
+/// Pack files are installed directly in the profile, not carried as mod
+/// manifests. Report their actual runtime support instead of treating their
+/// archive as a missing data-tier mod jar.
+fn pack_file_status(record: &Record, work: &Path) -> Option<(Status, String)> {
+    let kind = record.path.split('/').next()?;
+    if !matches!(kind, "resourcepacks" | "shaderpacks" | "datapacks") {
+        return None;
+    }
+    let installed = crate::import::validate_relative(&record.path).is_ok()
+        && ["pack-overrides", "home"]
+            .iter()
+            .any(|root| work.join(root).join(&record.path).is_file());
+    let reason = match (kind, installed) {
+        ("resourcepacks", true) => "resource pack installed and enabled in the profile",
+        ("resourcepacks", false) => "resource pack not fetched or installed yet",
+        ("shaderpacks", true) => {
+            "shader pack installed; Horizon does not apply shader packs in the renderer yet"
+        }
+        ("shaderpacks", false) => "shader pack not fetched or installed yet",
+        ("datapacks", true) => {
+            "data pack installed for new worlds; functions, tags and predicates load, but its other data is not applied yet"
+        }
+        ("datapacks", false) => "data pack not fetched or installed yet",
+        _ => unreachable!(),
+    };
+    let status = match (kind, installed) {
+        ("resourcepacks", true) => Status::Ported,
+        ("datapacks" | "shaderpacks", true) => Status::Partial,
+        (_, false) => Status::NotYet,
+        _ => unreachable!(),
+    };
+    Some((status, reason.to_owned()))
+}
+
 /// A carried-over mod: ported when its content is complete (data tier with no
 /// missing blocks/processors, or code tier with `carry/mod.wasm`) and no
 /// harness check failed; else partial, with what is missing.
@@ -280,7 +314,9 @@ pub fn build(records: &[Record], work: &Path) -> Vec<Row> {
     let mut rows: Vec<Row> = records
         .iter()
         .map(|r| {
-            let (status, reason) = if r.class == "unknown" {
+            let (status, reason) = if let Some(status) = pack_file_status(r, work) {
+                status
+            } else if r.class == "unknown" {
                 let why = if r.jar.is_some() {
                     "unclassified after reading its jar metadata and file census; needs review"
                 } else {
