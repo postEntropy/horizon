@@ -493,7 +493,7 @@ Capability `net` (API 0.4): bounded mod packets between client and server on the
 | Function | Signature | What it does |
 | --- | --- | --- |
 | `send-to-server` | `func(channel: string, payload: list<u8>) -> result<_, string>` | Sends `payload` (at most 32 KiB) on `channel` from client to server. |
-| `send-to-client` | `func(player: string, channel: string, payload: list<u8>) -> result<_, string>` | Sends `payload` (at most 32 KiB) on `channel` from server to `player` (`*` for all). |
+| `send-to-client` | `func(player: string, channel: string, payload: list<u8>) -> result<_, string>` | Sends `payload` (at most 32 KiB) from the server to `player`, a UUID as 32 lowercase hexadecimal digits (`*` for all connected players). |
 
 ## `recipes`
 

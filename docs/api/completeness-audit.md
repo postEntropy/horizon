@@ -1,6 +1,6 @@
 # Mod API completeness audit
 
-Audit date: 2026-10-26. This records what is present in the API contract, SDK,
+Audit date: 2026-10-27. This records what is present in the API contract, SDK,
 WASM runtime and game bridge. An interface declared in WIT, or a runtime unit
 test, does not by itself mean a pack feature works in a playable world.
 
@@ -9,12 +9,13 @@ test, does not by itself mean a pack feature works in a playable world.
 | Line | Contract / SDK | Runtime | Game integration | Status |
 |---|---|---|---|---|
 | 0.3 logic | Present | Present | Present for the client and local game hooks inspected | Implemented in parts; full multiplayer and per-capability gameplay coverage is not established |
-| 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist | Usable foundation; feature behavior and multiplayer/persistence coverage are incomplete |
+| 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist; mod packets now bridge the integrated single-player client and server | Usable foundation; feature behavior, LAN/dedicated networking and persistence coverage are incomplete |
 | 0.5 deep | Present | Present, including runtime tests | Melee damage, XP awards and block/mob loot dispatch hooks; custom entity lifecycle, models and other hooks remain unwired | Partial live bridge; not a complete player-facing API |
 
 ## Scope for the current ATM10 core milestone
 
-**Active:** API 0.4 machine behavior, starting with the Enrichment Chamber.
+**Active:** API 0.4 machine behavior and client/server integration, starting
+with the Enrichment Chamber and the local packet bridge.
 
 **Deferred:** completing API 0.3 and 0.5 game integrations. Their current
 interfaces and compatibility remain in the runtime; removing those versions
@@ -48,6 +49,12 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   tick, save/load, UI/menu callbacks and the capability checks.
 - Game code creates and ticks mod block entities, saves their private bytes and
   slots, exposes menu interactions, and connects energy/fluid operations.
+- The game now routes bounded `net` packets between the local window and its
+  integrated server: 256 packet queue entries per direction, at most 64
+  delivered per server/client tick. This covers the built-in single-player
+  server thread only. LAN guests, remote servers and dedicated servers are not
+  connected to mod packet dispatch yet; packet routing has not been exercised
+  in a live multiplayer session.
 - The general machine API's direct recipe lookup is limited to vanilla cooking
   recipes; custom machine recipes must use the recipe registry. Item-stack
   components are not carried by the machine slot contract. Those limits matter
@@ -107,10 +114,10 @@ was regenerated with the documented command and the full run then passed.
    save/recreate boundary. The live world confirms powered output and output
    persistence through a world save/reopen. Still add Java-side power injection
    for direct parity and verify integrated-server client updates.
-2. **0.4 generalization:** test representative item, fluid, energy, UI, network
-   and recipe flows in a real game; document unsupported item components and
-   recipe shapes; verify LAN/dedicated behavior before marking those capabilities
-   complete.
+2. **0.4 generalization:** run the `net-bridge` example in an integrated world;
+   test representative item, fluid, energy, UI, and recipe flows in a real game;
+   document unsupported item components and recipe shapes; finish and verify
+   LAN/dedicated packet delivery before marking networking complete.
 3. Keep the generated API reference synchronized with WIT and this audit
    synchronized with actual end-to-end evidence.
 

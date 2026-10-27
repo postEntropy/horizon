@@ -1,0 +1,8 @@
+id = "net_bridge"
+name = "Mod Packet Bridge Check"
+version = "0.1.0"
+description = "Sends one packet to the integrated server and displays its reply."
+authors = ["Horizon"]
+api = "0.4"
+side = "both"
+capabilities = ["chat", "net"]

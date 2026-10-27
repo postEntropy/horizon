@@ -429,18 +429,21 @@ it; the game does not create, tick or save them yet (next step in the plan).
   in single player and on any server, vanilla or Horizon. They see only what
   the client already knows (the snapshot), like F3 does, and act only on the
   local screen and chat. A server cannot see them.
-- **Server mods** (`side = "server"`) will run where the world is simulated:
-  Horizon's integrated server in single player and LAN, and the dedicated
-  server. Vanilla clients can join if the mod only uses vanilla content
-  (rules, commands, events).
-- **Both** (`side = "both"`): a server mod with a client half (new blocks,
-  their textures, a custom screen). On join the Horizon server announces its
-  mods (id, version, SHA-256) on a `horizon:mods` custom payload channel; a
-  Horizon client with matching client halves enables them for that session, or
-  offers to download them from the same source the launcher uses. Vanilla
-  clients are refused only if the server says its mods need a client.
-- Registries (new blocks and items) are server-owned and synced like vanilla's
-  registry sync, so ids match on both ends.
+- **Server mods** (`side = "server"`) run where the world is simulated. The
+  game loads them on its local server, but their hooks are not yet verified
+  across LAN and dedicated-server play.
+- **Both** (`side = "both"`) means the package can be loaded by client and
+  server. Automatic mod announcements, downloads and registry synchronization
+  between separate players are not implemented yet; install matching content
+  on both ends yourself.
+- The `net` capability currently bridges the window and its integrated
+  single-player server only. LAN guests and remote or dedicated servers do not
+  receive mod packets yet. A server-to-client target is a UUID written as 32
+  lowercase hexadecimal digits, or `*` for all players supported by that
+  connection.
+- The SDK's `examples/net-bridge` sends one `ping` from the window to the
+  integrated server, gets a `pong` back and prints a confirmation in chat. It
+  is a small way to inspect this path before trying a larger mod.
 
 ## Distribution
 

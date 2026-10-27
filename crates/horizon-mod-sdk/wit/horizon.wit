@@ -473,7 +473,8 @@ interface ui {
 interface net {
     /// Sends `payload` (at most 32 KiB) on `channel` from client to server.
     send-to-server: func(channel: string, payload: list<u8>) -> result<_, string>;
-    /// Sends `payload` (at most 32 KiB) on `channel` from server to `player` (`*` for all).
+    /// Sends `payload` (at most 32 KiB) from the server to `player`, a UUID
+    /// as 32 lowercase hexadecimal digits (`*` for all connected players).
     send-to-client: func(player: string, channel: string, payload: list<u8>) -> result<_, string>;
 }
 

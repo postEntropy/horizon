@@ -24,13 +24,15 @@ use horizon_client::{
 };
 use horizon_protocol::connection::Pipe;
 use horizon_protocol::{crypto::offline_uuid, text::translatable};
+#[cfg(feature = "mods")]
+use std::sync::mpsc::{TryRecvError, TrySendError};
 use std::{
     net::TcpListener,
     path::Path,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicI32, AtomicU16, AtomicU32, Ordering},
-        mpsc::{Receiver, Sender, channel, sync_channel},
+        mpsc::{Receiver, Sender, SyncSender, channel, sync_channel},
     },
     thread::JoinHandle,
     time::{Duration, Instant},
@@ -56,11 +58,23 @@ struct Flags {
 /// Work the window hands its server thread (`MinecraftServer.execute`).
 type Task = Box<dyn FnOnce(&mut Game<'_>) + Send>;
 
+/// A bounded mod packet crossing the integrated server's in-memory boundary.
+pub(super) struct ModPacket {
+    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
+    pub(super) channel: String,
+    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
+    pub(super) payload: Vec<u8>,
+}
+
 /// The window's handle on its server thread.
 pub(super) struct Integrated {
     flags: Arc<Flags>,
     thread: Option<JoinHandle<()>>,
     tasks: Sender<Task>,
+    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
+    client_to_server: SyncSender<ModPacket>,
+    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
+    mod_packets: Receiver<ModPacket>,
     /// The world's name (`level.dat`'s `LevelName`), for the pause menu.
     pub world_name: String,
 }
@@ -82,6 +96,23 @@ impl Integrated {
     /// `IntegratedServer.getPort` while `isPublished`.
     pub fn published(&self) -> Option<u16> {
         Some(self.flags.published.load(Ordering::Relaxed)).filter(|&p| p != 0)
+    }
+    /// Deliver a packet from the window's mod runtime to the server runtime.
+    #[cfg(feature = "mods")]
+    pub fn send_mod_packet(&self, packet: ModPacket) -> bool {
+        self.client_to_server.try_send(packet).is_ok()
+    }
+    /// Packets queued by the server runtime for the local window.
+    #[cfg(feature = "mods")]
+    pub fn drain_mod_packets(&self) -> Vec<ModPacket> {
+        let mut packets = Vec::new();
+        for _ in 0..64 {
+            match self.mod_packets.try_recv() {
+                Ok(packet) => packets.push(packet),
+                Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
+            }
+        }
+        packets
     }
     /// `executeBlocking`: run `f` on the server thread between two ticks and
     /// wait for its answer; `None` once the server has stopped.
@@ -143,9 +174,28 @@ pub(super) struct Serving {
     tasks: Receiver<Task>,
     /// The window's profile.
     owner: u128,
+    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
+    owner_uuid: String,
+    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
+    client_to_server: Receiver<ModPacket>,
+    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
+    mod_packets: SyncSender<ModPacket>,
     /// Open to LAN or closed from inside a player's command, while the hub
     /// is out of its place: applied after the tick.
     pending: Option<Publish>,
+}
+impl Serving {
+    /// Queues a mod packet for the one player in an integrated world.
+    #[cfg(feature = "mods")]
+    pub fn send_mod_packet(&self, player: &str, packet: ModPacket) -> bool {
+        if player != "*" && player != self.owner_uuid {
+            return false;
+        }
+        match self.mod_packets.try_send(packet) {
+            Ok(()) => true,
+            Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => false,
+        }
+    }
 }
 enum Publish {
     Open(TcpListener, LanSettings),
@@ -168,6 +218,8 @@ struct Launch {
     owner: u128,
     /// Its name, for the LAN's MOTD.
     player: String,
+    client_to_server: Receiver<ModPacket>,
+    mod_packets: SyncSender<ModPacket>,
 }
 
 /// Whether this world opens on a server thread: asked for.
@@ -203,6 +255,9 @@ impl Game<'_> {
         let player = auth
             .as_ref()
             .map_or_else(|| self.options.player_name(), |a| a.name.clone());
+        let owner = offline_uuid(&player);
+        let (client_to_server_tx, client_to_server_rx) = sync_channel(256);
+        let (mod_packet_tx, mod_packet_rx) = sync_channel(256);
         let launch = Launch {
             folder: folder.to_owned(),
             name: name.map(str::to_owned),
@@ -210,8 +265,10 @@ impl Game<'_> {
             creative,
             create: create.cloned(),
             // An offline-mode server names its players by their offline profile.
-            owner: offline_uuid(&player),
+            owner,
             player: player.clone(),
+            client_to_server: client_to_server_rx,
+            mod_packets: mod_packet_tx,
         };
         let mut options = self.options.clone();
         // A server without a console: no local player, no window, no control socket.
@@ -262,6 +319,8 @@ impl Game<'_> {
             flags,
             thread: Some(thread),
             tasks,
+            client_to_server: client_to_server_tx,
+            mod_packets: mod_packet_rx,
             world_name: String::new(),
         };
         let pipe = match ready.recv() {
@@ -355,6 +414,9 @@ impl Game<'_> {
             flags: flags.clone(),
             tasks,
             owner,
+            owner_uuid: format!("{owner:032x}"),
+            client_to_server: launch.client_to_server,
+            mod_packets: launch.mod_packets,
             pending: None,
         });
         let _ = ready.send(Ok((pipe, self.level.name.clone())));
@@ -520,6 +582,22 @@ impl Game<'_> {
         for task in tasks {
             task(self);
             self.apply_publish();
+        }
+        #[cfg(feature = "mods")]
+        {
+            let packets = self
+                .serving
+                .as_ref()
+                .map(|s| s.client_to_server.try_iter().take(64).collect::<Vec<_>>())
+                .unwrap_or_default();
+            let owner = self
+                .serving
+                .as_ref()
+                .map(|s| s.owner_uuid.clone())
+                .unwrap_or_default();
+            for packet in packets {
+                self.deliver_mod_packet(&packet.channel, &packet.payload, Some(&owner));
+            }
         }
     }
     /// `IntegratedServer.getPort` while published.

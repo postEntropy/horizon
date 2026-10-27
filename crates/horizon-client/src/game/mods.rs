@@ -84,7 +84,7 @@ pub(super) struct ModItemDrop {
 
 #[cfg(feature = "mods")]
 use {
-    super::Screen,
+    super::{Screen, integrated::ModPacket},
     horizon_client::{
         extras::Corner,
         extras_hud,
@@ -382,6 +382,7 @@ impl Game<'_> {
     }
     pub(super) fn sync_mods(&mut self) {}
     pub(super) fn tick_mods(&mut self) {}
+    pub(super) fn poll_mod_packets(&mut self) {}
     pub(super) fn mods_frame(&mut self, _elapsed: Duration) {}
     pub(super) fn mod_use_block(
         &mut self,
@@ -2600,7 +2601,7 @@ impl Game<'_> {
         self.show_mod_output();
     }
     /// Chat lines, command feedback and stopped mods, into the chat.
-    fn show_mod_output(&mut self) {
+    pub(super) fn show_mod_output(&mut self) {
         for output in self.mods.mods.drain() {
             let line = match output {
                 Output::Chat { name, text } => {
@@ -2681,10 +2682,33 @@ impl Game<'_> {
                     }
                     continue;
                 }
-                Output::ScreenOpened { .. }
-                | Output::ScreenClosed { .. }
-                | Output::PacketToServer { .. }
-                | Output::PacketToClient { .. } => continue,
+                Output::PacketToServer {
+                    channel, payload, ..
+                } => {
+                    if let Some(server) = self.integrated.as_ref() {
+                        if !server.send_mod_packet(ModPacket { channel, payload }) {
+                            log::warn!("Horizon: dropped a mod packet to the integrated server");
+                        }
+                    } else {
+                        log::warn!("Horizon: mod packets need an integrated server");
+                    }
+                    continue;
+                }
+                Output::PacketToClient {
+                    player,
+                    channel,
+                    payload,
+                    ..
+                } => {
+                    let delivered = self.serving.as_ref().is_some_and(|server| {
+                        server.send_mod_packet(&player, ModPacket { channel, payload })
+                    });
+                    if !delivered {
+                        log::warn!("Horizon: dropped a mod packet for {player:?}");
+                    }
+                    continue;
+                }
+                Output::ScreenOpened { .. } | Output::ScreenClosed { .. } => continue,
             };
             // Not through system_message: a mod must not hear its own lines.
             let focused = self.screen == Screen::Chat;
@@ -2692,6 +2716,33 @@ impl Game<'_> {
                 .chat
                 .add(&self.gui.atlas, line, None, self.ticks, focused);
         }
+    }
+    /// Delivers packets the integrated server queued for the window.
+    pub(super) fn poll_mod_packets(&mut self) {
+        #[cfg(feature = "mods")]
+        {
+            let packets = self
+                .integrated
+                .as_ref()
+                .map_or_else(Vec::new, |server| server.drain_mod_packets());
+            if packets.is_empty() {
+                return;
+            }
+            for packet in packets {
+                self.deliver_mod_packet(&packet.channel, &packet.payload, None);
+            }
+        }
+    }
+    /// A packet received from the other half of the local integrated mod.
+    #[cfg(feature = "mods")]
+    pub(super) fn deliver_mod_packet(
+        &mut self,
+        channel: &str,
+        payload: &[u8],
+        from_player: Option<&str>,
+    ) {
+        self.mods.mods.deliver_packet(channel, payload, from_player);
+        self.show_mod_output();
     }
     /// The mods' HUD panels, stacked with the extras in their corners.
     pub(super) fn draw_mod_panels(&self, batch: &mut HudBatch, corners: &mut Corners) {

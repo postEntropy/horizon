@@ -4236,6 +4236,7 @@ impl Game<'_> {
         self.tick_debug_keys()?;
         self.tick_debug_charts();
         if self.remote.is_some() {
+            self.poll_mod_packets();
             return self.tick_remote();
         }
         // LevelLoadingScreen.tick.
