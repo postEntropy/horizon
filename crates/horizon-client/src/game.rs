@@ -12516,6 +12516,45 @@ fn synchronous_startup(options: &Options) -> bool {
         || std::env::var_os("HORIZON_NET_REPORT").is_some()
 }
 
+type CoreResourceData = (
+    BlockFacts,
+    Vec<horizon_client::blocks::GameplayProjection>,
+    Biomes,
+    Environment,
+);
+
+/// The registry facts, biome sources and dimension environment do not depend
+/// on one another. Keep this helper usable both beside model baking and for
+/// the uncommon resource-pack rollback path.
+fn load_core_resource_data(
+    root: &std::path::Path,
+    registry: &'static horizon_world::registry::BlockRegistry,
+    behaviour_json: &serde_json::Value,
+    threads: usize,
+) -> std::result::Result<CoreResourceData, String> {
+    let load_facts = || {
+        BlockFacts::load_with_projection(root, registry, behaviour_json).map_err(|e| e.to_string())
+    };
+    let load_biomes = || Biomes::load(root).map_err(|e| e.to_string());
+    let load_environment = || Environment::load(root).map_err(|e| e.to_string());
+    let (facts, biomes, environment) = if threads > 1 {
+        std::thread::scope(|scope| {
+            let facts = scope.spawn(load_facts);
+            let biomes = scope.spawn(load_biomes);
+            let environment = scope.spawn(load_environment);
+            (
+                facts.join().unwrap(),
+                biomes.join().unwrap(),
+                environment.join().unwrap(),
+            )
+        })
+    } else {
+        (load_facts(), load_biomes(), load_environment())
+    };
+    let (facts, gameplay_projection) = facts?;
+    Ok((facts, gameplay_projection, biomes?, environment?))
+}
+
 /// The synchronous launch loads both phases; an ordinary launch returns the
 /// core bundle while the rest worker keeps loading.
 fn load_resources(
@@ -12562,20 +12601,13 @@ fn load_resources(
     }
     progress.set(0);
     let assets_started = Instant::now();
-    let (assets, render) = match Assets::load(&root).and_then(|assets| {
-        let render = assets.reload(&root)?;
-        Ok((assets, render))
-    }) {
-        Ok(bundle) => bundle,
-        // Minecraft.rollbackResourcePacks: the packs break loading, start
-        // with the game's own resources.
+    let assets = match Assets::load(&root) {
+        Ok(assets) => assets,
         Err(e) if root != vanilla_root => {
             log::warn!("Horizon: resource packs failed to load ({e}); using the default resources");
             pack_error = Some(e.to_string());
             root = vanilla_root.to_path_buf();
-            let assets = Assets::load(vanilla_root)?;
-            let render = assets.reload(vanilla_root)?;
-            (assets, render)
+            Assets::load(vanilla_root)?
         }
         Err(e) => {
             return Err(format!(
@@ -12584,8 +12616,73 @@ fn load_resources(
             .into());
         }
     };
-    let assets = Arc::new(assets);
-    let render = Arc::new(render);
+    let mut assets = Arc::new(assets);
+    let mut behaviour_json: serde_json::Value = serde_json::from_reader(std::io::BufReader::new(
+        std::fs::File::open(root.join("block-behaviours.json"))?,
+    ))?;
+    let facts_started = Instant::now();
+    // Baking the pack's models and textures is independent of decoding its
+    // state facts, biomes and environment. Run both sides at once on normal
+    // launches, while preserving the single-worker path for constrained runs.
+    let (render_result, mut core_result) = if threads > 1 {
+        std::thread::scope(|scope| {
+            let assets_for_render = assets.clone();
+            let root_for_render = root.clone();
+            let rendering = scope.spawn(move || {
+                assets_for_render
+                    .reload(&root_for_render)
+                    .map_err(|e| e.to_string())
+            });
+            let assets_for_facts = assets.clone();
+            let root_for_facts = root.clone();
+            let behaviour_for_facts = &behaviour_json;
+            let facts = scope.spawn(move || {
+                load_core_resource_data(
+                    &root_for_facts,
+                    assets_for_facts.registry,
+                    behaviour_for_facts,
+                    threads,
+                )
+            });
+            (rendering.join().unwrap(), facts.join().unwrap())
+        })
+    } else {
+        (
+            assets.reload(&root).map_err(|e| e.to_string()),
+            load_core_resource_data(&root, assets.registry, &behaviour_json, threads),
+        )
+    };
+    let render = match render_result {
+        Ok(render) => Arc::new(render),
+        Err(e) if root != vanilla_root => {
+            // Minecraft.rollbackResourcePacks: the pack breaks loading, so
+            // discard the concurrently loaded data and retry on vanilla.
+            log::warn!("Horizon: resource packs failed to load ({e}); using the default resources");
+            pack_error = Some(e);
+            root = vanilla_root.to_path_buf();
+            assets = Arc::new(Assets::load(vanilla_root)?);
+            behaviour_json = serde_json::from_reader(std::io::BufReader::new(
+                std::fs::File::open(root.join("block-behaviours.json"))?,
+            ))?;
+            let retry_started = Instant::now();
+            core_result = load_core_resource_data(&root, assets.registry, &behaviour_json, threads);
+            log::info!(
+                "Horizon: resource rollback facts loaded in {:.2}s",
+                retry_started.elapsed().as_secs_f32()
+            );
+            let render = assets.reload(vanilla_root)?;
+            Arc::new(render)
+        }
+        Err(e) => {
+            return Err(format!(
+                "{e}\nPrepare resources with the launcher, or: horizon-prepare --prepare"
+            )
+            .into());
+        }
+    };
+    let (facts, gameplay_projection, biomes, environment) =
+        core_result.map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+    let biomes = Arc::new(biomes);
     register_dimensions_from_resources(&root);
     // The menu bundle must come from the same root as the world bundle.
     if !ui_ready || root != requested_root {
@@ -12607,37 +12704,6 @@ fn load_resources(
         assets_started.elapsed().as_secs_f32()
     );
     progress.set(1);
-    let behaviour_json: serde_json::Value = serde_json::from_reader(std::io::BufReader::new(
-        std::fs::File::open(root.join("block-behaviours.json"))?,
-    ))?;
-    // The block facts, the biomes and the environment are independent reads:
-    // run them together, within the worker budget the settings allow.
-    let registry = assets.registry;
-    let load_facts = || {
-        BlockFacts::load_with_projection(&root, registry, &behaviour_json)
-            .map_err(|e| e.to_string())
-    };
-    let load_biomes = || Biomes::load(&root).map_err(|e| e.to_string());
-    let load_environment = || Environment::load(&root).map_err(|e| e.to_string());
-    let facts_started = Instant::now();
-    let (facts, biomes, environment) = if threads > 1 {
-        std::thread::scope(|scope| {
-            let facts = scope.spawn(load_facts);
-            let biomes = scope.spawn(load_biomes);
-            let environment = scope.spawn(load_environment);
-            (
-                facts.join().unwrap(),
-                biomes.join().unwrap(),
-                environment.join().unwrap(),
-            )
-        })
-    } else {
-        (load_facts(), load_biomes(), load_environment())
-    };
-    let (facts, gameplay_projection) =
-        facts.map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
-    let biomes = Arc::new(biomes.map_err(|e| -> Box<dyn std::error::Error> { e.into() })?);
-    let environment = environment.map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
     log::info!("load facts: {:.2}s", started.elapsed().as_secs_f32());
     log::info!(
         "Horizon: facts, biomes and environment stage took {:.2}s",
