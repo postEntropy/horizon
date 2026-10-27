@@ -212,6 +212,7 @@ properties and shapes the new block takes, and overrides what differs:
   "template": "minecraft:iron_block",
   "properties": { "hardness": 5.0, "explosion_resistance": 6.0, "sound": "minecraft:metal",
                   "map_color": 33, "light": 0, "requires_tool": true },
+  "state_properties": { "facing": ["north", "east", "south", "west"] },
   "item": true
 }
 ```
@@ -221,6 +222,13 @@ Most decoration and resource blocks are vanilla classes with other numbers: Maca
 data tier without code. Templates also give mod blocks every behaviour Horizon already
 implements and the harnesses already check. Items work the same way (`"template":
 "minecraft:diamond"`, overriding `max_stack_size`, `rarity` and so on).
+
+When a mod's model states use properties the vanilla template does not have, `state_properties`
+declares each property and its possible values. Horizon registers the Cartesian product (up to
+65,536 states per block), so the carried blockstate models can resolve every combination. The
+template's default state supplies the copied gameplay and shape data for all those combinations;
+this preserves model variants while reporting that behavior as an approximation. The field is
+optional and omitted for blocks whose state schema matches their template.
 
 How the game loads them, without touching vanilla's path:
 

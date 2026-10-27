@@ -13,6 +13,17 @@ use std::{
     path::Path,
 };
 
+/// Block state property domains exported from a prepared vanilla resource root.
+pub type StateSchemas = BTreeMap<String, BTreeMap<String, BTreeSet<String>>>;
+
+fn template_id(template: &str) -> String {
+    if template.contains(':') {
+        template.to_owned()
+    } else {
+        format!("minecraft:{template}")
+    }
+}
+
 #[derive(Debug, Default, Serialize)]
 pub struct Report {
     pub copied: usize,
@@ -641,6 +652,58 @@ pub fn properties(blockstate: &Value) -> BTreeSet<String> {
         }
     }
     out
+}
+
+/// The complete custom property domains expressed by a carried blockstate.
+/// They become registry states when no vanilla template has the same schema;
+/// the chosen template still supplies fallback gameplay facts.
+fn carried_state_properties(blockstate: &Value) -> Option<BTreeMap<String, Vec<String>>> {
+    const MAX_STATES: usize = 65_536;
+    let valid = |value: &str| {
+        !value.is_empty()
+            && value
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b))
+    };
+    let mut states = 1usize;
+    let mut out = BTreeMap::new();
+    for property in properties(blockstate) {
+        let mut values = values(blockstate, &property);
+        if values.contains("true") || values.contains("false") {
+            values.extend(["true".into(), "false".into()]);
+        }
+        let values: Vec<String> = values.into_iter().collect();
+        if !valid(&property) || values.is_empty() || values.iter().any(|value| !valid(value)) {
+            return None;
+        }
+        states = states
+            .checked_mul(values.len())
+            .filter(|&n| n <= MAX_STATES)?;
+        out.insert(property, values);
+    }
+    Some(out)
+}
+
+/// Returns the source schema when the selected vanilla template cannot
+/// represent one of its property axes or values.
+fn properties_outside_template(
+    blockstate: &Value,
+    template: &str,
+    schemas: Option<&StateSchemas>,
+) -> Option<BTreeMap<String, Vec<String>>> {
+    let properties = carried_state_properties(blockstate)?;
+    if properties.is_empty() {
+        return None;
+    }
+    let schema = schemas?.get(template)?;
+    properties
+        .iter()
+        .any(|(key, values)| {
+            schema
+                .get(key)
+                .is_none_or(|valid| values.iter().any(|value| !valid.contains(value)))
+        })
+        .then_some(properties)
 }
 
 /// A 1.21.1 ingredient (`{"item": id}`, `{"tag": t}` or a list of those) as
@@ -1306,7 +1369,42 @@ pub fn carry(
     pack: &Pack,
     conventions: &BTreeMap<String, Value>,
 ) -> Result<Report, String> {
-    carry_kind(jar, info, out, facts, allowed, pack, conventions, false)
+    carry_kind(
+        jar,
+        info,
+        out,
+        facts,
+        allowed,
+        pack,
+        conventions,
+        false,
+        None,
+    )
+}
+
+/// [`carry`] with vanilla property domains, so template guesses can detect
+/// values that share property names but are not valid in the selected block.
+pub fn carry_with_state_schemas(
+    jar: &Path,
+    info: &JarInfo,
+    out: &Path,
+    facts: Option<&Facts>,
+    allowed: &dyn Fn(&str) -> bool,
+    pack: &Pack,
+    conventions: &BTreeMap<String, Value>,
+    schemas: &StateSchemas,
+) -> Result<Report, String> {
+    carry_kind(
+        jar,
+        info,
+        out,
+        facts,
+        allowed,
+        pack,
+        conventions,
+        false,
+        Some(schemas),
+    )
 }
 
 /// Carries a standalone data pack. Every non-reserved namespace in its
@@ -1320,7 +1418,41 @@ pub fn carry_datapack(
     pack: &Pack,
     conventions: &BTreeMap<String, Value>,
 ) -> Result<Report, String> {
-    carry_kind(jar, info, out, facts, allowed, pack, conventions, true)
+    carry_kind(
+        jar,
+        info,
+        out,
+        facts,
+        allowed,
+        pack,
+        conventions,
+        true,
+        None,
+    )
+}
+
+/// [`carry_datapack`] with vanilla property domains.
+pub fn carry_datapack_with_state_schemas(
+    jar: &Path,
+    info: &JarInfo,
+    out: &Path,
+    facts: Option<&Facts>,
+    allowed: &dyn Fn(&str) -> bool,
+    pack: &Pack,
+    conventions: &BTreeMap<String, Value>,
+    schemas: &StateSchemas,
+) -> Result<Report, String> {
+    carry_kind(
+        jar,
+        info,
+        out,
+        facts,
+        allowed,
+        pack,
+        conventions,
+        true,
+        Some(schemas),
+    )
 }
 
 fn carry_kind(
@@ -1332,6 +1464,7 @@ fn carry_kind(
     pack: &Pack,
     conventions: &BTreeMap<String, Value>,
     data_pack: bool,
+    state_schemas: Option<&StateSchemas>,
 ) -> Result<Report, String> {
     let loaded = pack.loaded;
     let id = &info.mod_id;
@@ -1645,6 +1778,7 @@ fn carry_kind(
             let Some(b) = full.strip_prefix(&prefix) else {
                 break;
             };
+            let mut custom_state_properties = None;
             let choice = facts.template(full, allowed).or_else(|| {
                 let template = blockstates
                     .get(b)
@@ -1661,8 +1795,20 @@ fn carry_kind(
                         "mod-specific block states adapted to a vanilla template".into(),
                     ],
                 })
+            }).or_else(|| {
+                let state = blockstates.get(b)?;
+                let properties = carried_state_properties(state)?;
+                if properties.is_empty() || !allowed("minecraft:stone") {
+                    return None;
+                }
+                custom_state_properties = Some(properties);
+                Some(crate::oracle::Choice {
+                    template: "minecraft:stone".into(),
+                    properties: Map::new(),
+                    differences: vec!["custom block-state properties registered; gameplay uses the minecraft:stone fallback".into()],
+                })
             });
-            let Some(choice) = choice else {
+            let Some(mut choice) = choice else {
                 let props: Vec<&str> = block.properties.keys().map(String::as_str).collect();
                 let why = format!(
                     "no vanilla {} with properties [{}]",
@@ -1672,7 +1818,22 @@ fn carry_kind(
                 report.blocks_unknown.insert(b.to_owned(), why);
                 continue;
             };
+            if custom_state_properties.is_none()
+                && let Some(state) = blockstates.get(b)
+                && let Some(properties) =
+                    properties_outside_template(state, &choice.template, state_schemas)
+            {
+                custom_state_properties = Some(properties);
+                choice.template = "minecraft:stone".into();
+                choice.differences.push(
+                    "custom block-state values registered; gameplay uses the minecraft:stone fallback"
+                        .into(),
+                );
+            }
             let mut v = json!({"template": choice.template, "properties": choice.properties});
+            if let Some(properties) = custom_state_properties {
+                v["state_properties"] = json!(properties);
+            }
             if block.item == "minecraft:air" {
                 v["item"] = json!(false);
             } else if block.item != *full {
@@ -1773,6 +1934,26 @@ fn carry_kind(
     } else {
         for (b, state) in &blockstates {
             match block_template(b, state) {
+                Some(t)
+                    if let Some(properties) =
+                        properties_outside_template(state, &template_id(t), state_schemas) =>
+                {
+                    write_decl(
+                        "block",
+                        b,
+                        &json!({
+                            "template": "minecraft:stone",
+                            "state_properties": properties,
+                        }),
+                    )?;
+                    report
+                        .blocks
+                        .insert(b.clone(), "minecraft:stone".to_owned());
+                    report.differences.insert(
+                        b.clone(),
+                        vec!["custom block-state values registered; gameplay uses the minecraft:stone fallback".into()],
+                    );
+                }
                 Some(t) => {
                     write_decl("block", b, &json!({"template": t}))?;
                     report.blocks.insert(b.clone(), t.to_owned());
@@ -1785,6 +1966,24 @@ fn carry_kind(
                             ],
                         );
                     }
+                }
+                None if carried_state_properties(state).is_some_and(|p| !p.is_empty()) => {
+                    let properties = carried_state_properties(state).unwrap_or_default();
+                    write_decl(
+                        "block",
+                        b,
+                        &json!({
+                            "template": "minecraft:stone",
+                            "state_properties": properties,
+                        }),
+                    )?;
+                    report
+                        .blocks
+                        .insert(b.clone(), "minecraft:stone".to_owned());
+                    report.differences.insert(
+                        b.clone(),
+                        vec!["custom block-state properties registered; gameplay uses the minecraft:stone fallback".into()],
+                    );
                 }
                 None => {
                     let props: Vec<String> = properties(state).into_iter().collect();

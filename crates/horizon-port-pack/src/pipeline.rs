@@ -101,6 +101,35 @@ fn vanilla_blocks(resources: &Path) -> Result<BTreeSet<String>, String> {
     Ok(defaults.keys().cloned().collect())
 }
 
+/// Vanilla's property domains, by block id and property name.
+fn vanilla_state_schemas(resources: &Path) -> Result<carry::StateSchemas, String> {
+    let facts: Value = read_json(&resources.join("facts.json"))?;
+    let states = facts["states"].as_array().ok_or("facts.json: no states")?;
+    let mut schemas = carry::StateSchemas::new();
+    for row in states {
+        let Some(name) = row.get(0).and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(properties) = row
+            .get(4)
+            .and_then(|state| state.get("properties"))
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+        let schema = schemas.entry(name.to_owned()).or_default();
+        for (property, value) in properties {
+            if let Some(value) = value.as_str() {
+                schema
+                    .entry(property.clone())
+                    .or_default()
+                    .insert(value.to_owned());
+            }
+        }
+    }
+    Ok(schemas)
+}
+
 /// Step 4: supported-tier mods with a jar (or the ones in `only`) carried over
 /// into `<work>/mods/<id>/carry/`. Returns how many were.
 pub fn carry(
@@ -126,6 +155,11 @@ pub fn carry(
     let vanilla = resources.and_then(|r| {
         vanilla_blocks(r)
             .inspect_err(|e| log(format!("templates not limited to the game's blocks: {e}")))
+            .ok()
+    });
+    let state_schemas = resources.and_then(|r| {
+        vanilla_state_schemas(r)
+            .inspect_err(|e| log(format!("template state domains unavailable: {e}")))
             .ok()
     });
     let allowed = |b: &str| vanilla.as_ref().is_none_or(|v| v.contains(b));
@@ -207,10 +241,34 @@ pub fn carry(
         };
         let out = work.join("mods").join(&r.key);
         let facts = facts.as_ref().filter(seen);
-        let result = if r.path.split('/').next() == Some("datapacks") {
-            carry::carry_datapack(jar, info, &out, facts, &allowed, &pack, &conventions)
-        } else {
-            carry::carry(jar, info, &out, facts, &allowed, &pack, &conventions)
+        let result = match (
+            r.path.split('/').next() == Some("datapacks"),
+            state_schemas.as_ref(),
+        ) {
+            (true, Some(schemas)) => carry::carry_datapack_with_state_schemas(
+                jar,
+                info,
+                &out,
+                facts,
+                &allowed,
+                &pack,
+                &conventions,
+                schemas,
+            ),
+            (false, Some(schemas)) => carry::carry_with_state_schemas(
+                jar,
+                info,
+                &out,
+                facts,
+                &allowed,
+                &pack,
+                &conventions,
+                schemas,
+            ),
+            (true, None) => {
+                carry::carry_datapack(jar, info, &out, facts, &allowed, &pack, &conventions)
+            }
+            (false, None) => carry::carry(jar, info, &out, facts, &allowed, &pack, &conventions),
         };
         match result {
             Ok(report) => {

@@ -11,7 +11,7 @@
 use crate::manifest::{Capability, MANIFEST, Manifest};
 use serde::Deserialize;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     io::Read,
     path::{Path, PathBuf},
 };
@@ -93,6 +93,11 @@ struct BlockFile {
     template: String,
     #[serde(default)]
     properties: BlockProperties,
+    /// A carried block whose source property schema is not one of its
+    /// vanilla template's. Each value list is an axis in the custom state
+    /// registry; every combination is registered in key/value order.
+    #[serde(default)]
+    state_properties: BTreeMap<String, Vec<String>>,
     #[serde(default = "yes")]
     item: bool,
 }
@@ -109,6 +114,9 @@ pub struct Block {
     /// The vanilla block it copies, `minecraft:<path>`.
     pub template: String,
     pub properties: BlockProperties,
+    /// Custom model-state axes carried from a mod's blockstate file. The
+    /// template still supplies the block's fallback behavior and facts.
+    pub state_properties: BTreeMap<String, Vec<String>>,
     /// Also add a block item with the same id.
     pub item: bool,
 }
@@ -384,6 +392,8 @@ impl Content {
             let file: BlockFile =
                 serde_json::from_slice(&self.file(&name)?).map_err(|e| format!("{name}: {e}"))?;
             check_block(&file).map_err(|e| format!("{name}: {e}"))?;
+            validate_state_properties(&file.state_properties)
+                .map_err(|e| format!("{name}: {e}"))?;
             if file.item {
                 ids.insert(block.clone());
             }
@@ -391,6 +401,7 @@ impl Content {
                 id: block,
                 template: file.template,
                 properties: file.properties,
+                state_properties: file.state_properties,
                 item: file.item,
             });
         }
@@ -463,6 +474,34 @@ fn check_block(file: &BlockFile) -> Result<(), String> {
     }
     if p.sounds.as_deref().is_some_and(|s| !vanilla_id(s)) {
         return Err("sounds names a vanilla block (minecraft:...)".into());
+    }
+    Ok(())
+}
+
+fn validate_state_properties(properties: &BTreeMap<String, Vec<String>>) -> Result<(), String> {
+    const MAX_STATES: usize = 65_536;
+    let valid = |s: &str| {
+        !s.is_empty()
+            && s.bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b))
+    };
+    let mut states = 1usize;
+    for (property, values) in properties {
+        if !valid(property) || values.is_empty() || values.iter().any(|value| !valid(value)) {
+            return Err(
+                "state_properties names and values must use lowercase resource characters".into(),
+            );
+        }
+        let unique: BTreeSet<&str> = values.iter().map(String::as_str).collect();
+        if unique.len() != values.len() {
+            return Err(format!(
+                "state_properties[{property:?}] has duplicate values"
+            ));
+        }
+        states = states
+            .checked_mul(values.len())
+            .filter(|&count| count <= MAX_STATES)
+            .ok_or_else(|| format!("state_properties exceed {MAX_STATES} states"))?;
     }
     Ok(())
 }
@@ -553,6 +592,7 @@ capabilities = ["registries"]
                     sounds: Some("minecraft:amethyst_block".into()),
                     ..BlockProperties::default()
                 },
+                state_properties: BTreeMap::new(),
                 item: true,
             }]
         );
