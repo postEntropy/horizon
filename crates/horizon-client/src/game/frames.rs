@@ -259,6 +259,13 @@ impl Game<'_> {
         } else {
             self.item_frames[i].clone()
         };
+        if with_frame {
+            self.mod_entity_death(
+                f.id,
+                f.kind(),
+                [f.pos[0] as f64, f.pos[1] as f64, f.pos[2] as f64],
+            );
+        }
         self.audio.play(
             &sound(&f, if with_frame { "break" } else { "remove_item" }),
             Some(at),
@@ -312,6 +319,11 @@ impl Game<'_> {
                 let f = self.item_frames[i].clone();
                 if !self.frame_survives(&f) {
                     self.item_frames.remove(i);
+                    self.mod_entity_death(
+                        f.id,
+                        f.kind(),
+                        [f.pos[0] as f64, f.pos[1] as f64, f.pos[2] as f64],
+                    );
                     self.audio
                         .play(&sound(&f, "break"), Some(center(&f)), 1.0, 1.0);
                     self.drop_frame_items(&f, true, false);

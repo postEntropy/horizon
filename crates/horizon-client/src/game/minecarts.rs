@@ -1234,6 +1234,7 @@ impl Game<'_> {
                 self.carts.insert(i, c);
             } else {
                 let at = [c.position.x, c.position.y, c.position.z];
+                self.mod_entity_death(c.id, c.kind.id(), at);
                 if self.ui.rules.bool("entity_drops") {
                     for s in c.items.iter().flatten() {
                         self.spawn_item(s.clone(), at, [0.0, 0.1, 0.0], 10);

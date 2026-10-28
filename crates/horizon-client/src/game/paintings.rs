@@ -210,6 +210,11 @@ impl Game<'_> {
     /// `Painting.hurtServer` -> kill and `dropItem`.
     pub(super) fn break_painting(&mut self, index: usize, by_player: bool) {
         let p = self.paintings.remove(index);
+        self.mod_entity_death(
+            p.id,
+            "minecraft:painting",
+            [p.pos[0] as f64, p.pos[1] as f64, p.pos[2] as f64],
+        );
         let (lo, hi) = p.bounds();
         let at = [
             (lo[0] + hi[0]) / 2.0,

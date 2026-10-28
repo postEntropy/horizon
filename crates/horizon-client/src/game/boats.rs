@@ -857,6 +857,7 @@ impl Game<'_> {
             self.eject_boat_mobs(i, true);
             let b = self.boats.remove(i);
             let at = [b.position.x, b.position.y, b.position.z];
+            self.mod_entity_death(b.id, &b.entity_type(), at);
             if !creative && self.ui.rules.bool("entity_drops") {
                 // ChestBoat.destroy: chestVehicleDestroyed spills the contents.
                 for stack in b.items.iter().flatten() {

@@ -777,6 +777,17 @@ impl Game<'_> {
         self.show_mod_output();
     }
 
+    /// Dispatches a death event for a game entity removed from the world.
+    /// Entity positions use block coordinates, matching the other server hooks.
+    pub(super) fn mod_entity_death(&mut self, id: u32, kind: &str, pos: [f64; 3]) {
+        self.mod_server_event(
+            "entity-death",
+            id.to_string(),
+            pos.map(|v| v.floor() as i32),
+            kind.to_owned(),
+        );
+    }
+
     pub(super) fn mod_local_player_joined(&mut self, pos: [i32; 3]) {
         if self.remote.is_some() || self.mods.local_player_session_active {
             return;

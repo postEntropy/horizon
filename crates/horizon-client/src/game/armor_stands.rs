@@ -507,7 +507,8 @@ impl Game<'_> {
             return true;
         }
         if self.creative {
-            self.armor_stands.remove(i);
+            let stand = self.armor_stands.remove(i);
+            self.mod_entity_death(stand.id, "minecraft:armor_stand", at);
             self.audio
                 .play("minecraft:entity.armor_stand.break", Some(at), 1.0, 1.0);
             return true;
@@ -521,6 +522,7 @@ impl Game<'_> {
         }
         // brokenByPlayer: the stand item, then brokenByAnything: the equipment.
         let a = self.armor_stands.remove(i);
+        self.mod_entity_death(a.id, "minecraft:armor_stand", at);
         self.audio
             .play("minecraft:entity.armor_stand.break", Some(at), 1.0, 1.0);
         let center = [at[0], at[1] + if a.small { 0.4875 } else { 0.9875 }, at[2]];
@@ -566,6 +568,7 @@ impl Game<'_> {
         for i in dead.into_iter().rev() {
             let a = self.armor_stands.remove(i);
             let at = [a.position.x, a.position.y, a.position.z];
+            self.mod_entity_death(a.id, "minecraft:armor_stand", at);
             let (pos, drops) = burnt_armor_stand_equipment(a);
             for stack in drops {
                 self.pop_resource(pos, stack);
