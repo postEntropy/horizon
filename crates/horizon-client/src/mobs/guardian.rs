@@ -199,12 +199,18 @@ pub fn move_control(m: &mut Mob) {
     m.extra.flag2 = true;
 }
 /// `Guardian.travelInWater`; on land the usual travel.
-pub fn travel(m: &mut Mob, w: &MobWorld, input: Vec3, events: &mut Vec<MobEvent>) -> bool {
+pub fn travel(
+    m: &mut Mob,
+    w: &MobWorld,
+    input: Vec3,
+    events: &mut Vec<MobEvent>,
+    damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
+) -> bool {
     if !m.fluids.in_water {
         return false;
     }
     m.move_relative(0.1, input);
-    m.do_move(w, events);
+    m.do_move_with_damage_hook(w, events, damage);
     m.velocity = m.velocity.scale(0.9);
     if !m.extra.flag2 && m.ai.target.is_none() {
         m.velocity.y -= 0.005;

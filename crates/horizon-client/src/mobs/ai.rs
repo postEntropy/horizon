@@ -409,7 +409,7 @@ pub fn tick_with_damage_hook(
         return false;
     }
     if !m.no_ai {
-        ai_step(m, w, level_random, events);
+        ai_step(m, w, level_random, events, damage);
     }
     if m.species() == Species::Rabbit {
         super::rabbit::post_tick(m);
@@ -542,7 +542,7 @@ fn base_tick(
             take_damage(m, 1.0, Damage::of(DamageKind::Drown), damage);
         }
     }
-    tick_effects(m);
+    tick_effects(m, damage);
     if m.species() == Species::Illusioner {
         super::illusioner::tick(m, events);
     }
@@ -657,7 +657,13 @@ fn play_ambient(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     }
 }
 /// LivingEntity.aiStep (and Mob/AgeableMob/Animal additions).
-fn ai_step(m: &mut Mob, w: &MobWorld, level_random: &mut LegacyRandom, events: &mut Vec<MobEvent>) {
+fn ai_step(
+    m: &mut Mob,
+    w: &MobWorld,
+    level_random: &mut LegacyRandom,
+    events: &mut Vec<MobEvent>,
+    damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
+) {
     // Witch.aiStep runs before super.aiStep().
     if m.species() == Species::Witch {
         let far = m
@@ -705,7 +711,7 @@ fn ai_step(m: &mut Mob, w: &MobWorld, level_random: &mut LegacyRandom, events: &
         f64::from(m.ai.yya),
         f64::from(m.ai.zza),
     );
-    m.travel(w, input, events);
+    m.travel_with_damage_hook(w, input, events, damage);
     push_entities(m, w, events);
     // Spider.tick: climbing while pressed against a wall.
     if m.kind.flags.climber {
@@ -1451,23 +1457,29 @@ pub fn ate(m: &mut Mob) {
     }
 }
 /// Species-specific travel (fish, squid, dolphins swim with their own rules).
-pub fn custom_travel(m: &mut Mob, w: &MobWorld, input: Vec3, events: &mut Vec<MobEvent>) -> bool {
+pub fn custom_travel(
+    m: &mut Mob,
+    w: &MobWorld,
+    input: Vec3,
+    events: &mut Vec<MobEvent>,
+    damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
+) -> bool {
     if m.species() == Species::Drowned {
-        return undead::drowned_travel(m, w, input, events);
+        return undead::drowned_travel(m, w, input, events, damage);
     }
     match family(m.species()) {
-        Family::Aquatic => aquatic::travel(m, w, input, events),
-        Family::Guardian => super::guardian::travel(m, w, input, events),
+        Family::Aquatic => aquatic::travel(m, w, input, events, damage),
+        Family::Guardian => super::guardian::travel(m, w, input, events, damage),
         // Shulkers never move on their own.
         Family::Shulker => true,
         Family::Vex => super::vex::travel(m),
-        Family::Nautilus => super::nautilus::travel(m, w, input, events),
+        Family::Nautilus => super::nautilus::travel(m, w, input, events, damage),
         _ => false,
     }
 }
 
 /// MobEffect ticking for the effects mobs receive (poison, wither, regeneration).
-fn tick_effects(m: &mut Mob) {
+fn tick_effects(m: &mut Mob, damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>) {
     let mut effects = std::mem::take(&mut m.extra.effects);
     for (effect, ticks, amp) in &mut effects {
         let interval = |base: i32| (base >> (*amp).max(0)).max(1);
@@ -1475,10 +1487,10 @@ fn tick_effects(m: &mut Mob) {
             "minecraft:poison"
                 if *ticks % interval(25) == 0 && !m.kind.flags.undead && m.health > 1.0 =>
             {
-                m.damage(1.0, Damage::of(DamageKind::Magic));
+                take_damage(m, 1.0, Damage::of(DamageKind::Magic), damage);
             }
             "minecraft:wither" if *ticks % interval(40) == 0 => {
-                m.damage(1.0, Damage::of(DamageKind::Magic));
+                take_damage(m, 1.0, Damage::of(DamageKind::Magic), damage);
             }
             "minecraft:regeneration"
                 if *ticks % interval(50) == 0 && !m.kind.flags.undead && m.alive() =>

@@ -207,13 +207,14 @@ pub fn drowned_travel(
     w: &super::MobWorld,
     input: Vec3,
     events: &mut Vec<MobEvent>,
+    damage: &mut dyn FnMut(&mut Mob, f32, super::Damage) -> Option<f32>,
 ) -> bool {
     // isUnderWater: wasEyeInWater && isInWater.
     if !(m.was_eye_in_water && m.fluids.in_water && drowned_wants_to_swim(m, w)) {
         return false;
     }
     m.move_relative(0.01, input);
-    m.do_move(w, events);
+    m.do_move_with_damage_hook(w, events, damage);
     m.velocity = Vec3::new(m.velocity.x * 0.9, m.velocity.y * 0.9, m.velocity.z * 0.9);
     true
 }

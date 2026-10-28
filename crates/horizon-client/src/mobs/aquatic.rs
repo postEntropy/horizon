@@ -275,18 +275,24 @@ fn squid_ai_step(m: &mut Mob) {
     }
 }
 /// Species travel overrides. Returns true when handled.
-pub fn travel(m: &mut Mob, w: &MobWorld, input: Vec3, events: &mut Vec<MobEvent>) -> bool {
+pub fn travel(
+    m: &mut Mob,
+    w: &MobWorld,
+    input: Vec3,
+    events: &mut Vec<MobEvent>,
+    damage: &mut dyn FnMut(&mut Mob, f32, super::Damage) -> Option<f32>,
+) -> bool {
     use Species as S;
     match m.species() {
         // Squid.travel: move by the current velocity only.
         S::Squid | S::GlowSquid => {
-            m.do_move(w, events);
+            m.do_move_with_damage_hook(w, events, damage);
             true
         }
         // Axolotl.travelInWater: no fish sinking or generic water gravity.
         S::Axolotl if m.fluids.in_water => {
             m.move_relative(m.ai.speed, input);
-            m.do_move(w, events);
+            m.do_move_with_damage_hook(w, events, damage);
             m.velocity = Vec3::new(m.velocity.x * 0.9, m.velocity.y * 0.9, m.velocity.z * 0.9);
             true
         }
@@ -298,7 +304,7 @@ pub fn travel(m: &mut Mob, w: &MobWorld, input: Vec3, events: &mut Vec<MobEvent>
                 0.01
             };
             m.move_relative(speed, input);
-            m.do_move(w, events);
+            m.do_move_with_damage_hook(w, events, damage);
             m.velocity = Vec3::new(m.velocity.x * 0.9, m.velocity.y * 0.9, m.velocity.z * 0.9);
             if m.ai.target.is_none() {
                 m.velocity.y -= 0.005;

@@ -173,7 +173,9 @@ impl HandWorld for Probe<'_> {
     fn within_border(&mut self, _: [i32; 3]) -> bool {
         true
     }
-    fn attack_block(&mut self, _: [i32; 3]) {}
+    fn attack_block(&mut self, _: [i32; 3]) -> bool {
+        false
+    }
     /// `BlockBehaviour.getDestroyProgress` with `Player.getDestroySpeed` for
     /// a player on the ground, out of water, with no mining efficiency.
     fn destroy_progress(&mut self, pos: [i32; 3]) -> f32 {
@@ -421,7 +423,7 @@ impl HandWorld for ResetWorld<'_, '_> {
         attack_entity() -> bool;
         block_action_restricted(pos: [i32; 3]) -> bool;
         within_border(pos: [i32; 3]) -> bool;
-        attack_block(pos: [i32; 3]) -> ();
+        attack_block(pos: [i32; 3]) -> bool;
         destroy_progress(pos: [i32; 3]) -> f32;
         destroy_block(pos: [i32; 3]) -> bool;
         main_hand_key() -> String;

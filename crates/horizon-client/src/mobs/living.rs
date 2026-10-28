@@ -335,6 +335,14 @@ impl Mob {
     /// Entity.move with block collisions and step-up; updates collision flags
     /// and fall distance (Entity.checkFallDamage).
     pub fn do_move(&mut self, w: &MobWorld, events: &mut Vec<MobEvent>) {
+        self.do_move_with_damage_hook(w, events, &mut |_, amount, _| Some(amount));
+    }
+    pub fn do_move_with_damage_hook(
+        &mut self,
+        w: &MobWorld,
+        events: &mut Vec<MobEvent>,
+        damage: &mut dyn FnMut(&mut Mob, f32, super::Damage) -> Option<f32>,
+    ) {
         let wanted = self.velocity;
         let step = self.kind.step_height as f32;
         let mut scene = SceneCollisions {
@@ -374,7 +382,7 @@ impl Mob {
         if self.kind.flags.lava_walker && self.fluids.in_lava {
             self.fall_distance = 0.0;
         } else if !matches!(self.kind.species, super::Species::Bat | super::Species::Bee) {
-            self.check_fall_damage(w, moved, events);
+            self.check_fall_damage(w, moved, events, damage);
         }
         // restituteMovementAfterCollisions with no bounciness: the colliding
         // components become (signed) zero.
@@ -396,7 +404,13 @@ impl Mob {
     }
     /// LivingEntity.checkFallDamage: the fluid state refreshed out of water
     /// (touching water resets the fall), then Entity.checkFallDamage.
-    fn check_fall_damage(&mut self, w: &MobWorld, moved: Vec3, events: &mut Vec<MobEvent>) {
+    fn check_fall_damage(
+        &mut self,
+        w: &MobWorld,
+        moved: Vec3,
+        events: &mut Vec<MobEvent>,
+        damage: &mut dyn FnMut(&mut Mob, f32, super::Damage) -> Option<f32>,
+    ) {
         if !self.fluids.in_water {
             self.update_fluids(w, events);
         }
@@ -405,7 +419,7 @@ impl Mob {
         }
         if self.on_ground {
             if self.fall_distance > 0.0 {
-                self.cause_fall_damage(events);
+                self.cause_fall_damage(events, damage);
             }
             self.fall_distance = 0.0;
         }
@@ -584,7 +598,11 @@ impl Mob {
             self.position.z.floor() as i32,
         ]
     }
-    fn cause_fall_damage(&mut self, events: &mut Vec<MobEvent>) {
+    fn cause_fall_damage(
+        &mut self,
+        events: &mut Vec<MobEvent>,
+        filter: &mut dyn FnMut(&mut Mob, f32, super::Damage) -> Option<f32>,
+    ) {
         // Breeze.causeFallDamage: a landing from higher than three blocks.
         if self.species() == super::Species::Breeze && self.fall_distance > 3.0 {
             let at = [self.position.x, self.position.y, self.position.z];
@@ -603,7 +621,10 @@ impl Mob {
                 "entity.generic.small_fall"
             };
             events.push(MobEvent::Sound(sound, at, 1.0, 1.0));
-            self.damage(damage as f32, super::Damage::fall());
+            let source = super::Damage::fall();
+            if let Some(amount) = filter(self, damage as f32, source) {
+                self.damage(amount, source);
+            }
         }
     }
     /// LivingEntity.getFrictionInfluencedSpeed.
@@ -631,11 +652,20 @@ impl Mob {
     }
     /// LivingEntity.travel.
     pub fn travel(&mut self, w: &MobWorld, input: Vec3, events: &mut Vec<MobEvent>) {
-        if super::ai::custom_travel(self, w, input, events) {
+        self.travel_with_damage_hook(w, input, events, &mut |_, amount, _| Some(amount));
+    }
+    pub fn travel_with_damage_hook(
+        &mut self,
+        w: &MobWorld,
+        input: Vec3,
+        events: &mut Vec<MobEvent>,
+        damage: &mut dyn FnMut(&mut Mob, f32, super::Damage) -> Option<f32>,
+    ) {
+        if super::ai::custom_travel(self, w, input, events, damage) {
             return;
         }
         if self.kind.flags.flying {
-            return self.travel_flying(w, input, events);
+            return self.travel_flying(w, input, events, damage);
         }
         // shouldTravelInFluid: not where the fluid at its feet holds it up.
         let (x, y, z) = (
@@ -645,15 +675,21 @@ impl Mob {
         );
         let stands_on_fluid = self.kind.flags.lava_walker && w.fluid(x, y, z) == Fluid::Lava;
         if self.is_in_liquid() && self.affected_by_fluids() && !stands_on_fluid {
-            self.travel_in_fluid(w, input, events);
+            self.travel_in_fluid(w, input, events, damage);
         } else {
-            self.travel_in_air(w, input, events);
+            self.travel_in_air(w, input, events, damage);
         }
     }
     /// LivingEntity.travelFlying: no gravity, `0.91F` drag in the air,
     /// `0.8F` in water and 0.5 in lava. A happy ghast swims as fast as it
     /// flies (`HappyGhast.travel`); the others at 0.02.
-    fn travel_flying(&mut self, w: &MobWorld, input: Vec3, events: &mut Vec<MobEvent>) {
+    fn travel_flying(
+        &mut self,
+        w: &MobWorld,
+        input: Vec3,
+        events: &mut Vec<MobEvent>,
+        damage: &mut dyn FnMut(&mut Mob, f32, super::Damage) -> Option<f32>,
+    ) {
         let fluid_speed = if self.species() == super::Species::HappyGhast {
             self.kind.air_speed
         } else {
@@ -667,7 +703,7 @@ impl Mob {
             (self.kind.air_speed, f64::from(0.91_f32))
         };
         self.move_relative(speed, input);
-        self.do_move(w, events);
+        self.do_move_with_damage_hook(w, events, damage);
         self.velocity = Vec3::new(
             self.velocity.x * drag,
             self.velocity.y * drag,
@@ -681,7 +717,13 @@ impl Mob {
         let y = (self.position.y - 0.500_001).floor() as i32;
         w.facts.get(w.world.block(x, y, z)).friction
     }
-    fn travel_in_air(&mut self, w: &MobWorld, input: Vec3, events: &mut Vec<MobEvent>) {
+    fn travel_in_air(
+        &mut self,
+        w: &MobWorld,
+        input: Vec3,
+        events: &mut Vec<MobEvent>,
+        damage: &mut dyn FnMut(&mut Mob, f32, super::Damage) -> Option<f32>,
+    ) {
         let friction = if self.on_ground {
             self.block_friction(w)
         } else {
@@ -698,7 +740,7 @@ impl Mob {
                 self.velocity.z.clamp(-0.15, 0.15),
             );
         }
-        self.do_move(w, events);
+        self.do_move_with_damage_hook(w, events, damage);
         let mut movement = self.velocity;
         if self.kind.flags.climber
             && (self.horizontal_collision || self.ai.jumping)
@@ -730,7 +772,13 @@ impl Mob {
             movement.z * f64::from(f),
         );
     }
-    fn travel_in_fluid(&mut self, w: &MobWorld, input: Vec3, events: &mut Vec<MobEvent>) {
+    fn travel_in_fluid(
+        &mut self,
+        w: &MobWorld,
+        input: Vec3,
+        events: &mut Vec<MobEvent>,
+        damage: &mut dyn FnMut(&mut Mob, f32, super::Damage) -> Option<f32>,
+    ) {
         let falling = self.velocity.y <= 0.0;
         let old_y = self.position.y;
         let gravity = self.gravity();
@@ -746,7 +794,7 @@ impl Mob {
                 speed += (self.ai.speed - speed) * efficiency;
             }
             self.move_relative(speed, input);
-            self.do_move(w, events);
+            self.do_move_with_damage_hook(w, events, damage);
             let mut m = self.velocity;
             if self.horizontal_collision && self.kind.flags.climber {
                 m.y = 0.2;
@@ -759,7 +807,7 @@ impl Mob {
             self.velocity = fluid_falling(gravity, falling, m);
         } else {
             self.move_relative(0.02, input);
-            self.do_move(w, events);
+            self.do_move_with_damage_hook(w, events, damage);
             if self.fluids.lava <= self.fluid_jump_threshold() {
                 self.velocity = Vec3::new(
                     self.velocity.x * 0.5,
