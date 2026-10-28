@@ -47,7 +47,7 @@ Java mod behavior has an equivalent.
 | [x] | Shared `forge`/`neoforge` tag additions carry across mods; legacy `blocks/` and `items/` folders are normalized to Horizon's `block/` and `item/` tag paths. |
 | [~] | NeoForge `furnace_fuels` and `compostables` maps update cooking-fuel and composter behavior for registered items, expanding direct and nested item-tag selectors against the merged tag registry. Unknown tags and invalid values are reported. Other data maps remain unsupported. |
 | [~] | Re-carried 56 ATM10 mods on 2026-10-28: all 70 Forge/NeoForge loader-tag files now carry successfully. Of the 144 tag files still under `outside/`, 143 target namespaces absent from ATM10; the remaining CTOV tag is malformed JSON (EOF). |
-| [~] | Carry coverage depends on templates and supported JSON shapes; reports list omitted blocks/files/recipes. |
+| [~] | Carry coverage depends on templates and supported JSON shapes; reports list omitted blocks/files/recipes and `outside_reasons` classifies each excluded file as invalid, unsupported-format or unowned-namespace. |
 | [~] | Large content packs may need unsupported model, loot, worldgen or registry formats added to the carry/runtime pipeline. |
 
 ## API 0.3 — logic and local world actions
@@ -126,7 +126,7 @@ of the API is implemented.
 | Data | 21 | 43 | 0 | 0 | 64 |
 | Client | 0 | 0 | 35 | 0 | 35 |
 | No code tier | 0 | 0 | 20 | 121 | 141 |
-| **All classes** | **97** | **222** | **55** | **121** | **495** |
+| **All classes** | **80** | **239** | **55** | **121** | **495** |
 
 ## Complete known API backlog
 

@@ -378,8 +378,10 @@ block declarations. Recipes for missing optional mods or undeclared items move t
 are listed as `recipes_unregistered`; a cross-mod recipe stays when its output mod is carried.
 Without `--resources`, vanilla item outputs cannot be checked. Files of
 the mod's own content that the game's content loader would refuse whole also go to `outside/`,
-listed with the reason in the report's `unreadable`: paths vanilla does not read (upper case),
-and JSON that does not parse. Missing blockstate or parent model paths are repaired only when
+with the per-file reason in `carry-report.json`'s `outside_reasons`; `unreadable` keeps the
+specific content-loader errors for paths vanilla does not read (upper case) and JSON that does
+not parse. Other outside reasons distinguish unowned namespaces from shared or mod-owned formats
+the carry does not support yet. Missing blockstate or parent model paths are repaired only when
 the same namespace has exactly one model file with that basename; `carry-report.json` records
 the aliases and any references still unresolved. Vanilla skips unreadable files one by one. A vanilla or convention tag
 with `"replace": true` is carried as it is: the game honours it as a data pack's, with a warning

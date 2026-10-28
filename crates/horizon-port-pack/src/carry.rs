@@ -35,6 +35,8 @@ pub struct Report {
     /// Files outside what a content mod may hold (other namespaces, vanilla
     /// data other than tags), kept in `outside/` for review.
     pub outside: Vec<String>,
+    /// Why each file in `outside/` could not be carried.
+    pub outside_reasons: BTreeMap<String, String>,
     /// Shared loader data maps carried into Horizon's content root.
     pub data_maps: Vec<String>,
     /// Entries in carried data maps Horizon could not apply, grouped by file.
@@ -1169,6 +1171,32 @@ fn place(name: &str, owned: &[&str], contributes: &[&str]) -> Option<bool> {
     )
 }
 
+fn outside_reason(
+    name: &str,
+    unreadable: Option<&str>,
+    owned: &[&str],
+    contributes: &[&str],
+) -> String {
+    if let Some(reason) = unreadable {
+        return format!("content loader cannot read this file: {reason}");
+    }
+    if let Some((root, namespace, _)) = split(name) {
+        if owned.contains(&namespace) || contributes.contains(&namespace) {
+            return format!("unsupported {root} file format");
+        }
+        if matches!(
+            namespace,
+            "minecraft" | "c" | "forge" | "neoforge" | "fabric"
+        ) {
+            return format!("unsupported shared {root} file format in namespace {namespace}");
+        }
+        return format!(
+            "namespace {namespace} is not owned by this mod or contributed to a mod in the pack"
+        );
+    }
+    "not an importable asset or data resource".into()
+}
+
 fn contributed_namespaces(
     zip: &mut zip::ZipArchive<fs::File>,
     id: &str,
@@ -1562,6 +1590,12 @@ fn carry_kind(
         } else {
             None
         };
+        if !keep || unreadable.is_some() {
+            report.outside_reasons.insert(
+                name.clone(),
+                outside_reason(&name, unreadable.as_deref(), &owned, &contributes),
+            );
+        }
         let keep = keep && unreadable.is_none();
         if let Some(why) = unreadable {
             report.unreadable.insert(name.clone(), why);
@@ -2950,9 +2984,8 @@ mod tests {
         fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// A mod shipping its files under other names than its id: the
-    /// namespaces its own files name are its, compat files for other mods
-    /// and a pack mod's namespace stay outside.
+    /// A mod shipping content under extra namespaces contributes to other
+    /// pack mods; incompatible namespaces and unsupported loader files stay outside.
     #[test]
     fn claims_the_namespaces_its_files_name() {
         let dir = std::env::temp_dir().join(format!("horizon-port-pack-ns-{}", std::process::id()));
@@ -2985,7 +3018,7 @@ mod tests {
             ),
             // Compat for a mod outside the pack, named by nothing of its own.
             ("data/wares/loot_table/crate.json", r#"{"pools": []}"#),
-            // A pack mod's config naming the mod's sets, and a loader's file.
+            // A pack mod's config naming the mod's sets is a contribution.
             (
                 "data/cristel/config/towers.json",
                 r#"{"sets": ["towers_wg:towns"]}"#,
@@ -3009,14 +3042,22 @@ mod tests {
         };
         let report = carry(&jar, &info, &out, None, &|_| true, &pack, &BTreeMap::new()).unwrap();
         assert_eq!(report.namespaces, ["kaisyn", "towers_wg"]);
+        assert_eq!(report.contributes, ["cristel"]);
         assert_eq!(report.worldgen, 2);
         assert_eq!(
             report.outside,
             [
                 "data/wares/loot_table/crate.json",
-                "data/cristel/config/towers.json",
                 "data/neoforge/loot_modifiers/global.json",
             ]
+        );
+        assert_eq!(
+            report.outside_reasons["data/wares/loot_table/crate.json"],
+            "namespace wares is not owned by this mod or contributed to a mod in the pack"
+        );
+        assert_eq!(
+            report.outside_reasons["data/neoforge/loot_modifiers/global.json"],
+            "unsupported shared data file format in namespace neoforge"
         );
         // No block is declared from another namespace's blockstate.
         assert!(report.blocks.is_empty());
