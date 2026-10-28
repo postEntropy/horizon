@@ -4225,6 +4225,10 @@ impl Game<'_> {
                 Output::ScreenOpened { .. } | Output::ScreenClosed { .. } => continue,
             };
             // Not through system_message: a mod must not hear its own lines.
+            if let Some(capture) = self.chat_capture.as_mut() {
+                capture.push(line);
+                continue;
+            }
             let focused = self.screen == Screen::Chat;
             self.ui
                 .chat

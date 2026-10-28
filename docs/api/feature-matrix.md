@@ -220,7 +220,7 @@ API/engine work, not a list of individual mods to port.
 
 | Done? | Work remaining | Completion check |
 |---|---|---|
-| [~] | Run the API integration harness that launches a real modded single-player world in both simulation modes. | `tools/mod_api_e2e.py --mode both` covers logic, machine capabilities, screen lifecycle and save paths locally; wire the representative scenario into CI and add recipe coverage. |
+| [~] | Run the API integration harness that launches a real modded single-player world in both simulation modes. | `tools/mod_api_e2e.py --mode both` covers logic, recipe registry queries and replacement, machine capabilities, screen lifecycle and save paths locally; wire the representative scenario into CI. |
 | [ ] | Add missing parity harnesses for API effects that alter vanilla gameplay while preserving RNG order. | Each hook/action has a vanilla oracle and a Rust probe or equivalent fixture. |
 | [x] | Correct the stale claim that `content::tests::refuses_content_outside_its_fence` wrongly accepts `assets/minecraft/...`; mergeable vanilla resources are intentionally permitted by the content fence. | Test and `content.rs` agree that supported vanilla resources are allowed. |
 | [x] | Refresh `docs/research/code-mods-plan.md`, whose original gap table predates APIs 0.3–0.5 and the current game bridges. | Historical research is labelled and current capability/backlog links point here. |

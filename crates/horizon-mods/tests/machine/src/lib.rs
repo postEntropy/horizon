@@ -448,7 +448,7 @@ impl Mod for Machines {
                     id: "test_machine:crush_iron".into(),
                     kind: "test_machine:crusher".into(),
                     inputs: vec![IngredientSlot {
-                        items: vec!["#c:raw_iron".into()],
+                        items: vec!["minecraft:raw_iron".into()],
                         count: 1,
                     }],
                     outputs: vec!["minecraft:iron_ingot*2".into()],

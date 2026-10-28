@@ -284,6 +284,20 @@ def verify_explosion_hook(ctl_bin, socket, cwd, env):
     assert destroyed.get('block') == 'minecraft:air', destroyed
 
 
+def verify_recipe_api(ctl_bin, socket, cwd, env):
+    feedback = command(ctl_bin, socket, cwd, env, 'machine_api caps_and_recipes')
+    recipes = re.search(r'\brecipes=([^ ]+)', feedback)
+    assert recipes, f'recipe API callback did not report its query results: {feedback}'
+    custom = recipes.group(1).split('/')
+    assert len(custom) == 7, feedback
+    assert custom[0] == 'true', f'registered recipe was not queryable by id: {feedback}'
+    assert int(custom[1]) > 0, f'custom recipe type query returned no recipes: {feedback}'
+    assert int(custom[2]) > 0, f'input item query returned no recipes: {feedback}'
+    assert int(custom[3]) > 0, f'output item query returned no recipes: {feedback}'
+    assert custom[4] == 'true', f'registered recipe replacement was not visible: {feedback}'
+    assert int(custom[6]) > 0, f'replaced recipe output query returned no recipes: {feedback}'
+
+
 def check_mode(client, ctl_bin, mods, *, in_frame):
     mode = 'in-frame' if in_frame else 'integrated'
     work = Path(tempfile.mkdtemp(prefix=f'horizon-mod-api-{mode}-'))
@@ -310,6 +324,7 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
         command(ctl_bin, socket, game_dir, env, 'experience add @s 50 points')
         xp_levels = command(ctl_bin, socket, game_dir, env, 'experience query @s levels')
         assert re.search(r'\b7\b', xp_levels), f'xp-gain hook did not double command XP: {xp_levels}'
+        verify_recipe_api(ctl_bin, socket, game_dir, env)
         command(ctl_bin, socket, game_dir, env, 'machine_api set_machine_block')
         command(ctl_bin, socket, game_dir, env, 'peer_api set_peer_block')
         ctl(ctl_bin, socket, game_dir, env, 'wait', 3)
@@ -477,7 +492,7 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
             ctl_bin, socket, game_dir, env, verify_restored_attachment=True)
         command(ctl_bin, socket, game_dir, env,
                 f'setblock {ix} {iy} {iz} minecraft:hopper[facing=south]')
-        print(f'PASS {mode}: per-block explosion filter, XP command hook, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
+        print(f'PASS {mode}: per-block explosion filter, XP command hook, recipe API queries and replacement, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
     except (CheckFailed, AssertionError, subprocess.TimeoutExpired) as error:
         raise CheckFailed(f'{mode}: {error}\n{tail(work / "game.log")}') from error
     finally:
