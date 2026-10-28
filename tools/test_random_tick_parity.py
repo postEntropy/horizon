@@ -36,6 +36,7 @@ def crop_growth_cases(facts, per_block, seed):
         'wheat', 'carrots', 'potatoes', 'beetroots', 'torchflower_crop',
         'pumpkin_stem', 'melon_stem', 'cocoa', 'nether_wart',
         'sweet_berry_bush', 'pitcher_crop', 'cactus', 'sugar_cane',
+        'red_mushroom', 'brown_mushroom',
         'bamboo', 'bamboo_sapling',
     )
     for block in targets:

@@ -826,9 +826,9 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         &mut self,
         state: BlockStateId,
         pos: BlockPos,
-        next_age: i32,
+        growth_step: i32,
     ) -> Option<i32> {
-        let multiplier = self.level.crop_growth_multiplier(pos, state, next_age);
+        let multiplier = self.level.crop_growth_multiplier(pos, state, growth_step);
         if !multiplier.is_finite() || multiplier < 1.0 {
             return None;
         }
@@ -1021,26 +1021,56 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     pub(crate) fn sapling_advance_tree(&mut self, pos: BlockPos, state: BlockStateId) {
         self.advance_tree(pos, state);
     }
-    fn mushroom_random_tick(&mut self, state: BlockStateId, mut pos: BlockPos) {
-        let b = self.b;
+    fn mushroom_random_tick(&mut self, state: BlockStateId, pos: BlockPos) {
         if self.rand_int(25) != 0 {
             return;
         }
-        // canSpread: at most four of this mushroom within a 9x3x9 box.
-        let block = b.block(state);
-        let mut max = 5;
+        // canSpread stops at five matching mushrooms in the 9x3x9 box.
+        let block = self.b.block(state);
+        let population = self.mushroom_population(pos, block);
+        if population >= 5 {
+            return;
+        }
+        let Some(first) = self.mushroom_spread_target(state, pos) else {
+            return;
+        };
+        let Some(steps) = self.crop_growth_steps(state, pos, 1) else {
+            return;
+        };
+        for step in 0..steps.min(5 - population) {
+            let target = if step == 0 {
+                Some(first)
+            } else {
+                self.mushroom_spread_target(state, pos)
+            };
+            let Some(target) = target else { break };
+            self.set_block(target, state, 2);
+            if !self.b.is_block(self.state(target), block) {
+                break;
+            }
+        }
+    }
+    fn mushroom_population(&self, pos: BlockPos, block: super::states::BlockId) -> i32 {
+        let mut population = 0;
         for x in -4..=4 {
             for y in -1..=1 {
                 for z in -4..=4 {
-                    if b.is_block(self.state(pos.offset(x, y, z)), block) {
-                        max -= 1;
-                        if max <= 0 {
-                            return;
+                    if self.b.is_block(self.state(pos.offset(x, y, z)), block) {
+                        population += 1;
+                        if population >= 5 {
+                            return population;
                         }
                     }
                 }
             }
         }
+        population
+    }
+    fn mushroom_spread_target(
+        &mut self,
+        state: BlockStateId,
+        mut pos: BlockPos,
+    ) -> Option<BlockPos> {
         let mut offset = self.mushroom_offset(pos);
         for _ in 0..4 {
             if self.is_empty_block(offset) && self.can_survive(state, offset) {
@@ -1049,7 +1079,9 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             offset = self.mushroom_offset(pos);
         }
         if self.is_empty_block(offset) && self.can_survive(state, offset) {
-            self.set_block(offset, state, 2);
+            Some(offset)
+        } else {
+            None
         }
     }
     fn mushroom_offset(&mut self, pos: BlockPos) -> BlockPos {

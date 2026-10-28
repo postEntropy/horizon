@@ -588,6 +588,49 @@ fn crop_growth_hook_scales_cactus_and_sugar_cane_height() {
 }
 
 #[test]
+fn crop_growth_hook_scales_mushroom_spread_after_a_valid_target() {
+    let Some(f) = fixture() else { return };
+    let mut found_accelerated_spread = false;
+    for seed in 0..512 {
+        let mut vanilla = World::new(f, seed);
+        let mut accelerated = World::new(f, seed);
+        let mut cancelled = World::new(f, seed);
+        let pos = BlockPos::new(0, 64, 0);
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            world.floor("mycelium", 8);
+            let mushroom = world.id("red_mushroom", &[]);
+            world.put(pos, mushroom);
+        }
+        accelerated.level.crop_growth_multiplier = 3.0;
+        cancelled.level.crop_growth_multiplier = 0.0;
+
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            f.behaviours
+                .random_tick(&mut world.level, &mut world.ticks, pos);
+        }
+        if vanilla.level.crop_growth_calls == 0 {
+            continue;
+        }
+
+        assert_eq!(vanilla.level.crop_growth_calls, 1);
+        assert_eq!(accelerated.level.crop_growth_calls, 1);
+        assert_eq!(cancelled.level.crop_growth_calls, 1);
+        assert_eq!(vanilla.count("red_mushroom"), 2);
+        assert_eq!(cancelled.count("red_mushroom"), 1);
+        let accelerated_count = accelerated.count("red_mushroom");
+        assert!((2..=5).contains(&accelerated_count));
+        let vanilla_next = vanilla.level.random.next_int_bound(1_000_000);
+        let cancelled_next = cancelled.level.random.next_int_bound(1_000_000);
+        assert_eq!(vanilla_next, cancelled_next, "cancelled spread RNG");
+        if accelerated_count > 2 {
+            found_accelerated_spread = true;
+            break;
+        }
+    }
+    assert!(found_accelerated_spread, "no extra mushroom target found");
+}
+
+#[test]
 fn crop_growth_hook_scales_bamboo_height_after_the_vanilla_roll() {
     let Some(f) = fixture() else { return };
     for kind in ["bamboo_sapling", "bamboo"] {
