@@ -425,7 +425,7 @@ impl Mod for Machines {
                     .map(|s| s.id)
                     .unwrap_or_default();
 
-                recipes::register(&RecipeEntry {
+                let recipe = RecipeEntry {
                     id: "test_machine:crush_iron".into(),
                     kind: "test_machine:crusher".into(),
                     inputs: vec![IngredientSlot {
@@ -435,11 +435,22 @@ impl Mod for Machines {
                     outputs: vec!["minecraft:iron_ingot*2".into()],
                     ticks: 100,
                     energy: 2000,
-                })?;
+                };
+                recipes::register(&recipe)?;
+                let by_id = recipes::get("test_machine:crush_iron")
+                    .is_some_and(|entry| entry.inputs[0].count == 1);
                 let found = recipes::by_type("test_machine:crusher").len();
                 let found_by_item = recipes::for_input("minecraft:raw_iron").len();
+                let found_by_output = recipes::for_output("minecraft:iron_ingot").len();
+                let mut replacement = recipe;
+                replacement.outputs = vec!["minecraft:gold_ingot*1".into()];
+                recipes::register(&replacement)?;
+                let replaced = recipes::get("test_machine:crush_iron")
+                    .is_some_and(|entry| entry.outputs == replacement.outputs);
+                let old_output = recipes::for_output("minecraft:iron_ingot").len();
+                let new_output = recipes::for_output("minecraft:gold_ingot").len();
                 Ok(Some(format!(
-                    "fe={recv_sim}/{recv}/{recv_again}/{ext_sim}/{ext}/{ext_again}/{stored} fluid={filled}/{drained}/{incompatible}/{simulated_drain}/{after_simulation} mana={mana} ring={ring} recipes={found}/{found_by_item}"
+                    "fe={recv_sim}/{recv}/{recv_again}/{ext_sim}/{ext}/{ext_again}/{stored} fluid={filled}/{drained}/{incompatible}/{simulated_drain}/{after_simulation} mana={mana} ring={ring} recipes={by_id}/{found}/{found_by_item}/{found_by_output}/{replaced}/{old_output}/{new_output}"
                 )))
             }
             "state" => Ok(Some(format!(

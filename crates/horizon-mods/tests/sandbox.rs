@@ -890,7 +890,7 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     assert_eq!(
         mods.drain(),
         [Output::Feedback {
-            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=1/1".into(),
+            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=true/1/1/1/true/0/1".into(),
             error: false,
         }]
     );
@@ -899,7 +899,7 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     assert_eq!(
         mods.drain(),
         [Output::Feedback {
-            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=1/1".into(),
+            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=true/1/1/1/true/0/1".into(),
             error: false,
         }]
     );
