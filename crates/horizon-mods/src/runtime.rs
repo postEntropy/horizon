@@ -414,6 +414,7 @@ struct SharedWorld {
     portals: Vec<PortalSpec>,
     damage_multiplier: f32,
     xp_multiplier: f32,
+    crop_growth_multiplier: f32,
     enchantment_bonus: i32,
     extra_loot: Vec<ItemDrop>,
 }
@@ -1675,15 +1676,29 @@ impl Mods {
         .unwrap_or(true)
     }
 
-    /// Dispatches a named vanilla hook (`vanilla-hooks`, API 0.5) and returns
-    /// `(outcome, damage_multiplier, xp_multiplier, enchantment_bonus, extra_loot)`.
+    /// Dispatches a named vanilla hook (`vanilla-hooks`, API 0.5).
     pub fn vanilla_hook(
         &mut self,
         event: &VanillaHookEvent,
     ) -> (EventOutcome, f32, f32, i32, Vec<ItemDrop>) {
+        let (outcome, damage, xp, _, enchantment, loot) = self.dispatch_vanilla_hook(event);
+        (outcome, damage, xp, enchantment, loot)
+    }
+
+    /// Dispatches a crop growth hook and returns its outcome and stage multiplier.
+    pub fn crop_growth_hook(&mut self, event: &VanillaHookEvent) -> (EventOutcome, f32) {
+        let (outcome, _, _, multiplier, _, _) = self.dispatch_vanilla_hook(event);
+        (outcome, multiplier)
+    }
+
+    fn dispatch_vanilla_hook(
+        &mut self,
+        event: &VanillaHookEvent,
+    ) -> (EventOutcome, f32, f32, f32, i32, Vec<ItemDrop>) {
         if let Ok(mut sh) = self.shared.lock() {
             sh.damage_multiplier = 1.0;
             sh.xp_multiplier = 1.0;
+            sh.crop_growth_multiplier = 1.0;
             sh.enchantment_bonus = 0;
             sh.extra_loot.clear();
         }
@@ -1713,11 +1728,12 @@ impl Mods {
                 outcome,
                 sh.damage_multiplier,
                 sh.xp_multiplier,
+                sh.crop_growth_multiplier,
                 sh.enchantment_bonus,
                 std::mem::take(&mut sh.extra_loot),
             )
         } else {
-            (outcome, 1.0, 1.0, 0, Vec::new())
+            (outcome, 1.0, 1.0, 1.0, 0, Vec::new())
         }
     }
 
@@ -3448,6 +3464,14 @@ impl vanilla_hooks::Host for State {
             && let Ok(mut sh) = self.shared.lock()
         {
             sh.xp_multiplier *= factor;
+        }
+    }
+    fn set_crop_growth_multiplier(&mut self, factor: f32) {
+        if factor.is_finite()
+            && factor >= 0.0
+            && let Ok(mut sh) = self.shared.lock()
+        {
+            sh.crop_growth_multiplier *= factor;
         }
     }
     fn add_enchantment_bonus(&mut self, bonus: i32) {

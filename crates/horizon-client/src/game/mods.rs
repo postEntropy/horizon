@@ -381,6 +381,40 @@ struct FusionReactorInfo {
     controller: [i32; 3],
 }
 impl ModsState {
+    pub(super) fn crop_growth_multiplier(
+        &mut self,
+        subject: &str,
+        dimension: &str,
+        position: [i32; 3],
+        age: i32,
+    ) -> f32 {
+        #[cfg(feature = "mods")]
+        {
+            if !self.mods.is_running() {
+                return 1.0;
+            }
+            let (outcome, multiplier) = self.mods.crop_growth_hook(&VanillaHookEvent {
+                kind: VanillaHookKind::CropGrow,
+                subject: subject.to_owned(),
+                dimension: dimension.to_owned(),
+                x: position[0],
+                y: position[1],
+                z: position[2],
+                value: age as f32,
+                context: "minecraft:random_tick".to_owned(),
+            });
+            if outcome != EventOutcome::Pass {
+                0.0
+            } else {
+                multiplier
+            }
+        }
+        #[cfg(not(feature = "mods"))]
+        {
+            let _ = (subject, dimension, position, age);
+            1.0
+        }
+    }
     /// The chat's command tree: vanilla's, plus the running mods' commands.
     pub(super) fn dispatcher(&self) -> &Dispatcher {
         #[cfg(feature = "mods")]

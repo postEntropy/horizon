@@ -2,6 +2,7 @@
 //! prepared client resources and worldgen bundle (skipped when absent).
 use super::*;
 use crate::{chunk::BlockState, worldgen::generator::GeneratorData, worldgen::live::LiveFeatures};
+use horizon_core::random::RandomSource;
 use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
@@ -56,8 +57,14 @@ struct Level {
     biome: &'static str,
     day: i64,
     block_entities: Vec<(BlockPos, crate::nbt::Compound)>,
+    crop_growth_multiplier: f32,
+    crop_growth_calls: u32,
 }
 impl LevelAccess for Level {
+    fn crop_growth_multiplier(&mut self, _pos: BlockPos, _state: BlockStateId, _age: i32) -> f32 {
+        self.crop_growth_calls += 1;
+        self.crop_growth_multiplier
+    }
     fn day_time(&self) -> i64 {
         self.day
     }
@@ -109,6 +116,8 @@ impl World {
                 biome: "minecraft:plains",
                 day: 6000,
                 block_entities: Vec::new(),
+                crop_growth_multiplier: 1.0,
+                crop_growth_calls: 0,
             },
             f,
             ticks,
@@ -352,6 +361,81 @@ fn crops_age_with_bone_meal() {
     assert!(w.bone_meal(pos));
     assert_eq!(w.name(pos), "minecraft:torchflower");
     assert!(!w.bone_meal(pos), "torchflowers are not bonemealable");
+}
+
+#[test]
+fn crop_growth_multiplier_preserves_the_vanilla_roll_and_rng_order() {
+    let Some(f) = fixture() else { return };
+    for seed in 0..256 {
+        let mut vanilla = World::new(f, seed);
+        let mut accelerated = World::new(f, seed);
+        let mut cancelled = World::new(f, seed);
+        let pos = BlockPos::new(0, 64, 0);
+        let farmland = vanilla.id("farmland", &[]);
+        vanilla.put(BlockPos::new(0, 63, 0), farmland);
+        accelerated.put(BlockPos::new(0, 63, 0), farmland);
+        cancelled.put(BlockPos::new(0, 63, 0), farmland);
+        let wheat = vanilla.id("wheat", &[]);
+        vanilla.put(pos, wheat);
+        accelerated.put(pos, wheat);
+        cancelled.put(pos, wheat);
+        accelerated.level.crop_growth_multiplier = 3.0;
+        cancelled.level.crop_growth_multiplier = 0.0;
+
+        f.behaviours
+            .random_tick(&mut vanilla.level, &mut vanilla.ticks, pos);
+        f.behaviours
+            .random_tick(&mut accelerated.level, &mut accelerated.ticks, pos);
+        f.behaviours
+            .random_tick(&mut cancelled.level, &mut cancelled.ticks, pos);
+
+        let vanilla_age = f
+            .behaviours
+            .table
+            .int(vanilla.level.block_state(pos), f.behaviours.props.age);
+        let accelerated_age = f
+            .behaviours
+            .table
+            .int(accelerated.level.block_state(pos), f.behaviours.props.age);
+        assert_eq!(
+            accelerated.level.crop_growth_calls,
+            vanilla.level.crop_growth_calls
+        );
+        let vanilla_next = vanilla.level.random.next_int_bound(1_000_000);
+        let accelerated_next = accelerated.level.random.next_int_bound(1_000_000);
+        let cancelled_next = cancelled.level.random.next_int_bound(1_000_000);
+        assert_eq!(
+            vanilla_next, accelerated_next,
+            "growth multiplier consumed additional random draws for seed {seed}"
+        );
+        assert_eq!(
+            vanilla_next, cancelled_next,
+            "cancelled growth consumed additional random draws for seed {seed}"
+        );
+        if vanilla_age > 0 {
+            assert_eq!(accelerated_age, (vanilla_age + 2).min(7));
+            assert_eq!(vanilla.level.crop_growth_calls, 1);
+            assert_eq!(
+                f.behaviours
+                    .table
+                    .int(cancelled.level.block_state(pos), f.behaviours.props.age),
+                0,
+                "zero multiplier should cancel growth"
+            );
+            assert_eq!(cancelled.level.crop_growth_calls, 1);
+            return;
+        }
+        assert_eq!(accelerated_age, 0);
+        assert_eq!(cancelled.level.crop_growth_calls, 0);
+        assert_eq!(
+            f.behaviours
+                .table
+                .int(cancelled.level.block_state(pos), f.behaviours.props.age),
+            0
+        );
+        assert_eq!(vanilla.level.crop_growth_calls, 0);
+    }
+    panic!("no successful vanilla wheat growth roll found in 256 seeds");
 }
 #[test]
 fn tall_flowers_and_seagrass() {

@@ -513,6 +513,7 @@ enum GuestUse {
 
 /// The client world as seen by the vanilla block-behaviour library.
 struct GameLevel<'w> {
+    mods: &'w mut mods::ModsState,
     world: &'w mut World,
     facts: &'w BlockFacts,
     collision: &'w BlockCollisionRegistry<'w>,
@@ -633,6 +634,19 @@ impl GameLevel<'_> {
     }
 }
 impl LevelAccess for GameLevel<'_> {
+    fn crop_growth_multiplier(&mut self, pos: BlockPos, state: BlockStateId, age: i32) -> f32 {
+        let dimension = match self.dimension {
+            LevelDimension::Overworld => "minecraft:overworld",
+            LevelDimension::Nether => "minecraft:the_nether",
+            LevelDimension::End => "minecraft:the_end",
+        };
+        self.mods.crop_growth_multiplier(
+            &self.facts.get(state).name,
+            dimension,
+            [pos.x, pos.y, pos.z],
+            age,
+        )
+    }
     fn world_surface(&self, x: i32, z: i32) -> i32 {
         self.world.world_surface(x, z, |s| self.facts.is_air(s))
     }
@@ -2561,6 +2575,7 @@ impl Game<'_> {
             falling: &self.falling,
         };
         let mut level = GameLevel {
+            mods: &mut self.mods,
             cart_boxes,
             blockers,
             world: &mut self.world,

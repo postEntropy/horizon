@@ -707,7 +707,7 @@ interface logic {
         entity-damage,
         /// Modify experience orb or level gains.
         xp-gain,
-        /// Modify or accelerate crop and plant random-tick growth.
+        /// Modify simple crop age stages after successful vanilla random-tick growth.
         crop-grow,
         /// Filter or modify blocks affected by an explosion.
         explosion-detonate,
@@ -993,6 +993,8 @@ interface vanilla-hooks {
     add-loot-drop: func(item: string, count: u32);
     /// During an `xp-gain` hook: scales the experience value by `factor`.
     set-xp-multiplier: func(factor: f32);
+    /// During a successful `crop-grow` hook: scales age stages grown (pass applies; consume/cancel suppress vanilla growth).
+    set-crop-growth-multiplier: func(factor: f32);
     /// During an `enchantment-level` hook: adds `bonus` levels to the queried enchantment.
     add-enchantment-bonus: func(bonus: s32);
 }

@@ -764,7 +764,12 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         if age < max {
             let speed = self.crop_growth_speed(b.block(state), pos);
             if self.rand_int((25.0 / speed) as i32 + 1) == 0 {
-                let next = self.crop_state_for_age(state, age + 1);
+                let multiplier = self.level.crop_growth_multiplier(pos, state, age + 1);
+                if !multiplier.is_finite() || multiplier < 1.0 {
+                    return;
+                }
+                let steps = multiplier.floor().clamp(1.0, 64.0) as i32;
+                let next = self.crop_state_for_age(state, (age + steps).min(max));
                 self.set_block(pos, next, 2);
             }
         }

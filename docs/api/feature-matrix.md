@@ -100,7 +100,7 @@ Java mod behavior has an equivalent.
 | [ ] | Custom entity lifecycle is not connected to actual game-world spawning, simulation, persistence and rendering. |
 | [ ] | Custom model animation/draw data is not connected to game rendering. |
 | [ ] | Registered custom dimensions and portals are not connected to actual world travel/generation. |
-| [ ] | `crop-grow`, `explosion-detonate` and `enchantment-level` hooks are not connected to gameplay. |
+| [~] | `crop-grow` scales the age stages of a crop after its vanilla random-tick success; other plants, `explosion-detonate` and `enchantment-level` are not connected yet. |
 | [ ] | Audit remaining species-specific mob damage and special entities plus dedicated/LAN routes for `entity-damage`; base-tick environmental damage, poison/wither effects, fall damage, dolphin moisture, bee upkeep, vex lifetime and listed player/projectile/lightning sources now dispatch. |
 | [ ] | XP from all sources and all loot contexts (containers, fishing and structures) are not covered. |
 
@@ -186,7 +186,7 @@ API/engine work, not a list of individual mods to port.
 | [ ] | Connect model bones, poses, draw lists and block-entity attachments to their world render targets. | Runtime model calls produce visible and bounded geometry in-game. |
 | [ ] | Connect custom dimension/portal declarations to dimension registration, saved world metadata, travel, respawn and return portals. | Create/travel/save/reopen round-trip works without corrupting vanilla dimensions. |
 | [ ] | Implement or explicitly constrain custom dimension biome sources, chunk generators, height/light rules and worldgen data. | A custom dimension generates and loads chunks using documented supported codecs. |
-| [ ] | Wire `crop-grow` at the vanilla growth decision point, preserving vanilla RNG draw order and allowing pass/consume/cancel. | Parity harness compares random growth and cancellation against the vanilla oracle. |
+| [~] | Extend `crop-grow` to stems and other plant random-tick growth, and add a differential oracle harness for crop pass/cancel/multiplier behavior. Simple crop random-tick growth now dispatches after vanilla's success roll, preserving draws and the pass path. | Parity harness compares random growth and cancellation against the vanilla oracle. |
 | [ ] | Wire `explosion-detonate` before block/entity effects are applied. | Mods can safely pass, alter or cancel an explosion in a parity harness. |
 | [ ] | Wire `enchantment-level` into enchantment selection/level calculation. | Vanilla result is unchanged for pass; bounded mod changes match test expectations. |
 | [ ] | Complete `entity-damage` coverage for species-specific mob effects, special entities and dedicated/LAN routes. Base-tick environmental damage, poison/wither effects, fall damage plus incoming player, lightning, melee and mob projectile sources now dispatch. | Source-by-source harness confirms exactly one event and correct cancellation/scaling. |

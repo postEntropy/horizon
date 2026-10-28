@@ -1280,4 +1280,17 @@ fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
     });
     assert_eq!(outcome3, EventOutcome::Consume);
     assert_eq!(xp_mult, 2.0);
+
+    let (outcome4, crop_growth) = mods.crop_growth_hook(&VanillaHookEvent {
+        kind: VanillaHookKind::CropGrow,
+        subject: "minecraft:wheat[age=2]".into(),
+        dimension: "minecraft:overworld".into(),
+        x: 1,
+        y: 64,
+        z: 1,
+        value: 3.0,
+        context: "minecraft:random_tick".into(),
+    });
+    assert_eq!(outcome4, EventOutcome::Pass);
+    assert_eq!(crop_growth, 3.0);
 }

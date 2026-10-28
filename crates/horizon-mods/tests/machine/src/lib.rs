@@ -50,6 +50,7 @@ impl Mod for Machines {
         let _ = vanilla_hooks::subscribe("loot-drop");
         let _ = vanilla_hooks::subscribe("entity-damage");
         let _ = vanilla_hooks::subscribe("xp-gain");
+        let _ = vanilla_hooks::subscribe("crop-grow");
         let _ = dimensions::register_dimension(&DimensionSpec {
             id: "test_machine:twilight".into(),
             ultrawarm: false,
@@ -567,6 +568,10 @@ impl Mod for Machines {
             VanillaHookKind::XpGain => {
                 vanilla_hooks::set_xp_multiplier(2.0);
                 EventOutcome::Consume
+            }
+            VanillaHookKind::CropGrow => {
+                vanilla_hooks::set_crop_growth_multiplier(3.0);
+                EventOutcome::Pass
             }
             _ => EventOutcome::Pass,
         }
