@@ -523,6 +523,11 @@ needs `vscreen` or an active X11 display.
 
 ## Roadmap
 
+> **Historical plan.** The numbered sequence below predates the current API
+> implementation and is retained as project history. For current support and
+> remaining work, use the [API feature matrix](api/feature-matrix.md) and the
+> [API reference](api/mods-reference.md).
+
 1. Design (this page) and the Java research.
 2. SDK, example mod, runtime, `cargo horizon-mod`, the game's Mods page: API 0.1.
 3. `storage` (done), `keys`, `target`, `inventory-read`, `ui`: enough for the
