@@ -1992,6 +1992,13 @@ impl Game<'_> {
             if drops {
                 self.spawn_orbs([p.x, p.y, p.z], (xp as f32 * 0.2) as u32);
             }
+            if let Some(d) = self.dragon.as_ref() {
+                self.mod_entity_death(
+                    d.id,
+                    "minecraft:ender_dragon",
+                    [d.position.x, d.position.y, d.position.z],
+                );
+            }
             self.dragon = None;
             self.dragon_killed();
         }
