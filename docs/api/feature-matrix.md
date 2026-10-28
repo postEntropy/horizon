@@ -213,7 +213,7 @@ API/engine work, not a list of individual mods to port.
 | [ ] | Expand block/item template coverage where ATM10 content has no suitable vanilla base. | Representative declarations load with correct shape, collision, sound, hardness and item form. |
 | [ ] | Add missing model/state encodings needed by carried block/item assets, including unsupported multipart/selector forms when required. | Model fixtures render and item icons do not become invisible for supported carried content. |
 | [ ] | Audit recipes, tags, loot and worldgen data that are carried but not yet honored by the runtime. | Each data registry has a format-support table plus fixtures for nested/merge cases. |
-| [ ] | Keep content loading order, namespace ownership and cross-mod references deterministic when packs contain overlays/add-ons. | Repeated import/build yields the same registries; conflicts have actionable diagnostics. |
+| [~] | Keep content loading order, namespace ownership and cross-mod references deterministic when packs contain overlays/add-ons. Import sorts pack paths and directory entries; carry sorts output files; cross-mod recipe restoration and namespace maps use ordered collections; ownership conflicts produce actionable diagnostics. Repeated full imports with competing overlays still need an end-to-end determinism check. | Repeated import/build yields the same registries; conflicts have actionable diagnostics. |
 | [ ] | Build automated parity scenarios for the highest-impact carried content formats. | Carried recipes, loot, blockstates and worldgen match the vanilla oracle on selected cases. |
 
 ### Test, docs and release work
