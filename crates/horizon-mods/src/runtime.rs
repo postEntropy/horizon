@@ -131,6 +131,13 @@ const MAX_SLOTS: u32 = 256;
 const MAX_PACKET_BYTES: usize = 32 << 10;
 /// Opaque data components on one machine-slot stack.
 const MAX_ITEM_COMPONENT_BYTES: usize = 64 << 10;
+/// A mod's total registered custom recipes, including per-entry strings.
+const MAX_MOD_RECIPE_BYTES: usize = 4 << 20;
+const MAX_RECIPE_BYTES: usize = 64 << 10;
+const MAX_RECIPE_INPUTS: usize = 64;
+const MAX_RECIPE_OUTPUTS: usize = 64;
+const MAX_RECIPE_OPTIONS: usize = 128;
+const MAX_RECIPE_ID_BYTES: usize = 256;
 /// Max attachment payload in `capabilities` (64 KiB).
 const MAX_ATTACHMENT_BYTES: usize = 64 << 10;
 /// Max 3D wireframe boxes and ghost blocks per mod.
@@ -296,6 +303,7 @@ struct SharedWorld {
     attachments: HashMap<(String, String), Vec<u8>>,
     accessories: HashMap<(String, String, u32), (String, u32)>,
     recipes: Vec<RecipeEntry>,
+    registered_recipe_sizes: HashMap<String, HashMap<String, usize>>,
     entities: HashMap<u32, EntityState>,
     next_entity_handle: u32,
     animations: HashMap<String, (String, bool, f32)>,
@@ -1628,6 +1636,86 @@ fn valid_id(id: &str) -> bool {
         .is_some_and(|(ns, path)| !ns.is_empty() && !path.is_empty())
 }
 
+fn valid_recipe_id(id: &str) -> bool {
+    let Some((namespace, path)) = id.split_once(':') else {
+        return false;
+    };
+    let namespace_ok = !namespace.is_empty()
+        && namespace
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b));
+    let path_ok = !path.is_empty()
+        && path
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_./-".contains(&b));
+    id.len() <= MAX_RECIPE_ID_BYTES && namespace_ok && path_ok
+}
+
+fn valid_recipe_selector(selector: &str) -> bool {
+    if let Some(tag) = selector.strip_prefix('#') {
+        return valid_recipe_id(tag);
+    }
+    for kind in ["@fluid/", "@chemical/"] {
+        if let Some(resource) = selector.strip_prefix(kind) {
+            let Some((tank, id)) = resource.split_once('/') else {
+                return false;
+            };
+            return tank.parse::<u32>().is_ok() && valid_recipe_id(id);
+        }
+    }
+    valid_recipe_id(selector)
+}
+
+fn validate_recipe_entry(entry: &RecipeEntry) -> Result<usize, String> {
+    if !valid_recipe_id(&entry.id) {
+        return Err(format!("invalid recipe id {:?}", entry.id));
+    }
+    if !valid_recipe_id(&entry.kind) {
+        return Err(format!("invalid recipe type {:?}", entry.kind));
+    }
+    if entry.inputs.len() > MAX_RECIPE_INPUTS || entry.outputs.len() > MAX_RECIPE_OUTPUTS {
+        return Err("recipe has too many input or output slots".into());
+    }
+    if entry.outputs.is_empty() {
+        return Err("recipe must have at least one output".into());
+    }
+    let mut bytes = entry.id.len() + entry.kind.len() + 32;
+    for input in &entry.inputs {
+        if input.items.is_empty() || input.items.len() > MAX_RECIPE_OPTIONS || input.count == 0 {
+            return Err("recipe input needs 1–128 choices and a positive count".into());
+        }
+        bytes += 16;
+        for selector in &input.items {
+            if selector.len() > MAX_RECIPE_ID_BYTES || !valid_recipe_selector(selector) {
+                return Err(format!("invalid recipe input selector {selector:?}"));
+            }
+            bytes += selector.len();
+        }
+    }
+    for output in &entry.outputs {
+        let (selector, count) = output
+            .rsplit_once('*')
+            .map_or((output.as_str(), Some(1)), |(id, n)| {
+                (id, n.parse::<u32>().ok())
+            });
+        if output.len() > MAX_RECIPE_ID_BYTES
+            || !valid_recipe_selector(selector)
+            || count.is_none_or(|n| n == 0)
+        {
+            return Err(format!("invalid recipe output {output:?}"));
+        }
+        bytes += output.len() + 8;
+    }
+    if bytes > MAX_RECIPE_BYTES {
+        return Err(format!("recipe exceeds {} KiB", MAX_RECIPE_BYTES >> 10));
+    }
+    Ok(bytes)
+}
+
+fn recipe_budget_allows(current: usize, replaced: usize, incoming: usize) -> bool {
+    current.saturating_sub(replaced).saturating_add(incoming) <= MAX_MOD_RECIPE_BYTES
+}
+
 /// The block entity types a mod declared, if every one is for a block in its
 /// own namespaces, declared once, with at most [`MAX_SLOTS`] slots.
 fn check_types(m: &Manifest, types: Vec<BlockEntityType>) -> Result<Vec<BlockEntityType>, String> {
@@ -2583,9 +2671,28 @@ impl recipes::Host for State {
                 entry.id
             ));
         }
+        let entry_bytes = validate_recipe_entry(&entry)?;
         if let Ok(mut sh) = self.shared.lock() {
+            let sizes = sh.registered_recipe_sizes.get(&self.id);
+            let old_bytes = sizes
+                .and_then(|sizes| sizes.get(&entry.id))
+                .copied()
+                .unwrap_or(0);
+            let current_bytes: usize = sizes.map_or(0, |sizes| sizes.values().sum());
+            if !recipe_budget_allows(current_bytes, old_bytes, entry_bytes) {
+                return Err(format!(
+                    "mod recipe data exceeds {} MiB",
+                    MAX_MOD_RECIPE_BYTES >> 20
+                ));
+            }
             sh.recipes.retain(|r| r.id != entry.id);
+            sh.registered_recipe_sizes
+                .entry(self.id.clone())
+                .or_default()
+                .insert(entry.id.clone(), entry_bytes);
             sh.recipes.push(entry);
+        } else {
+            return Err("recipe registry is unavailable".into());
         }
         Ok(())
     }
@@ -2892,5 +2999,79 @@ impl vanilla_hooks::Host for State {
         if let Ok(mut sh) = self.shared.lock() {
             sh.enchantment_bonus = sh.enchantment_bonus.saturating_add(bonus);
         }
+    }
+}
+
+#[cfg(test)]
+mod recipe_validation_tests {
+    use super::*;
+
+    fn recipe() -> RecipeEntry {
+        RecipeEntry {
+            id: "test_machine:crush_iron".into(),
+            kind: "test_machine:crusher".into(),
+            inputs: vec![IngredientSlot {
+                items: vec!["#c:raw_iron", "minecraft:raw_iron"]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect(),
+                count: 1,
+            }],
+            outputs: vec!["minecraft:iron_ingot*2".into()],
+            ticks: 100,
+            energy: 2_000,
+        }
+    }
+
+    #[test]
+    fn accepts_item_tag_and_resource_recipes() {
+        let mut recipe = recipe();
+        recipe.inputs.push(IngredientSlot {
+            items: vec!["@fluid/0/minecraft:water".into()],
+            count: 1_000,
+        });
+        recipe
+            .outputs
+            .push("@chemical/1000/minecraft:oxygen*250".into());
+        assert!(validate_recipe_entry(&recipe).is_ok());
+    }
+
+    #[test]
+    fn rejects_malformed_or_unbounded_recipes() {
+        let mut bad = recipe();
+        bad.id = "Test Machine:Crush Iron".into();
+        assert!(validate_recipe_entry(&bad).is_err());
+
+        let mut bad = recipe();
+        bad.inputs[0].items[0] = "@fluid/nope/minecraft:water".into();
+        assert!(validate_recipe_entry(&bad).is_err());
+
+        let mut bad = recipe();
+        bad.outputs[0] = "minecraft:iron_ingot*0".into();
+        assert!(validate_recipe_entry(&bad).is_err());
+
+        let mut bad = recipe();
+        bad.inputs[0].count = 0;
+        assert!(validate_recipe_entry(&bad).is_err());
+
+        let mut bad = recipe();
+        bad.inputs[0].items = vec!["minecraft:raw_iron".into(); MAX_RECIPE_OPTIONS + 1];
+        assert!(validate_recipe_entry(&bad).is_err());
+
+        let mut bad = recipe();
+        bad.inputs = (0..MAX_RECIPE_INPUTS)
+            .map(|_| IngredientSlot {
+                items: vec!["example_namespace:long_machine_item_path".into(); MAX_RECIPE_OPTIONS],
+                count: 1,
+            })
+            .collect();
+        assert!(validate_recipe_entry(&bad).is_err());
+    }
+
+    #[test]
+    fn recipe_budget_counts_replacements_once() {
+        assert!(recipe_budget_allows(MAX_MOD_RECIPE_BYTES - 128, 128, 256));
+        assert!(!recipe_budget_allows(MAX_MOD_RECIPE_BYTES, 0, 1));
+        assert!(!recipe_budget_allows(usize::MAX, 0, 1));
     }
 }

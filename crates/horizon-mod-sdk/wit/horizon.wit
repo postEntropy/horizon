@@ -522,7 +522,9 @@ interface recipes {
     for-input: func(item-id: string) -> list<recipe-entry>;
     /// Lists recipes that produce `item-id`.
     for-output: func(item-id: string) -> list<recipe-entry>;
-    /// Registers a custom machine recipe entry under the mod's namespace.
+    /// Registers a custom machine recipe under the mod's namespace. Entries
+    /// must use valid namespaced ids and bounded item/resource selectors;
+    /// each mod may register at most 4 MiB of recipe data.
     register: func(entry: recipe-entry) -> result<_, string>;
 }
 

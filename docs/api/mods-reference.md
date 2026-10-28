@@ -537,7 +537,7 @@ Capability `recipes` (API 0.4): read the loaded recipe graph and register custom
 | `by-type` | `func(kind: string) -> list<recipe-entry>` | Lists recipes of a given type (`minecraft:smelting`, `<mod>:crusher`, ...). |
 | `for-input` | `func(item-id: string) -> list<recipe-entry>` | Lists recipes that consume `item-id`. |
 | `for-output` | `func(item-id: string) -> list<recipe-entry>` | Lists recipes that produce `item-id`. |
-| `register` | `func(entry: recipe-entry) -> result<_, string>` | Registers a custom machine recipe entry under the mod's namespace. |
+| `register` | `func(entry: recipe-entry) -> result<_, string>` | Registers a custom machine recipe under the mod's namespace. Entries must use valid namespaced ids and bounded item/resource selectors; each mod may register at most 4 MiB of recipe data. |
 
 ## `world-read`
 

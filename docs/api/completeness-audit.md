@@ -61,6 +61,10 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   slots; the game also preserves them when older mods use the original slot
   API. Both paths have sandbox coverage, while live compatibility across a
   broad set of mods remains to be established.
+- Custom recipe registration now validates namespaced ids, item/tag/resource
+  selectors, positive counts, field sizes, and a 4 MiB per-mod data budget.
+  Runtime unit tests cover valid mixed item/resource recipes and rejected
+  malformed or oversized fields.
 - The Mekanism port has recipe-processing code. The Enrichment Chamber has now
   been exercised in a live in-frame world: a creative energy cube powered a
   clay recipe, the machine produced four clay balls, and the output remained
