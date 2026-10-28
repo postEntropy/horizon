@@ -262,7 +262,7 @@ impl Mod for Machines {
                     id: "test_machine:crush_iron".into(),
                     kind: "test_machine:crusher".into(),
                     inputs: vec![IngredientSlot {
-                        items: vec!["minecraft:raw_iron".into()],
+                        items: vec!["#c:raw_iron".into()],
                         count: 1,
                     }],
                     outputs: vec!["minecraft:iron_ingot*2".into()],
@@ -270,8 +270,9 @@ impl Mod for Machines {
                     energy: 2000,
                 })?;
                 let found = recipes::by_type("test_machine:crusher").len();
+                let found_by_item = recipes::for_input("minecraft:raw_iron").len();
                 Ok(Some(format!(
-                    "fe={recv}/{ext}/{stored} fluid={filled}/{drained} mana={mana} ring={ring} recipes={found}"
+                    "fe={recv}/{ext}/{stored} fluid={filled}/{drained} mana={mana} ring={ring} recipes={found}/{found_by_item}"
                 )))
             }
             "state" => Ok(Some(format!(

@@ -143,6 +143,13 @@ impl ItemFacts for GameFacts {
             experience: c.experience,
         })
     }
+    fn item_in_tag(&self, id: &str, tag: &str) -> bool {
+        self.0
+            .rest
+            .get()
+            .and_then(|r| r.items.item_tags.get(tag))
+            .is_some_and(|items| items.contains(id))
+    }
 }
 
 #[cfg(feature = "mods")]

@@ -443,6 +443,9 @@ impl ItemFacts for Facts {
             experience: 0.7,
         })
     }
+    fn item_in_tag(&self, id: &str, tag: &str) -> bool {
+        tag == "c:raw_iron" && id == "minecraft:raw_iron"
+    }
 }
 
 fn stack(id: &str, count: u32) -> Stack {
@@ -667,7 +670,8 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     assert_eq!(
         mods.drain(),
         [Output::Feedback {
-            text: "fe=500/300/1200 fluid=1500/500 mana=42 ring=test_machine:ring recipes=1".into(),
+            text: "fe=500/300/1200 fluid=1500/500 mana=42 ring=test_machine:ring recipes=1/1"
+                .into(),
             error: false,
         }]
     );

@@ -518,7 +518,8 @@ interface recipes {
     get: func(id: string) -> option<recipe-entry>;
     /// Lists recipes of a given type (`minecraft:smelting`, `<mod>:crusher`, ...).
     by-type: func(kind: string) -> list<recipe-entry>;
-    /// Lists recipes that consume `item-id`.
+    /// Lists recipes that consume `item-id`, including ingredients whose
+    /// item tags include it in the active content registry.
     for-input: func(item-id: string) -> list<recipe-entry>;
     /// Lists recipes that produce `item-id`.
     for-output: func(item-id: string) -> list<recipe-entry>;

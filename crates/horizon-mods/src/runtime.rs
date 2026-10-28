@@ -154,6 +154,10 @@ pub trait ItemFacts: Send + Sync {
     /// What is left once the item is used up (a bucket from a lava bucket).
     fn remainder(&self, id: &str) -> Option<String>;
     fn cooking_recipe(&self, kind: CookingKind, input: &str) -> Option<CookingRecipe>;
+    /// Whether the active item registry includes `id` in `tag`.
+    fn item_in_tag(&self, _id: &str, _tag: &str) -> bool {
+        false
+    }
 }
 
 /// A block state property of a block entity's block, as `machine` sees it.
@@ -2633,15 +2637,21 @@ impl recipes::Host for State {
             .unwrap_or_default()
     }
     fn for_input(&mut self, item_id: String) -> Vec<RecipeEntry> {
+        let facts = self.facts.as_deref();
         self.shared
             .lock()
             .map(|sh| {
                 sh.recipes
                     .iter()
                     .filter(|r| {
-                        r.inputs
-                            .iter()
-                            .any(|slot| slot.items.iter().any(|i| i == &item_id))
+                        r.inputs.iter().any(|slot| {
+                            slot.items.iter().any(|selector| {
+                                selector == &item_id
+                                    || selector.strip_prefix('#').is_some_and(|tag| {
+                                        facts.is_some_and(|facts| facts.item_in_tag(&item_id, tag))
+                                    })
+                            })
+                        })
                     })
                     .cloned()
                     .collect()
