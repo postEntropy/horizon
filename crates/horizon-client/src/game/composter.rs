@@ -9,6 +9,11 @@ use horizon_client::{
 };
 use horizon_core::{position::BlockPos, random::RandomSource};
 
+fn compostable_chance_layers(chance: f64, random: &mut impl RandomSource) -> i32 {
+    let roll = f64::from(random.next_float());
+    i32::from(chance.is_finite() && (0.0..=1.0).contains(&chance) && roll < chance)
+}
+
 impl Game<'_> {
     /// The composter's `level` at `pos`, None when it isn't a composter.
     pub(super) fn composter_level(&self, pos: [i32; 3]) -> Option<i32> {
@@ -19,19 +24,24 @@ impl Game<'_> {
         }
         s.properties.get("level")?.parse().ok()
     }
-    /// The item's `compostable` layers provider.
+    /// The item's vanilla layers provider or a NeoForge composting chance.
     fn compostable(&self, stack: &ItemStack) -> Option<serde_json::Value> {
         self.res.items().get(&stack.item)?.compostable.clone()
     }
-    /// `ComposterBlock.addLayer` and level event 1500: the provider is
-    /// evaluated in the composter's block-interaction loot context (its
-    /// state; the level random), then the layer is added. True when it was.
-    fn composter_add(&mut self, pos: [i32; 3], layers: &serde_json::Value) -> bool {
-        let context = ComputeContext {
-            block: Some(pos),
-            target: None,
+    /// `ComposterBlock.addLayer` and level event 1500: vanilla evaluates its
+    /// layers provider, while NeoForge's data map rolls once against chance.
+    /// True when the composter's state changed.
+    fn composter_add(&mut self, pos: [i32; 3], component: &serde_json::Value) -> bool {
+        let layers = if let Some(chance) = component.get("chance").and_then(|v| v.as_f64()) {
+            compostable_chance_layers(chance, &mut self.world.random)
+        } else {
+            let context = ComputeContext {
+                block: Some(pos),
+                target: None,
+            };
+            let layers = component.get("layers").unwrap_or(component);
+            self.provider_int(layers, &context, 0).unwrap_or(0)
         };
-        let layers = self.provider_int(layers, &context, 0).unwrap_or(0);
         let before = self.world.block(pos[0], pos[1], pos[2]);
         let at = BlockPos::new(pos[0], pos[1], pos[2]);
         let after = self.with_level(|b, level, ticks| b.composter_insert(level, ticks, at, layers));
@@ -118,5 +128,33 @@ impl Game<'_> {
             ];
             self.particles.add(&options, p, v);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compostable_chance_layers;
+    use horizon_core::random::{LegacyRandom, RandomSource};
+
+    #[test]
+    fn compostable_chance_consumes_one_vanilla_float_and_sets_zero_or_one_layer() {
+        let mut failure = LegacyRandom::new(0);
+        assert_eq!(compostable_chance_layers(0.0, &mut failure), 0);
+        let after_failure = failure.next_float();
+        let mut expected = LegacyRandom::new(0);
+        expected.next_float();
+        assert_eq!(after_failure, expected.next_float());
+
+        let mut success = LegacyRandom::new(0);
+        assert_eq!(compostable_chance_layers(1.0, &mut success), 1);
+    }
+
+    #[test]
+    fn invalid_compostable_chance_adds_no_layer() {
+        assert_eq!(compostable_chance_layers(1.1, &mut LegacyRandom::new(0)), 0);
+        assert_eq!(
+            compostable_chance_layers(f64::NAN, &mut LegacyRandom::new(0)),
+            0
+        );
     }
 }

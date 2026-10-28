@@ -297,9 +297,9 @@ The fence: files go in the mod's own namespaces (`assets/<id>/`,
 registries, and to the convention tags NeoForge and Fabric mods share
 (`data/c/tags/`). Assets may also add or override files under
 `assets/minecraft/`, as resource packs do. The supported
-`data/neoforge/data_maps/item/furnace_fuels.json` map updates the
-`minecraft:cooking_fuel` component for registered items; item-tag selectors are
-reported and skipped until Horizon can expand them correctly. Known shared definitions merge by
+NeoForge's `furnace_fuels` and `compostables` data maps update registered items'
+fuel and composter behavior; item-tag selectors are reported and skipped until
+Horizon can expand them correctly. Known shared definitions merge by
 vanilla's rules: language keys override, atlas sources append, font providers
 use resource-stack order, and sound events append unless replaced. Other
 same-path assets use the later mod in load order. These files do not claim the

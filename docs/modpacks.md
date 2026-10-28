@@ -369,7 +369,7 @@ only): content 54, library 33, client-ui 26, performance 25, other 14, unknown 2
 
 `carry` copies a jar's `assets/<id>/`, `data/<id>/`, additions to vanilla recipes, advancements,
 loot tables and tags, including shared `data/forge/tags/` and `data/neoforge/tags/` additions,
-and supported NeoForge `furnace_fuels` data maps for game-time item component overrides,
+and supported NeoForge item data maps for fuel and composter behavior,
 into `mods/<id>/carry/`, a folder content mod (API 0.2) the game loads with `--dev-mod`, and
 keeps what a content mod may not hold (other namespaces,
 unsupported vanilla data) in `outside/`. After all selected jars are carried, the pack-wide pass

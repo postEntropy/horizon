@@ -81,7 +81,11 @@ pub fn shared_tag_addition(path: &str) -> bool {
 /// Unknown loader data stays outside the content fence until Horizon has a
 /// concrete gameplay mapping for it.
 pub fn shared_builtin_data_map(path: &str) -> bool {
-    matches!(path, "data/neoforge/data_maps/item/furnace_fuels.json")
+    matches!(
+        path,
+        "data/neoforge/data_maps/item/furnace_fuels.json"
+            | "data/neoforge/data_maps/item/compostables.json"
+    )
 }
 
 /// A vanilla identifier, `minecraft:path`.
@@ -605,10 +609,14 @@ capabilities = ["registries"]
                 "data/neoforge/data_maps/item/furnace_fuels.json",
                 br#"{"values":{"minecraft:coal":{"burn_time":1600}}}"#,
             ),
+            (
+                "data/neoforge/data_maps/item/compostables.json",
+                br#"{"values":{"minecraft:dandelion":{"chance":0.5}}}"#,
+            ),
             ("assets/ruby/textures/block/ruby_block.png", b"png"),
         ];
         let content = hmod("ok", MANIFEST_TEXT, files).unwrap();
-        assert_eq!(content.files.len(), 7);
+        assert_eq!(content.files.len(), 8);
         assert_eq!(
             content.blocks,
             [Block {

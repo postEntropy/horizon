@@ -247,6 +247,8 @@ struct Plan<'a> {
     /// NeoForge's static fuel map, applied after new item templates are copied.
     furnace_fuels: BTreeMap<String, Option<u32>>,
     replace_furnace_fuels: bool,
+    compostables: BTreeMap<String, Option<f64>>,
+    replace_compostables: bool,
     warnings: Vec<String>,
     /// Vanilla's state count (the tables' length before).
     states: usize,
@@ -433,6 +435,8 @@ impl<'a> Plan<'a> {
         }
         let mut furnace_fuels = BTreeMap::new();
         let mut replace_furnace_fuels = false;
+        let mut compostables = BTreeMap::new();
+        let mut replace_compostables = false;
         let mut warnings = Vec::new();
         const FURNACE_FUELS: &str = "data/neoforge/data_maps/item/furnace_fuels.json";
         for m in mods {
@@ -488,7 +492,60 @@ impl<'a> Plan<'a> {
                 }
             }
         }
-        if !furnace_fuels.is_empty() {
+        const COMPOSTABLES: &str = "data/neoforge/data_maps/item/compostables.json";
+        for m in mods {
+            if !m.content.files.iter().any(|file| file == COMPOSTABLES) {
+                continue;
+            }
+            let doc: serde_json::Value =
+                match serde_json::from_slice(&m.content.file(COMPOSTABLES)?) {
+                    Ok(doc) => doc,
+                    Err(error) => {
+                        warnings.push(format!("mod {}: {COMPOSTABLES}: {error}", m.id));
+                        continue;
+                    }
+                };
+            if doc.get("replace") == Some(&serde_json::Value::Bool(true)) {
+                replace_compostables = true;
+                compostables.clear();
+            }
+            if let Some(values) = doc.get("values").and_then(serde_json::Value::as_object) {
+                for (item, value) in values {
+                    if item.starts_with('#') {
+                        warnings.push(format!(
+                            "mod {}: {COMPOSTABLES}: item tag {item} is not supported yet",
+                            m.id
+                        ));
+                        continue;
+                    }
+                    let chance = value
+                        .get("chance")
+                        .and_then(serde_json::Value::as_f64)
+                        .filter(|chance| (0.0..=1.0).contains(chance));
+                    if let Some(chance) = chance {
+                        compostables.insert(item.clone(), Some(chance));
+                    } else {
+                        warnings.push(format!(
+                            "mod {}: {COMPOSTABLES}: invalid chance for {item}",
+                            m.id
+                        ));
+                    }
+                }
+            }
+            if let Some(remove) = doc.get("remove").and_then(serde_json::Value::as_array) {
+                for item in remove.iter().filter_map(serde_json::Value::as_str) {
+                    if item.starts_with('#') {
+                        warnings.push(format!(
+                            "mod {}: {COMPOSTABLES}: item tag removal {item} is not supported yet",
+                            m.id
+                        ));
+                    } else {
+                        compostables.insert(item.to_owned(), None);
+                    }
+                }
+            }
+        }
+        if !furnace_fuels.is_empty() || !compostables.is_empty() {
             let mut known: BTreeSet<String> = match read_json(&base.join("items.json"))? {
                 J::Obj(entries) => entries.into_iter().map(|(id, _)| id).collect(),
                 _ => return Err("items.json: no item registry".into()),
@@ -503,12 +560,23 @@ impl<'a> Plan<'a> {
                 }
                 exists
             });
+            compostables.retain(|item, _| {
+                let exists = known.contains(item);
+                if !exists {
+                    warnings.push(format!(
+                        "{COMPOSTABLES}: {item} is not registered in this mod set; ignored"
+                    ));
+                }
+                exists
+            });
         }
         Ok(Plan {
             blocks,
             items,
             furnace_fuels,
             replace_furnace_fuels,
+            compostables,
+            replace_compostables,
             warnings,
             states: names.len(),
             defaults,
@@ -708,10 +776,9 @@ impl<'a> Plan<'a> {
         }
     }
 
-    /// Applies NeoForge's static furnace-fuel data map to Horizon's item
-    /// component table. Data-map entries override only the burn time; retain
-    /// a template's speed provider, or use vanilla's default for new fuels.
-    fn furnace_fuels(&self, doc: &mut J) -> Result<()> {
+    /// Applies supported NeoForge static item maps to Horizon's component
+    /// table. Data-map entries override only their mapped field.
+    fn item_data_maps(&self, doc: &mut J) -> Result<()> {
         let J::Obj(items) = doc else {
             return Err("items.json: no item registry".into());
         };
@@ -719,6 +786,13 @@ impl<'a> Plan<'a> {
             for (_, components) in items.iter_mut() {
                 if let J::Obj(components) = components {
                     components.retain(|(name, _)| name != "minecraft:cooking_fuel");
+                }
+            }
+        }
+        if self.replace_compostables {
+            for (_, components) in items.iter_mut() {
+                if let J::Obj(components) = components {
+                    components.retain(|(name, _)| name != "minecraft:compostable");
                 }
             }
         }
@@ -750,6 +824,29 @@ impl<'a> Plan<'a> {
                     }
                 }
                 None => components.retain(|(name, _)| name != "minecraft:cooking_fuel"),
+            }
+        }
+        for (id, chance) in &self.compostables {
+            let Some((_, components)) = items.iter_mut().find(|(name, _)| name == id) else {
+                continue;
+            };
+            let J::Obj(components) = components else {
+                return Err(format!("items.json: {id} is not an item component object").into());
+            };
+            match chance {
+                Some(chance) => {
+                    let mut compostable = J::Obj(Vec::new());
+                    compostable.set("chance", J::f64(*chance));
+                    if let Some((_, old)) = components
+                        .iter_mut()
+                        .find(|(name, _)| name == "minecraft:compostable")
+                    {
+                        *old = compostable;
+                    } else {
+                        components.push(("minecraft:compostable".into(), compostable));
+                    }
+                }
+                None => components.retain(|(name, _)| name != "minecraft:compostable"),
             }
         }
         Ok(())
@@ -812,7 +909,7 @@ impl<'a> Plan<'a> {
             }
             "items.json" => {
                 self.items(doc, true);
-                self.furnace_fuels(doc)?;
+                self.item_data_maps(doc)?;
             }
             "registries.json" => {
                 // Network ids: the game and its server map items and blocks through
@@ -3360,7 +3457,7 @@ fn stamp(base: &Path, mods: &[ContentMod]) -> Result<String> {
             modified.as_nanos()
         ))
     };
-    let mut parts = vec!["horizon mod content 4".to_owned()];
+    let mut parts = vec!["horizon mod content 5".to_owned()];
     let base = std::path::absolute(base)?;
     parts.push(
         String::from_utf8_lossy(&fs::read(base.join("horizon-resources.json"))?).into_owned(),

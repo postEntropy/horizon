@@ -1592,6 +1592,30 @@ fn carry_kind(
                         .insert(name.clone(), unsupported);
                 }
             }
+            if name == "data/neoforge/data_maps/item/compostables.json"
+                && let Ok(doc) = serde_json::from_slice::<Value>(&bytes)
+            {
+                let mut unsupported = Vec::new();
+                if let Some(values) = doc.get("values").and_then(Value::as_object) {
+                    for (item, value) in values {
+                        if item.starts_with('#') {
+                            unsupported
+                                .push(format!("{item}: item-tag selectors are not supported"));
+                        } else if value
+                            .get("chance")
+                            .and_then(Value::as_f64)
+                            .is_none_or(|chance| !(0.0..=1.0).contains(&chance))
+                        {
+                            unsupported.push(format!("{item}: invalid chance"));
+                        }
+                    }
+                }
+                if !unsupported.is_empty() {
+                    report
+                        .data_map_unsupported
+                        .insert(name.clone(), unsupported);
+                }
+            }
         }
         let carried_name = canonical_tag_path(&name);
         let dest = if keep {
@@ -2772,6 +2796,10 @@ mod tests {
                 r##"{"values": {"gem:gem": {"burn_time": 1600}, "#c:planks": {"burn_time": 300}}}"##,
             ),
             (
+                "data/neoforge/data_maps/item/compostables.json",
+                r##"{"values": {"gem:gem": {"chance": 0.4}, "#c:flowers": {"chance": 0.5}, "gem:bad": {"chance": 1.5}}}"##,
+            ),
+            (
                 "data/gem/lithostitched/worldgen_modifier/houses.json",
                 r#"{"type": "lithostitched:add_template_pool_elements",
                     "template_pools": "minecraft:village/plains/houses",
@@ -2818,7 +2846,7 @@ mod tests {
             &BTreeMap::new(),
         )
         .unwrap();
-        assert_eq!(report.copied, 18);
+        assert_eq!(report.copied, 19);
         let unreadable: Vec<&str> = report.unreadable.keys().map(String::as_str).collect();
         assert_eq!(
             unreadable,
@@ -2904,13 +2932,28 @@ mod tests {
                 .files
                 .contains(&"data/neoforge/data_maps/item/furnace_fuels.json".to_owned())
         );
+        assert!(
+            content
+                .files
+                .contains(&"data/neoforge/data_maps/item/compostables.json".to_owned())
+        );
         assert_eq!(
             report.data_maps,
-            ["data/neoforge/data_maps/item/furnace_fuels.json"]
+            [
+                "data/neoforge/data_maps/item/furnace_fuels.json",
+                "data/neoforge/data_maps/item/compostables.json",
+            ]
         );
         assert_eq!(
             report.data_map_unsupported["data/neoforge/data_maps/item/furnace_fuels.json"],
             ["#c:planks: item-tag selectors are not supported"]
+        );
+        assert_eq!(
+            report.data_map_unsupported["data/neoforge/data_maps/item/compostables.json"],
+            [
+                "#c:flowers: item-tag selectors are not supported",
+                "gem:bad: invalid chance",
+            ]
         );
         fs::remove_dir_all(&dir).unwrap();
     }

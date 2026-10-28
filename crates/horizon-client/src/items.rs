@@ -85,7 +85,7 @@ pub struct ItemInfo {
     pub fuel: Option<(Value, Value)>,
     /// `brewing_fuel`: uses and speed-multiplier provider references.
     pub brewing_fuel: Option<(Value, Value)>,
-    /// `compostable.layers`: the layers provider (`ComposterBlock.addLayer`).
+    /// `compostable.layers` provider or NeoForge's composting `chance`.
     pub compostable: Option<Value>,
     /// Item left behind after crafting/fuel use (e.g. bucket).
     pub remainder: Option<String>,
@@ -638,7 +638,7 @@ impl Items {
                     brewing_fuel: c
                         .get("minecraft:brewing_fuel")
                         .map(|f| (f["uses"].clone(), f["speed_multiplier"].clone())),
-                    compostable: c.get("minecraft:compostable").map(|f| f["layers"].clone()),
+                    compostable: c.get("minecraft:compostable").cloned(),
                     remainder: c["minecraft:use_remainder"]["id"]
                         .as_str()
                         .or(c["minecraft:crafting_remainder"]["id"].as_str())
