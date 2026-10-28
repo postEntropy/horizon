@@ -221,6 +221,29 @@ def verify_mod_screen(ctl_bin, socket, cwd, env):
     assert 'count: 1, Slot: 0b, id: "minecraft:diamond"' in command(
         ctl_bin, socket, cwd, env, 'data get block -31 70 -9 Items')
 
+    # Shift-click the machine stack into the player inventory. The callback
+    # marker is reset first so this also proves QuickMove dispatches the hook.
+    ctl(ctl_bin, socket, cwd, env, 'command',
+        'setblock -28 70 -9 minecraft:stone')
+    ctl(ctl_bin, socket, cwd, env, 'key', 'shift', 'down')
+    try:
+        ctl(ctl_bin, socket, cwd, env, 'click-at', slot_x, slot_y)
+    finally:
+        ctl(ctl_bin, socket, cwd, env, 'key', 'shift', 'up')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    quick_moved = ctl(ctl_bin, socket, cwd, env, 'screen')
+    assert quick_moved.get('carried') == {'item': 'minecraft:diamond', 'count': 3}, quick_moved
+    assert next(slot for slot in quick_moved.get('slots', [])
+                if slot.get('slot') == 300).get('item') is None, quick_moved
+    inventory_diamonds = sum(
+        slot.get('count', 0) for slot in quick_moved.get('slots', [])
+        if 0 <= slot.get('slot', -1) < 36 and slot.get('item') == 'minecraft:diamond')
+    assert inventory_diamonds == 1, quick_moved
+    assert 'diamond' not in command(
+        ctl_bin, socket, cwd, env, 'data get block -31 70 -9 Items')
+    marker = ctl(ctl_bin, socket, cwd, env, 'block', -28, 70, -9)
+    assert marker.get('block') == 'minecraft:emerald_block', marker
+
     button = next(widget for widget in mod_screen['widgets'] if widget.get('id') == 3)
     button_x = origin[0] + button['x'] + button['width'] / 2
     button_y = origin[1] + button['y'] + button['height'] / 2
