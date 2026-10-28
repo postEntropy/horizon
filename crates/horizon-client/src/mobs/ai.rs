@@ -357,6 +357,17 @@ pub fn tick(
     level_random: &mut LegacyRandom,
     events: &mut Vec<MobEvent>,
 ) -> bool {
+    tick_with_damage_hook(m, w, level_random, events, &mut |_, amount, _| Some(amount))
+}
+/// One full entity tick with a synchronous damage filter. This keeps API
+/// hooks before health changes while leaving ordinary callers pass-through.
+pub fn tick_with_damage_hook(
+    m: &mut Mob,
+    w: &MobWorld,
+    level_random: &mut LegacyRandom,
+    events: &mut Vec<MobEvent>,
+    damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
+) -> bool {
     if m.removed {
         return false;
     }
@@ -386,7 +397,7 @@ pub fn tick(
     if m.species() == Species::Strider {
         super::strider::pre_tick(m, w, events);
     }
-    base_tick(m, w, events);
+    base_tick(m, w, events, damage);
     if m.species() == Species::Rabbit {
         super::rabbit::base_tick(m);
     }
@@ -442,7 +453,12 @@ pub fn tick_swing(m: &mut Mob) {
     m.anim.attack_anim = m.ai.swing_time as f32 / 6.0;
 }
 /// Entity.baseTick + LivingEntity.baseTick + Mob.baseTick.
-fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
+fn base_tick(
+    m: &mut Mob,
+    w: &MobWorld,
+    events: &mut Vec<MobEvent>,
+    damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
+) {
     m.was_eye_in_water = m.fluids.eye_in_water;
     m.update_fluids(w, events);
     let fire = crate::motion::environment::fire_contact(w.world, w.registry, m.bounds());
@@ -457,7 +473,7 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
             &mut m.random,
             multiplier,
         );
-        m.damage(fire, Damage::of(DamageKind::InFire));
+        take_damage(m, fire, Damage::of(DamageKind::InFire), damage);
     }
     // Fire: water extinguishes, lava ignites, burning hurts every second.
     if m.fluids.in_water && m.fire_ticks > 0 {
@@ -471,21 +487,21 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     }
     if m.fluids.in_lava && !m.kind.flags.fire_immune {
         m.ignite_for_ticks(300);
-        m.damage(4.0, Damage::of(DamageKind::Lava));
+        take_damage(m, 4.0, Damage::of(DamageKind::Lava), damage);
     }
     if m.fire_ticks > 0 {
         if m.kind.flags.fire_immune {
             m.fire_ticks = 0;
         } else {
             if m.fire_ticks % 20 == 0 && !m.fluids.in_lava {
-                m.damage(1.0, Damage::of(DamageKind::OnFire));
+                take_damage(m, 1.0, Damage::of(DamageKind::OnFire), damage);
             }
             m.fire_ticks -= 1;
         }
     }
     // Entity.checkBelowWorld: LivingEntity.onBelowWorld hurts 4 a tick.
     if m.position.y < f64::from(crate::chunk::MIN_Y - 64) {
-        m.damage(4.0, Damage::of(DamageKind::OutOfWorld));
+        take_damage(m, 4.0, Damage::of(DamageKind::OutOfWorld), damage);
     }
     m.first_tick = false;
     if m.alive() {
@@ -497,7 +513,7 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         );
         let at_eye = w.facts.get(w.world.block(ex, ey, ez));
         if at_eye.full_collision && at_eye.solid_render && m.width() < 1.0 {
-            m.damage(1.0, Damage::of(DamageKind::InWall));
+            take_damage(m, 1.0, Damage::of(DamageKind::InWall), damage);
         }
         // Air supply and drowning (WaterAnimal.handleAirSupply for aquatic mobs).
         if m.kind.flags.needs_water {
@@ -505,7 +521,7 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
                 m.air -= 1;
                 if m.air == -20 {
                     m.air = 0;
-                    m.damage(2.0, Damage::of(DamageKind::Drown));
+                    take_damage(m, 2.0, Damage::of(DamageKind::Drown), damage);
                 }
             } else {
                 m.air = 300;
@@ -514,7 +530,7 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
             m.air -= 1;
             if m.air == -20 {
                 m.air = 0;
-                m.damage(2.0, Damage::of(DamageKind::Drown));
+                take_damage(m, 2.0, Damage::of(DamageKind::Drown), damage);
             }
         } else if m.air < 300 {
             m.air = (m.air + 4).min(300);
@@ -523,7 +539,7 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         if m.kind.flags.water_sensitive
             && (m.fluids.in_water || w.raining && w.can_see_sky(ex, ey, ez))
         {
-            m.damage(1.0, Damage::of(DamageKind::Drown));
+            take_damage(m, 1.0, Damage::of(DamageKind::Drown), damage);
         }
     }
     tick_effects(m);
@@ -553,6 +569,16 @@ fn base_tick(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     }
     // Entity.baseTick ends with Leashable.tickLeash.
     super::leash::tick(m, w, events);
+}
+fn take_damage(
+    mob: &mut Mob,
+    amount: f32,
+    source: Damage,
+    filter: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
+) {
+    if let Some(amount) = filter(mob, amount, source) {
+        mob.damage(amount, source);
+    }
 }
 /// `Mob.playAmbientSound` on demand: a spawn egg or a mob bucket just placed `m`.
 pub fn ambient_sound(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {

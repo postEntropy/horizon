@@ -195,6 +195,73 @@ fn mod_block_state(text: &str) -> Option<horizon_world::chunk::BlockState> {
     })
 }
 
+/// Runs the API damage hook from inside the Mob simulation tick without
+/// borrowing the whole Game while its world snapshot is borrowed.
+pub(super) fn mob_tick_damage_hook(
+    mods: &mut ModsState,
+    dimension: &str,
+    mob: &horizon_client::mobs::Mob,
+    amount: f32,
+    source: horizon_client::mobs::Damage,
+) -> Option<f32> {
+    #[cfg(feature = "mods")]
+    {
+        if !mods.mods.is_running() {
+            return Some(amount);
+        }
+        let kind = &mob.kind.id;
+        let subject = if kind.contains(':') {
+            kind.clone()
+        } else {
+            format!("minecraft:{kind}")
+        };
+        let position = [mob.position.x, mob.position.y, mob.position.z].map(|v| v.floor() as i32);
+        let context = match source.kind {
+            horizon_client::mobs::DamageKind::PlayerAttack => "minecraft:player_attack",
+            horizon_client::mobs::DamageKind::MaceSmash => "minecraft:mace_smash",
+            horizon_client::mobs::DamageKind::MobAttack => "minecraft:mob_attack",
+            horizon_client::mobs::DamageKind::Arrow => "minecraft:arrow",
+            horizon_client::mobs::DamageKind::Thrown => "minecraft:thrown",
+            horizon_client::mobs::DamageKind::Fireball => "minecraft:fireball",
+            horizon_client::mobs::DamageKind::Explosion => "minecraft:explosion",
+            horizon_client::mobs::DamageKind::Fall => "minecraft:fall",
+            horizon_client::mobs::DamageKind::FallingBlock => "minecraft:falling_block",
+            horizon_client::mobs::DamageKind::OnFire => "minecraft:on_fire",
+            horizon_client::mobs::DamageKind::InFire => "minecraft:in_fire",
+            horizon_client::mobs::DamageKind::Lava => "minecraft:lava",
+            horizon_client::mobs::DamageKind::Drown => "minecraft:drown",
+            horizon_client::mobs::DamageKind::Magic => "minecraft:magic",
+            horizon_client::mobs::DamageKind::Sting => "minecraft:sting",
+            horizon_client::mobs::DamageKind::Cactus => "minecraft:cactus",
+            horizon_client::mobs::DamageKind::Generic => "minecraft:generic",
+            horizon_client::mobs::DamageKind::InWall => "minecraft:in_wall",
+            horizon_client::mobs::DamageKind::Thorns => "minecraft:thorns",
+            horizon_client::mobs::DamageKind::SonicBoom => "minecraft:sonic_boom",
+            horizon_client::mobs::DamageKind::OutOfWorld => "minecraft:out_of_world",
+        };
+        let (outcome, multiplier, _, _, _) = mods.mods.vanilla_hook(&VanillaHookEvent {
+            kind: VanillaHookKind::EntityDamage,
+            subject,
+            dimension: dimension.to_owned(),
+            x: position[0],
+            y: position[1],
+            z: position[2],
+            value: amount,
+            context: context.to_owned(),
+        });
+        if outcome == EventOutcome::Cancel {
+            None
+        } else {
+            Some(amount * multiplier)
+        }
+    }
+    #[cfg(not(feature = "mods"))]
+    {
+        let _ = (mods, dimension, mob, source);
+        Some(amount)
+    }
+}
+
 #[cfg(all(test, feature = "mods"))]
 mod block_state_tests {
     use super::mod_block_state;
@@ -549,6 +616,7 @@ impl Game<'_> {
     pub(super) fn tick_mods(&mut self) {}
     pub(super) fn poll_mod_packets(&mut self) {}
     pub(super) fn mods_frame(&mut self, _elapsed: Duration) {}
+    pub(super) fn show_mod_output(&mut self) {}
     pub(super) fn mod_use_block(
         &mut self,
         _pos: [i32; 3],

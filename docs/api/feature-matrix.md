@@ -94,14 +94,14 @@ Java mod behavior has an equivalent.
 |---|---|
 | [x] | WIT/SDK/runtime expose custom entity declarations and create/tick/save/remove/interact/hurt callbacks. |
 | [x] | Runtime tests exercise custom entity state, model, dimension and hook host calls. |
-| [~] | `entity-damage` reaches outgoing local-player melee hits against mobs and incoming player damage through `mob_hits_player` and `hurt_player_by` (mob attacks, projectiles, PvP, lightning, dragon/firework/pearl/potion damage and `/damage`). Outgoing damage to mobs also dispatches for mob attacks, most projectiles, explosions, lightning, wind charges, fangs, tridents, fireworks, wither skulls and `/damage`. Other environmental/special entities and every dedicated/LAN route still need an audit. |
+| [~] | `entity-damage` reaches outgoing local-player melee hits against mobs and incoming player damage through `mob_hits_player` and `hurt_player_by` (mob attacks, projectiles, PvP, lightning, dragon/firework/pearl/potion damage and `/damage`). Outgoing damage to mobs also dispatches for mob attacks, most projectiles, explosions, lightning, wind charges, fangs, tridents, fireworks, wither skulls, `/damage`, and base-tick fire/lava/burning/out-of-world/suffocation/drowning damage. Other environmental/special entities and every dedicated/LAN route still need an audit. |
 | [~] | `xp-gain` reaches XP-orb pickup, advancement rewards and positive `/experience add ... points` commands. A live mod doubles 50 command points to 7 levels in both single-player paths; other direct XP sources still need an audit. |
 | [~] | `loot-drop` reaches player-mined block drops and mob-death item drops. |
 | [ ] | Custom entity lifecycle is not connected to actual game-world spawning, simulation, persistence and rendering. |
 | [ ] | Custom model animation/draw data is not connected to game rendering. |
 | [ ] | Registered custom dimensions and portals are not connected to actual world travel/generation. |
 | [ ] | `crop-grow`, `explosion-detonate` and `enchantment-level` hooks are not connected to gameplay. |
-| [ ] | Audit remaining environmental sources, special entities and dedicated/LAN routes for `entity-damage`; incoming player damage and the listed mob/projectile/lightning sources now dispatch. |
+| [ ] | Audit remaining mob fall/effect/AI damage, special entities and dedicated/LAN routes for `entity-damage`; common base-tick environmental damage and listed player/projectile/lightning sources now dispatch. |
 | [ ] | XP from all sources and all loot contexts (containers, fishing and structures) are not covered. |
 
 ## Out of scope for this single-player snapshot
@@ -189,7 +189,7 @@ API/engine work, not a list of individual mods to port.
 | [ ] | Wire `crop-grow` at the vanilla growth decision point, preserving vanilla RNG draw order and allowing pass/consume/cancel. | Parity harness compares random growth and cancellation against the vanilla oracle. |
 | [ ] | Wire `explosion-detonate` before block/entity effects are applied. | Mods can safely pass, alter or cancel an explosion in a parity harness. |
 | [ ] | Wire `enchantment-level` into enchantment selection/level calculation. | Vanilla result is unchanged for pass; bounded mod changes match test expectations. |
-| [ ] | Complete `entity-damage` coverage for fall/fire and other environmental damage, special entities, and dedicated/LAN routes. Player incoming damage and listed mob/projectile/lightning sources now dispatch. | Source-by-source harness confirms exactly one event and correct cancellation/scaling. |
+| [ ] | Complete `entity-damage` coverage for mob fall/effect/AI damage, special entities and dedicated/LAN routes. Common base-tick environmental damage plus incoming player, lightning, melee and mob projectile sources now dispatch. | Source-by-source harness confirms exactly one event and correct cancellation/scaling. |
 | [~] | Expand `xp-gain` to every direct XP source and verify ordering with orb creation, pickup, advancement and commands. Orb pickup, advancements and positive command point grants are covered; audit any remaining direct awards. | XP amount and cancellation are consistent across a source matrix. |
 | [ ] | Expand `loot-drop` to container, fishing, structure, block and entity loot contexts. | Pass/consume/cancel semantics preserve vanilla RNG and are tested per context. |
 | [ ] | Add API hooks for other demonstrated pack needs that have no current WIT event (for example entity spawn/death, player lifecycle, inventory changes), after auditing representative mod requirements. | Every new hook has a named event, capability/version rule, security bound, and parity test. |

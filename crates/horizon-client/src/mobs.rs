@@ -1893,7 +1893,18 @@ impl Mob {
         level_random: &mut LegacyRandom,
         events: &mut Vec<MobEvent>,
     ) -> bool {
-        ai::tick(self, w, level_random, events)
+        self.tick_with_damage_hook(w, level_random, events, &mut |_, amount, _| Some(amount))
+    }
+    /// One game tick with a synchronous filter for damage taken during the
+    /// tick. The ordinary `tick` path uses a pass-through filter.
+    pub fn tick_with_damage_hook(
+        &mut self,
+        w: &MobWorld,
+        level_random: &mut LegacyRandom,
+        events: &mut Vec<MobEvent>,
+        damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
+    ) -> bool {
+        ai::tick_with_damage_hook(self, w, level_random, events, damage)
     }
     pub fn distance_to(&self, p: [f64; 3]) -> f64 {
         let d = [

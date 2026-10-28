@@ -532,6 +532,8 @@ impl Game<'_> {
                 horizon_client::mobs::seen_grid::SeenGrid::new(snapshot.iter().map(|s| s.bounds));
             // All but the snapshot is the same for every mob of the tick, so
             // build it once: the player view and the teams scan every UUID.
+            let dimension = self.dim.id().to_owned();
+            let mut mod_state = std::mem::take(&mut self.mods);
             let base = self.mob_world_base(&[]);
             // Each mob keeps its snapshot slot all tick; the first slot of an
             // id answers, as a scan would.
@@ -591,7 +593,16 @@ impl Game<'_> {
                 }
                 horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
                 let from = events.len();
-                let kept = m.tick(&w, &mut scratch, &mut events);
+                let mut damage_hook = |mob: &mut horizon_client::mobs::Mob, amount, source| {
+                    super::mods::mob_tick_damage_hook(
+                        &mut mod_state,
+                        &dimension,
+                        mob,
+                        amount,
+                        source,
+                    )
+                };
+                let kept = m.tick_with_damage_hook(&w, &mut scratch, &mut events, &mut damage_hook);
                 horizon_client::mobs::take_mob_pushes(&mut events, from, &mut pushes);
                 if let Some(conn) = seen_guest {
                     let mut k = from;
@@ -624,7 +635,9 @@ impl Game<'_> {
                 horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
             }
             level_random = scratch;
+            self.mods = mod_state;
         }
+        self.show_mod_output();
         self.world.random = level_random;
         if let Some(host) = self.lan.as_mut()
             && !guests.is_empty()
