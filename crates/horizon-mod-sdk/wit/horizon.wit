@@ -707,7 +707,7 @@ interface logic {
         entity-damage,
         /// Modify experience orb or level gains.
         xp-gain,
-        /// Modify plant age stages, vertical growth and vine or mushroom spread during vanilla random ticks.
+        /// Modify plant age stages, sapling trees, vertical growth and vine or mushroom spread during vanilla random ticks.
         crop-grow,
         /// Filter or modify blocks affected by an explosion.
         explosion-detonate,
@@ -727,7 +727,7 @@ interface logic {
         y: s32,
         /// Z coordinate.
         z: s32,
-        /// Numeric value associated with the event (damage amount, XP, next age stage, target height or spread attempt count).
+        /// Numeric value associated with the event (damage amount, XP, next age stage, target height or tree/spread attempt count).
         value: f32,
         /// Secondary context (attacker id, tool id, enchantment id).
         context: string,
@@ -993,7 +993,7 @@ interface vanilla-hooks {
     add-loot-drop: func(item: string, count: u32);
     /// During an `xp-gain` hook: scales the experience value by `factor`.
     set-xp-multiplier: func(factor: f32);
-    /// During `crop-grow`: scales age stages, vertical segments or spread attempts (default 1; values below 1 suppress growth; larger values round down and cap at 64 before each plant's natural cap; pass applies; consume/cancel suppresses the vanilla growth action).
+    /// During `crop-grow`: scales age stages, sapling tree attempts, vertical segments or spread attempts (default 1; values below 1 suppress growth; larger values round down and cap at 64; sapling feature placement is limited to four attempts per random tick; pass applies; consume/cancel suppresses the vanilla growth action).
     set-crop-growth-multiplier: func(factor: f32);
     /// During an `enchantment-level` hook: adds `bonus` levels to the queried enchantment.
     add-enchantment-bonus: func(bonus: s32);

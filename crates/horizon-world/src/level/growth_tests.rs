@@ -721,6 +721,60 @@ fn crop_growth_hook_scales_vine_spread_after_a_valid_target() {
 }
 
 #[test]
+fn crop_growth_hook_scales_sapling_tree_attempts_after_the_vanilla_roll() {
+    let Some(f) = fixture() else { return };
+    let mut found_tree = false;
+    for seed in 0..128 {
+        let seed = i64::from(seed) << 32;
+        let mut vanilla = World::new(f, seed);
+        let mut accelerated = World::new(f, seed);
+        let mut cancelled = World::new(f, seed);
+        let pos = BlockPos::new(0, 64, 0);
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            world.floor("grass_block", 12);
+            let sapling = world.id("oak_sapling", &[]);
+            world.put(pos, sapling);
+        }
+        accelerated.level.crop_growth_multiplier = 3.0;
+        cancelled.level.crop_growth_multiplier = 0.0;
+
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            f.behaviours
+                .random_tick(&mut world.level, &mut world.ticks, pos);
+        }
+        if vanilla.level.crop_growth_calls == 0 {
+            continue;
+        }
+
+        assert_eq!(vanilla.level.crop_growth_calls, 1);
+        assert_eq!(accelerated.level.crop_growth_calls, 1);
+        assert_eq!(cancelled.level.crop_growth_calls, 1);
+        assert_eq!(vanilla.name(pos), "minecraft:oak_sapling");
+        assert_eq!(
+            f.behaviours
+                .table
+                .int(vanilla.level.block_state(pos), f.behaviours.props.stage),
+            1
+        );
+        assert_eq!(cancelled.name(pos), "minecraft:oak_sapling");
+        assert_eq!(
+            f.behaviours
+                .table
+                .int(cancelled.level.block_state(pos), f.behaviours.props.stage),
+            0
+        );
+        let vanilla_next = vanilla.level.random.next_int_bound(1_000_000);
+        let cancelled_next = cancelled.level.random.next_int_bound(1_000_000);
+        assert_eq!(vanilla_next, cancelled_next, "cancelled tree-growth RNG");
+        if accelerated.count("oak_log") > 0 {
+            found_tree = true;
+            break;
+        }
+    }
+    assert!(found_tree, "multiplier did not complete a sapling tree");
+}
+
+#[test]
 fn crop_growth_hook_scales_bamboo_height_after_the_vanilla_roll() {
     let Some(f) = fixture() else { return };
     for kind in ["bamboo_sapling", "bamboo"] {

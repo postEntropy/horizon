@@ -1019,7 +1019,26 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `SaplingBlock.advanceTree`.
     pub(crate) fn sapling_advance_tree(&mut self, pos: BlockPos, state: BlockStateId) {
-        self.advance_tree(pos, state);
+        let Some(steps) = self.crop_growth_steps(state, pos, 1) else {
+            return;
+        };
+        let block = self.b.block(state);
+        let can_retry = self.b.live_features().is_some()
+            && self
+                .b
+                .data(state)
+                .feature
+                .as_deref()
+                .and_then(super::growth::grower)
+                .is_some();
+        let attempts = if can_retry { steps.min(4) } else { 1 };
+        for _ in 0..attempts {
+            let current = self.state(pos);
+            if !self.b.is_block(current, block) {
+                break;
+            }
+            self.advance_tree(pos, current);
+        }
     }
     fn mushroom_random_tick(&mut self, state: BlockStateId, pos: BlockPos) {
         if self.rand_int(25) != 0 {

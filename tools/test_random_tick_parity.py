@@ -29,7 +29,10 @@ def crop_growth_cases(facts, per_block, seed):
     """Focused random ticks for every block with a crop-grow age stage.
 
     `per_block` cases are generated for each target, cycling through its block
-    states so age/half variants receive comparable oracle coverage.
+    states so age/half variants receive comparable oracle coverage. Sapling
+    oracle cases use stage zero because advancing a stage-one sapling requires
+    dynamic worldgen registries that the map-backed Java oracle does not load;
+    live Rust growth tests cover actual tree placement.
     """
     rng = random.Random(seed)
     targets = (
@@ -37,10 +40,23 @@ def crop_growth_cases(facts, per_block, seed):
         'pumpkin_stem', 'melon_stem', 'cocoa', 'nether_wart',
         'sweet_berry_bush', 'pitcher_crop', 'cactus', 'sugar_cane',
         'red_mushroom', 'brown_mushroom',
-        'bamboo', 'bamboo_sapling', 'vine',
+        'bamboo', 'bamboo_sapling', 'vine', 'oak_sapling', 'spruce_sapling',
+        'birch_sapling', 'jungle_sapling', 'acacia_sapling', 'cherry_sapling',
+        'dark_oak_sapling', 'pale_oak_sapling', 'poplar_sapling',
+        'mangrove_propagule',
     )
+    saplings = {
+        'oak_sapling', 'spruce_sapling', 'birch_sapling', 'jungle_sapling',
+        'acacia_sapling', 'cherry_sapling', 'dark_oak_sapling',
+        'pale_oak_sapling', 'poplar_sapling', 'mangrove_propagule',
+    }
     for block in targets:
         pool = [i for i, state in enumerate(facts.states) if state[0] == f'minecraft:{block}']
+        if block in saplings:
+            pool = [
+                i for i in pool
+                if facts.states[i][4].get('properties', {}).get('stage') == '0'
+            ]
         if not pool:
             raise ValueError(f'no states found for crop-growth target {block}')
         for n in range(per_block):
