@@ -806,17 +806,30 @@ fn a_block_entity_that_traps_gives_its_slots_back() {
 #[test]
 fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     let mut mods = machines();
-    mods.add_resource_recipes([RecipeEntry {
-        id: "minecraft:raw_iron_smelting".into(),
-        kind: "minecraft:smelting".into(),
-        inputs: vec![IngredientSlot {
-            items: vec!["#c:raw_iron".into()],
-            count: 1,
-        }],
-        outputs: vec!["minecraft:iron_ingot*1".into()],
-        ticks: 200,
-        energy: 0,
-    }]);
+    mods.add_resource_recipes([
+        RecipeEntry {
+            id: "minecraft:raw_iron_smelting".into(),
+            kind: "minecraft:smelting".into(),
+            inputs: vec![IngredientSlot {
+                items: vec!["#c:raw_iron".into()],
+                count: 1,
+            }],
+            outputs: vec!["minecraft:iron_ingot*1".into()],
+            ticks: 200,
+            energy: 0,
+        },
+        RecipeEntry {
+            id: "test_machine:crush_iron".into(),
+            kind: "test_machine:resource_recipe".into(),
+            inputs: vec![IngredientSlot {
+                items: vec!["minecraft:raw_iron".into()],
+                count: 1,
+            }],
+            outputs: vec!["minecraft:copper_ingot*1".into()],
+            ticks: 80,
+            energy: 100,
+        },
+    ]);
     mods.set_snapshot(player());
     assert!(mods.has_block_hook("test_machine:smelter"));
     assert!(!mods.has_block_hook("test_machine:unregistered"));
@@ -916,7 +929,7 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     assert_eq!(
         mods.drain(),
         [Output::Feedback {
-            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=true/1/2/2/true/1/1 resource=true/1".into(),
+            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=true/1/2/2/true/1/1 resource=true/1/0/0".into(),
             error: false,
         }]
     );
@@ -925,7 +938,7 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     assert_eq!(
         mods.drain(),
         [Output::Feedback {
-            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=true/1/2/2/true/1/1 resource=true/1".into(),
+            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=true/1/2/2/true/1/1 resource=true/1/0/0".into(),
             error: false,
         }]
     );

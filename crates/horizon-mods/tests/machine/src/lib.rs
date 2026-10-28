@@ -456,8 +456,9 @@ impl Mod for Machines {
                     energy: 2000,
                 };
                 recipes::register(&recipe)?;
-                let by_id = recipes::get("test_machine:crush_iron")
-                    .is_some_and(|entry| entry.inputs[0].count == 1);
+                let by_id = recipes::get("test_machine:crush_iron").is_some_and(|entry| {
+                    entry.kind == "test_machine:crusher" && entry.outputs == recipe.outputs
+                });
                 let found = recipes::by_type("test_machine:crusher").len();
                 let found_by_item = recipes::for_input("minecraft:raw_iron").len();
                 let found_by_output = recipes::for_output("minecraft:iron_ingot").len();
@@ -470,8 +471,10 @@ impl Mod for Machines {
                 let new_output = recipes::for_output("minecraft:gold_ingot").len();
                 let resource_id = recipes::get("minecraft:raw_iron_smelting").is_some();
                 let resource_type = recipes::by_type("minecraft:smelting").len();
+                let replaced_resource_type = recipes::by_type("test_machine:resource_recipe").len();
+                let replaced_resource_output = recipes::for_output("minecraft:copper_ingot").len();
                 Ok(Some(format!(
-                    "fe={recv_sim}/{recv}/{recv_again}/{ext_sim}/{ext}/{ext_again}/{stored} fluid={filled}/{drained}/{incompatible}/{simulated_drain}/{after_simulation} mana={mana} ring={ring} recipes={by_id}/{found}/{found_by_item}/{found_by_output}/{replaced}/{old_output}/{new_output} resource={resource_id}/{resource_type}"
+                    "fe={recv_sim}/{recv}/{recv_again}/{ext_sim}/{ext}/{ext_again}/{stored} fluid={filled}/{drained}/{incompatible}/{simulated_drain}/{after_simulation} mana={mana} ring={ring} recipes={by_id}/{found}/{found_by_item}/{found_by_output}/{replaced}/{old_output}/{new_output} resource={resource_id}/{resource_type}/{replaced_resource_type}/{replaced_resource_output}"
                 )))
             }
             "state" => Ok(Some(format!(
