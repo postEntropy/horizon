@@ -1623,6 +1623,14 @@ impl Game<'_> {
         if self.creative {
             return;
         }
+        let position = self.player.as_ref().map_or([0; 3], |p| {
+            [p.position.x, p.position.y, p.position.z].map(|v| v.floor() as i32)
+        });
+        let Some(amount) =
+            self.mod_entity_damage("minecraft:player", position, amount, damage_type)
+        else {
+            return;
+        };
         if let Some(player) = self.player.as_mut()
             && let Some(id) = self.motion.health.damage.id(damage_type)
         {

@@ -294,7 +294,8 @@ impl Game<'_> {
         };
         let mut events = Vec::new();
         let peaceful = self.ui.difficulty == 0;
-        for m in self.mobs.iter_mut().filter(|m| m.alive()) {
+        let mut mobs = std::mem::take(&mut self.mobs);
+        for m in mobs.iter_mut().filter(|m| m.alive()) {
             if !inside([m.position.x, m.position.y, m.position.z]) {
                 continue;
             }
@@ -333,7 +334,20 @@ impl Game<'_> {
                     continue;
                 }
                 Species::Turtle => {
-                    m.damage(f32::MAX, damage);
+                    let subject = if m.kind.id.contains(':') {
+                        m.kind.id.clone()
+                    } else {
+                        format!("minecraft:{}", m.kind.id)
+                    };
+                    let position = at.map(|v| v.floor() as i32);
+                    if let Some(amount) = self.mod_entity_damage(
+                        &subject,
+                        position,
+                        f32::MAX,
+                        "minecraft:lightning_bolt",
+                    ) {
+                        m.damage(amount, damage);
+                    }
                     continue;
                 }
                 Species::Creeper => m.extra.charged = true,
@@ -345,8 +359,19 @@ impl Game<'_> {
                 m.ignite_for_ticks(160);
             }
 
-            m.damage(5.0, damage);
+            let subject = if m.kind.id.contains(':') {
+                m.kind.id.clone()
+            } else {
+                format!("minecraft:{}", m.kind.id)
+            };
+            let position = at.map(|v| v.floor() as i32);
+            if let Some(amount) =
+                self.mod_entity_damage(&subject, position, 5.0, "minecraft:lightning_bolt")
+            {
+                m.damage(amount, damage);
+            }
         }
+        self.mobs = mobs;
         if !events.is_empty() {
             let _ = self.handle_mob_events(events);
         }
