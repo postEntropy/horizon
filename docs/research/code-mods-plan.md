@@ -1,5 +1,11 @@
 # Code mods in modpacks: the gaps, the ranking, a first port
 
+> **Historical research snapshot (2026-10-19).** The API overview and gap
+> states below predate the current single-player bridges and are not current
+> implementation status. See the [API feature matrix](../api/feature-matrix.md)
+> for the maintained capability checklist and backlog. The ATM10 gap ranking
+> and Iron Furnaces proof of concept remain useful as dated research.
+
 ATM10's world now generates well in Horizon (structures, ores, decoration blocks), but **333 of its
 496 mods are still "not yet"**. Almost all of them have code: machines, magic, mobs, tools. This page
 is the research spike that gives Ludovic the facts to choose the path. It answers four questions:
@@ -11,7 +17,7 @@ native Horizon mods (Rust compiled to WebAssembly, against the Horizon mod API),
 checked against the Java mod running in a dev-only NeoForge oracle. Mod jars and decompiled code stay
 on the machine that ports them and never enter this repository.
 
-## 1. What the mod API carries today
+## 1. What the mod API carried at the time of this research
 
 | Line | What a mod can do | Where |
 |---|---|---|

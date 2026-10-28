@@ -4,10 +4,11 @@ Snapshot: 2026-10-28 · Focus: single-player · Scope: what a Rust/WASM mod can
 currently express and what the game actually runs. This is a detailed working
 checklist maintained in the repository.
 
-**Rough API-readiness estimate for ATM10 behavior in single-player: ~55%**
-(wide range: 45–65%). This is an engineering judgment based on the current
-contract/runtime/game-integration gaps below, not a measured percentage of mods
-ported or features implemented.
+**ATM10 API-readiness estimate: not currently measured.** The older ~55%
+estimate (45–65%) is stale and should not be used as a progress metric. The
+matrix below tracks individual capabilities; a useful percentage needs a
+weighted audit against representative ATM10 mod requirements, which has not
+been rerun since APIs 0.3–0.5 gained substantial single-player integration.
 
 **Legend:** [x] working in the stated scope · [~] partial or runtime-only · [ ] not
 connected / not implemented. “Working” means there is a real game path or
@@ -221,10 +222,10 @@ API/engine work, not a list of individual mods to port.
 |---|---|---|
 | [~] | Run the API integration harness that launches a real modded single-player world in both simulation modes. | `tools/mod_api_e2e.py --mode both` covers logic, machine capabilities, screen lifecycle and save paths locally; wire the representative scenario into CI and add recipe coverage. |
 | [ ] | Add missing parity harnesses for API effects that alter vanilla gameplay while preserving RNG order. | Each hook/action has a vanilla oracle and a Rust probe or equivalent fixture. |
-| [ ] | Re-run the full crate suite and fix the existing `content::tests::refuses_content_outside_its_fence` acceptance of `assets/minecraft/...`. | Full `cargo test -p horizon-mods --features runtime,pack` passes. |
-| [ ] | Refresh `docs/research/code-mods-plan.md`, whose original gap table predates APIs 0.3–0.5 and the current game bridges. | Historical research is labelled and current capability/backlog links point here. |
+| [x] | Correct the stale claim that `content::tests::refuses_content_outside_its_fence` wrongly accepts `assets/minecraft/...`; mergeable vanilla resources are intentionally permitted by the content fence. | Test and `content.rs` agree that supported vanilla resources are allowed. |
+| [x] | Refresh `docs/research/code-mods-plan.md`, whose original gap table predates APIs 0.3–0.5 and the current game bridges. | Historical research is labelled and current capability/backlog links point here. |
 | [ ] | Keep WIT API reference, public mod guide, audit and this local matrix synchronized after each API change. | Generated API reference passes and statuses cite current code/tests. |
-| [ ] | Recompute ATM10 API-readiness estimate after major integration gates instead of treating ~55% as measured truth. | Estimate has a dated basis and an explicit definition of what the percentage measures. |
+| [ ] | Recompute ATM10 API-readiness estimate after major integration gates instead of treating the old ~55% as measured truth. | A dated, weighted audit ties the estimate to representative ATM10 mod requirements. |
 
 ### Explicitly deferred until single-player APIs advance
 
