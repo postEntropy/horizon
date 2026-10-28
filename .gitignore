@@ -31,5 +31,3 @@
 /.horizon-cache/
 /crash-reports/
 /debug/
-# Local, detailed API coverage checklist (workspace-only).
-/docs/api/feature-matrix.local.md
