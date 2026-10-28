@@ -8110,6 +8110,7 @@ impl Game<'_> {
         book.to_be_displayed.retain(|r| index.contains(r));
         self.dim = dim;
         self.world_root = save_root.clone();
+        self.mod_load_attachments();
         self.block_ticks = Ticks::new(self.level.seed as i32);
         self.tick_chunks.clear();
         self.clear_entities();
@@ -10239,6 +10240,7 @@ impl Game<'_> {
         self.save_bossbars();
         self.save_schedule();
         self.save_warden_tracker();
+        self.mod_save_attachments();
         self.sync_level();
         self.store_owner();
         self.level.write(&self.world_root)?;

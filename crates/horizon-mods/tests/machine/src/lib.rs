@@ -167,6 +167,17 @@ impl Mod for Machines {
                         value: 0,
                         max_value: 0,
                     },
+                    Widget {
+                        id: 4,
+                        kind: WidgetKind::Button,
+                        x: 100,
+                        y: 20,
+                        width: 56,
+                        height: 20,
+                        text: "Restore?".into(),
+                        value: 0,
+                        max_value: 0,
+                    },
                 ],
             });
             ui::set_slot("test_machine:smelter_menu", 2, "minecraft:iron_ingot", 3);
@@ -256,6 +267,11 @@ impl Mod for Machines {
     fn on_menu_click(&mut self, screen_id: &str, slot: u32, button: u8) {
         self.clicked_slot = Some((slot, button));
         ui::set_gauge(screen_id, 1, 50, 100, "50%");
+        let _ = capabilities::set_attachment(
+            "level:minecraft:overworld",
+            "test_machine:menu_callback_seen",
+            &[42],
+        );
         if screen_id == "test_machine:smelter_menu" && slot == 0 && button == 0 {
             let _ = server::set_block(
                 "minecraft:overworld",
@@ -270,7 +286,13 @@ impl Mod for Machines {
     }
     fn on_menu_button(&mut self, screen_id: &str, button: u8) {
         self.clicked_button = Some(button);
-        if screen_id == "test_machine:smelter_menu" && button == 3 {
+        let restored = capabilities::get_attachment(
+            "level:minecraft:overworld",
+            "test_machine:menu_callback_seen",
+        )
+        .as_deref()
+            == Some(&[42][..]);
+        if screen_id == "test_machine:smelter_menu" && restored && button == 3 {
             let _ = server::set_block(
                 "minecraft:overworld",
                 BlockPos {
@@ -281,7 +303,24 @@ impl Mod for Machines {
                 "minecraft:gold_block",
             );
         }
-        ui::close_screen();
+        if screen_id == "test_machine:smelter_menu" && button == 4 {
+            let _ = server::set_block(
+                "minecraft:overworld",
+                BlockPos {
+                    x: -26,
+                    y: 70,
+                    z: -9,
+                },
+                if restored {
+                    "minecraft:diamond_block"
+                } else {
+                    "minecraft:redstone_block"
+                },
+            );
+        }
+        if button == 2 || button == 3 {
+            ui::close_screen();
+        }
     }
     fn on_packet(&mut self, channel: &str, payload: &[u8], from_player: Option<&str>) {
         self.last_packet = format!(

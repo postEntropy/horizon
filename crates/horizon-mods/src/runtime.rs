@@ -141,6 +141,12 @@ const MAX_RECIPE_OPTIONS: usize = 128;
 const MAX_RECIPE_ID_BYTES: usize = 256;
 /// Max attachment payload in `capabilities` (64 KiB).
 const MAX_ATTACHMENT_BYTES: usize = 64 << 10;
+/// Bound the total world attachment store, regardless of how many keys a mod
+/// registers across ticks.
+const MAX_ATTACHMENTS: usize = 4096;
+const MAX_ATTACHMENT_STORE_BYTES: usize = 16 << 20;
+const MAX_ATTACHMENT_TARGET_BYTES: usize = 512;
+const MAX_ATTACHMENT_KEY_BYTES: usize = 256;
 /// Max 3D wireframe boxes and ghost blocks per mod.
 const MAX_RENDER_SHAPES: usize = 256;
 const MAX_GHOST_BLOCKS: usize = 512;
@@ -512,6 +518,50 @@ pub struct Mods {
 }
 
 impl Mods {
+    /// A stable snapshot of capability attachments, for the game save layer.
+    pub fn attachment_snapshot(&self) -> Vec<(String, String, Vec<u8>)> {
+        self.shared
+            .lock()
+            .map(|shared| {
+                shared
+                    .attachments
+                    .iter()
+                    .map(|((target, key), value)| (target.clone(), key.clone(), value.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Replaces the live attachment store when a world is opened or its
+    /// persisted mod list is restored.
+    pub fn restore_attachments(&mut self, attachments: Vec<(String, String, Vec<u8>)>) {
+        if let Ok(mut shared) = self.shared.lock() {
+            let mut restored = HashMap::new();
+            let mut total_bytes = 0usize;
+            for (target, key, value) in attachments {
+                if target.len() > MAX_ATTACHMENT_TARGET_BYTES
+                    || key.len() > MAX_ATTACHMENT_KEY_BYTES
+                    || value.len() > MAX_ATTACHMENT_BYTES
+                {
+                    continue;
+                }
+                let id = (target, key);
+                let old_bytes = restored.get(&id).map_or(0, Vec::len);
+                let next_bytes = total_bytes
+                    .saturating_sub(old_bytes)
+                    .saturating_add(value.len());
+                if (!restored.contains_key(&id) && restored.len() >= MAX_ATTACHMENTS)
+                    || next_bytes > MAX_ATTACHMENT_STORE_BYTES
+                {
+                    continue;
+                }
+                total_bytes = next_bytes;
+                restored.insert(id, value);
+            }
+            shared.attachments = restored;
+        }
+    }
+
     /// Reads every mod at `paths` and starts those `enabled` says are on.
     /// A command that `reserved` (vanilla's commands) or an earlier mod
     /// already uses is refused.
@@ -2789,6 +2839,16 @@ impl capabilities::Host for State {
         key: String,
         value: Vec<u8>,
     ) -> Result<(), String> {
+        if target.len() > MAX_ATTACHMENT_TARGET_BYTES {
+            return Err(format!(
+                "attachment target is over {MAX_ATTACHMENT_TARGET_BYTES} bytes"
+            ));
+        }
+        if key.len() > MAX_ATTACHMENT_KEY_BYTES {
+            return Err(format!(
+                "attachment key is over {MAX_ATTACHMENT_KEY_BYTES} bytes"
+            ));
+        }
         if !self.owns_id(&key) {
             return Err(format!(
                 "attachment key {key:?} is not in the mod's namespaces"
@@ -2800,9 +2860,28 @@ impl capabilities::Host for State {
                 MAX_ATTACHMENT_BYTES >> 10
             ));
         }
-        if let Ok(mut sh) = self.shared.lock() {
-            sh.attachments.insert((target, key), value);
+        let mut sh = self
+            .shared
+            .lock()
+            .map_err(|_| "attachment store is unavailable".to_owned())?;
+        let id = (target, key);
+        let old_bytes = sh.attachments.get(&id).map_or(0, Vec::len);
+        let total_bytes = sh
+            .attachments
+            .values()
+            .map(Vec::len)
+            .sum::<usize>()
+            .saturating_sub(old_bytes)
+            .saturating_add(value.len());
+        if (!sh.attachments.contains_key(&id) && sh.attachments.len() >= MAX_ATTACHMENTS)
+            || total_bytes > MAX_ATTACHMENT_STORE_BYTES
+        {
+            return Err(format!(
+                "attachment store is limited to {MAX_ATTACHMENTS} entries and {} MiB",
+                MAX_ATTACHMENT_STORE_BYTES >> 20
+            ));
         }
+        sh.attachments.insert(id, value);
         Ok(())
     }
     fn delete_attachment(&mut self, target: String, key: String) {

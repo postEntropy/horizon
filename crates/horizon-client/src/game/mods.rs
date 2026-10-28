@@ -588,6 +588,8 @@ impl Game<'_> {
         false
     }
     pub(super) fn mod_save_block_entity(&mut self, _pos: [i32; 3]) {}
+    pub(super) fn mod_save_attachments(&mut self) {}
+    pub(super) fn mod_load_attachments(&mut self) {}
     pub(super) fn tick_mod_block_entities(&mut self, _positions: &[(i32, i32, i32)]) {}
     pub(super) fn mod_command(&mut self, _command: &str) -> bool {
         false
@@ -1047,7 +1049,9 @@ impl Game<'_> {
             .collect();
         let enabled = &self.settings.mods.enabled;
         let on = |id: &str| enabled.contains(id) || dev_ids.iter().any(|d| d == id);
+        let attachments = self.mods.mods.attachment_snapshot();
         let mut mods = Mods::load(&paths, on, vanilla_command);
+        mods.restore_attachments(attachments);
         let running = mods
             .entries()
             .iter()
@@ -2182,6 +2186,74 @@ impl Game<'_> {
         {
             *current = saved;
             self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
+        }
+    }
+    /// Restore capability attachments after the world root is known. The
+    /// target strings are kept intact so dimensions and entity identities
+    /// remain the mod's stable keys.
+    pub(super) fn mod_load_attachments(&mut self) {
+        const MAX_ATTACHMENT_SAVE_BYTES: u64 = 64 << 20;
+        let path = self.world_root.join("data/horizon/mod-attachments.json");
+        let attachments = match std::fs::metadata(&path) {
+            Ok(metadata) if metadata.len() > MAX_ATTACHMENT_SAVE_BYTES => {
+                log::warn!(
+                    "Horizon: mod attachment file {} exceeds the 64 MiB save limit",
+                    path.display()
+                );
+                Vec::new()
+            }
+            Ok(_) => match std::fs::read(&path) {
+                Ok(bytes) => match serde_json::from_slice(&bytes) {
+                    Ok(attachments) => attachments,
+                    Err(error) => {
+                        log::warn!(
+                            "Horizon: could not read mod attachments {}: {error}",
+                            path.display()
+                        );
+                        Vec::new()
+                    }
+                },
+                Err(error) => {
+                    log::warn!(
+                        "Horizon: could not read mod attachments {}: {error}",
+                        path.display()
+                    );
+                    Vec::new()
+                }
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(error) => {
+                log::warn!(
+                    "Horizon: could not inspect mod attachments {}: {error}",
+                    path.display()
+                );
+                Vec::new()
+            }
+        };
+        self.mods.mods.restore_attachments(attachments);
+    }
+
+    /// Persist world-scoped attachments beside level metadata. Write and sync
+    /// a temporary file before replacing the previous snapshot.
+    pub(super) fn mod_save_attachments(&mut self) {
+        let path = self.world_root.join("data/horizon/mod-attachments.json");
+        let result = (|| -> std::io::Result<()> {
+            let bytes = serde_json::to_vec(&self.mods.mods.attachment_snapshot())
+                .map_err(std::io::Error::other)?;
+            let parent = path.parent().expect("world attachment file has a parent");
+            std::fs::create_dir_all(parent)?;
+            let temporary = path.with_extension("json.tmp");
+            let mut file = std::fs::File::create(&temporary)?;
+            use std::io::Write;
+            file.write_all(&bytes)?;
+            file.sync_all()?;
+            std::fs::rename(&temporary, &path)
+        })();
+        if let Err(error) = result {
+            log::warn!(
+                "Horizon: could not save mod attachments {}: {error}",
+                path.display()
+            );
         }
     }
     fn thermal_evaporation_casing(&self, pos: [i32; 3]) -> bool {

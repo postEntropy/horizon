@@ -180,7 +180,7 @@ def stop_game(process, log, ctl_bin, socket, cwd, env):
     log.close()
 
 
-def verify_mod_screen(ctl_bin, socket, cwd, env):
+def verify_mod_screen(ctl_bin, socket, cwd, env, *, verify_restored_attachment=False):
     command(ctl_bin, socket, cwd, env, 'clear @s')
     command(ctl_bin, socket, cwd, env, 'tp @s -31 70 -11')
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
@@ -197,12 +197,23 @@ def verify_mod_screen(ctl_bin, socket, cwd, env):
     mod_screen = screen.get('mod_screen')
     assert mod_screen, f'mod machine screen contents are missing: {screen}'
     assert mod_screen.get('title') == 'Smelter', mod_screen
-    assert [widget.get('id') for widget in mod_screen.get('widgets', [])] == [1, 2, 3], mod_screen
+    assert [widget.get('id') for widget in mod_screen.get('widgets', [])] == [1, 2, 3, 4], mod_screen
     assert mod_screen.get('backgrounds'), mod_screen
     assert {'slot': 2, 'item': 'minecraft:iron_ingot', 'count': 3} in mod_screen.get('slots', []), mod_screen
 
     origin = screen.get('mod_screen_origin')
     assert origin and len(origin) == 2, screen
+    if verify_restored_attachment:
+        restore_button = next(widget for widget in mod_screen['widgets']
+                              if widget.get('id') == 4)
+        restore_x = origin[0] + restore_button['x'] + restore_button['width'] / 2
+        restore_y = origin[1] + restore_button['y'] + restore_button['height'] / 2
+        command(ctl_bin, socket, cwd, env,
+                'setblock -26 70 -9 minecraft:stone')
+        ctl(ctl_bin, socket, cwd, env, 'click-at', restore_x, restore_y)
+        ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+        restored = ctl(ctl_bin, socket, cwd, env, 'block', -26, 70, -9)
+        assert restored.get('block') == 'minecraft:diamond_block', restored
     slot_x, slot_y = origin[0] + 16, origin[1] + 26
     ctl(ctl_bin, socket, cwd, env, 'click-at', slot_x, slot_y)
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
@@ -247,6 +258,8 @@ def verify_mod_screen(ctl_bin, socket, cwd, env):
     button = next(widget for widget in mod_screen['widgets'] if widget.get('id') == 3)
     button_x = origin[0] + button['x'] + button['width'] / 2
     button_y = origin[1] + button['y'] + button['height'] / 2
+    command(ctl_bin, socket, cwd, env,
+            'setblock -27 70 -9 minecraft:stone')
     ctl(ctl_bin, socket, cwd, env, 'click-at', button_x, button_y)
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
     closed = ctl(ctl_bin, socket, cwd, env, 'screen')
@@ -443,7 +456,8 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
         assert peer_water_capacity_after == peer_water_capacity, peer
         ix, iy, iz = INPUT
         command(ctl_bin, socket, game_dir, env, f'setblock {ix} {iy} {iz} minecraft:air')
-        verify_mod_screen(ctl_bin, socket, game_dir, env)
+        verify_mod_screen(
+            ctl_bin, socket, game_dir, env, verify_restored_attachment=True)
         command(ctl_bin, socket, game_dir, env,
                 f'setblock {ix} {iy} {iz} minecraft:hopper[facing=south]')
         print(f'PASS {mode}: XP command hook, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
@@ -452,7 +466,10 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
     finally:
         if process is not None and log is not None and socket is not None:
             stop_game(process, log, ctl_bin, socket, game_dir, env)
-        shutil.rmtree(work, ignore_errors=True)
+        if os.environ.get('HORIZON_KEEP_MOD_API_E2E') == '1':
+            print(f'Kept E2E workspace for inspection: {work}', flush=True)
+        else:
+            shutil.rmtree(work, ignore_errors=True)
 
 
 def main():
