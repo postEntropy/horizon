@@ -23,6 +23,15 @@ pub enum ScheduledStep {
     Block(BlockPos),
 }
 
+enum ChorusRandomGrowth {
+    Up {
+        pos: BlockPos,
+        state: BlockStateId,
+        steps: i32,
+    },
+    Other,
+}
+
 impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     fn rand_int(&mut self, bound: i32) -> i32 {
         self.random().next_int_bound(bound).unwrap_or(0)
@@ -1519,17 +1528,45 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `ChorusFlowerBlock.randomTick`.
     fn chorus_flower_random_tick(&mut self, state: BlockStateId, pos: BlockPos) {
+        let Some(ChorusRandomGrowth::Up {
+            mut pos,
+            state,
+            steps,
+        }) = self.chorus_flower_random_tick_once(state, pos, true)
+        else {
+            return;
+        };
+        let flower = self.b.block(state);
+        for _ in 1..steps {
+            let current = self.state(pos);
+            if !self.b.is_block(current, flower) {
+                break;
+            }
+            let Some(ChorusRandomGrowth::Up { pos: next, .. }) =
+                self.chorus_flower_random_tick_once(current, pos, false)
+            else {
+                break;
+            };
+            pos = next;
+        }
+    }
+    fn chorus_flower_random_tick_once(
+        &mut self,
+        state: BlockStateId,
+        pos: BlockPos,
+        dispatch: bool,
+    ) -> Option<ChorusRandomGrowth> {
         let b = self.b;
         let p = b.props;
         let block = b.block(state);
         let plant = b.named.chorus_plant;
         let above_pos = above(pos);
         if !self.is_empty_block(above_pos) || above_pos.y > self.level.max_y() - 1 {
-            return;
+            return None;
         }
         let age = b.table.int(state, p.age);
         if age >= 5 {
-            return;
+            return None;
         }
         let mut grow_up = false;
         let mut pillar_on_support = false;
@@ -1561,18 +1598,33 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         };
         let plant_state = b.default_of(plant);
         if grow_up && all_empty(self, above_pos, None) && self.is_empty_block(pos.offset(0, 2, 0)) {
+            let steps = if dispatch {
+                self.crop_growth_steps(state, pos, 1)?
+            } else {
+                1
+            };
             let connected = self.chorus_plant_with_connections(pos, plant_state);
             self.set_block(pos, connected, 2);
-            self.set_block(
-                above_pos,
-                b.table.set_int(b.default_of(block), p.age, age),
-                2,
-            );
+            let flower_state = b.table.set_int(b.default_of(block), p.age, age);
+            self.set_block(above_pos, flower_state, 2);
             self.level_event(1033, above_pos, 0);
+            return Some(ChorusRandomGrowth::Up {
+                pos: above_pos,
+                state: flower_state,
+                steps,
+            });
         } else if age < 4 {
             let mut attempts = self.rand_int(4);
             if pillar_on_support {
                 attempts += 1;
+            }
+            if attempts > 0 {
+                let steps = if dispatch {
+                    self.crop_growth_steps(state, pos, attempts)?
+                } else {
+                    1
+                };
+                attempts = attempts.saturating_mul(steps).min(64);
             }
             let mut branched = false;
             for _ in 0..attempts {
@@ -1594,6 +1646,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             if branched {
                 let connected = self.chorus_plant_with_connections(pos, plant_state);
                 self.set_block(pos, connected, 2);
+                return Some(ChorusRandomGrowth::Other);
             } else {
                 self.set_block(pos, b.table.set_int(state, p.age, 5), 2);
                 self.level_event(1034, pos, 0);
@@ -1602,6 +1655,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             self.set_block(pos, b.table.set_int(state, p.age, 5), 2);
             self.level_event(1034, pos, 0);
         }
+        Some(ChorusRandomGrowth::Other)
     }
     /// `ServerLevel.tickPrecipitation` at a column whose top (motion-blocking
     /// heightmap) position and biome answers are supplied by the caller.

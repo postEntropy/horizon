@@ -702,7 +702,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `loot-drop` | Modify block or entity loot drops before they spawn. |
 | `entity-damage` | Modify incoming or outgoing entity damage. |
 | `xp-gain` | Modify experience orb or level gains. |
-| `crop-grow` | Modify plant age stages, sapling trees, vertical growth and vine or mushroom spread during vanilla random ticks. |
+| `crop-grow` | Modify plant age stages, sapling trees, vertical growth, chorus growth and vine or mushroom spread during vanilla random ticks. |
 | `explosion-detonate` | Filter or modify blocks affected by an explosion. |
 | `enchantment-level` | Modify effective enchantment levels on an item or entity. |
 

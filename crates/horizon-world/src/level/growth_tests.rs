@@ -775,6 +775,87 @@ fn crop_growth_hook_scales_sapling_tree_attempts_after_the_vanilla_roll() {
 }
 
 #[test]
+fn crop_growth_hook_scales_chorus_vertical_growth() {
+    let Some(f) = fixture() else { return };
+    let mut vanilla = World::new(f, 19);
+    let mut accelerated = World::new(f, 19);
+    let mut cancelled = World::new(f, 19);
+    let pos = BlockPos::new(0, 64, 0);
+    for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+        world.put(pos.offset(0, -1, 0), world.id("end_stone", &[]));
+        world.put(pos, world.id("chorus_flower", &[]));
+    }
+    accelerated.level.crop_growth_multiplier = 3.0;
+    cancelled.level.crop_growth_multiplier = 0.0;
+
+    for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+        f.behaviours
+            .random_tick(&mut world.level, &mut world.ticks, pos);
+    }
+
+    assert_eq!(vanilla.level.crop_growth_calls, 1);
+    assert_eq!(accelerated.level.crop_growth_calls, 1);
+    assert_eq!(cancelled.level.crop_growth_calls, 1);
+    assert_eq!(vanilla.count("chorus_plant"), 1);
+    assert_eq!(vanilla.count("chorus_flower"), 1);
+    assert_eq!(cancelled.name(pos), "minecraft:chorus_flower");
+    assert_eq!(cancelled.count("chorus_plant"), 0);
+    let vanilla_next = vanilla.level.random.next_int_bound(1_000_000);
+    let cancelled_next = cancelled.level.random.next_int_bound(1_000_000);
+    assert_eq!(
+        vanilla_next, cancelled_next,
+        "cancelled vertical growth RNG"
+    );
+    assert!(
+        accelerated.count("chorus_plant") + accelerated.count("chorus_flower")
+            > vanilla.count("chorus_plant") + vanilla.count("chorus_flower"),
+        "multiplier did not extend the chorus"
+    );
+}
+
+#[test]
+fn crop_growth_hook_scales_chorus_branch_attempts() {
+    let Some(f) = fixture() else { return };
+    let mut found_extra_branch = false;
+    for seed in 0..128 {
+        let seed = i64::from(seed) << 32;
+        let mut vanilla = World::new(f, seed);
+        let mut accelerated = World::new(f, seed);
+        let mut cancelled = World::new(f, seed);
+        let pos = BlockPos::new(0, 64, 0);
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            world.put(pos.offset(0, -3, 0), world.id("end_stone", &[]));
+            world.put(pos.offset(0, -2, 0), world.id("chorus_plant", &[]));
+            world.put(pos.offset(0, -1, 0), world.id("chorus_plant", &[]));
+            world.put(pos, world.id("chorus_flower", &[]));
+        }
+        accelerated.level.crop_growth_multiplier = 3.0;
+        cancelled.level.crop_growth_multiplier = 0.0;
+
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            f.behaviours
+                .random_tick(&mut world.level, &mut world.ticks, pos);
+        }
+        if vanilla.level.crop_growth_calls == 0 {
+            continue;
+        }
+        assert_eq!(vanilla.level.crop_growth_calls, 1);
+        assert_eq!(accelerated.level.crop_growth_calls, 1);
+        assert_eq!(cancelled.level.crop_growth_calls, 1);
+        assert_eq!(cancelled.name(pos), "minecraft:chorus_flower");
+        assert_eq!(cancelled.count("chorus_flower"), 1);
+        if accelerated.count("chorus_flower") > vanilla.count("chorus_flower") {
+            found_extra_branch = true;
+            break;
+        }
+    }
+    assert!(
+        found_extra_branch,
+        "multiplier did not create extra chorus branches"
+    );
+}
+
+#[test]
 fn crop_growth_hook_scales_bamboo_height_after_the_vanilla_roll() {
     let Some(f) = fixture() else { return };
     for kind in ["bamboo_sapling", "bamboo"] {
