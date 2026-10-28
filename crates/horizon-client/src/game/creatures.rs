@@ -1249,10 +1249,17 @@ impl Game<'_> {
                     }
                 }
                 MobEvent::GiftLoot { table, at } => {
-                    let drops =
+                    let vanilla =
                         self.res
                             .items()
                             .loot_table(table, false, None, &mut self.world.random);
+                    let pos = [
+                        at[0].floor() as i32,
+                        at[1].floor() as i32,
+                        at[2].floor() as i32,
+                    ];
+                    let drops =
+                        self.mod_loot_table_drops("minecraft:villager", pos, &table, vanilla);
                     for d in drops {
                         self.spawn_item(d, at, [0.0, 0.2, 0.0], 10);
                     }

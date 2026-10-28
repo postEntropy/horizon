@@ -699,7 +699,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 
 | Case | |
 | --- | --- |
-| `loot-drop` | Modify block, entity or fishing loot drops before they spawn. |
+| `loot-drop` | Modify block, entity, fishing or other table-driven loot drops before they spawn. |
 | `entity-damage` | Modify incoming or outgoing entity damage. |
 | `xp-gain` | Modify experience orb or level gains. |
 | `crop-grow` | Modify plant age stages, sapling trees, chorus growth, growing-plant segments and vine or mushroom spread during vanilla random ticks. |

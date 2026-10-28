@@ -84,6 +84,26 @@ pub(super) struct ModItemDrop {
     pub(super) count: u32,
 }
 
+fn apply_loot_drop_result(
+    outcome: ModHookOutcome,
+    vanilla: Vec<ItemStack>,
+    extra: Vec<ModItemDrop>,
+) -> Vec<ItemStack> {
+    let mut drops = if outcome.keeps_vanilla_drops() {
+        vanilla
+    } else {
+        Vec::new()
+    };
+    if outcome.keeps_mod_drops() {
+        drops.extend(
+            extra
+                .into_iter()
+                .map(|drop| ItemStack::new(&drop.id, drop.count)),
+        );
+    }
+    drops
+}
+
 #[cfg(feature = "mods")]
 use {
     super::{Screen, integrated::ModPacket},
@@ -674,6 +694,18 @@ impl Game<'_> {
         let dimension = self.dim.id();
         self.mods
             .effective_enchantment_level(&stack.item, enchantment, base, dimension, position)
+    }
+    /// Applies the generic loot hook to an already-rolled table result.
+    /// The loot table draws its vanilla random sequence before this dispatch.
+    pub(super) fn mod_loot_table_drops(
+        &mut self,
+        subject: &str,
+        position: [i32; 3],
+        context: &str,
+        vanilla: Vec<ItemStack>,
+    ) -> Vec<ItemStack> {
+        let (outcome, extra) = self.mod_loot_drop(subject, position, vanilla.len() as f32, context);
+        apply_loot_drop_result(outcome, vanilla, extra)
     }
 }
 
@@ -4264,7 +4296,8 @@ mod xp_tests {
 
 #[cfg(test)]
 mod loot_tests {
-    use super::ModHookOutcome;
+    use super::{ModHookOutcome, ModItemDrop, apply_loot_drop_result};
+    use horizon_client::items::ItemStack;
 
     #[test]
     fn loot_hook_outcomes_select_the_default_and_mod_drops() {
@@ -4274,5 +4307,28 @@ mod loot_tests {
         assert!(ModHookOutcome::Consume.keeps_mod_drops());
         assert!(!ModHookOutcome::Cancel.keeps_vanilla_drops());
         assert!(!ModHookOutcome::Cancel.keeps_mod_drops());
+    }
+
+    #[test]
+    fn table_loot_hook_preserves_replaces_or_suppresses_items() {
+        let vanilla = || vec![ItemStack::new("minecraft:cod", 2)];
+        let extra = || {
+            vec![ModItemDrop {
+                id: "minecraft:diamond".into(),
+                count: 3,
+            }]
+        };
+
+        let pass = apply_loot_drop_result(ModHookOutcome::Pass, vanilla(), extra());
+        assert_eq!(pass.len(), 2);
+        assert_eq!(&*pass[0].item, "minecraft:cod");
+        assert_eq!(&*pass[1].item, "minecraft:diamond");
+
+        let consume = apply_loot_drop_result(ModHookOutcome::Consume, vanilla(), extra());
+        assert_eq!(consume.len(), 1);
+        assert_eq!(&*consume[0].item, "minecraft:diamond");
+
+        let cancel = apply_loot_drop_result(ModHookOutcome::Cancel, vanilla(), extra());
+        assert!(cancel.is_empty());
     }
 }

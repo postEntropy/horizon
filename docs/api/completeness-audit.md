@@ -179,9 +179,10 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   100 points (7 levels) in both integrated-server and in-frame single-player.
   Negative point adjustments and direct `set` operations keep their vanilla
   semantics; other direct XP sources still need an audit against this event.
-- Player-mined block loot, mob-death item drops and fishing catches dispatch
-  `loot-drop` before item entities spawn. Fishing keeps vanilla XP rolls in
-  their prior order. `pass` preserves vanilla drops and adds mod drops;
+- Player-mined block loot, mob-death item drops, fishing catches, Piglin
+  bartering and villager gifts dispatch `loot-drop` before item entities spawn.
+  Fishing keeps vanilla XP rolls in their prior order. Table-generated vanilla
+  loot rolls before hook dispatch. `pass` preserves vanilla drops and adds mod drops;
   `consume` uses the mod drops instead; `cancel` suppresses item drops. XP orbs
   remain separate from item loot.
 - No game-side dispatch was found for `tick_entities`, custom entity

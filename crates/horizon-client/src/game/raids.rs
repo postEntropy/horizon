@@ -1113,10 +1113,16 @@ impl Game<'_> {
     }
     /// `BehaviorUtils.throwItem`: a hero's gift tossed toward the player.
     pub(super) fn throw_gift(&mut self, table: &str, from: [f64; 3], to: [f64; 3]) {
-        let drops = self
+        let vanilla = self
             .res
             .items()
             .loot_table(table, false, None, &mut self.world.random);
+        let position = [
+            from[0].floor() as i32,
+            from[1].floor() as i32,
+            from[2].floor() as i32,
+        ];
+        let drops = self.mod_loot_table_drops("minecraft:villager", position, table, vanilla);
         let d = Vec3::new(to[0] - from[0], to[1] - from[1], to[2] - from[2]).normalize();
         for stack in drops {
             self.spawn_item(stack, from, [d.x * 0.3, d.y * 0.3, d.z * 0.3], 10);

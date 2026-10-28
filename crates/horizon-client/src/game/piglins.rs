@@ -133,8 +133,10 @@ impl Game<'_> {
             return;
         };
         let m = &self.mobs[i];
-        let from = [m.position.x, m.position.y + 1.3, m.position.z];
-        let items = if &*item == "minecraft:gold_ingot" && !m.is_baby() {
+        let at = m.position;
+        let from = [at.x, at.y + 1.3, at.z];
+        let bartering = &*item == "minecraft:gold_ingot" && !m.is_baby();
+        let items = if bartering {
             self.res.items().loot_table(
                 "minecraft:gameplay/piglin_bartering",
                 false,
@@ -144,10 +146,24 @@ impl Game<'_> {
         } else {
             vec![ItemStack::new(&item, 1)]
         };
+        let items = if bartering {
+            let pos = [
+                at.x.floor() as i32,
+                at.y.floor() as i32,
+                at.z.floor() as i32,
+            ];
+            self.mod_loot_table_drops(
+                "minecraft:piglin",
+                pos,
+                "minecraft:gameplay/piglin_bartering",
+                items,
+            )
+        } else {
+            items
+        };
         // BehaviorUtils.throwItem toward the nearest visible player
         // (NEAREST_VISIBLE_PLAYER: within 16, alive, no spectators; the
         // guests count as much as the host), else nearby.
-        let at = m.position;
         let host = self
             .player
             .as_ref()
