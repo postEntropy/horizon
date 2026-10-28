@@ -152,10 +152,9 @@ impl Game<'_> {
         let Some(hook) = self.hook.take() else {
             return 0;
         };
-        let Some(p) = self.player.as_ref() else {
+        let Some(owner) = self.player.as_ref().map(|p| p.position) else {
             return 0;
         };
-        let owner = p.position;
         let mut damage = 0;
         if let State::Hooked(id) = hook.state {
             // pullEntity: 0.1 of the way to the owner.
@@ -187,34 +186,69 @@ impl Game<'_> {
                 Some(hook.open_water),
             );
             self.world.random = random;
+            let hook_position = [
+                hook.position.x.floor() as i32,
+                hook.position.y.floor() as i32,
+                hook.position.z.floor() as i32,
+            ];
+            let (outcome, extra_drops) = self.mod_loot_drop(
+                "minecraft:fishing_bobber",
+                hook_position,
+                items.len() as f32,
+                "minecraft:gameplay/fishing",
+            );
             // FishingHook.retrieve: fish_caught for a catch.
             self.stats.custom("fish_caught", 1);
             for stack in items {
-                let mut item = ItemStack {
-                    item: Arc::from(stack.item.as_str()),
-                    count: stack.count.max(1) as u32,
-                    damage: stack.damage.max(0) as u32,
-                    extra: None,
-                };
-                for (id, level) in &stack.enchantments {
-                    if &*item.item == "minecraft:enchanted_book" {
-                        horizon_client::item_data::set_level(
-                            &mut item.data_mut().stored_enchantments,
-                            id,
-                            (*level).max(0) as u32,
-                        );
-                    } else {
-                        item.enchant(id, (*level).max(0) as u32);
+                if outcome.keeps_vanilla_drops() {
+                    let mut item = ItemStack {
+                        item: Arc::from(stack.item.as_str()),
+                        count: stack.count.max(1) as u32,
+                        damage: stack.damage.max(0) as u32,
+                        extra: None,
+                    };
+                    for (id, level) in &stack.enchantments {
+                        if &*item.item == "minecraft:enchanted_book" {
+                            horizon_client::item_data::set_level(
+                                &mut item.data_mut().stored_enchantments,
+                                id,
+                                (*level).max(0) as u32,
+                            );
+                        } else {
+                            item.enchant(id, (*level).max(0) as u32);
+                        }
                     }
+                    if let Some(potion) = &stack.potion {
+                        item = item.with_potion(potion);
+                    }
+                    let (dx, dy, dz) = (
+                        owner.x - hook.position.x,
+                        owner.y - hook.position.y,
+                        owner.z - hook.position.z,
+                    );
+                    let v = [
+                        dx * 0.1,
+                        dy * 0.1 + (dx * dx + dy * dy + dz * dz).sqrt().sqrt() * 0.08,
+                        dz * 0.1,
+                    ];
+                    self.spawn_item(
+                        item,
+                        [hook.position.x, hook.position.y, hook.position.z],
+                        v,
+                        10,
+                    );
                 }
-                if let Some(potion) = &stack.potion {
-                    item = item.with_potion(potion);
-                }
-                let (dx, dy, dz) = (
-                    owner.x - hook.position.x,
-                    owner.y - hook.position.y,
-                    owner.z - hook.position.z,
-                );
+                let xp = self.world.random.next_int_bound(6).unwrap_or(0) as u32 + 1;
+                self.spawn_orbs([owner.x, owner.y + 0.5, owner.z + 0.5], xp);
+            }
+            for drop in extra_drops
+                .into_iter()
+                .filter(|_| outcome.keeps_mod_drops())
+            {
+                let item = ItemStack::new(&drop.id, drop.count);
+                let dx = owner.x - hook.position.x;
+                let dy = owner.y - hook.position.y;
+                let dz = owner.z - hook.position.z;
                 let v = [
                     dx * 0.1,
                     dy * 0.1 + (dx * dx + dy * dy + dz * dz).sqrt().sqrt() * 0.08,
@@ -226,8 +260,6 @@ impl Game<'_> {
                     v,
                     10,
                 );
-                let xp = self.world.random.next_int_bound(6).unwrap_or(0) as u32 + 1;
-                self.spawn_orbs([owner.x, owner.y + 0.5, owner.z + 0.5], xp);
             }
             damage = 1;
         }

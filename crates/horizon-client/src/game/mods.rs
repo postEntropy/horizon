@@ -1825,7 +1825,11 @@ impl Game<'_> {
         value: f32,
         context: &str,
     ) -> (ModHookOutcome, Vec<ModItemDrop>) {
-        if !self.mods.mods.is_running() {
+        if !self
+            .mods
+            .mods
+            .has_vanilla_hook_subscription(&VanillaHookKind::LootDrop)
+        {
             return (ModHookOutcome::Pass, Vec::new());
         }
         let (outcome, _, _, _, drops) = self.mods.mods.vanilla_hook(&VanillaHookEvent {

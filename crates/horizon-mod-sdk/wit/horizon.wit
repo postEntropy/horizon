@@ -701,7 +701,7 @@ interface logic {
         cancel,
     }
     enum vanilla-hook-kind {
-        /// Modify block or entity loot drops before they spawn.
+        /// Modify block, entity or fishing loot drops before they spawn.
         loot-drop,
         /// Modify incoming or outgoing entity damage.
         entity-damage,
