@@ -314,11 +314,19 @@ fn neoforge_furnace_fuels_update_item_components() {
         ),
         (
             "data/neoforge/data_maps/item/furnace_fuels.json",
-            r#"{"values":{"minecraft:coal":{"burn_time":1600},"minecraft:stick":{"burn_time":40},"ruby:ruby":{"burn_time":800}},"remove":["minecraft:oak_sapling"]}"#,
+            r##"{"values":{"minecraft:coal":{"burn_time":1600},"#ruby:test_fuels":{"burn_time":40},"ruby:ruby":{"burn_time":800}},"remove":["minecraft:oak_sapling"]}"##,
         ),
         (
             "data/neoforge/data_maps/item/compostables.json",
-            r#"{"values":{"minecraft:dandelion":{"chance":0.4},"ruby:ruby":{"chance":0.75}},"remove":["minecraft:oak_sapling"]}"#,
+            r##"{"values":{"#ruby:test_compostables":{"chance":0.4},"ruby:ruby":{"chance":0.75}},"remove":["minecraft:oak_sapling"]}"##,
+        ),
+        (
+            "data/ruby/tags/item/test_fuels.json",
+            r#"{"values":["minecraft:stick",{"id":"minecraft:coal"}]}"#,
+        ),
+        (
+            "data/ruby/tags/item/test_compostables.json",
+            r#"{"values":["minecraft:dandelion",{"id":"minecraft:stick"}]}"#,
         ),
     ] {
         let path = dir.join(name);
@@ -353,6 +361,10 @@ fn neoforge_furnace_fuels_update_item_components() {
     assert!(items["minecraft:oak_sapling"]["minecraft:cooking_fuel"].is_null());
     assert_eq!(
         items["minecraft:dandelion"]["minecraft:compostable"]["chance"],
+        0.4
+    );
+    assert_eq!(
+        items["minecraft:stick"]["minecraft:compostable"]["chance"],
         0.4
     );
     assert_eq!(items["ruby:ruby"]["minecraft:compostable"]["chance"], 0.75);

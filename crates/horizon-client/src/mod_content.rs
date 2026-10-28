@@ -245,9 +245,9 @@ struct Plan<'a> {
     blocks: Vec<NewBlock<'a>>,
     items: Vec<NewItem>,
     /// NeoForge's static fuel map, applied after new item templates are copied.
-    furnace_fuels: BTreeMap<String, Option<u32>>,
+    furnace_fuels: Vec<(String, Option<u32>)>,
     replace_furnace_fuels: bool,
-    compostables: BTreeMap<String, Option<f64>>,
+    compostables: Vec<(String, Option<f64>)>,
     replace_compostables: bool,
     warnings: Vec<String>,
     /// Vanilla's state count (the tables' length before).
@@ -256,6 +256,31 @@ struct Plan<'a> {
     defaults: BTreeMap<String, u32>,
     /// The gameplay rows' sound objects, by block, for `sounds` overrides.
     sounds: BTreeMap<String, J>,
+}
+
+fn resolve_item_selector(
+    selector: &str,
+    tags: &HashMap<String, Vec<String>>,
+    warnings: &mut Vec<String>,
+) -> Vec<String> {
+    if let Some(tag) = selector.strip_prefix('#') {
+        let tag = if tag.contains(':') {
+            tag.to_owned()
+        } else {
+            format!("minecraft:{tag}")
+        };
+        match tags.get(&tag) {
+            Some(items) => items.clone(),
+            None => {
+                warnings.push(format!(
+                    "item data map selector {selector} names an unknown tag"
+                ));
+                Vec::new()
+            }
+        }
+    } else {
+        vec![selector.to_owned()]
+    }
 }
 
 fn custom_state_combinations(
@@ -433,9 +458,9 @@ impl<'a> Plan<'a> {
                 });
             }
         }
-        let mut furnace_fuels = BTreeMap::new();
+        let mut furnace_fuels = Vec::new();
         let mut replace_furnace_fuels = false;
-        let mut compostables = BTreeMap::new();
+        let mut compostables = Vec::new();
         let mut replace_compostables = false;
         let mut warnings = Vec::new();
         const FURNACE_FUELS: &str = "data/neoforge/data_maps/item/furnace_fuels.json";
@@ -457,20 +482,13 @@ impl<'a> Plan<'a> {
             }
             if let Some(values) = doc.get("values").and_then(serde_json::Value::as_object) {
                 for (item, value) in values {
-                    if item.starts_with('#') {
-                        warnings.push(format!(
-                            "mod {}: {FURNACE_FUELS}: item tag {item} is not supported yet",
-                            m.id
-                        ));
-                        continue;
-                    }
                     let burn_time = value
                         .get("burn_time")
                         .and_then(serde_json::Value::as_u64)
                         .and_then(|value| u32::try_from(value).ok())
                         .filter(|value| *value > 0);
                     if let Some(burn_time) = burn_time {
-                        furnace_fuels.insert(item.clone(), Some(burn_time));
+                        furnace_fuels.push((item.clone(), Some(burn_time)));
                     } else {
                         warnings.push(format!(
                             "mod {}: {FURNACE_FUELS}: invalid burn_time for {item}",
@@ -487,7 +505,7 @@ impl<'a> Plan<'a> {
                             m.id
                         ));
                     } else {
-                        furnace_fuels.insert(item.to_owned(), None);
+                        furnace_fuels.push((item.to_owned(), None));
                     }
                 }
             }
@@ -511,19 +529,12 @@ impl<'a> Plan<'a> {
             }
             if let Some(values) = doc.get("values").and_then(serde_json::Value::as_object) {
                 for (item, value) in values {
-                    if item.starts_with('#') {
-                        warnings.push(format!(
-                            "mod {}: {COMPOSTABLES}: item tag {item} is not supported yet",
-                            m.id
-                        ));
-                        continue;
-                    }
                     let chance = value
                         .get("chance")
                         .and_then(serde_json::Value::as_f64)
                         .filter(|chance| (0.0..=1.0).contains(chance));
                     if let Some(chance) = chance {
-                        compostables.insert(item.clone(), Some(chance));
+                        compostables.push((item.clone(), Some(chance)));
                     } else {
                         warnings.push(format!(
                             "mod {}: {COMPOSTABLES}: invalid chance for {item}",
@@ -540,7 +551,7 @@ impl<'a> Plan<'a> {
                             m.id
                         ));
                     } else {
-                        compostables.insert(item.to_owned(), None);
+                        compostables.push((item.to_owned(), None));
                     }
                 }
             }
@@ -551,7 +562,10 @@ impl<'a> Plan<'a> {
                 _ => return Err("items.json: no item registry".into()),
             };
             known.extend(items.iter().map(|item| item.rename.to.clone()));
-            furnace_fuels.retain(|item, _| {
+            furnace_fuels.retain(|(item, _)| {
+                if item.starts_with('#') {
+                    return true;
+                }
                 let exists = known.contains(item);
                 if !exists {
                     warnings.push(format!(
@@ -560,7 +574,10 @@ impl<'a> Plan<'a> {
                 }
                 exists
             });
-            compostables.retain(|item, _| {
+            compostables.retain(|(item, _)| {
+                if item.starts_with('#') {
+                    return true;
+                }
                 let exists = known.contains(item);
                 if !exists {
                     warnings.push(format!(
@@ -778,10 +795,15 @@ impl<'a> Plan<'a> {
 
     /// Applies supported NeoForge static item maps to Horizon's component
     /// table. Data-map entries override only their mapped field.
-    fn item_data_maps(&self, doc: &mut J) -> Result<()> {
+    fn item_data_maps(
+        &self,
+        doc: &mut J,
+        item_tags: &HashMap<String, Vec<String>>,
+    ) -> Result<Vec<String>> {
         let J::Obj(items) = doc else {
             return Err("items.json: no item registry".into());
         };
+        let mut warnings = Vec::new();
         if self.replace_furnace_fuels {
             for (_, components) in items.iter_mut() {
                 if let J::Obj(components) = components {
@@ -796,60 +818,66 @@ impl<'a> Plan<'a> {
                 }
             }
         }
-        for (id, burn_time) in &self.furnace_fuels {
-            let Some((_, components)) = items.iter_mut().find(|(name, _)| name == id) else {
-                continue;
-            };
-            let J::Obj(components) = components else {
-                return Err(format!("items.json: {id} is not an item component object").into());
-            };
-            match burn_time {
-                Some(burn_time) => {
-                    let speed = components
-                        .iter()
-                        .find(|(name, _)| name == "minecraft:cooking_fuel")
-                        .and_then(|(_, fuel)| fuel.get("speed_multiplier"))
-                        .cloned()
-                        .unwrap_or_else(|| J::Str("minecraft:cooking/speed_default".into()));
-                    let mut fuel = J::Obj(Vec::new());
-                    fuel.set("burn_time", J::Num((*burn_time).into()));
-                    fuel.set("speed_multiplier", speed);
-                    if let Some((_, old)) = components
-                        .iter_mut()
-                        .find(|(name, _)| name == "minecraft:cooking_fuel")
-                    {
-                        *old = fuel;
-                    } else {
-                        components.push(("minecraft:cooking_fuel".into(), fuel));
+        for (selector, burn_time) in &self.furnace_fuels {
+            let ids = resolve_item_selector(selector, item_tags, &mut warnings);
+            for id in ids {
+                let Some((_, components)) = items.iter_mut().find(|(name, _)| name == &id) else {
+                    continue;
+                };
+                let J::Obj(components) = components else {
+                    return Err(format!("items.json: {id} is not an item component object").into());
+                };
+                match burn_time {
+                    Some(burn_time) => {
+                        let speed = components
+                            .iter()
+                            .find(|(name, _)| name == "minecraft:cooking_fuel")
+                            .and_then(|(_, fuel)| fuel.get("speed_multiplier"))
+                            .cloned()
+                            .unwrap_or_else(|| J::Str("minecraft:cooking/speed_default".into()));
+                        let mut fuel = J::Obj(Vec::new());
+                        fuel.set("burn_time", J::Num((*burn_time).into()));
+                        fuel.set("speed_multiplier", speed);
+                        if let Some((_, old)) = components
+                            .iter_mut()
+                            .find(|(name, _)| name == "minecraft:cooking_fuel")
+                        {
+                            *old = fuel;
+                        } else {
+                            components.push(("minecraft:cooking_fuel".into(), fuel));
+                        }
                     }
+                    None => components.retain(|(name, _)| name != "minecraft:cooking_fuel"),
                 }
-                None => components.retain(|(name, _)| name != "minecraft:cooking_fuel"),
             }
         }
-        for (id, chance) in &self.compostables {
-            let Some((_, components)) = items.iter_mut().find(|(name, _)| name == id) else {
-                continue;
-            };
-            let J::Obj(components) = components else {
-                return Err(format!("items.json: {id} is not an item component object").into());
-            };
-            match chance {
-                Some(chance) => {
-                    let mut compostable = J::Obj(Vec::new());
-                    compostable.set("chance", J::f64(*chance));
-                    if let Some((_, old)) = components
-                        .iter_mut()
-                        .find(|(name, _)| name == "minecraft:compostable")
-                    {
-                        *old = compostable;
-                    } else {
-                        components.push(("minecraft:compostable".into(), compostable));
+        for (selector, chance) in &self.compostables {
+            let ids = resolve_item_selector(selector, item_tags, &mut warnings);
+            for id in ids {
+                let Some((_, components)) = items.iter_mut().find(|(name, _)| name == &id) else {
+                    continue;
+                };
+                let J::Obj(components) = components else {
+                    return Err(format!("items.json: {id} is not an item component object").into());
+                };
+                match chance {
+                    Some(chance) => {
+                        let mut compostable = J::Obj(Vec::new());
+                        compostable.set("chance", J::f64(*chance));
+                        if let Some((_, old)) = components
+                            .iter_mut()
+                            .find(|(name, _)| name == "minecraft:compostable")
+                        {
+                            *old = compostable;
+                        } else {
+                            components.push(("minecraft:compostable".into(), compostable));
+                        }
                     }
+                    None => components.retain(|(name, _)| name != "minecraft:compostable"),
                 }
-                None => components.retain(|(name, _)| name != "minecraft:compostable"),
             }
         }
-        Ok(())
+        Ok(warnings)
     }
 
     /// One JSON table, rewritten.
@@ -909,7 +937,6 @@ impl<'a> Plan<'a> {
             }
             "items.json" => {
                 self.items(doc, true);
-                self.item_data_maps(doc)?;
             }
             "registries.json" => {
                 // Network ids: the game and its server map items and blocks through
@@ -2991,6 +3018,12 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
     let base = &std::path::absolute(base)?;
     let plan = Plan::new(base, mods)?;
     let overlay = Overlay::new(base, out)?;
+    let mut namespaces: Vec<&str> = mods
+        .iter()
+        .flat_map(|m| m.content.namespaces.iter().map(String::as_str))
+        .collect();
+    namespaces.sort();
+    overlay.write(MARKER, &serde_json::to_vec(&namespaces)?)?;
     tables(base, &plan, &overlay)?;
     // Mod files, and every tag addition gathered per tag file.
     let mut tags: BTreeMap<String, TagMerge> = BTreeMap::new();
@@ -3148,6 +3181,10 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
         }
         overlay.write(BIOME_TAGS, &serde_json::to_vec(&doc)?)?;
     }
+    let item_tags = crate::items::load_tag_lists(out, "item")?;
+    let mut items = read_json(&out.join("items.json"))?;
+    warnings.extend(plan.item_data_maps(&mut items, &item_tags)?);
+    overlay.write("items.json", &serde_json::to_vec(&items)?)?;
     if let Some(carvers) = worldgen.get_mut("worldgen/carvers.json") {
         let vanilla: BTreeMap<String, String> =
             serde_json::from_slice(&fs::read(base.join("worldgen/carvers.json"))?)?;
@@ -3392,12 +3429,6 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
             }
         }
     }
-    let mut namespaces: Vec<&str> = mods
-        .iter()
-        .flat_map(|m| m.content.namespaces.iter().map(String::as_str))
-        .collect();
-    namespaces.sort();
-    overlay.write(MARKER, &serde_json::to_vec(&namespaces)?)?;
     overlay.write(WARNINGS, warnings.join("\n").as_bytes())?;
     Ok(warnings)
 }
@@ -3457,7 +3488,7 @@ fn stamp(base: &Path, mods: &[ContentMod]) -> Result<String> {
             modified.as_nanos()
         ))
     };
-    let mut parts = vec!["horizon mod content 5".to_owned()];
+    let mut parts = vec!["horizon mod content 6".to_owned()];
     let base = std::path::absolute(base)?;
     parts.push(
         String::from_utf8_lossy(&fs::read(base.join("horizon-resources.json"))?).into_owned(),

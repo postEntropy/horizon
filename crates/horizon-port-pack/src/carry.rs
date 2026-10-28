@@ -1574,10 +1574,7 @@ fn carry_kind(
                 let mut unsupported = Vec::new();
                 if let Some(values) = doc.get("values").and_then(Value::as_object) {
                     for (item, value) in values {
-                        if item.starts_with('#') {
-                            unsupported
-                                .push(format!("{item}: item-tag selectors are not supported"));
-                        } else if value
+                        if value
                             .get("burn_time")
                             .and_then(Value::as_u64)
                             .is_none_or(|time| time == 0 || time > u32::MAX as u64)
@@ -1598,10 +1595,7 @@ fn carry_kind(
                 let mut unsupported = Vec::new();
                 if let Some(values) = doc.get("values").and_then(Value::as_object) {
                     for (item, value) in values {
-                        if item.starts_with('#') {
-                            unsupported
-                                .push(format!("{item}: item-tag selectors are not supported"));
-                        } else if value
+                        if value
                             .get("chance")
                             .and_then(Value::as_f64)
                             .is_none_or(|chance| !(0.0..=1.0).contains(&chance))
@@ -2944,16 +2938,14 @@ mod tests {
                 "data/neoforge/data_maps/item/compostables.json",
             ]
         );
-        assert_eq!(
-            report.data_map_unsupported["data/neoforge/data_maps/item/furnace_fuels.json"],
-            ["#c:planks: item-tag selectors are not supported"]
+        assert!(
+            !report
+                .data_map_unsupported
+                .contains_key("data/neoforge/data_maps/item/furnace_fuels.json")
         );
         assert_eq!(
             report.data_map_unsupported["data/neoforge/data_maps/item/compostables.json"],
-            [
-                "#c:flowers: item-tag selectors are not supported",
-                "gem:bad: invalid chance",
-            ]
+            ["gem:bad: invalid chance"]
         );
         fs::remove_dir_all(&dir).unwrap();
     }
