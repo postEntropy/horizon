@@ -375,10 +375,15 @@ impl GameLevel<'_> {
             match kind {
                 PreRemove::Contents { slots, .. } => {
                     let items = entity.as_ref().map_or(&[][..], BlockEntity::slots);
-                    for slot in 0..slots {
-                        let stack = items.get(slot).cloned().flatten();
-                        self.drop_item_stack(pos, stack);
-                    }
+                    self.spill_container_contents(
+                        pos,
+                        old,
+                        slots,
+                        items,
+                        entity
+                            .as_ref()
+                            .is_some_and(|entity| matches!(entity, BlockEntity::Chest(_))),
+                    );
                 }
                 PreRemove::Campfire => {
                     for _ in 0..4 {
@@ -501,7 +506,7 @@ impl GameLevel<'_> {
             return true;
         }
         let name = self.facts.get(old).name.clone();
-        let items = match removal::pre_remove(&name) {
+        let (slots, items) = match removal::pre_remove(&name) {
             PreRemove::Contents { slots, .. } if &*name == "minecraft:decorated_pot" => {
                 // Containers.dropContents reads getTheItem, which unpacks the loot table.
                 let mut tag = tag;
@@ -516,18 +521,68 @@ impl GameLevel<'_> {
                 items[0] = tag
                     .get("item")
                     .and_then(horizon_client::save::item_from_nbt);
-                items
+                (slots, items)
             }
-            PreRemove::Contents { slots, .. } => {
-                horizon_client::save::decode_items(tag.get("Items"), slots)
-            }
-            PreRemove::Campfire => horizon_client::save::decode_items(tag.get("Items"), 4),
+            PreRemove::Contents { slots, .. } => (
+                slots,
+                horizon_client::save::decode_items(tag.get("Items"), slots),
+            ),
+            PreRemove::Campfire => (4, horizon_client::save::decode_items(tag.get("Items"), 4)),
             _ => return true,
         };
-        for stack in items {
-            self.drop_item_stack(pos, stack);
-        }
+        self.spill_container_contents(
+            pos,
+            old,
+            slots,
+            &items,
+            name.as_ref() == "minecraft:chest" || name.as_ref() == "minecraft:trapped_chest",
+        );
         true
+    }
+    fn spill_container_contents(
+        &mut self,
+        pos: BlockPos,
+        old: BlockStateId,
+        slots: usize,
+        items: &[Option<ItemStack>],
+        loot_hook: bool,
+    ) {
+        if loot_hook && self.mods.has_loot_drop_hook() {
+            let vanilla: Vec<_> = items.iter().flatten().cloned().collect();
+            let dimension = match self.dimension {
+                super::LevelDimension::Overworld => "minecraft:overworld",
+                super::LevelDimension::Nether => "minecraft:the_nether",
+                super::LevelDimension::End => "minecraft:the_end",
+            };
+            let subject = self.facts.get(old).name.as_ref();
+            let (outcome, extra) = self.mods.loot_drop_hook(
+                self.items,
+                dimension,
+                subject,
+                [pos.x, pos.y, pos.z],
+                vanilla.len() as f32,
+                "minecraft:container_contents",
+            );
+            // Generate the vanilla drops first even when the mod consumes them,
+            // preserving every slot's RNG draws.
+            let first = self.spill.spawns.len();
+            for slot in 0..slots {
+                self.drop_item_stack(pos, items.get(slot).cloned().flatten());
+            }
+            let vanilla_spawns = self.spill.spawns.split_off(first);
+            if outcome.keeps_vanilla_drops() {
+                self.spill.spawns.extend(vanilla_spawns);
+            }
+            if outcome.keeps_mod_drops() {
+                for drop in extra {
+                    self.drop_item_stack(pos, Some(ItemStack::new(&drop.id, drop.count)));
+                }
+            }
+        } else {
+            for slot in 0..slots {
+                self.drop_item_stack(pos, items.get(slot).cloned().flatten());
+            }
+        }
     }
     /// `Containers.dropItemStack` of one slot (an empty one still draws its spot).
     fn drop_item_stack(&mut self, pos: BlockPos, stack: Option<ItemStack>) {

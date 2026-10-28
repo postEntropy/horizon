@@ -13,7 +13,7 @@ use horizon_client::{
     command::{Dispatcher, vanilla},
     extras_hud::Corners,
     hud::HudBatch,
-    items::ItemStack,
+    items::{ItemStack, Items},
     mod_list,
 };
 use std::{path::PathBuf, time::Duration};
@@ -401,6 +401,17 @@ struct FusionReactorInfo {
     controller: [i32; 3],
 }
 impl ModsState {
+    pub(super) fn has_loot_drop_hook(&self) -> bool {
+        #[cfg(feature = "mods")]
+        {
+            self.mods
+                .has_vanilla_hook_subscription(&VanillaHookKind::LootDrop)
+        }
+        #[cfg(not(feature = "mods"))]
+        {
+            false
+        }
+    }
     pub(super) fn has_enchantment_level_hook(&self) -> bool {
         #[cfg(feature = "mods")]
         {
@@ -445,6 +456,62 @@ impl ModsState {
         {
             let _ = (item, enchantment, dimension, position);
             base
+        }
+    }
+    pub(super) fn loot_drop_hook(
+        &mut self,
+        items: &Items,
+        dimension: &str,
+        subject: &str,
+        position: [i32; 3],
+        value: f32,
+        context: &str,
+    ) -> (ModHookOutcome, Vec<ModItemDrop>) {
+        #[cfg(feature = "mods")]
+        {
+            if !self.has_loot_drop_hook() {
+                return (ModHookOutcome::Pass, Vec::new());
+            }
+            let (outcome, _, _, _, drops) = self.mods.vanilla_hook(&VanillaHookEvent {
+                kind: VanillaHookKind::LootDrop,
+                subject: subject.to_owned(),
+                dimension: dimension.to_owned(),
+                x: position[0],
+                y: position[1],
+                z: position[2],
+                value,
+                context: context.to_owned(),
+            });
+            let outcome = match outcome {
+                EventOutcome::Pass => ModHookOutcome::Pass,
+                EventOutcome::Consume => ModHookOutcome::Consume,
+                EventOutcome::Cancel => ModHookOutcome::Cancel,
+            };
+            let mut validated = Vec::new();
+            for ItemDrop { id, count } in drops {
+                let Some(max_stack) = items.get(&id).map(|item| item.max_stack) else {
+                    log::warn!("Horizon: mod loot hook returned unknown item {id}");
+                    continue;
+                };
+                if count == 0 || max_stack == 0 {
+                    continue;
+                }
+                let mut remaining = count;
+                while remaining > 0 {
+                    let stack = remaining.min(max_stack);
+                    validated.push(ModItemDrop {
+                        id: id.clone(),
+                        count: stack,
+                    });
+                    remaining -= stack;
+                }
+            }
+            (outcome, validated)
+        }
+        #[cfg(not(feature = "mods"))]
+        {
+            let _ = (items, dimension, subject, position, value, context);
+            (ModHookOutcome::Pass, Vec::new())
         }
     }
     pub(super) fn has_explosion_detonate_hook(&self) -> bool {
@@ -1857,48 +1924,14 @@ impl Game<'_> {
         value: f32,
         context: &str,
     ) -> (ModHookOutcome, Vec<ModItemDrop>) {
-        if !self
-            .mods
-            .mods
-            .has_vanilla_hook_subscription(&VanillaHookKind::LootDrop)
-        {
-            return (ModHookOutcome::Pass, Vec::new());
-        }
-        let (outcome, _, _, _, drops) = self.mods.mods.vanilla_hook(&VanillaHookEvent {
-            kind: VanillaHookKind::LootDrop,
-            subject: subject.to_owned(),
-            dimension: self.dim.id().to_owned(),
-            x: position[0],
-            y: position[1],
-            z: position[2],
+        self.mods.loot_drop_hook(
+            self.res.items(),
+            self.dim.id(),
+            subject,
+            position,
             value,
-            context: context.to_owned(),
-        });
-        let outcome = match outcome {
-            EventOutcome::Pass => ModHookOutcome::Pass,
-            EventOutcome::Consume => ModHookOutcome::Consume,
-            EventOutcome::Cancel => ModHookOutcome::Cancel,
-        };
-        let mut validated = Vec::new();
-        for ItemDrop { id, count } in drops {
-            let Some(max_stack) = self.res.items().get(&id).map(|item| item.max_stack) else {
-                log::warn!("Horizon: mod loot hook returned unknown item {id}");
-                continue;
-            };
-            if count == 0 || max_stack == 0 {
-                continue;
-            }
-            let mut remaining = count;
-            while remaining > 0 {
-                let stack = remaining.min(max_stack);
-                validated.push(ModItemDrop {
-                    id: id.clone(),
-                    count: stack,
-                });
-                remaining -= stack;
-            }
-        }
-        (outcome, validated)
+            context,
+        )
     }
     /// A right-click on a mod-owned block. `true` means the mod handled it.
     pub(super) fn mod_use_block(
