@@ -46,7 +46,7 @@ Java mod behavior has an equivalent.
 | [x] | Existing pack-carry tooling imports supported assets, block/item declarations, recipes and loot data. |
 | [x] | Shared `forge`/`neoforge` tag additions carry across mods; legacy `blocks/` and `items/` folders are normalized to Horizon's `block/` and `item/` tag paths. |
 | [~] | NeoForge `furnace_fuels` and `compostables` maps update cooking-fuel and composter behavior for registered items, expanding direct and nested item-tag selectors against the merged tag registry. Unknown tags and invalid values are reported. Other data maps remain unsupported. |
-| [~] | ATM10's 2026-10-28 carry reports still list 70 loader-tag files from 25 mods under `outside/`; re-carry is needed to refresh those local reports and packages. |
+| [~] | Re-carried 56 ATM10 mods on 2026-10-28: all 70 Forge/NeoForge loader-tag files now carry successfully. Another 144 tag files from other namespaces remain under `outside/` across 41 mods and need namespace/dependency review. |
 | [~] | Carry coverage depends on templates and supported JSON shapes; reports list omitted blocks/files/recipes. |
 | [~] | Large content packs may need unsupported model, loot, worldgen or registry formats added to the carry/runtime pipeline. |
 
