@@ -381,6 +381,47 @@ struct FusionReactorInfo {
     controller: [i32; 3],
 }
 impl ModsState {
+    pub(super) fn has_explosion_detonate_hook(&self) -> bool {
+        #[cfg(feature = "mods")]
+        {
+            self.mods
+                .has_vanilla_hook_subscription(&VanillaHookKind::ExplosionDetonate)
+        }
+        #[cfg(not(feature = "mods"))]
+        {
+            false
+        }
+    }
+    pub(super) fn explosion_detonate_hook(
+        &mut self,
+        subject: &str,
+        dimension: &str,
+        position: [i32; 3],
+        radius: f32,
+        context: &str,
+    ) -> bool {
+        #[cfg(feature = "mods")]
+        {
+            self.mods
+                .vanilla_hook(&VanillaHookEvent {
+                    kind: VanillaHookKind::ExplosionDetonate,
+                    subject: subject.to_owned(),
+                    dimension: dimension.to_owned(),
+                    x: position[0],
+                    y: position[1],
+                    z: position[2],
+                    value: radius,
+                    context: context.to_owned(),
+                })
+                .0
+                == EventOutcome::Pass
+        }
+        #[cfg(not(feature = "mods"))]
+        {
+            let _ = (subject, dimension, position, radius, context);
+            true
+        }
+    }
     pub(super) fn crop_growth_multiplier(
         &mut self,
         subject: &str,

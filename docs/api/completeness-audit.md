@@ -188,8 +188,11 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   now dispatches for crop age stages, hanging mangrove propagule ages,
   bamboo/cactus/sugar-cane heights, sapling-tree attempts, mushroom/vine/chorus
   spreading and growing-plant-head segments after vanilla random-tick conditions
-  succeed. `explosion-detonate` and
-  `enchantment-level` are still not connected to gameplay. Container, fishing
+  succeed. `explosion-detonate` now filters individual non-air blast targets
+  before block damage, drops and fire; `tools/mod_api_e2e.py --mode both`
+  verifies a protected stone and destroyed neighboring glass in both
+  single-player paths. `enchantment-level` is not connected to gameplay.
+  Container, fishing
   and structure loot paths still need review.
 - Status: **partial live integration; API coverage remains incomplete**.
 

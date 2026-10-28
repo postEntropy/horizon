@@ -692,7 +692,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | Case | |
 | --- | --- |
 | `pass` | Let vanilla or default behaviour continue. |
-| `consume` | Handled by the mod; swing hand and stop default handling. |
+| `consume` | Handled by the mod; stop the corresponding default action. |
 | `cancel` | Cancel the action. |
 
 ### enum `vanilla-hook-kind`
@@ -703,7 +703,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `entity-damage` | Modify incoming or outgoing entity damage. |
 | `xp-gain` | Modify experience orb or level gains. |
 | `crop-grow` | Modify plant age stages, sapling trees, chorus growth, growing-plant segments and vine or mushroom spread during vanilla random ticks. |
-| `explosion-detonate` | Filter or modify blocks affected by an explosion. |
+| `explosion-detonate` | Filter individual non-air blocks in a detonation before its block and fire effects. |
 | `enchantment-level` | Modify effective enchantment levels on an item or entity. |
 
 ### record `vanilla-hook-event`
@@ -716,8 +716,8 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `x` | `s32` | X coordinate. |
 | `y` | `s32` | Y coordinate. |
 | `z` | `s32` | Z coordinate. |
-| `value` | `f32` | Numeric value associated with the event (damage amount, XP, next age stage, target height or tree/spread attempt count). |
-| `context` | `string` | Secondary context (attacker id, tool id, enchantment id). |
+| `value` | `f32` | Numeric value associated with the event (damage amount, XP, next age stage, explosion radius or tree/spread attempt count). |
+| `context` | `string` | Secondary context (damage source, block interaction and fire flag for explosions, attacker/tool/enchantment id). |
 
 ### record `logic-hooks`
 

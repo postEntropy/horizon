@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Exercise the API 0.4 machine/container path in an isolated single-player game.
+"""Exercise mod hooks and the API 0.4 machine/container path in isolated single-player worlds.
 
-Builds two test WASM mods and Horizon, then checks cross-mod FE transfer and
-that vanilla hoppers can feed the smelter and collect its output. Runs both
+Builds two test WASM mods and Horizon, then checks per-block explosion filtering,
+XP hooks, cross-mod FE transfer and vanilla hopper input/output. Runs both
 in-frame and integrated-server single-player, and reopens each saved world to
 check that machine capabilities and transferred items survive. Needs prepared
 Minecraft resources in .local/horizon-client and a virtual screen on Linux.
@@ -268,6 +268,22 @@ def verify_mod_screen(ctl_bin, socket, cwd, env, *, verify_restored_attachment=F
     assert marker.get('block') == 'minecraft:gold_block', marker
 
 
+def verify_explosion_hook(ctl_bin, socket, cwd, env):
+    center = (-31, 70, -12)
+    stone = (-30, 70, -12)
+    glass = (-32, 70, -12)
+    command(ctl_bin, socket, cwd, env, f'setblock {center[0]} 69 {center[2]} minecraft:stone')
+    command(ctl_bin, socket, cwd, env, f'setblock {stone[0]} {stone[1]} {stone[2]} minecraft:stone')
+    command(ctl_bin, socket, cwd, env, f'setblock {glass[0]} {glass[1]} {glass[2]} minecraft:glass')
+    command(ctl_bin, socket, cwd, env,
+            f'summon minecraft:tnt {center[0]} {center[1]} {center[2]} {{fuse:1s}}')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 10)
+    protected = ctl(ctl_bin, socket, cwd, env, 'block', *stone)
+    destroyed = ctl(ctl_bin, socket, cwd, env, 'block', *glass)
+    assert protected.get('block') == 'minecraft:stone', protected
+    assert destroyed.get('block') == 'minecraft:air', destroyed
+
+
 def check_mode(client, ctl_bin, mods, *, in_frame):
     mode = 'in-frame' if in_frame else 'integrated'
     work = Path(tempfile.mkdtemp(prefix=f'horizon-mod-api-{mode}-'))
@@ -290,6 +306,7 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
     process = log = socket = None
     try:
         process, log, socket = start_game(client, ctl_bin, mods, work, env, in_frame=in_frame)
+        verify_explosion_hook(ctl_bin, socket, game_dir, env)
         command(ctl_bin, socket, game_dir, env, 'experience add @s 50 points')
         xp_levels = command(ctl_bin, socket, game_dir, env, 'experience query @s levels')
         assert re.search(r'\b7\b', xp_levels), f'xp-gain hook did not double command XP: {xp_levels}'
@@ -460,7 +477,7 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
             ctl_bin, socket, game_dir, env, verify_restored_attachment=True)
         command(ctl_bin, socket, game_dir, env,
                 f'setblock {ix} {iy} {iz} minecraft:hopper[facing=south]')
-        print(f'PASS {mode}: XP command hook, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
+        print(f'PASS {mode}: per-block explosion filter, XP command hook, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
     except (CheckFailed, AssertionError, subprocess.TimeoutExpired) as error:
         raise CheckFailed(f'{mode}: {error}\n{tail(work / "game.log")}') from error
     finally:

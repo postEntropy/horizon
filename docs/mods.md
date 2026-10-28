@@ -440,8 +440,10 @@ mod-to-mod item transfer are not connected to this path yet.
   likewise leaves tank contents unchanged, and a nonempty tank rejects a
   different fluid id.
 
-`python3 tools/mod_api_e2e.py` checks a test smelter in both integrated-server
-and in-frame single-player: the mod's `server::set_block` creates the machine,
+`python3 tools/mod_api_e2e.py` checks vanilla hooks and a test smelter in both
+integrated-server and in-frame single-player: the mod filters stone from a
+short-fuse TNT blast while adjacent glass still breaks, and its
+`server::set_block` creates the machine,
 `/item` writes and clears a machine slot, a vanilla hopper inserts raw iron,
 the mod processes a vanilla recipe, a second hopper extracts the ingot, and the
 output survives a save/reopen. It checks denied side access, that a full

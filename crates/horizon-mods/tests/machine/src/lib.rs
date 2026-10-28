@@ -51,6 +51,7 @@ impl Mod for Machines {
         let _ = vanilla_hooks::subscribe("entity-damage");
         let _ = vanilla_hooks::subscribe("xp-gain");
         let _ = vanilla_hooks::subscribe("crop-grow");
+        let _ = vanilla_hooks::subscribe("explosion-detonate");
         let _ = dimensions::register_dimension(&DimensionSpec {
             id: "test_machine:twilight".into(),
             ultrawarm: false,
@@ -572,6 +573,9 @@ impl Mod for Machines {
             VanillaHookKind::CropGrow => {
                 vanilla_hooks::set_crop_growth_multiplier(3.0);
                 EventOutcome::Pass
+            }
+            VanillaHookKind::ExplosionDetonate if event.subject == "minecraft:stone" => {
+                EventOutcome::Cancel
             }
             _ => EventOutcome::Pass,
         }

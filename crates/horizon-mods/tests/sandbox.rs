@@ -1295,4 +1295,16 @@ fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
     });
     assert_eq!(outcome4, EventOutcome::Pass);
     assert_eq!(crop_growth, 3.0);
+
+    let (outcome5, _, _, _, _) = mods.vanilla_hook(&VanillaHookEvent {
+        kind: VanillaHookKind::ExplosionDetonate,
+        subject: "minecraft:stone".into(),
+        dimension: "minecraft:overworld".into(),
+        x: 2,
+        y: 64,
+        z: -1,
+        value: 4.0,
+        context: "minecraft:explosion;Destroy;fire=false".into(),
+    });
+    assert_eq!(outcome5, EventOutcome::Cancel);
 }

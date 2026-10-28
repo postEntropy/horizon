@@ -89,6 +89,10 @@ pub(super) enum BlockInteraction {
     DestroyWithDecay,
 }
 
+fn retain_explosion_targets(targets: &mut Vec<[i32; 3]>, mut allows: impl FnMut([i32; 3]) -> bool) {
+    targets.retain(|pos| allows(*pos));
+}
+
 thread_local! {
     /// Client-side randomness (explosion sound pitch), separate from the level random.
     static CLIENT_RANDOM: std::cell::RefCell<LegacyRandom> = std::cell::RefCell::new(LegacyRandom::new(0x5eed));
@@ -547,6 +551,21 @@ impl Game<'_> {
         let ctx = horizon_client::sculk::Context::default();
         self.post_game_event("minecraft:explode", center, ctx);
         let mut targets = self.exploded_positions(center, radius, resists);
+        if interaction != BlockInteraction::Keep && self.mods.has_explosion_detonate_hook() {
+            let dimension = self.dim.id().to_owned();
+            let context = format!("{damage_type};{interaction:?};fire={fire}");
+            let facts = self.res.facts();
+            let world = &self.world;
+            let mods = &mut self.mods;
+            retain_explosion_targets(&mut targets, |pos| {
+                let state = world.block(pos[0], pos[1], pos[2]);
+                if facts.is_air(state) {
+                    return true;
+                }
+                let subject = &facts.get(state).name;
+                mods.explosion_detonate_hook(subject, &dimension, pos, radius, &context)
+            });
+        }
         self.explosion_hurt_entities(center, radius, damage_type);
         if interaction != BlockInteraction::Keep {
             // Util.shuffle(list, level.random)
@@ -712,5 +731,17 @@ mod tests {
         add_or_append_stack(&mut stacks, stack("minecraft:stone"), [1, 0, 0]);
         let counts: Vec<u32> = stacks.iter().map(|(_, s)| s.count).collect();
         assert_eq!(counts, vec![16, 4, 1]);
+    }
+
+    #[test]
+    fn explosion_hook_filter_keeps_allowed_targets_in_vanilla_order() {
+        let mut targets = vec![[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+        let mut seen = Vec::new();
+        retain_explosion_targets(&mut targets, |pos| {
+            seen.push(pos);
+            pos != [4, 5, 6]
+        });
+        assert_eq!(seen, [[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
+        assert_eq!(targets, [[1, 2, 3], [7, 8, 9]]);
     }
 }
