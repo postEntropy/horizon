@@ -580,6 +580,9 @@ impl Game<'_> {
     pub(super) fn mod_button_at(&self, _x: f32, _y: f32) -> Option<u8> {
         None
     }
+    pub(super) fn mod_button_declared(&self, _button: u8) -> bool {
+        false
+    }
     pub(super) fn draw_mod_screen(&self, _batch: &mut HudBatch, _ox: f32, _oy: f32) {}
     pub(super) fn ensure_mod_block_entity(&mut self, _pos: [i32; 3], _block: &str) -> bool {
         false
@@ -1829,6 +1832,13 @@ impl Game<'_> {
                     && y < w.y as f32 + w.height as f32
             })
             .and_then(|w| u8::try_from(w.id).ok())
+    }
+    pub(super) fn mod_button_declared(&self, button: u8) -> bool {
+        self.mod_screen_view().is_some_and(|screen| {
+            screen.widgets.iter().any(|widget| {
+                widget.kind == ModWidgetKind::Button && widget.id == u32::from(button)
+            })
+        })
     }
     pub(super) fn draw_mod_screen(&self, batch: &mut HudBatch, ox: f32, oy: f32) {
         let Some(screen) = self.mod_screen_view() else {

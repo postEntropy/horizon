@@ -1082,6 +1082,8 @@ impl Game<'_> {
                 });
             }
             S::PlayerCommand(p) if p.action == 6 => self.lan_start_gliding(host, conn),
+            S::ContainerButtonClick(p)
+                if self.lan_mod_menu_button(host, conn, p.container, p.button) => {}
             S::ContainerButtonClick(p) => {
                 self.lan_station_button(host, conn, p.container, p.button);
             }
@@ -1285,7 +1287,7 @@ impl Game<'_> {
     /// cursor goes back into their inventory (`placeItemBackInInventory`,
     /// dropped only if it doesn't fit), and their client's cursor empties
     /// with the inventory it is sent.
-    fn guest_carried_back(&mut self, host: &mut LanHost, gi: usize) {
+    pub(super) fn guest_carried_back(&mut self, host: &mut LanHost, gi: usize) {
         if let Some(c) = host.hub.guests[gi].carried.take() {
             self.lan_place_back(host, gi, vec![c]);
             host.hub.send_inventory(gi);

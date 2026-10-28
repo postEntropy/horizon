@@ -6616,6 +6616,12 @@ impl Game<'_> {
             if let Some(key) = self.container {
                 self.container_changed(key);
             }
+            if matches!(self.container_kind(), Some(BlockEntity::Mod { .. }))
+                && let Some(slot) = slot
+                && slot >= 300
+            {
+                self.mod_menu_click((slot - 300) as u32, u8::from(right));
+            }
             return;
         }
         self.click_inventory(right);
@@ -6867,9 +6873,6 @@ impl Game<'_> {
         if self.station_click(right) {
             return;
         }
-        if self.remote.is_some() {
-            return self.remote_click(right);
-        }
         let Some(size) = self
             .renderer
             .as_ref()
@@ -6880,7 +6883,22 @@ impl Game<'_> {
         let batch = HudBatch::new(size);
         let (ox, oy) = self.inventory_origin(&batch);
         if let Some(button) = self.mod_button_at(self.cursor.0 - ox, self.cursor.1 - oy) {
-            self.mod_menu_button(button);
+            if self.remote.is_some() {
+                self.remote_mod_menu_button(button);
+            } else {
+                self.mod_menu_button(button);
+                if self.mod_screen_view().is_none()
+                    && matches!(self.container_kind(), Some(BlockEntity::Mod { .. }))
+                {
+                    self.close_container();
+                    self.screen = Screen::Playing;
+                    self.capture(true);
+                }
+            }
+            return;
+        }
+        if self.remote.is_some() {
+            self.remote_click(right);
             return;
         }
         let Some(slot) = self.slot_at(&batch, self.cursor.0, self.cursor.1) else {

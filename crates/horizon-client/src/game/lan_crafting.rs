@@ -305,6 +305,50 @@ impl Game<'_> {
         true
     }
 
+    /// A button declared by an API 0.4 mod screen. Validate both the guest's
+    /// active mod menu and the button id before dispatching the server callback.
+    pub(super) fn lan_mod_menu_button(
+        &mut self,
+        host: &mut LanHost,
+        conn: u32,
+        window: i32,
+        button: i32,
+    ) -> bool {
+        let Some(button) = u8::try_from(button).ok() else {
+            return false;
+        };
+        let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
+            return false;
+        };
+        let Some(pos) = host.hub.guests[gi]
+            .menu
+            .as_ref()
+            .filter(|menu| window != 0 && menu.window == window)
+            .and_then(|menu| match menu.slots {
+                Slots::Block(pos) => Some(pos),
+                _ => None,
+            })
+        else {
+            return false;
+        };
+        if !matches!(
+            self.world.block_entities.get(&pos),
+            Some(BlockEntity::Mod { .. })
+        ) || !self.mod_button_declared(button)
+        {
+            return false;
+        }
+
+        self.mod_menu_button(button);
+        self.mod_save_block_entity([pos.0, pos.1, pos.2]);
+        if self.mod_screen_view().is_none() {
+            self.guest_container_closed(host, conn);
+            host.hub.close_container(conn);
+            self.guest_carried_back(host, gi);
+        }
+        true
+    }
+
     /// `ServerGamePacketListenerImpl.handleContainerSlotStateChanged`: a
     /// guest's crafter slot toggle (`CrafterBlockEntity.setSlotState`) in
     /// their open crafter window.

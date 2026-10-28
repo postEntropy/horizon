@@ -692,6 +692,14 @@ impl Game<'_> {
             );
         }
         if let Some(screen) = self.mod_screen_view() {
+            if let Some(renderer) = &self.renderer {
+                let origin = horizon_client::hud::HudBatch::new([
+                    renderer.config.width,
+                    renderer.config.height,
+                ])
+                .centered_origin(screen.width as f32, screen.height as f32);
+                v["mod_screen_origin"] = json!([origin.0, origin.1]);
+            }
             v["mod_screen"] = json!({
                 "title": screen.title,
                 "width": screen.width,

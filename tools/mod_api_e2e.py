@@ -188,6 +188,8 @@ def verify_mod_screen(ctl_bin, socket, cwd, env):
     target = ctl(ctl_bin, socket, cwd, env, 'looking-at')
     hit = target.get('block') or {}
     assert target.get('kind') == 'block' and hit.get('pos') == [-31, 70, -9] and hit.get('face') == 'north', target
+    command(ctl_bin, socket, cwd, env,
+            'item replace block -31 70 -9 container.0 with minecraft:diamond 4')
     ctl(ctl_bin, socket, cwd, env, 'mouse', 'right', 'click')
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
     screen = ctl(ctl_bin, socket, cwd, env, 'screen')
@@ -195,12 +197,39 @@ def verify_mod_screen(ctl_bin, socket, cwd, env):
     mod_screen = screen.get('mod_screen')
     assert mod_screen, f'mod machine screen contents are missing: {screen}'
     assert mod_screen.get('title') == 'Smelter', mod_screen
-    assert [widget.get('id') for widget in mod_screen.get('widgets', [])] == [1, 2], mod_screen
+    assert [widget.get('id') for widget in mod_screen.get('widgets', [])] == [1, 2, 3], mod_screen
     assert mod_screen.get('backgrounds'), mod_screen
     assert {'slot': 2, 'item': 'minecraft:iron_ingot', 'count': 3} in mod_screen.get('slots', []), mod_screen
-    ctl(ctl_bin, socket, cwd, env, 'key', 'esc', 'tap')
+
+    origin = screen.get('mod_screen_origin')
+    assert origin and len(origin) == 2, screen
+    slot_x, slot_y = origin[0] + 16, origin[1] + 26
+    ctl(ctl_bin, socket, cwd, env, 'click-at', slot_x, slot_y)
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    picked = ctl(ctl_bin, socket, cwd, env, 'screen')
+    assert picked.get('carried') == {'item': 'minecraft:diamond', 'count': 4}, picked
+    assert next(slot for slot in picked.get('slots', []) if slot.get('slot') == 300).get('item') is None, picked
+    marker = ctl(ctl_bin, socket, cwd, env, 'block', -28, 70, -9)
+    assert marker.get('block') == 'minecraft:emerald_block', marker
+
+    ctl(ctl_bin, socket, cwd, env, 'click-at', slot_x, slot_y, 'right')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    placed = ctl(ctl_bin, socket, cwd, env, 'screen')
+    assert placed.get('carried') == {'item': 'minecraft:diamond', 'count': 3}, placed
+    machine_slot = next(slot for slot in placed.get('slots', []) if slot.get('slot') == 300)
+    assert machine_slot.get('item') == 'minecraft:diamond' and machine_slot.get('count') == 1, placed
+    assert 'count: 1, Slot: 0b, id: "minecraft:diamond"' in command(
+        ctl_bin, socket, cwd, env, 'data get block -31 70 -9 Items')
+
+    button = next(widget for widget in mod_screen['widgets'] if widget.get('id') == 3)
+    button_x = origin[0] + button['x'] + button['width'] / 2
+    button_y = origin[1] + button['y'] + button['height'] / 2
+    ctl(ctl_bin, socket, cwd, env, 'click-at', button_x, button_y)
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
     closed = ctl(ctl_bin, socket, cwd, env, 'screen')
     assert closed.get('screen') == 'playing' and 'mod_screen' not in closed, closed
+    marker = ctl(ctl_bin, socket, cwd, env, 'block', -27, 70, -9)
+    assert marker.get('block') == 'minecraft:gold_block', marker
 
 
 def check_mode(client, ctl_bin, mods, *, in_frame):

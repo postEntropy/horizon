@@ -156,6 +156,17 @@ impl Mod for Machines {
                         value: 0,
                         max_value: 0,
                     },
+                    Widget {
+                        id: 3,
+                        kind: WidgetKind::Button,
+                        x: 100,
+                        y: 55,
+                        width: 56,
+                        height: 20,
+                        text: "Power".into(),
+                        value: 0,
+                        max_value: 0,
+                    },
                 ],
             });
             ui::set_slot("test_machine:smelter_menu", 2, "minecraft:iron_ingot", 3);
@@ -245,9 +256,31 @@ impl Mod for Machines {
     fn on_menu_click(&mut self, screen_id: &str, slot: u32, button: u8) {
         self.clicked_slot = Some((slot, button));
         ui::set_gauge(screen_id, 1, 50, 100, "50%");
+        if screen_id == "test_machine:smelter_menu" && slot == 0 && button == 0 {
+            let _ = server::set_block(
+                "minecraft:overworld",
+                BlockPos {
+                    x: -28,
+                    y: 70,
+                    z: -9,
+                },
+                "minecraft:emerald_block",
+            );
+        }
     }
-    fn on_menu_button(&mut self, _screen_id: &str, button: u8) {
+    fn on_menu_button(&mut self, screen_id: &str, button: u8) {
         self.clicked_button = Some(button);
+        if screen_id == "test_machine:smelter_menu" && button == 3 {
+            let _ = server::set_block(
+                "minecraft:overworld",
+                BlockPos {
+                    x: -27,
+                    y: 70,
+                    z: -9,
+                },
+                "minecraft:gold_block",
+            );
+        }
         ui::close_screen();
     }
     fn on_packet(&mut self, channel: &str, payload: &[u8], from_player: Option<&str>) {

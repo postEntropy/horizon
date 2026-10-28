@@ -4506,6 +4506,15 @@ impl Game<'_> {
         };
         self.remote_menu_ops(&[(Some(internal), i32::from(right), input)]);
     }
+    /// A button declared by an API 0.4 mod screen belongs to its server-side
+    /// menu callback, just like a vanilla menu button.
+    pub(super) fn remote_mod_menu_button(&mut self, button: u8) {
+        let (container, _) = self.remote_menu();
+        self.send(S::ContainerButtonClick(play::ContainerButtonClick {
+            container,
+            button: i32::from(button),
+        }));
+    }
     /// The server's open menu: its window id and menu type (0, "inventory"
     /// when none is open).
     fn remote_menu(&self) -> (i32, String) {
