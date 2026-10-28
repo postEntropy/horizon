@@ -1307,4 +1307,43 @@ fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
         context: "minecraft:explosion;Destroy;fire=false".into(),
     });
     assert_eq!(outcome5, EventOutcome::Cancel);
+
+    let (outcome6, _, _, looting_bonus, _) = mods.vanilla_hook(&VanillaHookEvent {
+        kind: VanillaHookKind::EnchantmentLevel,
+        subject: "minecraft:looting".into(),
+        dimension: "minecraft:overworld".into(),
+        x: 2,
+        y: 64,
+        z: -1,
+        value: 1.0,
+        context: "minecraft:diamond_sword".into(),
+    });
+    assert_eq!(outcome6, EventOutcome::Pass);
+    assert_eq!(looting_bonus, 2);
+
+    let (outcome7, _, _, consumed_bonus, _) = mods.vanilla_hook(&VanillaHookEvent {
+        kind: VanillaHookKind::EnchantmentLevel,
+        subject: "minecraft:fortune".into(),
+        dimension: "minecraft:overworld".into(),
+        x: 2,
+        y: 64,
+        z: -1,
+        value: 1.0,
+        context: "minecraft:iron_pickaxe".into(),
+    });
+    assert_eq!(outcome7, EventOutcome::Consume);
+    assert_eq!(consumed_bonus, 4);
+
+    let (outcome8, _, _, cancelled_bonus, _) = mods.vanilla_hook(&VanillaHookEvent {
+        kind: VanillaHookKind::EnchantmentLevel,
+        subject: "minecraft:silk_touch".into(),
+        dimension: "minecraft:overworld".into(),
+        x: 2,
+        y: 64,
+        z: -1,
+        value: 1.0,
+        context: "minecraft:diamond_pickaxe".into(),
+    });
+    assert_eq!(outcome8, EventOutcome::Cancel);
+    assert_eq!(cancelled_bonus, 0);
 }

@@ -191,8 +191,11 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   succeed. `explosion-detonate` now filters individual non-air blast targets
   before block damage, drops and fire; `tools/mod_api_e2e.py --mode both`
   verifies a protected stone and destroyed neighboring glass in both
-  single-player paths. `enchantment-level` is not connected to gameplay.
-  Container, fishing
+  single-player paths. `enchantment-level` now affects live gameplay reads for
+  respiration, vanishing curse, silk touch, crossbow Quick Charge/Multishot,
+  trident Riptide/Loyalty and fishing Lure/Luck, with an unsubscribed fast path.
+  Loot-table enchantment predicates/bonuses and remaining equipment/entity
+  effects are not yet connected. Container, fishing
   and structure loot paths still need review.
 - Status: **partial live integration; API coverage remains incomplete**.
 

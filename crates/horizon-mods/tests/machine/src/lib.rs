@@ -52,6 +52,7 @@ impl Mod for Machines {
         let _ = vanilla_hooks::subscribe("xp-gain");
         let _ = vanilla_hooks::subscribe("crop-grow");
         let _ = vanilla_hooks::subscribe("explosion-detonate");
+        let _ = vanilla_hooks::subscribe("enchantment-level");
         let _ = dimensions::register_dimension(&DimensionSpec {
             id: "test_machine:twilight".into(),
             ultrawarm: false,
@@ -577,6 +578,18 @@ impl Mod for Machines {
             VanillaHookKind::ExplosionDetonate if event.subject == "minecraft:stone" => {
                 EventOutcome::Cancel
             }
+            VanillaHookKind::EnchantmentLevel => match event.subject.as_str() {
+                "minecraft:looting" => {
+                    vanilla_hooks::add_enchantment_bonus(2);
+                    EventOutcome::Pass
+                }
+                "minecraft:fortune" => {
+                    vanilla_hooks::add_enchantment_bonus(4);
+                    EventOutcome::Consume
+                }
+                "minecraft:silk_touch" => EventOutcome::Cancel,
+                _ => EventOutcome::Pass,
+            },
             _ => EventOutcome::Pass,
         }
     }

@@ -2021,9 +2021,18 @@ impl Game<'_> {
             })
             .and_then(|s| self.res.items().get(&s.item))
             .map(|i| i.use_speed);
-        let respiration = self.armor[0]
-            .as_ref()
-            .map_or(0, |s| s.enchantment_level("minecraft:respiration") as i32);
+        let dimension = self.dim.id();
+        let position = self.mod_hook_position();
+        let respiration = self.armor[0].as_ref().map_or(0, |s| {
+            let base = s.enchantment_level("minecraft:respiration");
+            self.mods.effective_enchantment_level(
+                &s.item,
+                "minecraft:respiration",
+                base,
+                dimension,
+                position,
+            ) as i32
+        });
         let leather_boots = self.armor[3]
             .as_ref()
             .is_some_and(|s| &*s.item == "minecraft:leather_boots");
@@ -2239,7 +2248,7 @@ impl Game<'_> {
             self.inventory.iter_mut().filter_map(Option::take).collect();
         stacks.extend(self.armor.iter_mut().rev().filter_map(Option::take));
         stacks.extend(self.offhand.take());
-        stacks.retain(|s| s.enchantment_level("minecraft:vanishing_curse") == 0);
+        stacks.retain(|s| self.effective_enchantment_level(s, "minecraft:vanishing_curse") == 0);
         self.apply_equipment();
         for stack in stacks {
             let r = &mut self.world.random;
@@ -3533,9 +3542,9 @@ impl Game<'_> {
                     .unwrap_or_else(|| "minecraft:player".into());
                 let (loot_outcome, extra_drops) =
                     self.mod_loot_drop(&facts.name, pos, drops.len() as f32, &context);
-                let silk = held
-                    .as_ref()
-                    .is_some_and(|h| h.enchantment_level("minecraft:silk_touch") > 0);
+                let silk = held.as_ref().is_some_and(|h| {
+                    self.effective_enchantment_level(h, "minecraft:silk_touch") > 0
+                });
                 if loot_outcome.keeps_vanilla_drops() {
                     for d in drops {
                         if &*d.item != "minecraft:air" {
@@ -4357,9 +4366,18 @@ impl Game<'_> {
         } else if !player.may_fly {
             player.flying = false;
         }
-        player.respiration = self.armor[0]
-            .as_ref()
-            .map_or(0, |s| s.enchantment_level("minecraft:respiration") as i32);
+        let dimension = self.dim.id();
+        let position = self.mod_hook_position();
+        player.respiration = self.armor[0].as_ref().map_or(0, |s| {
+            let base = s.enchantment_level("minecraft:respiration");
+            self.mods.effective_enchantment_level(
+                &s.item,
+                "minecraft:respiration",
+                base,
+                dimension,
+                position,
+            ) as i32
+        });
         player.pitch = self.pitch;
         player.glider = self.glider_worn();
         // A saved death already dropped inventory/XP and counted the death.

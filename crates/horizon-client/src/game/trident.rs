@@ -101,7 +101,7 @@ impl Game<'_> {
             .items()
             .get(&stack.item)
             .map_or(250, |i| i.max_damage);
-        let riptide = stack.enchantment_level("minecraft:riptide") > 0;
+        let riptide = self.effective_enchantment_level(stack, "minecraft:riptide") > 0;
         if stack.damage + 1 >= max || (riptide && !self.in_water_or_rain()) {
             return true;
         }
@@ -165,7 +165,7 @@ impl Game<'_> {
         let Some(eye) = self.eye_position() else {
             return;
         };
-        let riptide = stack.enchantment_level("minecraft:riptide");
+        let riptide = self.effective_enchantment_level(&stack, "minecraft:riptide");
         let at = self
             .player
             .as_ref()
@@ -225,9 +225,10 @@ impl Game<'_> {
             v,
             on_ground,
         );
+        let loyalty = self.effective_enchantment_level(&thrown, "minecraft:loyalty");
         self.tridents.push(ThrownTrident {
             id: 0,
-            loyalty: thrown.enchantment_level("minecraft:loyalty"),
+            loyalty,
             stack: thrown,
             position: start,
             previous: start,

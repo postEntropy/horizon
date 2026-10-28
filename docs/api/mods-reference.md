@@ -704,7 +704,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `xp-gain` | Modify experience orb or level gains. |
 | `crop-grow` | Modify plant age stages, sapling trees, chorus growth, growing-plant segments and vine or mushroom spread during vanilla random ticks. |
 | `explosion-detonate` | Filter individual non-air blocks in a detonation before its block and fire effects. |
-| `enchantment-level` | Modify effective enchantment levels on an item or entity. |
+| `enchantment-level` | Modify an item's queried enchantment level during gameplay. |
 
 ### record `vanilla-hook-event`
 
@@ -716,8 +716,8 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `x` | `s32` | X coordinate. |
 | `y` | `s32` | Y coordinate. |
 | `z` | `s32` | Z coordinate. |
-| `value` | `f32` | Numeric value associated with the event (damage amount, XP, next age stage, explosion radius or tree/spread attempt count). |
-| `context` | `string` | Secondary context (damage source, block interaction and fire flag for explosions, attacker/tool/enchantment id). |
+| `value` | `f32` | Numeric value associated with the event (damage amount, XP, base enchantment level, next age stage, explosion radius or tree/spread attempt count). |
+| `context` | `string` | Secondary context (damage source, item id for enchantment-level, block interaction and fire flag for explosions, attacker/tool id). |
 
 ### record `logic-hooks`
 
@@ -943,4 +943,4 @@ Capability `vanilla-hooks` (API 0.5): named hooks into vanilla behaviour (what M
 | `add-loot-drop` | `func(item: string, count: u32)` | During a `loot-drop` hook: appends `count` of `item` to the loot output. |
 | `set-xp-multiplier` | `func(factor: f32)` | During an `xp-gain` hook: scales the experience value by `factor`. |
 | `set-crop-growth-multiplier` | `func(factor: f32)` | During `crop-grow`: scales age stages, sapling tree attempts, vertical segments or spread attempts (default 1; values below 1 suppress growth; larger values round down and cap at 64; sapling feature placement is limited to four attempts per random tick; pass applies; consume/cancel suppresses the vanilla growth action). |
-| `add-enchantment-bonus` | `func(bonus: s32)` | During an `enchantment-level` hook: adds `bonus` levels to the queried enchantment. |
+| `add-enchantment-bonus` | `func(bonus: s32)` | During `enchantment-level`: adds `bonus` to the queried item level. With `pass`, returns vanilla level + bonus; `consume` uses the mod bonus as the level; `cancel` returns 0. Final levels are clamped to 0..255. |

@@ -71,10 +71,15 @@ impl Game<'_> {
         if &*stack.item != "minecraft:fishing_rod" {
             return false;
         }
-        let Some(p) = self.player.as_ref() else {
+        let Some((position, eye_height)) = self.player.as_ref().map(|p| {
+            (
+                [p.position.x, p.position.y, p.position.z],
+                f64::from(p.dimensions.eye_height),
+            )
+        }) else {
             return false;
         };
-        let at = [p.position.x, p.position.y, p.position.z];
+        let at = position;
         let pitch = 0.4 / (self.world.random.next_float() * 0.4 + 0.8);
         if self.hook.is_some() {
             let damage = self.retrieve_hook();
@@ -93,18 +98,18 @@ impl Game<'_> {
                 pitch,
             );
             // FishingHook(player, level, luck, lureSpeed)
-            let lure = stack.enchantment_level("minecraft:lure") as i32 * 5 * 20;
-            let luck = stack.enchantment_level("minecraft:luck_of_the_sea") as i32;
+            let lure = self.effective_enchantment_level(stack, "minecraft:lure") as i32 * 5 * 20;
+            let luck = self.effective_enchantment_level(stack, "minecraft:luck_of_the_sea") as i32;
             let (yaw, pitch) = (self.yaw, self.pitch);
             let y_cos = (-yaw.to_radians() - std::f32::consts::PI).cos();
             let y_sin = (-yaw.to_radians() - std::f32::consts::PI).sin();
             let x_cos = -(-pitch.to_radians()).cos();
             let x_sin = (-pitch.to_radians()).sin();
-            let eye_y = p.position.y + f64::from(p.dimensions.eye_height);
+            let eye_y = position[1] + eye_height;
             let start = Vec3::new(
-                p.position.x - f64::from(y_sin) * 0.3,
+                position[0] - f64::from(y_sin) * 0.3,
                 eye_y,
-                p.position.z - f64::from(y_cos) * 0.3,
+                position[2] - f64::from(y_cos) * 0.3,
             );
             let mut v = Vec3::new(
                 f64::from(-y_sin),

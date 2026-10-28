@@ -45,8 +45,8 @@ impl Game<'_> {
         let seconds = 1.25 - 0.25 * stack.enchantment_level("minecraft:quick_charge") as f32;
         (seconds.max(0.0) * 20.0).floor() as u32
     }
-    fn charging_sounds(stack: &ItemStack) -> [&'static str; 3] {
-        match stack.enchantment_level("minecraft:quick_charge") {
+    fn charging_sounds(quick_charge: u32) -> [&'static str; 3] {
+        match quick_charge {
             0 => [
                 "minecraft:item.crossbow.loading_start",
                 "minecraft:item.crossbow.loading_middle",
@@ -96,9 +96,11 @@ impl Game<'_> {
     pub(super) fn tick_crossbow(&mut self, slot: usize, ticks: u32, stack: &ItemStack) {
         let ticks = ticks + 1;
         self.using = Some((slot, ticks));
-        let charge = Self::charge_ticks(stack).max(1) as f32;
+        let quick_charge = self.effective_enchantment_level(stack, "minecraft:quick_charge");
+        let seconds = 1.25 - 0.25 * quick_charge as f32;
+        let charge = (seconds.max(0.0) * 20.0).floor().max(1.0);
         let (before, now) = ((ticks - 1) as f32 / charge, ticks as f32 / charge);
-        let sounds = Self::charging_sounds(stack);
+        let sounds = Self::charging_sounds(quick_charge);
         let at = self
             .player
             .as_ref()
@@ -112,7 +114,7 @@ impl Game<'_> {
         let charged = stack.data().is_some_and(|d| !d.charged.is_empty());
         if now >= 1.0 && !charged {
             // tryLoadProjectiles / ProjectileWeaponItem.draw.
-            let shots = if stack.enchantment_level("minecraft:multishot") > 0 {
+            let shots = if self.effective_enchantment_level(stack, "minecraft:multishot") > 0 {
                 3
             } else {
                 1

@@ -711,7 +711,7 @@ interface logic {
         crop-grow,
         /// Filter individual non-air blocks in a detonation before its block and fire effects.
         explosion-detonate,
-        /// Modify effective enchantment levels on an item or entity.
+        /// Modify an item's queried enchantment level during gameplay.
         enchantment-level,
     }
     record vanilla-hook-event {
@@ -727,9 +727,9 @@ interface logic {
         y: s32,
         /// Z coordinate.
         z: s32,
-        /// Numeric value associated with the event (damage amount, XP, next age stage, explosion radius or tree/spread attempt count).
+        /// Numeric value associated with the event (damage amount, XP, base enchantment level, next age stage, explosion radius or tree/spread attempt count).
         value: f32,
-        /// Secondary context (damage source, block interaction and fire flag for explosions, attacker/tool/enchantment id).
+        /// Secondary context (damage source, item id for enchantment-level, block interaction and fire flag for explosions, attacker/tool id).
         context: string,
     }
     record logic-hooks {
@@ -995,7 +995,7 @@ interface vanilla-hooks {
     set-xp-multiplier: func(factor: f32);
     /// During `crop-grow`: scales age stages, sapling tree attempts, vertical segments or spread attempts (default 1; values below 1 suppress growth; larger values round down and cap at 64; sapling feature placement is limited to four attempts per random tick; pass applies; consume/cancel suppresses the vanilla growth action).
     set-crop-growth-multiplier: func(factor: f32);
-    /// During an `enchantment-level` hook: adds `bonus` levels to the queried enchantment.
+    /// During `enchantment-level`: adds `bonus` to the queried item level. With `pass`, returns vanilla level + bonus; `consume` uses the mod bonus as the level; `cancel` returns 0. Final levels are clamped to 0..255.
     add-enchantment-bonus: func(bonus: s32);
 }
 

@@ -13,6 +13,7 @@ use horizon_client::{
     command::{Dispatcher, vanilla},
     extras_hud::Corners,
     hud::HudBatch,
+    items::ItemStack,
     mod_list,
 };
 use std::{path::PathBuf, time::Duration};
@@ -89,7 +90,6 @@ use {
     horizon_client::{
         extras::Corner,
         extras_hud,
-        items::ItemStack,
         mod_list::Installed,
         text::{self, Text},
     },
@@ -381,6 +381,44 @@ struct FusionReactorInfo {
     controller: [i32; 3],
 }
 impl ModsState {
+    pub(super) fn effective_enchantment_level(
+        &mut self,
+        item: &str,
+        enchantment: &str,
+        base: u32,
+        dimension: &str,
+        position: [i32; 3],
+    ) -> u32 {
+        #[cfg(feature = "mods")]
+        {
+            if !self
+                .mods
+                .has_vanilla_hook_subscription(&VanillaHookKind::EnchantmentLevel)
+            {
+                return base;
+            }
+            let (outcome, _, _, bonus, _) = self.mods.vanilla_hook(&VanillaHookEvent {
+                kind: VanillaHookKind::EnchantmentLevel,
+                subject: enchantment.to_owned(),
+                dimension: dimension.to_owned(),
+                x: position[0],
+                y: position[1],
+                z: position[2],
+                value: base as f32,
+                context: item.to_owned(),
+            });
+            match outcome {
+                EventOutcome::Pass => (i64::from(base) + i64::from(bonus)).clamp(0, 255) as u32,
+                EventOutcome::Consume => i64::from(bonus).clamp(0, 255) as u32,
+                EventOutcome::Cancel => 0,
+            }
+        }
+        #[cfg(not(feature = "mods"))]
+        {
+            let _ = (item, enchantment, dimension, position);
+            base
+        }
+    }
     pub(super) fn has_explosion_detonate_hook(&self) -> bool {
         #[cfg(feature = "mods")]
         {
@@ -609,6 +647,29 @@ pub(super) fn list_installed_early(dev: &[PathBuf]) -> Vec<horizon_client::mod_l
 }
 
 /// A build without the `mods` feature: no mod runs.
+impl Game<'_> {
+    pub(super) fn mod_hook_position(&self) -> [i32; 3] {
+        self.player.as_ref().map_or([0; 3], |p| {
+            [
+                p.position.x.floor() as i32,
+                p.position.y.floor() as i32,
+                p.position.z.floor() as i32,
+            ]
+        })
+    }
+    pub(super) fn effective_enchantment_level(
+        &mut self,
+        stack: &ItemStack,
+        enchantment: &str,
+    ) -> u32 {
+        let base = stack.enchantment_level(enchantment);
+        let position = self.mod_hook_position();
+        let dimension = self.dim.id();
+        self.mods
+            .effective_enchantment_level(&stack.item, enchantment, base, dimension, position)
+    }
+}
+
 #[cfg(not(feature = "mods"))]
 impl Game<'_> {
     pub(super) fn mod_use_item_in_air(&mut self, _item: &str) -> bool {
