@@ -211,7 +211,11 @@ pub fn travel(m: &mut Mob) -> bool {
     true
 }
 /// `Vex.tick`: the limited life costs a heart a second once spent.
-pub fn ai_step(m: &mut Mob, w: &super::MobWorld) {
+pub fn ai_step(
+    m: &mut Mob,
+    w: &super::MobWorld,
+    damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
+) {
     m.extra.point = m
         .target_info(w)
         .map(|t| [t.position.x, t.position.y, t.position.z]);
@@ -219,7 +223,10 @@ pub fn ai_step(m: &mut Mob, w: &super::MobWorld) {
         m.extra.egg_time -= 1;
         if m.extra.egg_time == 0 {
             m.extra.egg_time = 20;
-            m.damage(1.0, Damage::of(DamageKind::Generic));
+            let source = Damage::of(DamageKind::Generic);
+            if let Some(amount) = damage(m, 1.0, source) {
+                m.damage(amount, source);
+            }
         }
     }
 }

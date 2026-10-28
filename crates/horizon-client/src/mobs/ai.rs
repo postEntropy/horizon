@@ -699,7 +699,7 @@ fn ai_step(
     // roaring ravager).
     let immobile = m.species() == Species::Ravager && super::ravager::immobile(m);
     if m.alive() && !immobile {
-        server_ai_step(m, w, level_random, events);
+        server_ai_step(m, w, level_random, events, damage);
     } else {
         m.ai.jumping = false;
         m.ai.xxa = 0.0;
@@ -776,7 +776,7 @@ fn ai_step(
     if m.kind.flags.burns_in_day && m.alive() && sun_burn_tick(m, w) && m.extra.head.is_none() {
         m.ignite_for_ticks(160);
     }
-    species_ai_step(m, w, events);
+    species_ai_step(m, w, events, damage);
 }
 impl Mob {
     /// LivingEntity.isPushable (and the push it takes from `Entity.push(Entity)`):
@@ -886,6 +886,7 @@ fn server_ai_step(
     w: &MobWorld,
     level_random: &mut LegacyRandom,
     events: &mut Vec<MobEvent>,
+    damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
 ) {
     m.ai.no_action_time += 1;
     // A happy ghast set up for its age (ageBoundaryReached runs at once).
@@ -945,7 +946,7 @@ fn server_ai_step(
     }
     {
         let mut cx = Cx { w, events };
-        custom_server_ai_step(m, &mut cx);
+        custom_server_ai_step(m, &mut cx, damage);
     }
     if frozen {
         m.ai.jumping = false;
@@ -960,7 +961,11 @@ fn server_ai_step(
     }
     m.jump_control_tick();
 }
-fn custom_server_ai_step(m: &mut Mob, cx: &mut Cx) {
+fn custom_server_ai_step(
+    m: &mut Mob,
+    cx: &mut Cx,
+    damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
+) {
     match m.species() {
         Species::Rabbit => super::rabbit::server_ai_step(m),
         Species::Sheep => {}
@@ -981,13 +986,18 @@ fn custom_server_ai_step(m: &mut Mob, cx: &mut Cx) {
         // SpellcasterIllager.customServerAiStep.
         Species::Evoker if m.extra.counter > 0 => m.extra.counter -= 1,
         Species::Bat => super::bat::server_ai_step(m, cx.w, cx.events),
-        Species::Bee => super::bee::server_ai_step(m, cx),
+        Species::Bee => super::bee::server_ai_step(m, cx, damage),
         _ => {}
     }
 }
-fn species_ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
+fn species_ai_step(
+    m: &mut Mob,
+    w: &MobWorld,
+    events: &mut Vec<MobEvent>,
+    damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
+) {
     if family(m.species()) == Family::Aquatic {
-        aquatic::ai_step(m, w, events);
+        aquatic::ai_step(m, w, events, damage);
     }
     match m.species() {
         Species::Enderman => super::enderman::ai_step(m, w, events),
@@ -1003,7 +1013,7 @@ fn species_ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         Species::Phantom => super::phantom::flap_sound(m, events),
         Species::Warden => super::warden::ai_step(m, events),
         Species::Guardian | Species::ElderGuardian => super::guardian::ai_step(m, w, events),
-        Species::Vex => super::vex::ai_step(m, w),
+        Species::Vex => super::vex::ai_step(m, w, damage),
         Species::Ravager => super::ravager::ai_step(m, w, events),
         Species::Wither => super::wither::ai_step(m, w, events),
         Species::Allay => super::allay::ai_step(m),

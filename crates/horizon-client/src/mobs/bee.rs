@@ -284,13 +284,20 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld) {
 }
 /// `Bee.customServerAiStep`: drowning, the sting's slow death, the time
 /// without nectar and the anger.
-pub fn server_ai_step(m: &mut Mob, cx: &mut Cx) {
+pub fn server_ai_step(
+    m: &mut Mob,
+    cx: &mut Cx,
+    damage: &mut dyn FnMut(&mut Mob, f32, Damage) -> Option<f32>,
+) {
     let stung = has_stung(m);
     let in_water = m.fluids.in_water;
     let b = st(m);
     b.under_water = if in_water { b.under_water + 1 } else { 0 };
     if b.under_water > 20 {
-        m.damage(1.0, Damage::of(DamageKind::Drown));
+        let source = Damage::of(DamageKind::Drown);
+        if let Some(amount) = damage(m, 1.0, source) {
+            m.damage(amount, source);
+        }
     }
     if stung {
         let b = st(m);
@@ -303,7 +310,10 @@ pub fn server_ai_step(m: &mut Mob, cx: &mut Cx) {
                 == 0
         {
             let health = m.health;
-            m.damage(health, Damage::of(DamageKind::Generic));
+            let source = Damage::of(DamageKind::Generic);
+            if let Some(amount) = damage(m, health, source) {
+                m.damage(amount, source);
+            }
         }
     }
     if !has_nectar(m) {

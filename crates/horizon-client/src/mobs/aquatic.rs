@@ -129,7 +129,12 @@ pub fn puff_scale(state: i32) -> f64 {
     }
 }
 /// Species aiStep additions.
-pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
+pub fn ai_step(
+    m: &mut Mob,
+    w: &MobWorld,
+    events: &mut Vec<MobEvent>,
+    damage: &mut dyn FnMut(&mut Mob, f32, super::Damage) -> Option<f32>,
+) {
     use Species as S;
     match m.species() {
         S::Squid | S::GlowSquid => squid_ai_step(m),
@@ -211,7 +216,10 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
             } else {
                 m.extra.counter -= 1;
                 if m.extra.counter <= 0 {
-                    m.damage(1.0, super::Damage::of(super::DamageKind::Drown));
+                    let source = super::Damage::of(super::DamageKind::Drown);
+                    if let Some(amount) = damage(m, 1.0, source) {
+                        m.damage(amount, source);
+                    }
                 }
                 if m.on_ground {
                     let (a, b) = (m.random.next_float(), m.random.next_float());

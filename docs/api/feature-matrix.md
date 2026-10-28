@@ -94,14 +94,14 @@ Java mod behavior has an equivalent.
 |---|---|
 | [x] | WIT/SDK/runtime expose custom entity declarations and create/tick/save/remove/interact/hurt callbacks. |
 | [x] | Runtime tests exercise custom entity state, model, dimension and hook host calls. |
-| [~] | `entity-damage` reaches outgoing local-player melee hits against mobs and incoming player damage through `mob_hits_player` and `hurt_player_by` (mob attacks, projectiles, PvP, lightning, dragon/firework/pearl/potion damage and `/damage`). Outgoing damage to mobs also dispatches for mob attacks, most projectiles, explosions, lightning, wind charges, fangs, tridents, fireworks, wither skulls, `/damage`, base-tick fire/lava/burning/out-of-world/suffocation/drowning, poison/wither effects, and fall damage through standard and custom travel. Species-specific damage such as bee/dolphin upkeep, other effects, special entities and dedicated/LAN routes still need an audit. |
+| [~] | `entity-damage` reaches outgoing local-player melee hits against mobs and incoming player damage through `mob_hits_player` and `hurt_player_by` (mob attacks, projectiles, PvP, lightning, dragon/firework/pearl/potion damage and `/damage`). Outgoing damage to mobs also dispatches for mob attacks, most projectiles, explosions, lightning, wind charges, fangs, tridents, fireworks, wither skulls, `/damage`, base-tick fire/lava/burning/out-of-world/suffocation/drowning, poison/wither effects, fall damage through standard and custom travel, dolphin moisture, bee drowning/sting upkeep and vex lifetime upkeep. Other special entities and dedicated/LAN routes still need an audit. |
 | [~] | `xp-gain` reaches XP-orb pickup, advancement rewards and positive `/experience add ... points` commands. A live mod doubles 50 command points to 7 levels in both single-player paths; other direct XP sources still need an audit. |
 | [~] | `loot-drop` reaches player-mined block drops and mob-death item drops. |
 | [ ] | Custom entity lifecycle is not connected to actual game-world spawning, simulation, persistence and rendering. |
 | [ ] | Custom model animation/draw data is not connected to game rendering. |
 | [ ] | Registered custom dimensions and portals are not connected to actual world travel/generation. |
 | [ ] | `crop-grow`, `explosion-detonate` and `enchantment-level` hooks are not connected to gameplay. |
-| [ ] | Audit remaining species-specific mob damage (including bee/dolphin upkeep and other AI effects), special entities and dedicated/LAN routes for `entity-damage`; base-tick environmental damage, poison/wither effects, fall damage and listed player/projectile/lightning sources now dispatch. |
+| [ ] | Audit remaining species-specific mob damage and special entities plus dedicated/LAN routes for `entity-damage`; base-tick environmental damage, poison/wither effects, fall damage, dolphin moisture, bee upkeep, vex lifetime and listed player/projectile/lightning sources now dispatch. |
 | [ ] | XP from all sources and all loot contexts (containers, fishing and structures) are not covered. |
 
 ## Out of scope for this single-player snapshot
