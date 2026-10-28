@@ -276,7 +276,7 @@ impl Game<'_> {
             let Some(stack) = self.armor[slot].clone() else {
                 continue;
             };
-            let level = stack.enchantment_level("minecraft:thorns");
+            let level = self.effective_enchantment_level(&stack, "minecraft:thorns");
             if level == 0 {
                 continue;
             }
@@ -328,15 +328,39 @@ impl Game<'_> {
             // EnchantmentHelper.getRandomItemWith(REPAIR_WITH_XP, damaged), in
             // EquipmentSlot order: the main hand, the off hand, then feet, legs,
             // chest and head (`armor` holds head first).
-            let mending = |s: &Option<ItemStack>| {
-                s.as_ref()
-                    .is_some_and(|s| s.damage > 0 && s.enchantment_level("minecraft:mending") > 0)
+            let selected = self.selected;
+            let dimension = self.dim.id();
+            let position = self.mod_hook_position();
+            let (inventory, offhand, armor, mods) =
+                (&self.inventory, &self.offhand, &self.armor, &mut self.mods);
+            let has_hook = mods.has_enchantment_level_hook();
+            let mut candidates = Vec::new();
+            let mut add_candidate = |slot, stack: &Option<ItemStack>| {
+                if let Some(stack) = stack.as_ref()
+                    && stack.damage > 0
+                {
+                    let base = stack.enchantment_level("minecraft:mending");
+                    let level = if has_hook {
+                        mods.effective_enchantment_level(
+                            &stack.item,
+                            "minecraft:mending",
+                            base,
+                            dimension,
+                            position,
+                        )
+                    } else {
+                        base
+                    };
+                    if level > 0 {
+                        candidates.push(slot);
+                    }
+                }
             };
-            let candidates: Vec<MendSlot> = [MendSlot::Main, MendSlot::Off]
-                .into_iter()
-                .chain((0..self.armor.len()).rev().map(MendSlot::Armor))
-                .filter(|&slot| mending(self.mend_slot(slot)))
-                .collect();
+            add_candidate(MendSlot::Main, &inventory[selected]);
+            add_candidate(MendSlot::Off, offhand);
+            for i in (0..armor.len()).rev() {
+                add_candidate(MendSlot::Armor(i), &armor[i]);
+            }
             if candidates.is_empty() {
                 return amount;
             }

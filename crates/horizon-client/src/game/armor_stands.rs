@@ -569,7 +569,9 @@ impl Game<'_> {
             let a = self.armor_stands.remove(i);
             let at = [a.position.x, a.position.y, a.position.z];
             self.mod_entity_death(a.id, "minecraft:armor_stand", at);
-            let (pos, drops) = burnt_armor_stand_equipment(a);
+            let (pos, drops) = burnt_armor_stand_equipment(a, |stack| {
+                self.effective_enchantment_level(stack, "minecraft:vanishing_curse") == 0
+            });
             for stack in drops {
                 self.pop_resource(pos, stack);
             }
@@ -786,9 +788,11 @@ impl Game<'_> {
         }
         let current = self.armor[index].clone();
         // PREVENT_ARMOR_CHANGE (Curse of Binding) outside creative, or the same item.
+        let binding_curse = current
+            .as_ref()
+            .is_some_and(|c| self.effective_enchantment_level(c, "minecraft:binding_curse") > 0);
         if current.as_ref().is_some_and(|c| {
-            (c.enchantment_level("minecraft:binding_curse") > 0 && !self.creative)
-                || c.same_item_same_components(stack)
+            (binding_curse && !self.creative) || c.same_item_same_components(stack)
         }) {
             return true;
         }
@@ -944,7 +948,10 @@ pub(super) fn skull_kind(item: &str) -> Option<&'static str> {
     })
 }
 
-fn burnt_armor_stand_equipment(a: ArmorStand) -> ([i32; 3], Vec<ItemStack>) {
+fn burnt_armor_stand_equipment(
+    a: ArmorStand,
+    mut should_drop: impl FnMut(&ItemStack) -> bool,
+) -> ([i32; 3], Vec<ItemStack>) {
     let pos = [
         a.position.x.floor() as i32,
         a.position.y.floor() as i32 + 1,
@@ -954,7 +961,7 @@ fn burnt_armor_stand_equipment(a: ArmorStand) -> ([i32; 3], Vec<ItemStack>) {
         .equipment
         .into_iter()
         .flatten()
-        .filter(|stack| stack.enchantment_level("minecraft:vanishing_curse") == 0)
+        .filter(|stack| should_drop(stack))
         .collect();
     (pos, drops)
 }
@@ -972,7 +979,9 @@ mod burn_drop_tests {
             .push(("minecraft:vanishing_curse".into(), 1));
         stand.equipment[0] = Some(kept.clone());
         stand.equipment[1] = Some(vanished);
-        let (pos, drops) = burnt_armor_stand_equipment(stand);
+        let (pos, drops) = burnt_armor_stand_equipment(stand, |stack| {
+            stack.enchantment_level("minecraft:vanishing_curse") == 0
+        });
         assert_eq!(pos, [-1, 5, 0]);
         assert_eq!(drops, vec![kept]);
     }

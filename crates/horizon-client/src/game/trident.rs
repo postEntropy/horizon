@@ -306,7 +306,8 @@ impl Game<'_> {
                     }
                 }
                 if let Some((id, _)) = hit_mob {
-                    let impaling = t.stack.enchantment_level("minecraft:impaling") as f32;
+                    let impaling =
+                        self.effective_enchantment_level(&t.stack, "minecraft:impaling") as f32;
                     let aquatic = self.mobs.iter().find(|m| m.id == id).is_some_and(|m| {
                         m.kind.flags.aquatic_swimmer || m.kind.flags.breathes_water
                     });

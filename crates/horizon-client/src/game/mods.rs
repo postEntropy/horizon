@@ -381,6 +381,17 @@ struct FusionReactorInfo {
     controller: [i32; 3],
 }
 impl ModsState {
+    pub(super) fn has_enchantment_level_hook(&self) -> bool {
+        #[cfg(feature = "mods")]
+        {
+            self.mods
+                .has_vanilla_hook_subscription(&VanillaHookKind::EnchantmentLevel)
+        }
+        #[cfg(not(feature = "mods"))]
+        {
+            false
+        }
+    }
     pub(super) fn effective_enchantment_level(
         &mut self,
         item: &str,
@@ -391,10 +402,7 @@ impl ModsState {
     ) -> u32 {
         #[cfg(feature = "mods")]
         {
-            if !self
-                .mods
-                .has_vanilla_hook_subscription(&VanillaHookKind::EnchantmentLevel)
-            {
+            if !self.has_enchantment_level_hook() {
                 return base;
             }
             let (outcome, _, _, bonus, _) = self.mods.vanilla_hook(&VanillaHookEvent {
@@ -646,7 +654,6 @@ pub(super) fn list_installed_early(dev: &[PathBuf]) -> Vec<horizon_client::mod_l
         .collect()
 }
 
-/// A build without the `mods` feature: no mod runs.
 impl Game<'_> {
     pub(super) fn mod_hook_position(&self) -> [i32; 3] {
         self.player.as_ref().map_or([0; 3], |p| {
@@ -670,6 +677,7 @@ impl Game<'_> {
     }
 }
 
+/// A build without the `mods` feature: no mod runs.
 #[cfg(not(feature = "mods"))]
 impl Game<'_> {
     pub(super) fn mod_use_item_in_air(&mut self, _item: &str) -> bool {
