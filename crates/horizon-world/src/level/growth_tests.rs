@@ -479,6 +479,48 @@ fn crop_growth_hook_covers_other_age_stage_plants() {
         assert!(grew, "no successful random growth roll found for {name}");
     }
 }
+
+#[test]
+fn crop_growth_hook_scales_cactus_and_sugar_cane_age_without_extra_rng() {
+    let Some(f) = fixture() else { return };
+    for name in ["cactus", "sugar_cane"] {
+        let mut vanilla = World::new(f, 91);
+        let mut accelerated = World::new(f, 91);
+        let mut cancelled = World::new(f, 91);
+        let pos = BlockPos::new(0, 64, 0);
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            let sand = world.id("sand", &[]);
+            let plant = world.id(name, &[]);
+            world.put(BlockPos::new(0, 63, 0), sand);
+            world.put(pos, plant);
+        }
+        accelerated.level.crop_growth_multiplier = 3.0;
+        cancelled.level.crop_growth_multiplier = 0.0;
+
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            f.behaviours
+                .random_tick(&mut world.level, &mut world.ticks, pos);
+        }
+
+        let age = |world: &World| {
+            f.behaviours
+                .table
+                .int(world.level.block_state(pos), f.behaviours.props.age)
+        };
+        assert_eq!(age(&vanilla), 1, "vanilla {name} age");
+        assert_eq!(age(&accelerated), 3, "accelerated {name} age");
+        assert_eq!(age(&cancelled), 0, "cancelled {name} age");
+        assert_eq!(vanilla.level.crop_growth_calls, 1);
+        assert_eq!(accelerated.level.crop_growth_calls, 1);
+        assert_eq!(cancelled.level.crop_growth_calls, 1);
+        let vanilla_next = vanilla.level.random.next_int_bound(1_000_000);
+        let accelerated_next = accelerated.level.random.next_int_bound(1_000_000);
+        let cancelled_next = cancelled.level.random.next_int_bound(1_000_000);
+        assert_eq!(vanilla_next, accelerated_next, "{name} accelerated RNG");
+        assert_eq!(vanilla_next, cancelled_next, "{name} cancelled RNG");
+    }
+}
+
 #[test]
 fn tall_flowers_and_seagrass() {
     let Some(f) = fixture() else { return };

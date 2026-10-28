@@ -397,8 +397,13 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                             if age == 15 {
                                 self.set_block_and_update(above(pos), b.default_of(block));
                                 self.set_block(pos, b.table.set_int(state, p.age, 0), 260);
-                            } else {
-                                self.set_block(pos, b.table.set_int(state, p.age, age + 1), 260);
+                            } else if let Some(steps) = self.crop_growth_steps(state, pos, age + 1)
+                            {
+                                self.set_block(
+                                    pos,
+                                    b.table.set_int(state, p.age, (age + steps).min(15)),
+                                    260,
+                                );
                             }
                         }
                     }
@@ -930,7 +935,13 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             self.neighbor_changed_full(reset, above_pos, block, false);
         }
         if age < 15 {
-            self.set_block(pos, b.table.set_int(state, b.props.age, age + 1), 260);
+            if let Some(steps) = self.crop_growth_steps(state, pos, age + 1) {
+                self.set_block(
+                    pos,
+                    b.table.set_int(state, b.props.age, (age + steps).min(15)),
+                    260,
+                );
+            }
         }
     }
     fn farmland_random_tick(&mut self, state: BlockStateId, pos: BlockPos) {

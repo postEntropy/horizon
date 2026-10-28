@@ -4,6 +4,9 @@
 Every block state is put at the origin of a random neighbourhood and `randomTick`
 (or `tick`) is run with a seeded RNG on both sides; the resulting block changes,
 scheduled ticks, side effects and the RNG fingerprint after the call must match.
+The `--crop-growth` mode adds focused cases for all crop-grow age-stage blocks.
+The Rust probe defaults to the release profile; set `HORIZON_PARITY_PROFILE=fast`
+to use the optimized fast profile with shorter link times during local iteration.
 """
 import random
 try:
@@ -22,10 +25,44 @@ def cases(facts, count, seed, only):
         yield case
 
 
+def crop_growth_cases(facts, per_block, seed):
+    """Focused random ticks for every block with a crop-grow age stage.
+
+    `per_block` cases are generated for each target, cycling through its block
+    states so age/half variants receive comparable oracle coverage.
+    """
+    rng = random.Random(seed)
+    targets = (
+        'wheat', 'pumpkin_stem', 'melon_stem', 'cocoa', 'nether_wart',
+        'sweet_berry_bush', 'pitcher_crop', 'cactus', 'sugar_cane',
+    )
+    for block in targets:
+        pool = h.state_pool(facts, block)
+        if not pool:
+            raise ValueError(f'no states found for crop-growth target {block}')
+        for n in range(per_block):
+            state = pool[n % len(pool)]
+            yield {
+                **h.environment(rng), 'pos': [0, 0, 0],
+                'cells': facts.cells(rng, state), 'mode': 'random',
+            }
+
+
 def main():
-    args = h.argument_parser(__doc__).parse_args()
+    parser = h.argument_parser(__doc__)
+    parser.add_argument(
+        '--crop-growth', action='store_true',
+        help='run `--count` random-tick cases for each block with crop-grow age stages',
+    )
+    args = parser.parse_args()
     facts = h.load_facts()
-    differing = h.execute('random-tick-parity', list(cases(facts, args.count, args.seed, args.only)), args, facts)
+    if args.crop_growth:
+        selected = crop_growth_cases(facts, args.count, args.seed)
+        name = 'crop-growth-random-tick-parity'
+    else:
+        selected = cases(facts, args.count, args.seed, args.only)
+        name = 'random-tick-parity'
+    differing = h.execute(name, list(selected), args, facts)
     h.finish(differing)
 
 

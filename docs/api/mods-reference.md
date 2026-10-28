@@ -702,7 +702,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `loot-drop` | Modify block or entity loot drops before they spawn. |
 | `entity-damage` | Modify incoming or outgoing entity damage. |
 | `xp-gain` | Modify experience orb or level gains. |
-| `crop-grow` | Modify age-stage growth for crops, stems, cocoa, nether wart, pitcher crops and sweet berries after vanilla's random-tick growth succeeds. Other plant growth is not yet hooked. |
+| `crop-grow` | Modify age-stage growth for crops, stems, cocoa, nether wart, pitcher crops, sweet berries, cactus and sugar cane during vanilla random ticks. Other plant growth is not yet hooked. |
 | `explosion-detonate` | Filter or modify blocks affected by an explosion. |
 | `enchantment-level` | Modify effective enchantment levels on an item or entity. |
 
@@ -942,5 +942,5 @@ Capability `vanilla-hooks` (API 0.5): named hooks into vanilla behaviour (what M
 | `set-damage-multiplier` | `func(factor: f32)` | During an `entity-damage` hook: scales the final damage by `factor`. |
 | `add-loot-drop` | `func(item: string, count: u32)` | During a `loot-drop` hook: appends `count` of `item` to the loot output. |
 | `set-xp-multiplier` | `func(factor: f32)` | During an `xp-gain` hook: scales the experience value by `factor`. |
-| `set-crop-growth-multiplier` | `func(factor: f32)` | During a successful age-stage `crop-grow` hook: scales the age stages advanced (default `1`; values below `1` prevent growth; larger values are rounded down and capped at `64`). Use `pass` to apply the multiplier; `consume` or `cancel` suppresses the vanilla growth action. |
+| `set-crop-growth-multiplier` | `func(factor: f32)` | During an age-stage `crop-grow` hook: scales the age stages advanced (default `1`; values below `1` prevent advancement; larger values are rounded down and capped at `64`). Use `pass` to apply the multiplier; `consume` or `cancel` suppresses the vanilla age advancement. |
 | `add-enchantment-bonus` | `func(bonus: s32)` | During an `enchantment-level` hook: adds `bonus` levels to the queried enchantment. |
