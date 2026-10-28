@@ -634,7 +634,12 @@ impl GameLevel<'_> {
     }
 }
 impl LevelAccess for GameLevel<'_> {
-    fn crop_growth_multiplier(&mut self, pos: BlockPos, state: BlockStateId, age: i32) -> f32 {
+    fn crop_growth_multiplier(
+        &mut self,
+        pos: BlockPos,
+        state: BlockStateId,
+        growth_step: i32,
+    ) -> f32 {
         let dimension = match self.dimension {
             LevelDimension::Overworld => "minecraft:overworld",
             LevelDimension::Nether => "minecraft:the_nether",
@@ -644,7 +649,7 @@ impl LevelAccess for GameLevel<'_> {
             &self.facts.get(state).name,
             dimension,
             [pos.x, pos.y, pos.z],
-            age,
+            growth_step,
         )
     }
     fn world_surface(&self, x: i32, z: i32) -> i32 {

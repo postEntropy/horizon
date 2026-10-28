@@ -386,11 +386,14 @@ impl ModsState {
         subject: &str,
         dimension: &str,
         position: [i32; 3],
-        age: i32,
+        growth_step: i32,
     ) -> f32 {
         #[cfg(feature = "mods")]
         {
-            if !self.mods.is_running() {
+            if !self
+                .mods
+                .has_vanilla_hook_subscription(&VanillaHookKind::CropGrow)
+            {
                 return 1.0;
             }
             let (outcome, multiplier) = self.mods.crop_growth_hook(&VanillaHookEvent {
@@ -400,7 +403,7 @@ impl ModsState {
                 x: position[0],
                 y: position[1],
                 z: position[2],
-                value: age as f32,
+                value: growth_step as f32,
                 context: "minecraft:random_tick".to_owned(),
             });
             if outcome != EventOutcome::Pass {
@@ -411,7 +414,7 @@ impl ModsState {
         }
         #[cfg(not(feature = "mods"))]
         {
-            let _ = (subject, dimension, position, age);
+            let _ = (subject, dimension, position, growth_step);
             1.0
         }
     }

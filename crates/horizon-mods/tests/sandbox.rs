@@ -1189,6 +1189,8 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
 fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
     let mut mods = machines();
     mods.set_snapshot(player());
+    assert!(mods.has_vanilla_hook_subscription(&VanillaHookKind::CropGrow));
+    assert!(!Mods::default().has_vanilla_hook_subscription(&VanillaHookKind::CropGrow));
 
     // 1. Custom entity types, lifecycle, ticking, saving, interaction & hurt callbacks
     let entity_types: Vec<(&str, f32)> = mods

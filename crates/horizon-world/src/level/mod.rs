@@ -289,9 +289,14 @@ pub enum LevelEvent {
 pub trait LevelAccess {
     /// `getBlockState`. Unloaded or out-of-bounds positions read as air.
     fn block_state(&self, pos: BlockPos) -> BlockStateId;
-    /// Multiplier for a crop's successful random-tick growth step. The game
+    /// Multiplier for a plant's successful random-tick growth step. The game
     /// may consult a mod hook here; standalone world simulations stay vanilla.
-    fn crop_growth_multiplier(&mut self, _pos: BlockPos, _state: BlockStateId, _age: i32) -> f32 {
+    fn crop_growth_multiplier(
+        &mut self,
+        _pos: BlockPos,
+        _state: BlockStateId,
+        _growth_step: i32,
+    ) -> f32 {
         1.0
     }
     /// Storage write (`LevelChunkSection.setBlockState`). Returns the previous

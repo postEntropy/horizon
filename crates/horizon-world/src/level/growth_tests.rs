@@ -522,6 +522,70 @@ fn crop_growth_hook_scales_cactus_and_sugar_cane_age_without_extra_rng() {
 }
 
 #[test]
+fn crop_growth_hook_scales_bamboo_height_after_the_vanilla_roll() {
+    let Some(f) = fixture() else { return };
+    for kind in ["bamboo_sapling", "bamboo"] {
+        let mut found_growth = false;
+        for seed in 0..128 {
+            let mut vanilla = World::new(f, seed);
+            let mut accelerated = World::new(f, seed);
+            let mut cancelled = World::new(f, seed);
+            let pos = BlockPos::new(0, 64, 0);
+            for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+                let soil = world.id("sand", &[]);
+                world.put(BlockPos::new(0, 63, 0), soil);
+                let plant = world.id(kind, &[]);
+                world.put(pos, plant);
+                if kind == "bamboo" {
+                    let lower = world.id("bamboo", &[]);
+                    world.put(BlockPos::new(0, 63, 0), lower);
+                }
+            }
+            accelerated.level.crop_growth_multiplier = 3.0;
+            cancelled.level.crop_growth_multiplier = 0.0;
+            let initial_bamboo = vanilla.count("bamboo");
+
+            for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+                f.behaviours
+                    .random_tick(&mut world.level, &mut world.ticks, pos);
+            }
+            if vanilla.level.crop_growth_calls == 0 {
+                continue;
+            }
+            assert_eq!(vanilla.level.crop_growth_calls, 1);
+            assert_eq!(accelerated.level.crop_growth_calls, 1);
+            assert_eq!(cancelled.level.crop_growth_calls, 1);
+            let vanilla_segments = if kind == "bamboo" { 1 } else { 2 };
+            assert_eq!(
+                vanilla.count("bamboo"),
+                initial_bamboo + vanilla_segments,
+                "vanilla {kind} growth: before={initial_bamboo}, at64={}, at65={}",
+                vanilla.name(pos),
+                vanilla.name(pos.offset(0, 1, 0))
+            );
+            assert_eq!(
+                accelerated.count("bamboo"),
+                vanilla.count("bamboo") + 2,
+                "accelerated {kind} height"
+            );
+            assert_eq!(
+                cancelled.count("bamboo"),
+                initial_bamboo,
+                "cancelled {kind} growth"
+            );
+            let vanilla_next = vanilla.level.random.next_int_bound(1_000_000);
+            let accelerated_next = accelerated.level.random.next_int_bound(1_000_000);
+            let cancelled_next = cancelled.level.random.next_int_bound(1_000_000);
+            assert_eq!(vanilla_next, accelerated_next, "{kind} accelerated RNG");
+            assert_eq!(vanilla_next, cancelled_next, "{kind} cancelled RNG");
+            found_growth = true;
+            break;
+        }
+        assert!(found_growth, "no successful vanilla growth roll for {kind}");
+    }
+}
+
+#[test]
 fn tall_flowers_and_seagrass() {
     let Some(f) = fixture() else { return };
     let mut w = World::new(f, 5);

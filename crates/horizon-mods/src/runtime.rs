@@ -4,7 +4,10 @@ use horizon_world::nbt::{Limits as NbtLimits, Tag as NbtTag, read_network};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU8, Ordering},
+    },
     time::{Duration, Instant, SystemTime},
 };
 use wasmtime::{
@@ -498,6 +501,9 @@ struct State {
     ghost_blocks: Vec<GhostBlock>,
     /// Capability `vanilla-hooks` (API 0.5): subscribed named hooks.
     vanilla_hooks: Vec<VanillaHookKind>,
+    /// Fast prefilter shared by the mod runner; bits are hints backed by the
+    /// per-mod subscriptions above and are rebuilt when a mod stops/reloads.
+    vanilla_hook_mask: Arc<AtomicU8>,
 }
 
 /// The installed mods and the engine running them. `Mods::default()` is
@@ -516,6 +522,8 @@ pub struct Mods {
     /// The block entities a mod held when it stopped mid-call, saved from
     /// its dropped store so the game gets their slots back.
     stranded: Vec<BlockEntityView>,
+    /// Hook subscriptions across all running mods, for O(1) empty-hook checks.
+    vanilla_hook_mask: Arc<AtomicU8>,
 }
 
 impl Mods {
@@ -607,7 +615,25 @@ impl Mods {
             }
             mods.entries.push(entry);
         }
+        mods.rebuild_vanilla_hook_mask();
         mods
+    }
+
+    fn rebuild_vanilla_hook_mask(&self) {
+        let mut mask = 0;
+        for entry in &self.entries {
+            if let Some(run) = &entry.run {
+                for kind in &run.store.data().vanilla_hooks {
+                    mask |= vanilla_hook_bit(kind);
+                }
+            }
+        }
+        self.vanilla_hook_mask.store(mask, Ordering::Relaxed);
+    }
+
+    /// Fast check used before constructing a `VanillaHookEvent`.
+    pub fn has_vanilla_hook_subscription(&self, kind: &VanillaHookKind) -> bool {
+        self.vanilla_hook_mask.load(Ordering::Relaxed) & vanilla_hook_bit(kind) != 0
     }
 
     fn engine(&mut self) -> Result<&(Engine, Linker<State>), String> {
@@ -656,6 +682,7 @@ impl Mods {
             .collect();
         let snapshot = self.snapshot.clone();
         let shared = self.shared.clone();
+        let vanilla_hook_mask = self.vanilla_hook_mask.clone();
         let facts = self.facts.clone();
         let (engine, linker) = self.engine()?;
         let component =
@@ -710,6 +737,7 @@ impl Mods {
             shapes: Vec::new(),
             ghost_blocks: Vec::new(),
             vanilla_hooks: Vec::new(),
+            vanilla_hook_mask,
         };
         let mut store = Store::new(engine, state);
         store.limiter(|s| &mut s.limits);
@@ -1091,10 +1119,11 @@ impl Mods {
             .store
             .set_fuel(fuel)
             .and_then(|()| f(&run.exports, &mut run.store));
+        let stopped = result.is_err();
         // An average over about the last 64 calls.
         entry.cost = (entry.cost * 63 + started.elapsed()) / 64;
         self.out.append(&mut run.store.data_mut().out);
-        match result {
+        let output = match result {
             Ok(r) => Some(r),
             Err(e) => {
                 let reason = reason(&e);
@@ -1109,7 +1138,11 @@ impl Mods {
                 entry.run = None;
                 None
             }
+        };
+        if stopped {
+            self.rebuild_vanilla_hook_mask();
         }
+        output
     }
 
     /// A game tick.
@@ -1685,7 +1718,7 @@ impl Mods {
         (outcome, damage, xp, enchantment, loot)
     }
 
-    /// Dispatches a crop growth hook and returns its outcome and stage multiplier.
+    /// Dispatches a plant growth hook and returns its outcome and growth-step multiplier.
     pub fn crop_growth_hook(&mut self, event: &VanillaHookEvent) -> (EventOutcome, f32) {
         let (outcome, _, _, multiplier, _, _) = self.dispatch_vanilla_hook(event);
         (outcome, multiplier)
@@ -1695,6 +1728,9 @@ impl Mods {
         &mut self,
         event: &VanillaHookEvent,
     ) -> (EventOutcome, f32, f32, f32, i32, Vec<ItemDrop>) {
+        if !self.has_vanilla_hook_subscription(&event.kind) {
+            return (EventOutcome::Pass, 1.0, 1.0, 1.0, 0, Vec::new());
+        }
         if let Ok(mut sh) = self.shared.lock() {
             sh.damage_multiplier = 1.0;
             sh.xp_multiplier = 1.0;
@@ -1812,6 +1848,9 @@ impl Mods {
                 }
             }
         }
+        if any {
+            self.rebuild_vanilla_hook_mask();
+        }
         any
     }
 }
@@ -1828,6 +1867,17 @@ fn logic_of(m: &Exports) -> wasmtime::Result<&LogicHost> {
     m.logic
         .as_ref()
         .ok_or_else(|| wasmtime::Error::msg("no logic export"))
+}
+
+fn vanilla_hook_bit(kind: &VanillaHookKind) -> u8 {
+    match kind {
+        VanillaHookKind::LootDrop => 1 << 0,
+        VanillaHookKind::EntityDamage => 1 << 1,
+        VanillaHookKind::XpGain => 1 << 2,
+        VanillaHookKind::CropGrow => 1 << 3,
+        VanillaHookKind::ExplosionDetonate => 1 << 4,
+        VanillaHookKind::EnchantmentLevel => 1 << 5,
+    }
 }
 
 fn call_on_block(
@@ -3437,7 +3487,9 @@ impl vanilla_hooks::Host for State {
             _ => return Err(format!("unknown vanilla hook {hook:?}")),
         };
         if !self.vanilla_hooks.contains(&kind) {
+            let bit = vanilla_hook_bit(&kind);
             self.vanilla_hooks.push(kind);
+            self.vanilla_hook_mask.fetch_or(bit, Ordering::Relaxed);
         }
         Ok(())
     }

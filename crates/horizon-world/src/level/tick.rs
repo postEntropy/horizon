@@ -243,7 +243,13 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                         && self.is_empty_block(above(pos))
                         && self.raw_brightness(above(pos), 0) >= 9
                     {
-                        self.bamboo_sapling_grow(pos);
+                        if let Some(steps) = self.crop_growth_steps(state, pos, 1) {
+                            self.bamboo_sapling_grow(pos);
+                            if steps > 1 {
+                                let top = above(pos);
+                                self.bamboo_grow_multiple(self.state(top), top, 1, steps - 1);
+                            }
+                        }
                     }
                 }
                 Class::BambooStalk => {
@@ -254,7 +260,13 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                     {
                         let height = self.bamboo_height_below(pos) + 1;
                         if height < 16 {
-                            self.bamboo_grow(state, pos, height);
+                            if let Some(steps) = self.crop_growth_steps(state, pos, height + 1) {
+                                if steps == 1 {
+                                    self.bamboo_grow(state, pos, height);
+                                } else {
+                                    self.bamboo_grow_multiple(state, pos, height, steps);
+                                }
+                            }
                         }
                     }
                 }
@@ -1198,6 +1210,26 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         );
         let _ = self.bamboo_height_above(pos);
         self.set_block(above(pos), next, 3);
+    }
+    fn bamboo_grow_multiple(
+        &mut self,
+        mut state: BlockStateId,
+        mut pos: BlockPos,
+        mut height: i32,
+        steps: i32,
+    ) {
+        let b = self.b;
+        let p = b.props;
+        for _ in 0..steps.min((16 - height).max(0)) {
+            let grow = above(pos);
+            if b.table.int(state, p.stage) != 0 || !self.is_empty_block(grow) {
+                break;
+            }
+            self.bamboo_grow(state, pos, height);
+            pos = grow;
+            state = self.state(pos);
+            height += 1;
+        }
     }
     /// `VineBlock.randomTick`.
     fn vine_random_tick(&mut self, state: BlockStateId, pos: BlockPos) {
