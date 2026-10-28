@@ -468,8 +468,10 @@ impl Mod for Machines {
                     .is_some_and(|entry| entry.outputs == replacement.outputs);
                 let old_output = recipes::for_output("minecraft:iron_ingot").len();
                 let new_output = recipes::for_output("minecraft:gold_ingot").len();
+                let resource_id = recipes::get("minecraft:raw_iron_smelting").is_some();
+                let resource_type = recipes::by_type("minecraft:smelting").len();
                 Ok(Some(format!(
-                    "fe={recv_sim}/{recv}/{recv_again}/{ext_sim}/{ext}/{ext_again}/{stored} fluid={filled}/{drained}/{incompatible}/{simulated_drain}/{after_simulation} mana={mana} ring={ring} recipes={by_id}/{found}/{found_by_item}/{found_by_output}/{replaced}/{old_output}/{new_output}"
+                    "fe={recv_sim}/{recv}/{recv_again}/{ext_sim}/{ext}/{ext_again}/{stored} fluid={filled}/{drained}/{incompatible}/{simulated_drain}/{after_simulation} mana={mana} ring={ring} recipes={by_id}/{found}/{found_by_item}/{found_by_output}/{replaced}/{old_output}/{new_output} resource={resource_id}/{resource_type}"
                 )))
             }
             "state" => Ok(Some(format!(

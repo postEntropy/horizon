@@ -2,9 +2,9 @@
 //! that misbehaves on command. Needs `rustup target add wasm32-unknown-unknown`.
 use horizon_mods::{
     BlockAction, BlockEntityView, BlockEvent, BlockHit, Clock, CookingKind, CookingRecipe, Corner,
-    EventOutcome, ItemAction, ItemDrop, ItemEvent, ItemFacts, Mods, Output, Package, Player,
-    Property, ServerAction, ServerEvent, ServerEventKind, Snapshot, Stack, StackView, Status,
-    VanillaHookEvent, VanillaHookKind, WorldCell, manifest::componentize,
+    EventOutcome, IngredientSlot, ItemAction, ItemDrop, ItemEvent, ItemFacts, Mods, Output,
+    Package, Player, Property, RecipeEntry, ServerAction, ServerEvent, ServerEventKind, Snapshot,
+    Stack, StackView, Status, VanillaHookEvent, VanillaHookKind, WorldCell, manifest::componentize,
 };
 use std::{
     path::{Path, PathBuf},
@@ -806,6 +806,17 @@ fn a_block_entity_that_traps_gives_its_slots_back() {
 #[test]
 fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     let mut mods = machines();
+    mods.add_resource_recipes([RecipeEntry {
+        id: "minecraft:raw_iron_smelting".into(),
+        kind: "minecraft:smelting".into(),
+        inputs: vec![IngredientSlot {
+            items: vec!["#c:raw_iron".into()],
+            count: 1,
+        }],
+        outputs: vec!["minecraft:iron_ingot*1".into()],
+        ticks: 200,
+        energy: 0,
+    }]);
     mods.set_snapshot(player());
     assert!(mods.has_block_hook("test_machine:smelter"));
     assert!(!mods.has_block_hook("test_machine:unregistered"));
@@ -905,7 +916,7 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     assert_eq!(
         mods.drain(),
         [Output::Feedback {
-            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=true/1/1/1/true/0/1".into(),
+            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=true/1/2/2/true/1/1 resource=true/1".into(),
             error: false,
         }]
     );
@@ -914,7 +925,7 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     assert_eq!(
         mods.drain(),
         [Output::Feedback {
-            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=true/1/1/1/true/0/1".into(),
+            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=true/1/2/2/true/1/1 resource=true/1".into(),
             error: false,
         }]
     );
