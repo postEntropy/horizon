@@ -9,23 +9,22 @@ test, does not by itself mean a pack feature works in a playable world.
 | Line | Contract / SDK | Runtime | Game integration | Status |
 |---|---|---|---|---|
 | 0.3 logic | Present | Present | Present for the client and local game hooks inspected | Implemented in parts; full multiplayer and per-capability gameplay coverage is not established |
-| 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist; mod packets bridge the integrated single-player client and server | Usable foundation; neighboring FE/fluid transfer, broad recipe behavior, LAN/dedicated networking and some persistence cases remain incomplete |
-| 0.5 deep | Present | Present, including runtime tests | Melee damage, XP awards and block/mob loot dispatch hooks; custom entity lifecycle, models and other hooks remain unwired | Partial live bridge; not a complete player-facing API |
+| 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist; mod packets bridge the integrated single-player client and server | Usable foundation; directional transfer, broad recipe behavior, LAN/dedicated networking and some persistence cases remain incomplete |
+| 0.5 deep | Present | Present, including runtime tests | Crop growth, explosion filtering, enchantment reads, damage, XP and loot hooks have partial gameplay integration; custom entity lifecycle, models and dimensions remain unwired | Partial live bridge; not a complete player-facing API |
 
 ## Scope for the current ATM10 core milestone
 
-**Active:** API 0.4 machine behavior and client/server integration, starting
-with the Enrichment Chamber and the local packet bridge.
+**Active:** single-player API readiness across 0.3–0.5, including the machine
+path and gameplay hooks. The [feature matrix](feature-matrix.md) is the current
+item-by-item backlog and should be updated alongside this evidence log.
 
-**Deferred:** completing API 0.3 and 0.5 game integrations. Their current
-interfaces and compatibility remain in the runtime; removing those versions
-would prevent already-built mods from loading. The imported ATM10 workspace has
-27 carried manifests on 0.3 and 9 on 0.5, so treating them as deferred preserves
-those ports while we close the machine path.
+**Deferred:** LAN guest, remote multiplayer and dedicated-server parity for mod
+APIs. Their interfaces remain available where implemented, but single-player
+coverage is the current scope.
 
 **None of the three lines should be described as complete for arbitrary mods.**
-For the current milestone, finish the 0.4 machine path first. Return to 0.3
-bridge coverage and the missing 0.5 game integration in a later milestone.
+Progress and remaining work are tracked by capability in the feature matrix;
+this audit records concrete evidence and its limits.
 
 ## Evidence and limits
 
@@ -149,15 +148,15 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   selectors, positive counts, field sizes, and a 4 MiB per-mod data budget.
   Runtime unit tests cover valid mixed item/resource recipes and rejected
   malformed or oversized fields.
-- The Mekanism port has recipe-processing code. The Enrichment Chamber has now
+- The Mekanism port has recipe-processing code. The Enrichment Chamber has
   been exercised in a live in-frame world: a creative energy cube powered a
   clay recipe, the machine produced four clay balls, and the output remained
-  after saving and reopening the world. The declared machine screen opens when
-  the player is holding an item. Its first-run layout rendered, but after a full
-  game restart the screen opened with most of its contents missing; screen
-  rendering across restart remains a bug. This verifies basic processing and
-  saved output, not complete UI behavior. Integrated-server, LAN and dedicated-
-  server behavior remain unverified.
+  after saving and reopening the world. The machine-screen restart bug noted
+  in the original audit was subsequently fixed: `tools/mod_api_e2e.py --mode
+  both` now verifies screen contents, slots, background, callbacks, clicks and
+  reopen after restart in both single-player paths. Visual pixel/layout QA and
+  broader menu shapes remain. LAN and dedicated-server behavior remain
+  unverified.
 - The Horizon probe now loads custom machine recipes from its resource root and
   can seed energy/fluid state per scenario. `ports/mekanism/scenarios/` contains
   an Enrichment Chamber assertion. The Java oracle currently does not seed
@@ -222,20 +221,13 @@ arbitrary machine mods, chunk unload/reload, or every network topology.
 
 ## Completion gates
 
-1. **0.4 machine pilot:** Horizon-side Enrichment Chamber processing is verified
-   for a carried clay recipe in both the machine probe and a live in-frame world.
-   The probe checks 200 ticks, 8,000 FE consumed, four clay balls, and a
-   save/recreate boundary. The live world confirms powered output and output
-   persistence through a world save/reopen. Still add Java-side power injection
-   for direct parity and verify integrated-server client updates.
-2. **0.4 generalization:** run the `net-bridge` example in an integrated world;
-   extend `tools/mod_api_e2e.py` with chunk unload/mod reload and screen-restart
-   scenarios; verify real carried-mod recipes, item components, directional
-   energy/fluid networks, and ownership rules for item-slot capabilities and
-   attachments. LAN and dedicated-server packet delivery remains deferred until
-   after the single-player API work.
+1. **Single-player coverage:** use the current matrix to select the next API
+   gap; expand `tools/mod_api_e2e.py` where game behavior needs live evidence.
+2. **Machines:** verify carried-mod recipes, chunk unload/reload, mod reload,
+   directional energy/fluid networks, and ownership rules for item-slot
+   capabilities and attachments.
 3. Keep the generated API reference synchronized with WIT and this audit
    synchronized with actual end-to-end evidence.
 
-Deferred follow-up: complete 0.3 integration coverage, then add live game
-dispatch and gameplay validation for 0.5 entities, models, dimensions and hooks.
+Custom entity lifecycle, custom rendering and custom dimensions remain major
+0.5 gaps; LAN and dedicated-server parity remain deferred.
