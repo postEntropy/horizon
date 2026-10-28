@@ -95,7 +95,7 @@ use {
     horizon_mods::{
         BlockAction, BlockEntityView, BlockEvent, BlockHit, Clock, CookingKind, CookingRecipe,
         EventOutcome, ItemDrop, ItemFacts, Mods, Output, Player, ServerAction, Snapshot, Stack,
-        StackView, Status, VanillaHookEvent, VanillaHookKind,
+        StackView, Status, VanillaHookEvent, VanillaHookKind, WorldCell,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -593,6 +593,65 @@ impl Game<'_> {
         });
         Snapshot { player, clock }
     }
+    #[cfg(feature = "mods")]
+    fn mod_world_view(&self) -> Option<Vec<WorldCell>> {
+        let player = self.player.as_ref()?;
+        let center = [
+            player.position.x.floor() as i32,
+            player.position.y.floor() as i32,
+            player.position.z.floor() as i32,
+        ];
+        const RADIUS: i32 = 4;
+        let (min_y, max_y) = if self.dim.id() == "minecraft:overworld" {
+            (
+                horizon_client::chunk::MIN_Y,
+                horizon_client::chunk::MIN_Y + horizon_client::chunk::HEIGHT - 1,
+            )
+        } else {
+            (0, 255)
+        };
+        let mut cells = Vec::with_capacity(9 * 9 * 9);
+        for x in center[0] - RADIUS..=center[0] + RADIUS {
+            for y in (center[1] - RADIUS).max(min_y)..=(center[1] + RADIUS).min(max_y) {
+                for z in center[2] - RADIUS..=center[2] + RADIUS {
+                    if !self.world.loaded(x, z) {
+                        continue;
+                    }
+                    let state = self.world.block(x, y, z);
+                    let name = self.res.facts().get(state).name.to_string();
+                    let block = self
+                        .pack
+                        .assets
+                        .registry
+                        .state(state)
+                        .map_or(name.clone(), |s| {
+                            if s.properties.is_empty() {
+                                name
+                            } else {
+                                let properties = s
+                                    .properties
+                                    .iter()
+                                    .map(|(key, value)| format!("{key}={value}"))
+                                    .collect::<Vec<_>>()
+                                    .join(",");
+                                format!("{name}[{properties}]")
+                            }
+                        });
+                    let chunk = self.world.chunks.get(&(x >> 4, z >> 4))?;
+                    let biome = self.res.core.biomes.get(chunk.biome(x, y, z)).name.clone();
+                    cells.push(WorldCell {
+                        x,
+                        y,
+                        z,
+                        block,
+                        biome,
+                        light: self.world.light(x, y, z),
+                    });
+                }
+            }
+        }
+        Some(cells)
+    }
     /// A game tick.
     pub(super) fn tick_mods(&mut self) {
         self.load_mod_resource_recipes();
@@ -619,6 +678,11 @@ impl Game<'_> {
         }
         let snapshot = self.mod_snapshot();
         self.mods.mods.set_snapshot(snapshot);
+        if self.mods.mods.wants_world_read()
+            && let Some(cells) = self.mod_world_view()
+        {
+            self.mods.mods.set_world_view(self.dim.id(), cells);
+        }
         let block_hit = self.pick().map(|hit| {
             let state_id = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
             let name = self.res.facts().get(state_id).name.to_string();

@@ -100,10 +100,11 @@ The chat box colours and Tab-completes a mod's commands like vanilla's, for
 every player whatever their permission level, and takes any text after the
 name (the mod reads it as `args`; API 0.1 has no way to declare argument types).
 
-### Planned interfaces
+### Mod capabilities
 
-Each is a new capability, added in a 0.x minor version so older mods keep
-loading. Ordered by what the first native ports need:
+Each imported interface is a capability that a manifest must declare. Existing
+mods keep loading when a newer API version adds capabilities. Full contracts
+and minimum API versions are listed in [the API reference](api/mods-reference.md).
 
 | Interface | For | Notes |
 |---|---|---|
@@ -112,7 +113,7 @@ loading. Ordered by what the first native ports need:
 | `inventory-read` | the player's inventory, held item, open container | AppleSkin, recipe viewers |
 | `recipes` | the recipe registry and lookups | JEI/EMI-style viewers |
 | `ui` | widgets: text, item icons, lists, a screen the mod owns, a settings page in Options > Mods | built from vanilla's widgets (`ui`) so it matches the menus |
-| `world-read` | blocks and biomes around the player, within the render distance | minimaps, schematics |
+| `world-read` | loaded block states, biomes and packed light within four blocks of the player | local overlays and machine logic |
 | `render` | world-space lines, boxes and ghost blocks in a per-frame budget | Litematica-style placement, waypoints |
 | `registries` | new blocks, items, entities and recipes, mostly data: JSON models, textures, loot and recipes in the `.hmod`'s `assets/` and `data/` | server side; see [Multiplayer](#multiplayer) |
 | `server` | world events (block break/place, entity spawn/death, player join), game rules, server commands | runs where the world is simulated |

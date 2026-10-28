@@ -543,7 +543,7 @@ Capability `recipes` (API 0.4): read the loaded recipe graph and register custom
 
 Access: capability `world-read`.
 
-Capability `world-read` (API 0.4): read-only block, biome and light queries around the player for maps, jade/wthit overlays and guide previews.
+Capability `world-read` (API 0.3): read-only block, biome and light queries in loaded cells within four blocks of the local player. Coordinates outside the current snapshot return `none`.
 
 | Function | Signature | What it does |
 | --- | --- | --- |

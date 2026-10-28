@@ -39,6 +39,10 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   chat, ticks, frames, target and inventory snapshots. This is evidence of an
   in-game path, but does not verify every action in both in-frame and integrated
   server modes, LAN, and dedicated-server mode.
+- The game refreshes `world-read` with loaded block states, biomes and packed
+  light in a four-block neighborhood around the player. Queries are scoped to
+  the active dimension; runtime sandbox coverage checks two dimensions sharing
+  the same coordinates.
 - Status: **implemented, integration coverage incomplete**.
 
 ### 0.4 — machines

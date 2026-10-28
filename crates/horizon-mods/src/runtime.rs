@@ -193,6 +193,18 @@ pub struct Snapshot {
     pub clock: Option<Clock>,
 }
 
+/// One loaded world cell exposed to the `world-read` capability.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorldCell {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub block: String,
+    pub biome: String,
+    /// Packed block and sky light, in Minecraft's standard nibble format.
+    pub light: u8,
+}
+
 /// A server-side mutation requested by a mod via capability `server`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ServerAction {
@@ -292,8 +304,8 @@ pub enum Status {
 #[derive(Default)]
 struct SharedWorld {
     blocks: HashMap<(String, i32, i32, i32), String>,
-    biomes: HashMap<(i32, i32, i32), String>,
-    lights: HashMap<(i32, i32, i32), u8>,
+    biomes: HashMap<(String, i32, i32, i32), String>,
+    lights: HashMap<(String, i32, i32, i32), u8>,
     rules: HashMap<String, String>,
     target_block: Option<BlockHit>,
     target_entity: Option<EntityHit>,
@@ -664,6 +676,15 @@ impl Mods {
     pub fn is_running(&self) -> bool {
         self.entries.iter().any(|e| e.run.is_some())
     }
+    /// Whether any running mod can read the local world neighborhood.
+    pub fn wants_world_read(&self) -> bool {
+        self.entries.iter().any(|e| {
+            e.run.is_some()
+                && e.manifest
+                    .as_ref()
+                    .is_some_and(|m| m.capabilities.contains(&Capability::WorldRead))
+        })
+    }
     pub fn entries(&self) -> &[Entry] {
         &self.entries
     }
@@ -823,17 +844,44 @@ impl Mods {
         }
     }
 
+    /// Replaces the loaded-cell snapshot for one dimension. Unloaded cells are
+    /// absent, so queries outside the sampled player neighborhood return none.
+    pub fn set_world_view(&mut self, dimension: &str, cells: Vec<WorldCell>) {
+        if let Ok(mut sh) = self.shared.lock() {
+            sh.blocks.retain(|(dim, _, _, _), _| dim != dimension);
+            sh.biomes.retain(|(dim, _, _, _), _| dim != dimension);
+            sh.lights.retain(|(dim, _, _, _), _| dim != dimension);
+            for cell in cells {
+                let key = (dimension.to_owned(), cell.x, cell.y, cell.z);
+                sh.blocks.insert(key.clone(), cell.block);
+                sh.biomes.insert(key.clone(), cell.biome);
+                sh.lights.insert(key, cell.light);
+            }
+        }
+    }
+
     /// Sets a biome in the shared world cache (for `world.get-biome`).
     pub fn set_world_biome(&mut self, x: i32, y: i32, z: i32, biome: &str) {
+        let dimension = self
+            .snapshot
+            .player
+            .as_ref()
+            .map_or("minecraft:overworld", |p| p.dimension.as_str());
         if let Ok(mut sh) = self.shared.lock() {
-            sh.biomes.insert((x, y, z), biome.to_owned());
+            sh.biomes
+                .insert((dimension.to_owned(), x, y, z), biome.to_owned());
         }
     }
 
     /// Sets packed light in the shared world cache (for `world.get-light`).
     pub fn set_world_light(&mut self, x: i32, y: i32, z: i32, light: u8) {
+        let dimension = self
+            .snapshot
+            .player
+            .as_ref()
+            .map_or("minecraft:overworld", |p| p.dimension.as_str());
         if let Ok(mut sh) = self.shared.lock() {
-            sh.lights.insert((x, y, z), light);
+            sh.lights.insert((dimension.to_owned(), x, y, z), light);
         }
     }
 
@@ -2724,10 +2772,32 @@ impl world::Host for State {
             .cloned()
     }
     fn get_biome(&mut self, x: i32, y: i32, z: i32) -> Option<String> {
-        self.shared.lock().ok()?.biomes.get(&(x, y, z)).cloned()
+        let dim = self
+            .snapshot
+            .player
+            .as_ref()
+            .map_or("minecraft:overworld", |p| p.dimension.as_str())
+            .to_owned();
+        self.shared
+            .lock()
+            .ok()?
+            .biomes
+            .get(&(dim, x, y, z))
+            .cloned()
     }
     fn get_light(&mut self, x: i32, y: i32, z: i32) -> Option<u8> {
-        self.shared.lock().ok()?.lights.get(&(x, y, z)).copied()
+        let dim = self
+            .snapshot
+            .player
+            .as_ref()
+            .map_or("minecraft:overworld", |p| p.dimension.as_str())
+            .to_owned();
+        self.shared
+            .lock()
+            .ok()?
+            .lights
+            .get(&(dim, x, y, z))
+            .copied()
     }
 }
 

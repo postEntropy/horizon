@@ -4,7 +4,7 @@ use horizon_mods::{
     BlockAction, BlockEntityView, BlockEvent, BlockHit, Clock, CookingKind, CookingRecipe, Corner,
     EventOutcome, ItemAction, ItemDrop, ItemEvent, ItemFacts, Mods, Output, Package, Player,
     Property, ServerAction, ServerEvent, ServerEventKind, Snapshot, Stack, StackView, Status,
-    VanillaHookEvent, VanillaHookKind, manifest::componentize,
+    VanillaHookEvent, VanillaHookKind, WorldCell, manifest::componentize,
 };
 use std::{
     path::{Path, PathBuf},
@@ -106,6 +106,7 @@ fn player() -> Snapshot {
 fn coords_hud_draws_and_answers() {
     let mut mods = load("coords_hud.hmod");
     assert_eq!(mods.entries()[0].status, Status::Running);
+    assert!(!mods.wants_world_read());
     assert_eq!(mods.commands().collect::<Vec<_>>(), ["where", "coords"]);
     mods.set_snapshot(player());
     mods.tick(1);
@@ -476,6 +477,7 @@ fn smelter(handle: u32, input: Option<Stack>) -> BlockEntityView {
 fn machines() -> Mods {
     let mut mods = load("horizon_mods_test_machine.hmod");
     assert_eq!(mods.entries()[0].status, Status::Running);
+    assert!(mods.wants_world_read());
     mods.set_item_facts(std::sync::Arc::new(Facts));
     mods
 }
@@ -651,14 +653,33 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
         Vec::new(),
         Vec::new(),
     );
-    mods.set_world_block("minecraft:overworld", 0, 64, 0, "test_machine:smelter");
-    mods.set_world_biome(0, 64, 0, "minecraft:plains");
-    mods.set_world_light(0, 64, 0, 0xF8);
+    mods.set_world_view(
+        "minecraft:overworld",
+        vec![WorldCell {
+            x: 0,
+            y: 64,
+            z: 0,
+            block: "test_machine:smelter[lit=false]".into(),
+            biome: "minecraft:plains".into(),
+            light: 0xF8,
+        }],
+    );
+    mods.set_world_view(
+        "test:moon",
+        vec![WorldCell {
+            x: 0,
+            y: 64,
+            z: 0,
+            block: "test_machine:crate".into(),
+            biome: "test:moon_surface".into(),
+            light: 0,
+        }],
+    );
     assert!(mods.command("machine_api client_reads"));
     assert_eq!(
         mods.drain(),
         [Output::Feedback {
-            text: "key=true hit=test_machine:smelter[lit=false] hand=test_machine:wrench*1 blk=test_machine:smelter biome=minecraft:plains light=248".into(),
+            text: "key=true hit=test_machine:smelter[lit=false] hand=test_machine:wrench*1 blk=test_machine:smelter[lit=false] biome=minecraft:plains light=248".into(),
             error: false,
         }]
     );

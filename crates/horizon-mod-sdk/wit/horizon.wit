@@ -529,8 +529,9 @@ interface recipes {
     register: func(entry: recipe-entry) -> result<_, string>;
 }
 
-/// Capability `world-read` (API 0.4): read-only block, biome and light queries
-/// around the player for maps, jade/wthit overlays and guide previews.
+/// Capability `world-read` (API 0.3): read-only block, biome and light queries
+/// in loaded cells within four blocks of the local player. Coordinates outside
+/// the current snapshot return `none`.
 interface world-read {
     /// Block state string at `(x, y, z)` in the current world, if loaded.
     get-block: func(x: s32, y: s32, z: s32) -> option<string>;
