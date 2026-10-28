@@ -557,12 +557,43 @@ pub fn encode_block_entity(
             block,
             saved,
             items,
+            energy,
+            fluids,
             ..
         } => {
             entries.push(("mod_block", string(block)));
             entries.push(("mod_data", Tag::ByteArray(saved.clone())));
             entries.push(("mod_slots", Tag::Int(items.len() as i32)));
             entries.push(("Items", encode_items(items)));
+            if let Some(energy) = energy {
+                entries.push((
+                    "horizon_energy",
+                    Tag::compound([
+                        ("stored", string(&energy.stored.to_string())),
+                        ("capacity", string(&energy.capacity.to_string())),
+                        ("max_receive", string(&energy.max_receive.to_string())),
+                        ("max_extract", string(&energy.max_extract.to_string())),
+                    ]),
+                ));
+            }
+            if !fluids.is_empty() {
+                entries.push((
+                    "horizon_fluids",
+                    Tag::List(
+                        fluids
+                            .iter()
+                            .map(|(slot, tank)| {
+                                Tag::compound([
+                                    ("tank", Tag::Int(*slot as i32)),
+                                    ("fluid", string(&tank.fluid)),
+                                    ("amount", string(&tank.amount.to_string())),
+                                    ("capacity", string(&tank.capacity.to_string())),
+                                ])
+                            })
+                            .collect(),
+                    ),
+                ));
+            }
         }
     }
     Tag::compound(entries)
@@ -593,6 +624,31 @@ pub fn decode_block_entity(tag: &Tag) -> Option<((i32, i32, i32), crate::contain
             tag.get("Items"),
             int("mod_slots").unwrap_or(0).max(0) as usize,
         );
+        let energy = tag.get("horizon_energy").and_then(|saved| {
+            Some(crate::containers::ModEnergyBuffer {
+                stored: text(saved.get("stored"))?.parse().ok()?,
+                capacity: text(saved.get("capacity"))?.parse().ok()?,
+                max_receive: text(saved.get("max_receive"))?.parse().ok()?,
+                max_extract: text(saved.get("max_extract"))?.parse().ok()?,
+            })
+        });
+        let fluids = match tag.get("horizon_fluids") {
+            Some(Tag::List(tanks)) => tanks
+                .iter()
+                .filter_map(|saved| {
+                    let tank = number(saved.get("tank"))?;
+                    Some((
+                        u32::try_from(tank).ok()?,
+                        crate::containers::ModFluidTank {
+                            fluid: text(saved.get("fluid"))?,
+                            amount: text(saved.get("amount"))?.parse().ok()?,
+                            capacity: text(saved.get("capacity"))?.parse().ok()?,
+                        },
+                    ))
+                })
+                .collect(),
+            _ => Default::default(),
+        };
         return Some((
             pos,
             BlockEntity::Mod {
@@ -600,6 +656,8 @@ pub fn decode_block_entity(tag: &Tag) -> Option<((i32, i32, i32), crate::contain
                 handle: 0,
                 saved,
                 items,
+                energy,
+                fluids,
             },
         ));
     }
@@ -3906,6 +3964,44 @@ mod tests {
         assert_eq!(back.components, banner.components);
     }
     use super::*;
+
+    #[test]
+    fn mod_block_entity_capabilities_survive_nbt_round_trip() {
+        use crate::containers::{BlockEntity, ModEnergyBuffer, ModFluidTank};
+        let block = BlockEntity::Mod {
+            block: "test_machine:smelter".into(),
+            handle: 0,
+            saved: vec![1, 2, 3],
+            items: Vec::new(),
+            energy: Some(ModEnergyBuffer {
+                stored: u64::MAX,
+                capacity: u64::MAX,
+                max_receive: 25,
+                max_extract: 10,
+            }),
+            fluids: HashMap::from([(
+                2,
+                ModFluidTank {
+                    fluid: "mekanism:hydrogen".into(),
+                    amount: 640,
+                    capacity: 1_000,
+                },
+            )]),
+        };
+        let tag = encode_block_entity((3, 70, -4), &block, "test_machine:smelter");
+        let (pos, loaded) = decode_block_entity(&tag).unwrap();
+        assert_eq!(pos, (3, 70, -4));
+        assert!(
+            matches!(loaded, BlockEntity::Mod { energy: Some(ref e), fluids, .. }
+            if e.stored == u64::MAX
+                && e.capacity == u64::MAX
+                && e.max_receive == 25
+                && e.max_extract == 10
+                && fluids[&2].fluid == "mekanism:hydrogen"
+                && fluids[&2].amount == 640
+                && fluids[&2].capacity == 1_000)
+        );
+    }
 
     #[test]
     fn uuid_text_round_trips() {

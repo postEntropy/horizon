@@ -44,6 +44,9 @@ impl Game<'_> {
             });
             return Ok(());
         }
+        if self.integrated.is_none() && self.remote.is_none() {
+            self.mod_local_player_left();
+        }
         if let Some(integrated) = &self.integrated {
             integrated.request_stop();
             self.pending_save = Some(ClosingSave {

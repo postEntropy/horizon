@@ -936,6 +936,19 @@ impl Game<'_> {
                     }
                     HostEvent::Joined(conn) => {
                         self.lan_guest_joined(&mut host, conn, state.as_ref(), entities, spawn);
+                        if let Some(g) = host.hub.guest(conn).filter(|g| g.placed) {
+                            self.mod_server_event_at(
+                                "player-join",
+                                g.name.clone(),
+                                g.dimension.clone(),
+                                [
+                                    g.position[0].floor() as i32,
+                                    g.position[1].floor() as i32,
+                                    g.position[2].floor() as i32,
+                                ],
+                                String::new(),
+                            );
+                        }
                         if self.options.dedicated.is_some()
                             && let Some(g) = host.hub.guest(conn)
                         {
@@ -961,6 +974,19 @@ impl Game<'_> {
                         }
                     }
                     HostEvent::Left(mut guest) => {
+                        if guest.placed {
+                            self.mod_server_event_at(
+                                "player-leave",
+                                guest.name.clone(),
+                                guest.dimension.clone(),
+                                [
+                                    guest.position[0].floor() as i32,
+                                    guest.position[1].floor() as i32,
+                                    guest.position[2].floor() as i32,
+                                ],
+                                String::new(),
+                            );
+                        }
                         // The container they had open loses an opener.
                         if let Some(pos) = guest.menu.as_ref().and_then(|m| m.pos)
                             && !guest.spectator()

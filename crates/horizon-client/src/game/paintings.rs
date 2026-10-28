@@ -163,6 +163,16 @@ impl Game<'_> {
         self.audio
             .play("minecraft:entity.painting.place", Some(at), 1.0, 1.0);
         self.paintings.push(candidate);
+        self.mod_server_event(
+            "entity-spawn",
+            self.next_entity.to_string(),
+            [
+                at[0].floor() as i32,
+                at[1].floor() as i32,
+                at[2].floor() as i32,
+            ],
+            "minecraft:painting".to_owned(),
+        );
         self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
         if !self.creative {
             self.consume_held();

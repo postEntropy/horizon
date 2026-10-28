@@ -79,6 +79,7 @@ impl Game<'_> {
             Owner::Block(p) => {
                 let size = match self.world.block_entities.get(&(p[0], p[1], p[2])) {
                     Some(horizon_client::containers::BlockEntity::Chest(items)) => items.len(),
+                    Some(horizon_client::containers::BlockEntity::Mod { items, .. }) => items.len(),
                     _ => 0,
                 };
                 for i in 0..size {
@@ -194,6 +195,9 @@ impl Game<'_> {
                 Some(horizon_client::containers::BlockEntity::Chest(items)) => {
                     items.get(*i).cloned().flatten()
                 }
+                Some(horizon_client::containers::BlockEntity::Mod { items, .. }) => {
+                    items.get(*i).cloned().flatten()
+                }
                 _ => None,
             },
         }
@@ -268,6 +272,15 @@ impl Game<'_> {
             },
             Slot::Block(p, i) => match self.world.block_entities.get_mut(&(p[0], p[1], p[2])) {
                 Some(horizon_client::containers::BlockEntity::Chest(items)) => {
+                    match items.get_mut(*i) {
+                        Some(slot) => {
+                            *slot = stack;
+                            true
+                        }
+                        None => false,
+                    }
+                }
+                Some(horizon_client::containers::BlockEntity::Mod { items, .. }) => {
                     match items.get_mut(*i) {
                         Some(slot) => {
                             *slot = stack;
@@ -828,6 +841,16 @@ impl Game<'_> {
             Some(Owner::Block(p)) => *p,
             _ => [0; 3],
         };
+        if block
+            && matches!(
+                self.world.block_entities.get(&(pos[0], pos[1], pos[2])),
+                Some(horizon_client::containers::BlockEntity::Mod { .. })
+            )
+        {
+            self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
+            self.container_changed((pos[0], pos[1], pos[2]));
+            self.mod_save_block_entity(pos);
+        }
         let zero = match &known {
             Some(k) => err(
                 "commands.item.target.failed.known_item",

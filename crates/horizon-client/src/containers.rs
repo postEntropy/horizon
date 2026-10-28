@@ -48,6 +48,23 @@ pub struct Furnace {
 /// A hopper's slots: the only plain container with five.
 pub const HOPPER_SLOTS: usize = 5;
 
+/// Persistent energy exposed by a mod machine's capability interface.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ModEnergyBuffer {
+    pub stored: u64,
+    pub capacity: u64,
+    pub max_receive: u64,
+    pub max_extract: u64,
+}
+
+/// Persistent fluid or chemical tank exposed by a mod machine.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ModFluidTank {
+    pub fluid: String,
+    pub amount: u64,
+    pub capacity: u64,
+}
+
 #[derive(Clone, Debug)]
 pub enum BlockEntity {
     Chest(Vec<Option<ItemStack>>),
@@ -86,6 +103,8 @@ pub enum BlockEntity {
         handle: u32,
         saved: Vec<u8>,
         items: Vec<Option<ItemStack>>,
+        energy: Option<ModEnergyBuffer>,
+        fluids: HashMap<u32, ModFluidTank>,
     },
 }
 /// `CrafterBlockEntity`: nine slots that can be disabled, the powered flag

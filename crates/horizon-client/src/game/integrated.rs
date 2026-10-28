@@ -455,6 +455,19 @@ impl Game<'_> {
         }
         if let Some(mut host) = self.lan.take() {
             for g in &host.hub.guests {
+                if g.placed {
+                    self.mod_server_event_at(
+                        "player-leave",
+                        g.name.clone(),
+                        g.dimension.clone(),
+                        [
+                            g.position[0].floor() as i32,
+                            g.position[1].floor() as i32,
+                            g.position[2].floor() as i32,
+                        ],
+                        String::new(),
+                    );
+                }
                 self.save_guest(&host, g);
             }
             let conns: Vec<u32> = host.hub.guests.iter().map(|g| g.conn).collect();
@@ -800,10 +813,14 @@ mod tests {
         let flags = Arc::new(Flags::default());
         let (release, wait) = channel();
         let (tasks, _) = channel();
+        let (client_to_server, _) = sync_channel(1);
+        let (_, mod_packets) = sync_channel(1);
         let server = Integrated {
             flags: flags.clone(),
             thread: Some(std::thread::spawn(move || wait.recv().unwrap())),
             tasks,
+            client_to_server,
+            mod_packets,
             world_name: String::new(),
         };
         server.request_stop();
@@ -818,12 +835,16 @@ mod tests {
         let flags = Arc::new(Flags::default());
         let saving = flags.clone();
         let (tasks, _) = channel();
+        let (client_to_server, _) = sync_channel(1);
+        let (_, mod_packets) = sync_channel(1);
         let server = Integrated {
             flags,
             thread: Some(std::thread::spawn(move || {
                 *saving.failure.lock().unwrap() = Some("disk write failed".into());
             })),
             tasks,
+            client_to_server,
+            mod_packets,
             world_name: String::new(),
         };
         assert_eq!(server.stop().unwrap_err().to_string(), "disk write failed");

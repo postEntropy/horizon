@@ -1183,6 +1183,7 @@ struct Game<'a> {
     potions: potions::PotionState,
     scratch_slot: Option<ItemStack>,
     mining: Option<Mining>,
+    mod_block_attack_consumed: Option<([i32; 3], bool)>,
     /// The other players' cracks (`LevelRenderer.destroyingBlocks`): breaker id to the block,
     /// the stage (0..=9) and the game time it last changed.
     destroying: HashMap<i32, ([i32; 3], u8, i64)>,
@@ -2237,6 +2238,8 @@ impl Game<'_> {
         pickup_delay: u32,
     ) {
         self.next_entity += 1;
+        let id = self.next_entity;
+        let kind = stack.item.to_string();
         let p = Vec3::new(position[0], position[1], position[2]);
         // ItemEntity.bobOffs comes from the entity's own random, not the level's.
         let bob = self.particles.random().next_float() * std::f32::consts::PI * 2.0;
@@ -2244,7 +2247,7 @@ impl Game<'_> {
             health: 5,
             fire_ticks: 0,
             thrower: None,
-            id: self.next_entity,
+            id,
             stack,
             position: p,
             previous: p,
@@ -2255,6 +2258,16 @@ impl Game<'_> {
             bob_offset: bob,
             ticks: 0,
         });
+        self.mod_server_event(
+            "entity-spawn",
+            id.to_string(),
+            [
+                position[0].floor() as i32,
+                position[1].floor() as i32,
+                position[2].floor() as i32,
+            ],
+            kind,
+        );
     }
     /// `Block.getDrops`: the block's loot table, drawing from its server random
     /// sequence (`LootContext.Builder.create`), else the level random.
@@ -2576,10 +2589,17 @@ impl Game<'_> {
         };
         let result = f(self.res.behaviours(), &mut level, &mut self.block_ticks);
         self.flush_spill();
+        self.dispatch_mod_neighbor_events();
+        self.dispatch_mod_random_tick_events();
         result
     }
     /// Level.setBlock(pos, state, UPDATE_ALL) with neighbour/shape updates.
     fn level_set(&mut self, pos: [i32; 3], state: BlockStateId) -> Result<()> {
+        let previous = self.world.block(pos[0], pos[1], pos[2]);
+        let (old_name, new_name) = (
+            self.res.facts().get(previous).name.to_string(),
+            self.res.facts().get(state).name.to_string(),
+        );
         self.with_level(|b, level, ticks| {
             b.set_block(
                 level,
@@ -2589,13 +2609,54 @@ impl Game<'_> {
                 level_flags::UPDATE_ALL,
             );
         });
-        self.process_level_events()
+        self.process_level_events()?;
+        let landed = self.world.block(pos[0], pos[1], pos[2]);
+        if old_name != new_name
+            && self.res.facts().get(landed).name.as_ref() == new_name
+            && matches!(
+                self.world.block_entities.get(&(pos[0], pos[1], pos[2])),
+                Some(BlockEntity::Mod { .. })
+            )
+        {
+            self.world.block_entities.remove(&(pos[0], pos[1], pos[2]));
+        }
+        if self.res.facts().get(landed).name.as_ref() == new_name {
+            self.ensure_mod_block_entity(pos, &new_name);
+        }
+        Ok(())
     }
-    fn attack_block(&mut self, pos: [i32; 3]) -> Result<()> {
+    fn attack_block(&mut self, pos: [i32; 3]) -> Result<bool> {
+        let mut already_dispatched = false;
+        let block_name = self
+            .res
+            .facts()
+            .get(self.world.block(pos[0], pos[1], pos[2]))
+            .name
+            .to_string();
+        if self.remote.is_none() && self.mod_has_block_hook(&block_name) {
+            if let Some((seen, handled)) = self.mod_block_attack_consumed
+                && seen == pos
+            {
+                if handled {
+                    return Ok(true);
+                }
+                already_dispatched = true;
+            } else {
+                let handled = self.mod_attack_block(pos);
+                self.mod_block_attack_consumed = Some((pos, handled));
+                if handled {
+                    return Ok(true);
+                }
+            }
+        }
+        if self.creative || already_dispatched {
+            return Ok(false);
+        }
         self.with_level(|b, level, ticks| {
             b.attack_block(level, ticks, BlockPos::new(pos[0], pos[1], pos[2]));
         });
-        self.process_level_events()
+        self.process_level_events()?;
+        Ok(false)
     }
     /// Track which chunks are ticking (Ticks needs chunk load/unload).
     fn sync_tick_chunks(&mut self) {
@@ -2679,7 +2740,7 @@ impl Game<'_> {
         // Entity.checkInsideBlocks for the plates, tripwires and detector rails
         // under the players (the host and the LAN guests) and the minecarts.
         let mut inside = Vec::new();
-        let guests = self.lan_block_trigger_boxes();
+        let guests = self.lan_block_trigger_entities();
         let boxes = self
             .player
             .iter()
@@ -2690,6 +2751,7 @@ impl Game<'_> {
                 (
                     [p.position.x - w, p.position.y, p.position.z - w],
                     [p.position.x + w, p.position.y + h, p.position.z + w],
+                    self.acting_player_name().to_owned(),
                 )
             })
             .chain(self.carts.iter().map(|c| {
@@ -2697,24 +2759,28 @@ impl Game<'_> {
                 (
                     [p.x - 0.49, p.y, p.z - 0.49],
                     [p.x + 0.49, p.y + 0.7, p.z + 0.49],
+                    format!("minecraft:minecart/{}", c.id),
                 )
             }))
             .chain(guests);
-        for (lo, hi) in boxes {
+        for (lo, hi, actor) in boxes {
             for x in (lo[0] + 1e-7).floor() as i32..=(hi[0] - 1e-7).floor() as i32 {
                 for y in (lo[1] + 1e-7).floor() as i32..=(hi[1] - 1e-7).floor() as i32 {
                     for z in (lo[2] + 1e-7).floor() as i32..=(hi[2] - 1e-7).floor() as i32 {
-                        inside.push(BlockPos::new(x, y, z));
+                        inside.push((BlockPos::new(x, y, z), actor.clone()));
                     }
                 }
             }
         }
         self.with_level(|b, level, ticks| {
-            for pos in inside {
-                b.entity_inside(level, ticks, pos);
+            for (pos, _) in &inside {
+                b.entity_inside(level, ticks, *pos);
             }
         });
         self.process_level_events()?;
+        for (pos, actor) in inside {
+            self.mod_entity_inside([pos.x, pos.y, pos.z], actor);
+        }
         self.tick_scheduled()?;
         self.with_level(|b, level, ticks| {
             for (x, z) in ticking {
@@ -2765,11 +2831,16 @@ impl Game<'_> {
             loop {
                 let more =
                     self.with_level(|b, level, ticks| b.scheduled_step(level, ticks, fluids));
+                let block_tick = match more {
+                    horizon_world::level::ScheduledStep::Block(pos) => Some([pos.x, pos.y, pos.z]),
+                    horizon_world::level::ScheduledStep::Ran => None,
+                    horizon_world::level::ScheduledStep::Empty => break,
+                };
                 if !self.level_events.is_empty() {
                     self.process_level_events()?;
                 }
-                if !more {
-                    break;
+                if let Some(pos) = block_tick {
+                    self.mod_scheduled_block_tick(pos);
                 }
             }
             self.with_level(|b, _, ticks| b.scheduled_finish(ticks, fluids));
@@ -3388,6 +3459,9 @@ impl Game<'_> {
         // ServerPlayerGameMode.destroyBlock.
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let facts = self.res.facts().get(state).clone();
+        if self.mod_block_broken(pos) {
+            return Ok(());
+        }
         let state = self.crack_mined_pot(pos, state);
         // Block.playerWillDestroy: mining their gold angers all nearby piglins.
         if self.guarded_by_piglins(&facts.name) {
@@ -3482,6 +3556,14 @@ impl Game<'_> {
         }
         self.pending.clear(pos);
         self.process_level_events()?;
+        if removed {
+            self.mod_server_event(
+                "block-break",
+                self.acting_player_name().to_owned(),
+                pos,
+                facts.name.to_string(),
+            );
+        }
         Ok(())
     }
     /// The hand whose use ended the click, if any.
@@ -3549,6 +3631,7 @@ impl Game<'_> {
     /// One hand's turn in `startUseItem`: `useItemOn` the block aimed at,
     /// then `useItem`. Whether the click ends here (it acted or failed).
     fn use_hand(&mut self, block_hit: Option<&Hit>) -> Result<bool> {
+        let on_block = matches!(self.guest_use, Some(GuestUse::OnBlock(_)));
         // isSecondaryUseActive with something in either hand keeps blocks
         // from reacting.
         let sneaking = self.keys.contains(&KeyCode::ShiftLeft);
@@ -3640,12 +3723,19 @@ impl Game<'_> {
         let Some(info) = self.res.items().get(&stack.item).cloned() else {
             return Ok(false);
         };
+        if let Some(hit) = block_hit {
+            if self.mod_use_item_on_block(&stack.item, hit.pos) {
+                self.swing_arm();
+                return Ok(true);
+            }
+        } else if !on_block && self.mod_use_item_in_air(&stack.item) {
+            return Ok(true);
+        }
         if block_hit.is_some() && (self.use_bone_meal(&stack)? || self.ignite_tnt(&stack)?) {
             return Ok(true);
         }
         // A guest's UseItemOn stops at ItemStack.useOn: what Item.use does
         // (throw, drink, eat, raise, equip) waits for its UseItem.
-        let on_block = matches!(self.guest_use, Some(GuestUse::OnBlock(_)));
         let spawn_egg = stack.item.ends_with("_spawn_egg");
         use horizon_client::first_person::UseResult;
         let swings = self.swings_started;
@@ -3776,6 +3866,21 @@ impl Game<'_> {
         } else {
             self.ensure_mod_block_entity(target, &block_name);
         }
+        let placement_face = match face {
+            Direction::Down => "down",
+            Direction::Up => "up",
+            Direction::North => "north",
+            Direction::South => "south",
+            Direction::West => "west",
+            Direction::East => "east",
+        };
+        self.mod_block_placed(target, placement_face.into());
+        self.mod_server_event(
+            "block-place",
+            self.acting_player_name().to_owned(),
+            target,
+            block_name.clone(),
+        );
         self.swing_arm();
         // BlockItem.place's sound is among the level events;
         // SolidBucketItem.getPlaceSound replaces it with the bucket's own.
@@ -3969,6 +4074,9 @@ impl Game<'_> {
         }
         if ticks >= duration {
             self.using = None;
+            if self.mod_finish_using(&stack.item) {
+                return;
+            }
             self.finish_consuming(&info, consumable, &stack);
         } else {
             self.using = Some((slot, ticks));
@@ -3991,19 +4099,37 @@ impl Game<'_> {
         }
         if !self.left || self.screen != Screen::Playing {
             self.mining = None;
+            self.mod_block_attack_consumed = None;
             return Ok(());
         }
         let Some(hit) = self.pick() else {
             self.mining = None;
+            self.mod_block_attack_consumed = None;
             return Ok(());
         };
+        if self
+            .mod_block_attack_consumed
+            .is_some_and(|(seen, handled)| seen == hit.pos && handled)
+        {
+            return Ok(());
+        }
+        if self
+            .mod_block_attack_consumed
+            .is_some_and(|(seen, _)| seen != hit.pos)
+        {
+            self.mod_block_attack_consumed = None;
+        }
         // GameType.isBlockPlacingRestricted: adventure and spectator.
         if !self.may_build() {
             self.mining = None;
+            self.mod_block_attack_consumed = None;
             return Ok(());
         }
         if self.creative {
             if self.destroy_delay == 0 {
+                if self.attack_block(hit.pos)? {
+                    return Ok(());
+                }
                 self.break_block(hit.pos)?;
                 self.destroy_delay = 5;
             }
@@ -4013,7 +4139,9 @@ impl Game<'_> {
             return Ok(());
         }
         if self.mining.as_ref().is_none_or(|m| m.pos != hit.pos) {
-            self.attack_block(hit.pos)?;
+            if self.attack_block(hit.pos)? {
+                return Ok(());
+            }
             self.mining = Some(Mining {
                 pos: hit.pos,
                 progress: 0.0,
@@ -4229,6 +4357,11 @@ impl Game<'_> {
         self.eye = 1.62;
         self.previous_eye = 1.62;
         self.clock.reset();
+        self.mod_local_player_joined([
+            feet.x.floor() as i32,
+            feet.y.floor() as i32,
+            feet.z.floor() as i32,
+        ]);
         self.capture_loaded_world();
         Ok(())
     }
@@ -7525,6 +7658,13 @@ impl Game<'_> {
                     > d
             })
         {
+            let pos = self.paintings[i].pos;
+            if let Some(item) = self.held().map(|stack| stack.item.to_string())
+                && self.mod_attack_entity(&item, "minecraft:painting", pos)
+            {
+                self.swing_arm();
+                return true;
+            }
             self.break_painting(i, true);
             return true;
         }
@@ -7558,6 +7698,21 @@ impl Game<'_> {
             if d < distance {
                 return false;
             }
+        }
+        let target = format!(
+            "minecraft:{}",
+            self.mobs[index].kind.id.trim_start_matches("minecraft:")
+        );
+        let target_pos = [
+            self.mobs[index].position.x.floor() as i32,
+            self.mobs[index].position.y.floor() as i32,
+            self.mobs[index].position.z.floor() as i32,
+        ];
+        if let Some(item) = self.held().map(|stack| stack.item.to_string())
+            && self.mod_attack_entity(&item, &target, target_pos)
+        {
+            self.swing_arm();
+            return true;
         }
         self.attack_mob(index);
         // Minecraft.startAttack swings after the attack.
@@ -7929,6 +8084,7 @@ impl Game<'_> {
         self.inventory = inventory;
         self.save = save;
         self.level = level;
+        self.reset_mod_player_session();
         // ServerRecipeBook.loadUntrusted: recipes the manager does not have are dropped.
         let index = &self.res.stations().recipe_index;
         let book = &mut self.level.recipe_book;
@@ -8228,6 +8384,7 @@ impl Game<'_> {
             self.saved_for_exit = true;
             return Ok(());
         }
+        self.mod_local_player_left();
         self.close_container();
         if self.remote.is_none() {
             self.stats.custom("leave_game", 1);
@@ -8900,6 +9057,16 @@ impl Game<'_> {
             age: 0,
             on_ground: false,
         });
+        self.mod_server_event(
+            "entity-spawn",
+            self.next_entity.to_string(),
+            [
+                at[0].floor() as i32,
+                at[1].floor() as i32,
+                at[2].floor() as i32,
+            ],
+            "minecraft:experience_orb".to_owned(),
+        );
     }
     fn can_place_used_fire(&mut self, target: [i32; 3]) -> bool {
         let pos = BlockPos::new(target[0], target[1], target[2]);
@@ -12044,6 +12211,7 @@ impl<'a> Game<'a> {
             potions: Default::default(),
             scratch_slot: None,
             mining: None,
+            mod_block_attack_consumed: None,
             destroying: HashMap::new(),
             destroy_delay: 0,
             use_delay: 0,

@@ -103,12 +103,19 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   and fluid transfer. FE receive/extract quotas are now accumulated per buffer
   per game tick across API calls and mods; simulated calls do not spend the
   quota. Sandbox coverage exercises repeated calls and verifies that a new tick
-  restores the budget. Directional transfer rules and saturated-rate behavior
-  now have live coverage: the peer accepts only 1 FE per tick while the donor
+  restores the budget. Rate limits and saturated-buffer behavior now have live
+  coverage: the peer accepts only 1 FE per tick while the donor
   attempts two transfers, and the E2E verifies it remains below the buffer's
   capacity across the run. The peer fluid tank also fills to its 16 mB capacity;
   the donor recovers to a full 1,000 mB tank without overfilling the peer.
-  Directional transfer rules remain uncovered.
+  Directional transfer rules remain uncovered. Capability definitions are now
+  owner-scoped: `set-energy-buffer` and `set-fluid-tank` only affect positions
+  with a block entity registered by the calling mod; cross-mod transfer remains
+  available through receive/extract/fill/drain. A malicious peer fixture tries
+  to replace the donor's 10,000 FE capacity and rate limits and change its water
+  tank to lava; a sandbox test and both live single-player paths confirm those
+  writes are ignored while normal transfer still works. This does not yet
+  define ownership for the separate item-slot capability or attachments.
 - `tools/mod_api_e2e.py` now verifies block creation through the mod's
   `server::set_block` action, direct `/item` access to mod slots, hopper input,
   vanilla cooking and hopper output in both integrated-server and in-frame
@@ -184,13 +191,14 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
 ## Verification run
 
 `cargo test -p horizon-mods --features runtime,pack` passes: 18 unit tests,
-3 API-reference tests, and 19 sandbox tests (one ignored). The live
+3 API-reference tests, and 20 sandbox tests (one ignored). The live
 `python3 tools/mod_api_e2e.py --mode both` run also passes in integrated-server
-and in-frame single-player. It covers cross-mod FE/fluid transfer, simulation,
-per-tick limits, sided item movement, hopper input/output and remainders, and
-save/reopen of machine inventory and capability state. These checks validate
-the listed paths only; they do not establish complete compatibility with
-arbitrary machine mods, chunk unload/reload, or every network topology.
+and in-frame single-player. It covers cross-mod FE/fluid transfer, rejected
+cross-owner capability redefinitions, simulation, per-tick limits, sided item
+movement, hopper input/output and remainders, and save/reopen of machine
+inventory and capability state. These checks validate the listed paths only;
+they do not establish complete compatibility with arbitrary machine mods,
+chunk unload/reload, or every network topology.
 
 ## Completion gates
 
@@ -202,9 +210,10 @@ arbitrary machine mods, chunk unload/reload, or every network topology.
    for direct parity and verify integrated-server client updates.
 2. **0.4 generalization:** run the `net-bridge` example in an integrated world;
    extend `tools/mod_api_e2e.py` with chunk unload/mod reload and screen-restart
-   scenarios; verify real carried-mod recipes, item components and directional
-   energy/fluid networks. LAN and dedicated-server packet delivery remains
-   deferred until after the single-player API work.
+   scenarios; verify real carried-mod recipes, item components, directional
+   energy/fluid networks, and ownership rules for item-slot capabilities and
+   attachments. LAN and dedicated-server packet delivery remains deferred until
+   after the single-player API work.
 3. Keep the generated API reference synchronized with WIT and this audit
    synchronized with actual end-to-end evidence.
 

@@ -140,7 +140,7 @@ pub use interact::{InteractionResult, PlayerContext, PlayerEffect};
 pub use pistons::{BlockEventData, MovingPiston};
 pub use place::{PlaceContext, PlaceOutcome};
 pub use states::{BlockId, PropKey, StateTable};
-pub use tick::{Precipitation, PrecipitationKind};
+pub use tick::{Precipitation, PrecipitationKind, ScheduledStep};
 pub use ticks::Ticks;
 
 /// `Block.UPDATE_*` flags accepted by [`Behaviours::set_block`].
@@ -720,10 +720,10 @@ impl Behaviours {
         ticks: &mut Ticks,
         pos: BlockPos,
         delay: i32,
-    ) {
+    ) -> horizon_core::ticks::ScheduleResult {
         let mut sim = self.sim(level, ticks);
         let block = self.block(sim.state(pos));
-        sim.schedule_tick(pos, block, delay);
+        sim.schedule_tick(pos, block, delay)
     }
     /// `BlockState.handleNeighborChanged(level, pos, changedBlock, orientation, movedByPiston)`
     /// for the state currently at `pos`.

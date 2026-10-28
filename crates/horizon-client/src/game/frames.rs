@@ -152,6 +152,12 @@ impl Game<'_> {
             .play(&sound(&frame, "place"), Some(center(&frame)), 1.0, 1.0);
         self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
         self.item_frames.push(frame);
+        self.mod_server_event(
+            "entity-spawn",
+            self.next_entity.to_string(),
+            pos,
+            stack.item.to_string(),
+        );
         if !self.creative {
             self.consume_held();
         }
@@ -233,6 +239,15 @@ impl Game<'_> {
         };
         if !self.before_block(d) || self.mob_hit().is_some_and(|m| m.1 < d) {
             return false;
+        }
+        let frame = &self.item_frames[i];
+        let target = frame.kind().to_owned();
+        let pos = frame.pos;
+        if let Some(item) = self.held().map(|stack| stack.item.to_string())
+            && self.mod_attack_entity(&item, &target, pos)
+        {
+            self.swing_arm();
+            return true;
         }
         if self.item_frames[i].fixed {
             return true;

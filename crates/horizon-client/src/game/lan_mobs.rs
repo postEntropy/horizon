@@ -156,7 +156,7 @@ impl Game<'_> {
     /// tripwires, detector rails): `Entity.checkInsideBlocks` and
     /// `Level.getEntities` see every player in the level, but not spectators
     /// (`Entity.isIgnoringBlockTriggers`).
-    pub(super) fn lan_block_trigger_boxes(&self) -> Vec<([f64; 3], [f64; 3])> {
+    pub(super) fn lan_block_trigger_entities(&self) -> Vec<([f64; 3], [f64; 3], String)> {
         let Some(host) = self.lan.as_ref() else {
             return Vec::new();
         };
@@ -167,8 +167,19 @@ impl Game<'_> {
             .map(|g| {
                 let [x, y, z] = g.position;
                 let height = if g.sneaking { 1.5 } else { 1.8 };
-                ([x - 0.3, y, z - 0.3], [x + 0.3, y + height, z + 0.3])
+                (
+                    [x - 0.3, y, z - 0.3],
+                    [x + 0.3, y + height, z + 0.3],
+                    g.name.clone(),
+                )
             })
+            .collect()
+    }
+
+    pub(super) fn lan_block_trigger_boxes(&self) -> Vec<([f64; 3], [f64; 3])> {
+        self.lan_block_trigger_entities()
+            .into_iter()
+            .map(|(lo, hi, _)| (lo, hi))
             .collect()
     }
 

@@ -402,6 +402,14 @@ impl Game<'_> {
                 dims.push(dim);
             }
         }
+        #[cfg(feature = "mods")]
+        {
+            for dim in self.pending_mod_action_dimensions() {
+                if !dims.contains(&dim) {
+                    dims.push(dim);
+                }
+            }
+        }
         if dims.is_empty() {
             dims.push(Dim::Overworld);
         }

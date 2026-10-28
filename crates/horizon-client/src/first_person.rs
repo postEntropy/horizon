@@ -471,7 +471,8 @@ pub trait HandWorld {
     /// `WorldBorder.isWithinBounds`.
     fn within_border(&mut self, pos: [i32; 3]) -> bool;
     /// `BlockState.attack` on the first hit of a break.
-    fn attack_block(&mut self, pos: [i32; 3]);
+    /// Returns whether vanilla block handling should continue.
+    fn attack_block(&mut self, pos: [i32; 3]) -> bool;
     /// `BlockState.getDestroyProgress` for the player.
     fn destroy_progress(&mut self, pos: [i32; 3]) -> f32;
     /// `MultiPlayerGameMode.destroyBlock`.
@@ -548,12 +549,19 @@ impl Destroying {
             return false;
         }
         if w.instabuild() {
+            if !w.attack_block(pos) {
+                self.stop(w);
+                return true;
+            }
             w.destroy_block(pos);
             self.delay = 5;
         } else if !self.active || !self.same_target(w, pos) {
             let not_air = !w.is_air(pos);
             if not_air && self.progress == 0.0 {
-                w.attack_block(pos);
+                if !w.attack_block(pos) {
+                    self.stop(w);
+                    return true;
+                }
             }
             if not_air && w.destroy_progress(pos) >= 1.0 {
                 w.destroy_block(pos);

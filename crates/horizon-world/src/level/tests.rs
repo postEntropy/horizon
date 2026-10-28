@@ -39,6 +39,90 @@ fn fixture() -> Option<&'static Fixture> {
         .as_ref()
 }
 
+#[test]
+fn scheduled_step_reports_the_valid_block_tick_position() {
+    let Some(f) = fixture() else { return };
+    let mut world = World::new(f);
+    let pos = BlockPos::new(0, 64, 0);
+    world.put(pos, world.id("stone", &[]));
+    assert_eq!(
+        world
+            .b()
+            .schedule_tick(&mut world.level, &mut world.ticks, pos, 0),
+        horizon_core::ticks::ScheduleResult::Added
+    );
+    assert_eq!(
+        world
+            .b()
+            .schedule_tick(&mut world.level, &mut world.ticks, pos, 0),
+        horizon_core::ticks::ScheduleResult::Duplicate
+    );
+    assert_eq!(
+        world.b().schedule_tick(
+            &mut world.level,
+            &mut world.ticks,
+            BlockPos::new(64, 64, 0),
+            0,
+        ),
+        horizon_core::ticks::ScheduleResult::MissingChunk
+    );
+
+    assert!(
+        world
+            .b()
+            .scheduled_begin(&mut world.level, &mut world.ticks, false)
+    );
+    assert_eq!(
+        world
+            .b()
+            .scheduled_step(&mut world.level, &mut world.ticks, false),
+        ScheduledStep::Block(pos)
+    );
+    assert_eq!(
+        world
+            .b()
+            .scheduled_step(&mut world.level, &mut world.ticks, false),
+        ScheduledStep::Empty
+    );
+    world.b().scheduled_finish(&mut world.ticks, false);
+}
+
+#[test]
+fn scheduled_composter_tick_advances_full_composter() {
+    let Some(f) = fixture() else { return };
+    let mut world = World::new(f);
+    let pos = BlockPos::new(0, 64, 0);
+    world.put(pos, world.id("composter", &[("level", "7")]));
+    assert_eq!(
+        world
+            .b()
+            .schedule_tick(&mut world.level, &mut world.ticks, pos, 1),
+        horizon_core::ticks::ScheduleResult::Added
+    );
+    world.level.time = 1;
+    world.b().tick_scheduled(&mut world.level, &mut world.ticks);
+    assert_eq!(
+        world.f.registry.state(world.get(pos)).unwrap().properties["level"],
+        "8"
+    );
+}
+
+#[test]
+fn random_tick_reports_the_randomly_ticked_block_position() {
+    let Some(f) = fixture() else { return };
+    let mut world = World::new(f);
+    let pos = BlockPos::new(0, 64, 0);
+    let sapling = world.id("oak_sapling", &[]);
+    assert!(world.b().is_randomly_ticking(sapling));
+    world.put(pos, sapling);
+
+    world
+        .b()
+        .random_tick(&mut world.level, &mut world.ticks, pos);
+
+    assert_eq!(world.ticks.random_block_ticks, [pos]);
+}
+
 pub(crate) struct TestLevel {
     blocks: HashMap<BlockPos, BlockStateId>,
     air: BlockStateId,

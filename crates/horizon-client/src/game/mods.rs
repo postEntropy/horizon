@@ -93,10 +93,12 @@ use {
         mod_list::Installed,
         text::{self, Text},
     },
+    horizon_core::ticks::ScheduleResult,
     horizon_mods::{
         BlockAction, BlockEntityView, BlockEvent, BlockHit, Clock, CookingKind, CookingRecipe,
-        EventOutcome, ItemDrop, ItemFacts, Mods, Output, Player, ServerAction, Snapshot, Stack,
-        StackView, Status, VanillaHookEvent, VanillaHookKind, WorldCell,
+        EventOutcome, ItemAction, ItemDrop, ItemEvent, ItemFacts, Mods, Output, Player,
+        ServerAction, ServerEvent, ServerEventKind, Snapshot, Stack, StackView, Status,
+        VanillaHookEvent, VanillaHookKind, WorldCell,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -124,7 +126,7 @@ impl ItemFacts for GameFacts {
         r.providers.burn_time(&r.items, &stack, false).max(0) as u32
     }
     fn remainder(&self, id: &str) -> Option<String> {
-        self.0.rest.get()?.items.get(id)?.crafting_remainder.clone()
+        self.0.rest.get()?.items.get(id)?.remainder.clone()
     }
     fn cooking_recipe(&self, kind: CookingKind, input: &str) -> Option<CookingRecipe> {
         let r = self.0.rest.get()?;
@@ -163,6 +165,53 @@ fn item_components(stack: &ItemStack) -> Vec<u8> {
 }
 
 #[cfg(feature = "mods")]
+fn mod_block_state(text: &str) -> Option<horizon_world::chunk::BlockState> {
+    let (name, properties) = match text.split_once('[') {
+        Some((name, rest)) if rest.ends_with(']') => (name, &rest[..rest.len() - 1]),
+        Some(_) => return None,
+        None => (text, ""),
+    };
+    if name.is_empty() {
+        return None;
+    }
+    let name = if name.contains(':') {
+        name.to_owned()
+    } else {
+        format!("minecraft:{name}")
+    };
+    let mut parsed = std::collections::BTreeMap::new();
+    for pair in properties.split(',').filter(|pair| !pair.is_empty()) {
+        let (key, value) = pair.split_once('=')?;
+        if key.is_empty()
+            || value.is_empty()
+            || parsed.insert(key.to_owned(), value.to_owned()).is_some()
+        {
+            return None;
+        }
+    }
+    Some(horizon_world::chunk::BlockState {
+        name,
+        properties: parsed,
+    })
+}
+
+#[cfg(all(test, feature = "mods"))]
+mod block_state_tests {
+    use super::mod_block_state;
+
+    #[test]
+    fn server_block_states_keep_properties_and_reject_malformed_values() {
+        let state = mod_block_state("test:machine[active=true,facing=north]").unwrap();
+        assert_eq!(state.name, "test:machine");
+        assert_eq!(state.properties["active"], "true");
+        assert_eq!(state.properties["facing"], "north");
+        assert_eq!(mod_block_state("stone").unwrap().name, "minecraft:stone");
+        assert!(mod_block_state("test:machine[active").is_none());
+        assert!(mod_block_state("test:machine[active=true,active=false]").is_none());
+    }
+}
+
+#[cfg(feature = "mods")]
 fn restore_item_components(stack: &mut ItemStack, encoded: &[u8]) {
     if encoded.is_empty() {
         return;
@@ -182,8 +231,20 @@ fn restore_item_components(stack: &mut ItemStack, encoded: &[u8]) {
 
 #[derive(Default)]
 pub(super) struct ModsState {
+    pub(super) local_player_session_active: bool,
+    #[cfg(feature = "mods")]
+    pub(super) dispatching_neighbor_hooks: bool,
     #[cfg(feature = "mods")]
     mods: Mods,
+    /// Server mutations waiting for destination chunks to finish loading.
+    #[cfg(feature = "mods")]
+    pub(super) pending_server_actions: Vec<(ServerAction, i64)>,
+    /// Temporary forced tickets owned by queued mod actions or scheduled ticks.
+    #[cfg(feature = "mods")]
+    mod_action_tickets: HashSet<(String, i32, i32)>,
+    /// Mod scheduled ticks that still need their chunk's temporary ticket.
+    #[cfg(feature = "mods")]
+    scheduled_mod_action_tickets: HashMap<(String, i32, i32, i32), (i32, i32, i64)>,
     /// `--dev-mod PATH`: always on, reloaded when rebuilt.
     pub(super) dev: Vec<PathBuf>,
     /// When dev mods were last checked for a rebuild.
@@ -405,6 +466,75 @@ pub(super) fn list_installed_early(dev: &[PathBuf]) -> Vec<horizon_client::mod_l
 /// A build without the `mods` feature: no mod runs.
 #[cfg(not(feature = "mods"))]
 impl Game<'_> {
+    pub(super) fn mod_use_item_in_air(&mut self, _item: &str) -> bool {
+        false
+    }
+
+    pub(super) fn mod_use_item_on_block(&mut self, _item: &str, _pos: [i32; 3]) -> bool {
+        false
+    }
+
+    pub(super) fn mod_attack_entity(&mut self, _item: &str, _target: &str, _pos: [i32; 3]) -> bool {
+        false
+    }
+
+    pub(super) fn mod_attack_block(&mut self, _pos: [i32; 3]) -> bool {
+        false
+    }
+
+    pub(super) fn mod_has_block_hook(&self, _block: &str) -> bool {
+        false
+    }
+
+    pub(super) fn mod_block_broken(&mut self, _pos: [i32; 3]) -> bool {
+        false
+    }
+
+    pub(super) fn mod_block_placed(&mut self, _pos: [i32; 3], _face: String) {}
+
+    pub(super) fn mod_scheduled_block_tick(&mut self, _pos: [i32; 3]) {}
+
+    pub(super) fn mod_entity_inside(&mut self, _pos: [i32; 3], _actor: String) {}
+
+    pub(super) fn mod_server_event(
+        &mut self,
+        _kind: &str,
+        _subject: String,
+        _pos: [i32; 3],
+        _detail: String,
+    ) {
+    }
+
+    pub(super) fn mod_server_event_at(
+        &mut self,
+        _kind: &str,
+        _subject: String,
+        _dimension: String,
+        _pos: [i32; 3],
+        _detail: String,
+    ) {
+    }
+
+    pub(super) fn mod_local_player_joined(&mut self, _pos: [i32; 3]) {}
+
+    pub(super) fn mod_local_player_left(&mut self) {}
+
+    pub(super) fn reset_mod_player_session(&mut self) {
+        self.mods.local_player_session_active = false;
+    }
+
+    pub(super) fn dispatch_mod_neighbor_events(&mut self) {
+        self.block_ticks.neighbor_changes.clear();
+    }
+
+    pub(super) fn dispatch_mod_random_tick_events(&mut self) {
+        self.block_ticks.random_block_ticks.clear();
+    }
+
+    pub(super) fn mod_finish_using(&mut self, _item: &str) -> bool {
+        false
+    }
+
     /// Says why the installed and dev mods don't run.
     pub(super) fn start_mods(&mut self) {
         let dir = Self::options_path().with_file_name(mod_list::DIR);
@@ -486,6 +616,419 @@ impl Game<'_> {
 
 #[cfg(feature = "mods")]
 impl Game<'_> {
+    pub(super) fn mod_block_placed(&mut self, pos: [i32; 3], face: String) {
+        let _ = self.mod_block_event(pos, BlockAction::Place, face);
+    }
+
+    pub(super) fn mod_scheduled_block_tick(&mut self, pos: [i32; 3]) {
+        let key = (self.dim.id().to_owned(), pos[0], pos[1], pos[2]);
+        if self
+            .mods
+            .scheduled_mod_action_tickets
+            .remove(&key)
+            .is_some()
+        {
+            self.release_mod_action_tickets();
+        }
+        let _ = self.mod_block_event_actor(
+            pos,
+            BlockAction::ScheduledTick,
+            String::new(),
+            String::new(),
+        );
+    }
+
+    /// Releases only tickets with no pending action or scheduled tick left in
+    /// their chunk. Scheduled ticks need a block-ticking ticket, not just a
+    /// loaded chunk, until the engine actually runs them.
+    fn release_mod_action_tickets(&mut self) {
+        let now = self.world.game_time;
+        let expired: Vec<_> = self
+            .mods
+            .scheduled_mod_action_tickets
+            .iter()
+            .filter_map(|(tick, &(_, _, deadline))| (now >= deadline).then(|| tick.clone()))
+            .collect();
+        for tick in expired {
+            if self
+                .mods
+                .scheduled_mod_action_tickets
+                .remove(&tick)
+                .is_some()
+            {
+                log::warn!(
+                    "Horizon: released expired mod scheduled-tick ticket for {:?} at ({}, {}, {})",
+                    tick.0,
+                    tick.1,
+                    tick.2,
+                    tick.3
+                );
+            }
+        }
+        let release: Vec<_> = self
+            .mods
+            .mod_action_tickets
+            .iter()
+            .filter(|key| {
+                let pending_action = self.mods.pending_server_actions.iter().any(|(action, _)| {
+                    mod_action_chunk(action).is_some_and(|(dimension, x, z)| {
+                        dimension == key.0 && (x >> 4, z >> 4) == (key.1, key.2)
+                    })
+                });
+                let pending_tick = self.mods.scheduled_mod_action_tickets.iter().any(
+                    |((dimension, x, _, z), _)| {
+                        dimension == &key.0 && (*x >> 4, *z >> 4) == (key.1, key.2)
+                    },
+                );
+                !pending_action && !pending_tick
+            })
+            .cloned()
+            .collect();
+        for key in release {
+            self.mods.mod_action_tickets.remove(&key);
+            self.with_mod_dimension(&key.0, |game| {
+                game.streaming.forced.remove(&(key.1, key.2));
+            });
+            log::info!(
+                "Horizon: released mod action chunk ticket for {:?} [{}, {}]",
+                key.0,
+                key.1,
+                key.2
+            );
+        }
+    }
+
+    pub(super) fn dispatch_mod_random_tick_events(&mut self) {
+        const MAX_HOOKS_PER_DRAIN: usize = 65_536;
+        let mut events = std::mem::take(&mut self.block_ticks.random_block_ticks);
+        if events.len() > MAX_HOOKS_PER_DRAIN {
+            log::warn!(
+                "Horizon: limiting mod random-tick callbacks to {MAX_HOOKS_PER_DRAIN} ({} sampled blocks)",
+                events.len()
+            );
+            events.truncate(MAX_HOOKS_PER_DRAIN);
+        }
+        for pos in events {
+            let block = self
+                .res
+                .facts()
+                .get(self.world.block(pos.x, pos.y, pos.z))
+                .name
+                .to_string();
+            if self.mod_has_block_hook(&block) {
+                let _ = self.mod_block_event_actor(
+                    [pos.x, pos.y, pos.z],
+                    BlockAction::RandomTick,
+                    String::new(),
+                    String::new(),
+                );
+            }
+        }
+    }
+
+    pub(super) fn mod_entity_inside(&mut self, pos: [i32; 3], actor: String) {
+        let _ = self.mod_block_event_actor(pos, BlockAction::EntityInside, String::new(), actor);
+    }
+
+    pub(super) fn mod_server_event(
+        &mut self,
+        kind: &str,
+        subject: String,
+        pos: [i32; 3],
+        detail: String,
+    ) {
+        self.mod_server_event_at(kind, subject, self.dim.id().to_owned(), pos, detail);
+    }
+
+    pub(super) fn mod_server_event_at(
+        &mut self,
+        kind: &str,
+        subject: String,
+        dimension: String,
+        pos: [i32; 3],
+        detail: String,
+    ) {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return;
+        }
+        let kind = match kind {
+            "player-join" => ServerEventKind::PlayerJoin,
+            "player-leave" => ServerEventKind::PlayerLeave,
+            "block-break" => ServerEventKind::BlockBreak,
+            "block-place" => ServerEventKind::BlockPlace,
+            "entity-spawn" => ServerEventKind::EntitySpawn,
+            "entity-death" => ServerEventKind::EntityDeath,
+            _ => return,
+        };
+        self.mods.mods.server_event(ServerEvent {
+            kind,
+            subject,
+            dimension,
+            x: pos[0],
+            y: pos[1],
+            z: pos[2],
+            detail,
+        });
+        self.show_mod_output();
+    }
+
+    pub(super) fn mod_local_player_joined(&mut self, pos: [i32; 3]) {
+        if self.remote.is_some() || self.mods.local_player_session_active {
+            return;
+        }
+        self.mods.local_player_session_active = true;
+        self.mod_server_event(
+            "player-join",
+            self.acting_player_name().to_owned(),
+            pos,
+            String::new(),
+        );
+    }
+
+    pub(super) fn mod_local_player_left(&mut self) {
+        if self.remote.is_some() || !self.mods.local_player_session_active {
+            return;
+        }
+        self.mods.local_player_session_active = false;
+        let pos = self.player.as_ref().map_or([0, 0, 0], |player| {
+            [
+                player.position.x.floor() as i32,
+                player.position.y.floor() as i32,
+                player.position.z.floor() as i32,
+            ]
+        });
+        self.mod_server_event(
+            "player-leave",
+            self.acting_player_name().to_owned(),
+            pos,
+            String::new(),
+        );
+    }
+
+    pub(super) fn reset_mod_player_session(&mut self) {
+        self.mods.local_player_session_active = false;
+    }
+
+    pub(super) fn dispatch_mod_neighbor_events(&mut self) {
+        if self.mods.dispatching_neighbor_hooks {
+            return;
+        }
+        const MAX_HOOKS_PER_DRAIN: usize = 65_536;
+        self.mods.dispatching_neighbor_hooks = true;
+        let mut dispatched = 0;
+        loop {
+            let events = std::mem::take(&mut self.block_ticks.neighbor_changes);
+            if events.is_empty() {
+                break;
+            }
+            for pos in events {
+                if dispatched == MAX_HOOKS_PER_DRAIN {
+                    self.block_ticks.neighbor_changes.clear();
+                    log::warn!(
+                        "Horizon: stopped mod neighbor callbacks after {dispatched} events in one drain"
+                    );
+                    break;
+                }
+                dispatched += 1;
+                let block = self
+                    .res
+                    .facts()
+                    .get(self.world.block(pos.x, pos.y, pos.z))
+                    .name
+                    .to_string();
+                if self.mod_has_block_hook(&block) {
+                    let _ = self.mod_block_event_actor(
+                        [pos.x, pos.y, pos.z],
+                        BlockAction::NeighborChanged,
+                        String::new(),
+                        String::new(),
+                    );
+                }
+            }
+            if dispatched == MAX_HOOKS_PER_DRAIN {
+                break;
+            }
+        }
+        self.mods.dispatching_neighbor_hooks = false;
+    }
+
+    pub(super) fn mod_has_block_hook(&self, block: &str) -> bool {
+        self.mods.mods.has_block_hook(block)
+    }
+
+    fn mod_block_state_at(&self, pos: [i32; 3]) -> String {
+        let state = self.world.block(pos[0], pos[1], pos[2]);
+        let fallback = self.res.facts().get(state).name.to_string();
+        let Some(state) = self.pack.assets.registry.state(state) else {
+            return fallback;
+        };
+        if state.properties.is_empty() {
+            return state.name.clone();
+        }
+        let properties = state
+            .properties
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("{}[{properties}]", state.name)
+    }
+
+    pub(super) fn mod_block_broken(&mut self, pos: [i32; 3]) -> bool {
+        let state = self
+            .res
+            .facts()
+            .get(self.world.block(pos[0], pos[1], pos[2]))
+            .name
+            .to_string();
+        self.mod_has_block_hook(&state)
+            && self.mod_block_event(pos, BlockAction::Broken, String::new()) != EventOutcome::Pass
+    }
+
+    /// Dispatches a use-in-air callback for a mod-owned item. `true` means
+    /// the mod consumed or cancelled the use.
+    pub(super) fn mod_use_item_in_air(&mut self, item: &str) -> bool {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return false;
+        }
+        let outcome = self.mods.mods.item_event(ItemEvent {
+            action: ItemAction::UseInAir,
+            item: item.to_owned(),
+            player: self.acting_player_name().to_owned(),
+            dimension: self.dim.id().to_owned(),
+            x: 0,
+            y: 0,
+            z: 0,
+            target: String::new(),
+        });
+        self.show_mod_output();
+        outcome != EventOutcome::Pass
+    }
+
+    /// Dispatches an item's block-use callback after the block itself passed.
+    pub(super) fn mod_use_item_on_block(&mut self, item: &str, pos: [i32; 3]) -> bool {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return false;
+        }
+        let outcome = self.mods.mods.item_event(ItemEvent {
+            action: ItemAction::UseOnBlock,
+            item: item.to_owned(),
+            player: self.acting_player_name().to_owned(),
+            dimension: self.dim.id().to_owned(),
+            x: pos[0],
+            y: pos[1],
+            z: pos[2],
+            target: self.mod_block_state_at(pos),
+        });
+        self.show_mod_output();
+        outcome != EventOutcome::Pass
+    }
+
+    /// Dispatches the held item's callback before a player damages a mob.
+    pub(super) fn mod_attack_entity(&mut self, item: &str, target: &str, pos: [i32; 3]) -> bool {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return false;
+        }
+        let outcome = self.mods.mods.item_event(ItemEvent {
+            action: ItemAction::AttackEntity,
+            item: item.to_owned(),
+            player: self.acting_player_name().to_owned(),
+            dimension: self.dim.id().to_owned(),
+            x: pos[0],
+            y: pos[1],
+            z: pos[2],
+            target: target.to_owned(),
+        });
+        self.show_mod_output();
+        outcome != EventOutcome::Pass
+    }
+
+    /// Dispatches a left-click callback for a mod-owned block.
+    pub(super) fn mod_attack_block(&mut self, pos: [i32; 3]) -> bool {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return false;
+        }
+        self.mod_block_event(pos, BlockAction::Attack, String::new()) != EventOutcome::Pass
+    }
+
+    /// Dispatches an action to the mod that owns the block and applies its
+    /// queued server actions.
+    pub(super) fn mod_block_event(
+        &mut self,
+        pos: [i32; 3],
+        action: BlockAction,
+        face: String,
+    ) -> EventOutcome {
+        let actor = self.acting_player_name().to_owned();
+        self.mod_block_event_actor(pos, action, face, actor)
+    }
+
+    fn mod_block_event_actor(
+        &mut self,
+        pos: [i32; 3],
+        action: BlockAction,
+        face: String,
+        actor: String,
+    ) -> EventOutcome {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return EventOutcome::Pass;
+        }
+        let state = self.mod_block_state_at(pos);
+        let name = self
+            .res
+            .facts()
+            .get(self.world.block(pos[0], pos[1], pos[2]))
+            .name
+            .to_string();
+        self.ensure_mod_block_entity(pos, &name);
+        let outcome = self.mods.mods.block_event(
+            BlockEvent {
+                action,
+                dimension: self.dim.id().to_owned(),
+                x: pos[0],
+                y: pos[1],
+                z: pos[2],
+                state,
+                actor,
+                held_item: if matches!(
+                    action,
+                    BlockAction::NeighborChanged
+                        | BlockAction::ScheduledTick
+                        | BlockAction::RandomTick
+                        | BlockAction::EntityInside
+                ) {
+                    String::new()
+                } else {
+                    self.held()
+                        .map_or_else(String::new, |stack| stack.item.to_string())
+                },
+            },
+            face,
+        );
+        self.show_mod_output();
+        self.mod_save_block_entity(pos);
+        outcome
+    }
+
+    /// Dispatches the item callback when a consumable completes.
+    pub(super) fn mod_finish_using(&mut self, item: &str) -> bool {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return false;
+        }
+        let outcome = self.mods.mods.item_event(ItemEvent {
+            action: ItemAction::FinishUsing,
+            item: item.to_owned(),
+            player: self.acting_player_name().to_owned(),
+            dimension: self.dim.id().to_owned(),
+            x: 0,
+            y: 0,
+            z: 0,
+            target: String::new(),
+        });
+        self.show_mod_output();
+        outcome != EventOutcome::Pass
+    }
+
     /// Reads `horizon-mods/` and the dev mods, and starts the ones turned on.
     pub(super) fn start_mods(&mut self) {
         let dir = Self::options_path().with_file_name(mod_list::DIR);
@@ -502,6 +1045,16 @@ impl Game<'_> {
         let enabled = &self.settings.mods.enabled;
         let on = |id: &str| enabled.contains(id) || dev_ids.iter().any(|d| d == id);
         let mut mods = Mods::load(&paths, on, vanilla_command);
+        let running = mods
+            .entries()
+            .iter()
+            .filter(|entry| matches!(&entry.status, Status::Running))
+            .count();
+        let commands = mods.commands().count();
+        log::info!(
+            "Horizon: loaded {running} running mod(s) with {commands} command(s) from {} package(s)",
+            mods.entries().len(),
+        );
         mods.set_item_facts(Arc::new(GameFacts(self.res.clone())));
         self.mods.mods = mods;
         self.mods.resource_recipes_loaded = false;
@@ -750,9 +1303,33 @@ impl Game<'_> {
             if let Some(ref s) = off_hand {
                 inv.push(s.clone());
             }
+            let container_slots = self.container_kind().map_or(0, |_| self.container_size());
+            let mut container_stacks = Vec::new();
+            for slot in 0..container_slots {
+                if let Some(stack) = self.slot_view(300 + slot) {
+                    container_stacks.push((slot, stack));
+                }
+            }
+            let open_container = container_stacks
+                .into_iter()
+                .map(|(slot, stack)| {
+                    let max_damage = self
+                        .res
+                        .items()
+                        .get(&stack.item)
+                        .map_or(0, |item| item.max_damage);
+                    StackView {
+                        slot: slot as u32,
+                        id: stack.item.to_string(),
+                        count: stack.count,
+                        damage: stack.damage,
+                        max_damage,
+                    }
+                })
+                .collect();
             self.mods
                 .mods
-                .set_inventory(main_hand, off_hand, inv, Vec::new());
+                .set_inventory(main_hand, off_hand, inv, open_container);
         }
         self.mods.mods.tick(self.ticks);
         self.show_mod_output();
@@ -1076,6 +1653,7 @@ impl Game<'_> {
             _ => "",
         }
         .to_owned();
+        let state = self.mod_block_state_at(pos);
         let outcome = self.mods.mods.block_event(
             BlockEvent {
                 action: if held_item.is_some() {
@@ -1087,8 +1665,8 @@ impl Game<'_> {
                 x: pos[0],
                 y: pos[1],
                 z: pos[2],
-                state: name,
-                actor: String::new(),
+                state,
+                actor: self.acting_player_name().to_owned(),
                 held_item: held_item.unwrap_or_default().to_owned(),
             },
             face,
@@ -1442,9 +2020,17 @@ impl Game<'_> {
             handle: 0,
             saved,
             items,
+            energy,
+            fluids,
         }) = self.world.block_entities.get(&key)
         {
-            let (block, saved, items) = (block.clone(), saved.clone(), items.clone());
+            let (block, saved, items, energy, fluids) = (
+                block.clone(),
+                saved.clone(),
+                items.clone(),
+                energy.clone(),
+                fluids.clone(),
+            );
             let Some((handle, slots)) = self.mods.mods.create_block_entity_at(
                 &block,
                 &saved,
@@ -1452,6 +2038,28 @@ impl Game<'_> {
             ) else {
                 return false;
             };
+            if let Some(energy) = &energy {
+                self.mods.mods.set_energy_buffer(
+                    &format!("{}:{},{},{}", self.dim.id(), pos[0], pos[1], pos[2]),
+                    horizon_mods::EnergyView {
+                        stored: energy.stored,
+                        capacity: energy.capacity,
+                        max_receive: energy.max_receive,
+                        max_extract: energy.max_extract,
+                    },
+                );
+            }
+            for (tank, fluid) in &fluids {
+                self.mods.mods.set_fluid_tank(
+                    &format!("{}:{},{},{}", self.dim.id(), pos[0], pos[1], pos[2]),
+                    *tank,
+                    horizon_mods::FluidView {
+                        fluid: fluid.fluid.clone(),
+                        amount: fluid.amount,
+                        capacity: fluid.capacity,
+                    },
+                );
+            }
             if let Some(horizon_client::containers::BlockEntity::Mod {
                 handle: current_handle,
                 items: current_items,
@@ -1484,6 +2092,25 @@ impl Game<'_> {
                         .iter()
                         .map(|slot| slot.as_ref().map_or_else(Vec::new, item_components))
                         .collect(),
+                    energy: energy.as_ref().map(|e| horizon_mods::EnergyView {
+                        stored: e.stored,
+                        capacity: e.capacity,
+                        max_receive: e.max_receive,
+                        max_extract: e.max_extract,
+                    }),
+                    fluids: fluids
+                        .iter()
+                        .map(|(tank, f)| {
+                            (
+                                *tank,
+                                horizon_mods::FluidView {
+                                    fluid: f.fluid.clone(),
+                                    amount: f.amount,
+                                    capacity: f.capacity,
+                                },
+                            )
+                        })
+                        .collect(),
                     ..Default::default()
                 },
             );
@@ -1509,6 +2136,8 @@ impl Game<'_> {
                 handle,
                 saved: self.mods.mods.save_block_entity(handle).unwrap_or_default(),
                 items: vec![None; slots as usize],
+                energy: None,
+                fluids: Default::default(),
             },
         );
         self.mods.block_entities.insert(
@@ -2622,6 +3251,8 @@ impl Game<'_> {
                 mut handle,
                 saved,
                 mut items,
+                energy,
+                fluids,
             }) = self.world.block_entities.take(&pos)
             else {
                 continue;
@@ -2639,12 +3270,36 @@ impl Game<'_> {
                             handle,
                             saved,
                             items,
+                            energy,
+                            fluids,
                         },
                     );
                     continue;
                 };
                 handle = new_handle;
                 items.resize(slots as usize, None);
+            }
+            if let Some(energy) = &energy {
+                self.mods.mods.set_energy_buffer(
+                    &format!("{}:{},{},{}", self.dim.id(), pos.0, pos.1, pos.2),
+                    horizon_mods::EnergyView {
+                        stored: energy.stored,
+                        capacity: energy.capacity,
+                        max_receive: energy.max_receive,
+                        max_extract: energy.max_extract,
+                    },
+                );
+            }
+            for (tank, fluid) in &fluids {
+                self.mods.mods.set_fluid_tank(
+                    &format!("{}:{},{},{}", self.dim.id(), pos.0, pos.1, pos.2),
+                    *tank,
+                    horizon_mods::FluidView {
+                        fluid: fluid.fluid.clone(),
+                        amount: fluid.amount,
+                        capacity: fluid.capacity,
+                    },
+                );
             }
             let state = self.world.block(pos.0, pos.1, pos.2);
             let mut properties = Vec::new();
@@ -2684,6 +3339,25 @@ impl Game<'_> {
                     .iter()
                     .map(|slot| slot.as_ref().map_or_else(Vec::new, item_components))
                     .collect(),
+                energy: energy.as_ref().map(|e| horizon_mods::EnergyView {
+                    stored: e.stored,
+                    capacity: e.capacity,
+                    max_receive: e.max_receive,
+                    max_extract: e.max_extract,
+                }),
+                fluids: fluids
+                    .iter()
+                    .map(|(tank, f)| {
+                        (
+                            *tank,
+                            horizon_mods::FluidView {
+                                fluid: f.fluid.clone(),
+                                amount: f.amount,
+                                capacity: f.capacity,
+                            },
+                        )
+                    })
+                    .collect(),
                 properties,
                 changed: false,
             });
@@ -2720,6 +3394,29 @@ impl Game<'_> {
                     }
                 }
             }
+            let energy =
+                view.energy
+                    .as_ref()
+                    .map(|e| horizon_client::containers::ModEnergyBuffer {
+                        stored: e.stored,
+                        capacity: e.capacity,
+                        max_receive: e.max_receive,
+                        max_extract: e.max_extract,
+                    });
+            let fluids: std::collections::HashMap<_, _> = view
+                .fluids
+                .iter()
+                .map(|(tank, fluid)| {
+                    (
+                        *tank,
+                        horizon_client::containers::ModFluidTank {
+                            fluid: fluid.fluid.clone(),
+                            amount: fluid.amount,
+                            capacity: fluid.capacity,
+                        },
+                    )
+                })
+                .collect();
             let saved = self
                 .mods
                 .mods
@@ -2736,14 +3433,61 @@ impl Game<'_> {
                     handle,
                     saved,
                     items,
+                    energy,
+                    fluids,
                 },
             );
         }
         self.show_mod_output();
     }
+    /// Run a server action in its requested level, returning to the level that
+    /// emitted it. In-frame mode has only its current dimension loaded.
+    fn with_mod_dimension<T>(
+        &mut self,
+        dimension: &str,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> Option<T> {
+        let target = super::Dim::from_id(dimension);
+        if matches!(target, super::Dim::Custom(_)) && super::dimension_info(dimension).is_none() {
+            return None;
+        }
+        let back = self.enter_command_level(target);
+        if self.dim != target {
+            return None;
+        }
+        let out = f(self);
+        if let Some(back) = back {
+            self.enter_command_level(back);
+        }
+        Some(out)
+    }
+
+    /// The destination chunk for server actions that need a loaded world.
+    pub(super) fn pending_mod_action_dimensions(&self) -> Vec<super::Dim> {
+        self.mods
+            .pending_server_actions
+            .iter()
+            .filter_map(|(action, _)| {
+                mod_action_chunk(action).map(|(dim, _, _)| super::Dim::from_id(dim))
+            })
+            .collect()
+    }
+
     /// Chat lines, command feedback and stopped mods, into the chat.
     pub(super) fn show_mod_output(&mut self) {
-        for output in self.mods.mods.drain() {
+        let mut outputs: Vec<_> = self
+            .mods
+            .mods
+            .drain()
+            .into_iter()
+            .map(|output| (output, None))
+            .collect();
+        outputs.extend(
+            std::mem::take(&mut self.mods.pending_server_actions)
+                .into_iter()
+                .map(|(action, deadline)| (Output::Server(action), Some(deadline))),
+        );
+        for (output, pending_age) in outputs {
             let line = match output {
                 Output::Chat { name, text } => {
                     let mut line = Text::literal(format!("[{name}] ")).with_color(text::GRAY);
@@ -2758,6 +3502,59 @@ impl Game<'_> {
                     Text::literal(format!("Mod {name} stopped: {reason}")).with_color(text::RED)
                 }
                 Output::Server(action) => {
+                    let needs_tick_ticket = matches!(&action, ServerAction::ScheduleTick { .. });
+                    if let Some((dimension, x, z)) = mod_action_chunk(&action) {
+                        let dimension = dimension.to_owned();
+                        let key = (dimension.clone(), x >> 4, z >> 4);
+                        let loaded = self.with_mod_dimension(&dimension, |game| {
+                            if needs_tick_ticket
+                                && game.streaming.forced.insert((x >> 4, z >> 4))
+                            {
+                                game.mods.mod_action_tickets.insert(key.clone());
+                                log::info!(
+                                    "Horizon: mod scheduled-tick action requested a ticking ticket for {dimension:?} [{}, {}]",
+                                    x >> 4,
+                                    z >> 4
+                                );
+                            }
+                            if game.world.loaded(x, z) {
+                                true
+                            } else {
+                                if game.streaming.forced.insert((x >> 4, z >> 4)) {
+                                    game.mods.mod_action_tickets.insert(key.clone());
+                                    log::info!(
+                                        "Horizon: mod action requested a chunk ticket for {dimension:?} [{}, {}]",
+                                        x >> 4,
+                                        z >> 4
+                                    );
+                                }
+                                false
+                            }
+                        });
+                        if loaded == Some(false) {
+                            let deadline = pending_age
+                                .unwrap_or_else(|| self.world.game_time.saturating_add(1_200));
+                            if self.world.game_time < deadline
+                                && self.mods.pending_server_actions.len() < 256
+                            {
+                                self.mods.pending_server_actions.push((action, deadline));
+                            } else {
+                                log::warn!(
+                                    "Horizon: dropped mod action after waiting for chunk ({}, {}) in {dimension:?}",
+                                    key.1,
+                                    key.2
+                                );
+                            }
+                            continue;
+                        }
+                        if loaded == Some(true) && pending_age.is_some() {
+                            log::info!(
+                                "Horizon: mod action chunk ready in {dimension:?} [{}, {}]",
+                                key.1,
+                                key.2
+                            );
+                        }
+                    }
                     match action {
                         ServerAction::SetBlock {
                             dimension,
@@ -2766,11 +3563,21 @@ impl Game<'_> {
                             z,
                             state,
                         } => {
-                            if dimension == self.dim.id() {
-                                let name = state.split_once('[').map_or(state.as_str(), |(n, _)| n);
-                                if let Some(id) = self.pack.assets.registry.default_state(name) {
-                                    let _ = self.world.set(x, y, z, id);
-                                }
+                            if self
+                                .with_mod_dimension(&dimension, |game| {
+                                    if let Some(id) = mod_block_state(&state).and_then(|state| {
+                                        game.pack.assets.registry.resolve(&state).ok()
+                                    }) {
+                                        if let Err(error) = game.level_set([x, y, z], id) {
+                                            log::warn!("Horizon: mod set-block failed: {error}");
+                                        }
+                                    }
+                                })
+                                .is_none()
+                            {
+                                log::warn!(
+                                    "Horizon: mod set-block requested unavailable dimension {dimension:?}"
+                                );
                             }
                         }
                         ServerAction::SpawnDrop {
@@ -2781,8 +3588,40 @@ impl Game<'_> {
                             id,
                             count,
                         } => {
-                            if dimension == self.dim.id() {
-                                self.pop_resource([x, y, z], ItemStack::new(&id, count));
+                            if self
+                                .with_mod_dimension(&dimension, |game| {
+                                    game.pop_resource([x, y, z], ItemStack::new(&id, count));
+                                })
+                                .is_none()
+                            {
+                                log::warn!(
+                                    "Horizon: mod spawn-drop requested unavailable dimension {dimension:?}"
+                                );
+                            }
+                        }
+                        ServerAction::SpawnMob {
+                            dimension,
+                            x,
+                            y,
+                            z,
+                            entity,
+                        } => {
+                            if self
+                                .with_mod_dimension(&dimension, |game| {
+                                    let at = [f64::from(x) + 0.5, f64::from(y), f64::from(z) + 0.5];
+                                    game.spawn_mob_for(&entity, at, true, true).is_some()
+                                })
+                                .is_none_or(|spawned| !spawned)
+                            {
+                                if self.dim.id() != dimension {
+                                    log::warn!(
+                                        "Horizon: mod spawn-mob requested unavailable dimension {dimension:?}"
+                                    );
+                                } else {
+                                    log::warn!(
+                                        "Horizon: mod requested unknown or unavailable mob {entity:?}"
+                                    );
+                                }
                             }
                         }
                         ServerAction::PlaySound {
@@ -2794,20 +3633,114 @@ impl Game<'_> {
                             volume,
                             pitch,
                         } => {
-                            if dimension == self.dim.id() {
-                                self.audio.play(
-                                    &sound,
-                                    Some([
-                                        f64::from(x) + 0.5,
-                                        f64::from(y) + 0.5,
-                                        f64::from(z) + 0.5,
-                                    ]),
-                                    volume,
-                                    pitch,
+                            if self
+                                .with_mod_dimension(&dimension, |game| {
+                                    game.audio.play(
+                                        &sound,
+                                        Some([
+                                            f64::from(x) + 0.5,
+                                            f64::from(y) + 0.5,
+                                            f64::from(z) + 0.5,
+                                        ]),
+                                        volume,
+                                        pitch,
+                                    );
+                                })
+                                .is_none()
+                            {
+                                log::warn!(
+                                    "Horizon: mod play-sound requested unavailable dimension {dimension:?}"
                                 );
                             }
                         }
-                        ServerAction::ScheduleTick { .. } | ServerAction::SetRule { .. } => {}
+                        ServerAction::ScheduleTick {
+                            dimension,
+                            x,
+                            y,
+                            z,
+                            block,
+                            delay,
+                        } => {
+                            let key = (dimension.clone(), x >> 4, z >> 4);
+                            match self.with_mod_dimension(&dimension, |game| {
+                                if game
+                                    .res
+                                    .facts()
+                                    .get(game.world.block(x, y, z))
+                                    .name
+                                    .as_ref()
+                                    != block
+                                {
+                                    return None;
+                                }
+                                let chunk = (x >> 4, z >> 4);
+                                if game
+                                    .block_ticks
+                                    .blocks
+                                    .chunk(horizon_core::position::ChunkPos::new(chunk.0, chunk.1))
+                                    .is_none()
+                                {
+                                    game.register_chunk_ticks(chunk);
+                                }
+                                Some(game.with_level(|b, level, ticks| {
+                                    b.schedule_tick(
+                                        level,
+                                        ticks,
+                                        horizon_core::position::BlockPos::new(x, y, z),
+                                        delay.min(i32::MAX as u32) as i32,
+                                    )
+                                }))
+                            }) {
+                                Some(Some(ScheduleResult::Added)) => {
+                                    if self.mods.mod_action_tickets.contains(&key) {
+                                        self.mods.scheduled_mod_action_tickets.insert(
+                                            (dimension.clone(), x, y, z),
+                                            (
+                                                key.1,
+                                                key.2,
+                                                self.world
+                                                    .game_time
+                                                    .saturating_add(i64::from(delay))
+                                                    .saturating_add(1_200),
+                                            ),
+                                        );
+                                    }
+                                    log::info!(
+                                        "Horizon: mod scheduled {block} tick in {dimension:?} at ({x}, {y}, {z})"
+                                    );
+                                }
+                                Some(Some(ScheduleResult::Duplicate)) => {
+                                    if self.mods.mod_action_tickets.contains(&key) {
+                                        self.mods.scheduled_mod_action_tickets.insert(
+                                            (dimension.clone(), x, y, z),
+                                            (
+                                                key.1,
+                                                key.2,
+                                                self.world
+                                                    .game_time
+                                                    .saturating_add(i64::from(delay))
+                                                    .saturating_add(1_200),
+                                            ),
+                                        );
+                                    }
+                                    log::debug!(
+                                        "Horizon: mod schedule-tick already exists for {block} in {dimension:?} at ({x}, {y}, {z})"
+                                    );
+                                }
+                                Some(Some(ScheduleResult::MissingChunk)) => log::warn!(
+                                    "Horizon: mod could not schedule {block} tick because its chunk is not registered in {dimension:?} at ({x}, {y}, {z})"
+                                ),
+                                Some(None) => log::warn!(
+                                    "Horizon: mod schedule-tick block mismatch in {dimension:?} at ({x}, {y}, {z}); expected {block}"
+                                ),
+                                None => log::warn!(
+                                    "Horizon: mod schedule-tick requested unavailable dimension {dimension:?}"
+                                ),
+                            }
+                        }
+                        ServerAction::SetRule { name, value } => {
+                            self.mods.mods.set_rule(&name, &value);
+                        }
                     }
                     continue;
                 }
@@ -2857,6 +3790,7 @@ impl Game<'_> {
                 .chat
                 .add(&self.gui.atlas, line, None, self.ticks, focused);
         }
+        self.release_mod_action_tickets();
     }
     /// Delivers packets the integrated server queued for the window.
     pub(super) fn poll_mod_packets(&mut self) {
@@ -2905,6 +3839,25 @@ impl Game<'_> {
                 .collect();
             extras_hud::draw_lines(batch, &self.gui.atlas, corners, corner, &lines);
         }
+    }
+}
+
+#[cfg(feature = "mods")]
+fn mod_action_chunk(action: &ServerAction) -> Option<(&str, i32, i32)> {
+    match action {
+        ServerAction::SetBlock {
+            dimension, x, z, ..
+        }
+        | ServerAction::ScheduleTick {
+            dimension, x, z, ..
+        }
+        | ServerAction::SpawnDrop {
+            dimension, x, z, ..
+        }
+        | ServerAction::SpawnMob {
+            dimension, x, z, ..
+        } => Some((dimension, *x, *z)),
+        ServerAction::PlaySound { .. } | ServerAction::SetRule { .. } => None,
     }
 }
 

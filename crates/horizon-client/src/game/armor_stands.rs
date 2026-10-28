@@ -347,6 +347,12 @@ impl Game<'_> {
         );
         self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
         self.armor_stands.push(stand);
+        self.mod_server_event(
+            "entity-spawn",
+            self.next_entity.to_string(),
+            pos,
+            "minecraft:armor_stand".to_owned(),
+        );
         if !self.creative {
             self.consume_held();
         }
@@ -489,6 +495,17 @@ impl Game<'_> {
         let time = self.world.game_time;
         let at = self.armor_stands[i].position;
         let at = [at.x, at.y, at.z];
+        let target = [
+            at[0].floor() as i32,
+            at[1].floor() as i32,
+            at[2].floor() as i32,
+        ];
+        if let Some(item) = self.held().map(|stack| stack.item.to_string())
+            && self.mod_attack_entity(&item, "minecraft:armor_stand", target)
+        {
+            self.swing_arm();
+            return true;
+        }
         if self.creative {
             self.armor_stands.remove(i);
             self.audio

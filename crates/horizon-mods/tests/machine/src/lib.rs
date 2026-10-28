@@ -35,6 +35,7 @@ struct Machines {
     /// Each custom entity's age in ticks.
     entity_ticks: HashMap<u32, u32>,
     last_packet: String,
+    last_server_event: String,
     clicked_slot: Option<(u32, u8)>,
     clicked_button: Option<u8>,
 }
@@ -76,6 +77,7 @@ impl Mod for Machines {
                 progress,
                 entity_ticks: HashMap::new(),
                 last_packet: String::new(),
+                last_server_event: String::new(),
                 clicked_slot: None,
                 clicked_button: None,
             },
@@ -99,11 +101,31 @@ impl Mod for Machines {
     fn logic_hooks(&mut self) -> LogicHooks {
         LogicHooks::new()
             .block("test_machine:smelter")
+            .block("minecraft:composter")
             .item("test_machine:wrench")
             .server_event(ServerEventKind::PlayerJoin)
+            .server_event(ServerEventKind::PlayerLeave)
+            .server_event(ServerEventKind::BlockBreak)
+            .server_event(ServerEventKind::BlockPlace)
+            .server_event(ServerEventKind::EntitySpawn)
+            .server_event(ServerEventKind::EntityDeath)
             .channel("test_machine:sync")
     }
     fn on_block(&mut self, event: BlockEvent) -> EventOutcome {
+        if event.action == BlockAction::ScheduledTick
+            && event.state.starts_with("minecraft:composter")
+        {
+            let _ = server::set_block(
+                &event.dimension,
+                BlockPos {
+                    x: event.x,
+                    y: event.y,
+                    z: event.z,
+                },
+                "minecraft:emerald_block",
+            );
+            return EventOutcome::Pass;
+        }
         if event.action == BlockAction::UseWithoutItem {
             let face = server::get_block_face().unwrap_or_default();
             let _ = ui::open_screen(&ScreenSpec {
@@ -170,13 +192,52 @@ impl Mod for Machines {
                     count: 2,
                 },
             );
+            let _ = server::spawn_mob(&event.dimension, pos, "minecraft:iron_golem");
             return EventOutcome::Consume;
         }
         EventOutcome::Pass
     }
     fn on_server(&mut self, event: ServerEvent) -> EventOutcome {
+        let kind = match &event.kind {
+            ServerEventKind::PlayerJoin => "player-join",
+            ServerEventKind::PlayerLeave => "player-leave",
+            ServerEventKind::EntitySpawn => "entity-spawn",
+            ServerEventKind::EntityDeath => "entity-death",
+            ServerEventKind::BlockBreak => "block-break",
+            ServerEventKind::BlockPlace => "block-place",
+        };
+        self.last_server_event = format!(
+            "{kind}:{}:{}:{},{},{}:{}",
+            event.subject, event.dimension, event.x, event.y, event.z, event.detail
+        );
         if event.kind == ServerEventKind::PlayerJoin {
             let _ = server::set_rule("keepInventory", "true");
+            if event.subject == "ModQueueProbe" {
+                let _ = server::set_block(
+                    "minecraft:the_nether",
+                    BlockPos { x: 1, y: 64, z: 1 },
+                    "minecraft:gold_block",
+                );
+                server::schedule_tick(
+                    "minecraft:the_nether",
+                    BlockPos { x: 1, y: 64, z: 1 },
+                    "minecraft:gold_block",
+                    1,
+                );
+                server::spawn_drop(
+                    "minecraft:the_nether",
+                    BlockPos { x: 2, y: 64, z: 2 },
+                    &ItemDrop {
+                        id: "minecraft:diamond".into(),
+                        count: 1,
+                    },
+                );
+                let _ = server::spawn_mob(
+                    "minecraft:the_nether",
+                    BlockPos { x: 3, y: 64, z: 3 },
+                    "minecraft:cow",
+                );
+            }
             return EventOutcome::Consume;
         }
         EventOutcome::Pass
@@ -205,6 +266,11 @@ impl Mod for Machines {
                 let after = config::get_int("speed").unwrap_or(0);
                 Ok(Some(format!("speed {before}->{after}")))
             }
+            "item_facts" => {
+                let remainder =
+                    machine::remainder("minecraft:milk_bucket").unwrap_or_else(|| "none".into());
+                Ok(Some(format!("remainder={remainder}")))
+            }
             "client_reads" => {
                 let pressed = keys::was_pressed("vein_mine");
                 let hit = target::get_block()
@@ -212,6 +278,10 @@ impl Mod for Machines {
                     .unwrap_or_else(|| "none".into());
                 let hand = horizon_mod_sdk::inventory::get_main_hand()
                     .map(|s| format!("{}*{}", s.id, s.count))
+                    .unwrap_or_else(|| "empty".into());
+                let container = horizon_mod_sdk::inventory::get_open_container()
+                    .first()
+                    .map(|s| format!("{}*{}@{}", s.id, s.count, s.slot))
                     .unwrap_or_else(|| "empty".into());
                 let blk = world::get_block(0, 64, 0).unwrap_or_else(|| "air".into());
                 let biome = world::get_biome(0, 64, 0).unwrap_or_else(|| "none".into());
@@ -233,7 +303,7 @@ impl Mod for Machines {
                     alpha: 0.5,
                 }]);
                 Ok(Some(format!(
-                    "key={pressed} hit={hit} hand={hand} blk={blk} biome={biome} light={light}"
+                    "key={pressed} hit={hit} hand={hand} container={container} blk={blk} biome={biome} light={light}"
                 )))
             }
             "caps_and_recipes" => {
@@ -247,8 +317,12 @@ impl Mod for Machines {
                         max_extract: 500,
                     },
                 );
+                let recv_sim = capabilities::receive_energy(pos, 800, true);
                 let recv = capabilities::receive_energy(pos, 800, false);
+                let recv_again = capabilities::receive_energy(pos, 800, false);
+                let ext_sim = capabilities::extract_energy(pos, 300, true);
                 let ext = capabilities::extract_energy(pos, 300, false);
+                let ext_again = capabilities::extract_energy(pos, 300, false);
                 let stored = capabilities::get_energy(pos).map_or(0, |e| e.stored);
 
                 capabilities::set_fluid_tank(
@@ -262,6 +336,10 @@ impl Mod for Machines {
                 );
                 let filled = capabilities::fill_fluid(pos, "minecraft:lava", 1500, false);
                 let drained = capabilities::drain_fluid(pos, "minecraft:lava", 500, false);
+                let incompatible = capabilities::fill_fluid(pos, "minecraft:water", 500, true);
+                let simulated_drain = capabilities::drain_fluid(pos, "minecraft:lava", 400, true);
+                let after_simulation =
+                    capabilities::get_fluid(pos, 0).map_or(0, |tank| tank.amount);
 
                 capabilities::set_attachment("entity:player", "test_machine:mana", &[42])?;
                 let mana = capabilities::get_attachment("entity:player", "test_machine:mana")
@@ -286,13 +364,76 @@ impl Mod for Machines {
                 let found = recipes::by_type("test_machine:crusher").len();
                 let found_by_item = recipes::for_input("minecraft:raw_iron").len();
                 Ok(Some(format!(
-                    "fe={recv}/{ext}/{stored} fluid={filled}/{drained} mana={mana} ring={ring} recipes={found}/{found_by_item}"
+                    "fe={recv_sim}/{recv}/{recv_again}/{ext_sim}/{ext}/{ext_again}/{stored} fluid={filled}/{drained}/{incompatible}/{simulated_drain}/{after_simulation} mana={mana} ring={ring} recipes={found}/{found_by_item}"
                 )))
             }
             "state" => Ok(Some(format!(
                 "pkt={} click={:?} btn={:?}",
                 self.last_packet, self.clicked_slot, self.clicked_button
             ))),
+            "last_server_event" => Ok(Some(self.last_server_event.clone())),
+            "set_other_dimension" => {
+                server::set_block(
+                    "minecraft:the_nether",
+                    BlockPos { x: 1, y: 64, z: 1 },
+                    "minecraft:gold_block",
+                )?;
+                Ok(Some("requested block in the Nether".into()))
+            }
+            "schedule_test_tick" => {
+                // Keep the target in the player's block-ticking chunk so the
+                // end-to-end fixture proves execution, not only queueing.
+                let pos = BlockPos {
+                    x: -31,
+                    y: 70,
+                    z: -9,
+                };
+                server::set_block("minecraft:overworld", pos, "minecraft:composter[level=7]")?;
+                server::schedule_tick("minecraft:overworld", pos, "minecraft:composter", 1);
+                Ok(Some("scheduled composter tick".into()))
+            }
+            "set_machine_block" => {
+                server::set_block(
+                    "minecraft:overworld",
+                    BlockPos {
+                        x: -31,
+                        y: 70,
+                        z: -9,
+                    },
+                    "test_machine:smelter",
+                )?;
+                Ok(Some("requested test machine block".into()))
+            }
+            "queue_inframe_far" => {
+                let pos = BlockPos {
+                    x: 240,
+                    y: 64,
+                    z: 0,
+                };
+                server::set_block("minecraft:overworld", pos, "minecraft:gold_block")?;
+                server::spawn_drop(
+                    "minecraft:overworld",
+                    BlockPos {
+                        x: 241,
+                        y: 64,
+                        z: 0,
+                    },
+                    &ItemDrop {
+                        id: "minecraft:diamond".into(),
+                        count: 1,
+                    },
+                );
+                server::spawn_mob(
+                    "minecraft:overworld",
+                    BlockPos {
+                        x: 242,
+                        y: 64,
+                        z: 0,
+                    },
+                    "minecraft:cow",
+                )?;
+                Ok(Some("queued far-world actions".into()))
+            }
             "deep_api" => {
                 let h = entities::spawn(
                     "minecraft:overworld",
@@ -418,10 +559,94 @@ impl Mod for Machines {
             let _ = item_transfer::set_slot_access(handle, 0, item_transfer::Face::Up, false, true);
             let _ =
                 item_transfer::set_slot_access(handle, 0, item_transfer::Face::Down, true, false);
+            let _ =
+                item_transfer::set_slot_access(handle, 0, item_transfer::Face::North, true, false);
+            let _ = item_transfer::set_slot_access(handle, 1, item_transfer::Face::Up, false, true);
         }
     }
     fn tick_block_entities(&mut self, handles: &[u32]) {
         for &h in handles {
+            if let Some(position) = machine::get_position(h) {
+                let key = format!(
+                    "{}:{},{},{}",
+                    position.dimension, position.x, position.y, position.z
+                );
+                if capabilities::get_energy(&key).is_none() {
+                    capabilities::set_energy_buffer(
+                        &key,
+                        EnergyView {
+                            stored: 0,
+                            capacity: 10_000,
+                            max_receive: 25,
+                            max_extract: 25,
+                        },
+                    );
+                }
+                capabilities::receive_energy(&key, 5, false);
+                let peer_key = format!(
+                    "{}:{},{},{}",
+                    position.dimension,
+                    position.x + 1,
+                    position.y,
+                    position.z
+                );
+                if capabilities::get_energy(&peer_key).is_some() {
+                    for _ in 0..2 {
+                        let accepted = capabilities::receive_energy(&peer_key, 1, true);
+                        let extracted = capabilities::extract_energy(&key, accepted, false);
+                        let received = capabilities::receive_energy(&peer_key, extracted, false);
+                        if received < extracted {
+                            capabilities::receive_energy(&key, extracted - received, false);
+                        }
+                    }
+                }
+                if capabilities::get_fluid(&key, 0).is_none() {
+                    capabilities::set_fluid_tank(
+                        &key,
+                        0,
+                        &FluidView {
+                            fluid: String::new(),
+                            amount: 0,
+                            capacity: 1_000,
+                        },
+                    );
+                }
+                capabilities::fill_fluid_tank(&key, 0, "minecraft:water", 10, false);
+                if capabilities::get_fluid(&peer_key, 0).is_some() {
+                    for _ in 0..2 {
+                        let accepted = capabilities::fill_fluid_tank(
+                            &peer_key,
+                            0,
+                            "minecraft:water",
+                            10,
+                            true,
+                        );
+                        let drained = capabilities::drain_fluid_tank(
+                            &key,
+                            0,
+                            "minecraft:water",
+                            accepted,
+                            false,
+                        );
+                        let received = capabilities::fill_fluid_tank(
+                            &peer_key,
+                            0,
+                            "minecraft:water",
+                            drained,
+                            false,
+                        );
+                        if received < drained {
+                            capabilities::fill_fluid_tank(
+                                &key,
+                                0,
+                                "minecraft:water",
+                                drained - received,
+                                false,
+                            );
+                        }
+                    }
+                }
+            }
             let components = item_data::get_slot_components(h, 0);
             if !components.is_empty() {
                 let _ = item_data::set_slot_components(h, 0, &components);
@@ -430,6 +655,32 @@ impl Mod for Machines {
             if machine::get_slot(h, 0).is_some_and(|s| s.id == "minecraft:tnt") {
                 machine::set_property(h, "lit", "true");
                 panic!("tnt in the smelter");
+            }
+            if let Some(input) = machine::get_slot(h, 0)
+                && matches!(
+                    input.id.as_str(),
+                    "minecraft:milk_bucket" | "minecraft:honey_bottle"
+                )
+            {
+                let Some(remainder) = machine::remainder(&input.id) else {
+                    continue;
+                };
+                if !machine::insert_slot(
+                    h,
+                    1,
+                    &ItemStack {
+                        id: remainder,
+                        count: 1,
+                    },
+                ) {
+                    continue;
+                }
+                let rest = (input.count > 1).then(|| ItemStack {
+                    count: input.count - 1,
+                    ..input
+                });
+                machine::set_slot(h, 0, rest.as_ref());
+                continue;
             }
             let recipe = machine::get_slot(h, 0)
                 .and_then(|input| machine::cooking(CookingKind::Smelting, &input.id));
@@ -444,15 +695,10 @@ impl Mod for Machines {
                 continue;
             }
             *progress = 0;
-            let out = match machine::get_slot(h, 1) {
-                Some(o) if o.id == recipe.output.id => ItemStack {
-                    count: o.count + recipe.output.count,
-                    ..o
-                },
-                Some(_) => continue,
-                None => recipe.output,
-            };
-            if !machine::set_slot(h, 1, Some(&out)) {
+            // A full or incompatible output slot must not consume the input.
+            // `insert_slot` is all-or-nothing, so retries cannot duplicate a
+            // partial result on the next tick.
+            if !machine::insert_slot(h, 1, &recipe.output) {
                 continue;
             }
             let input = machine::get_slot(h, 0).filter(|i| i.count > 1);

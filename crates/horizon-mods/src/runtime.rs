@@ -183,8 +183,76 @@ pub struct BlockEntityView {
     pub slots: Vec<Option<Stack>>,
     /// Opaque binary network-NBT components aligned with `slots`.
     pub slot_components: Vec<Vec<u8>>,
+    /// Persisted energy capability state for this block entity.
+    pub energy: Option<EnergyView>,
+    /// Persisted fluid/chemical tanks keyed by the mod's tank index.
+    pub fluids: BTreeMap<u32, FluidView>,
     pub properties: Vec<Property>,
     pub changed: bool,
+}
+
+fn capability_position(view: &BlockEntityView) -> String {
+    format!("{}:{},{},{}", view.dimension, view.x, view.y, view.z)
+}
+
+fn seed_block_entity_capabilities(shared: &mut SharedWorld, views: &[BlockEntityView]) {
+    let positions: HashSet<String> = views.iter().map(capability_position).collect();
+    let tanks: HashSet<(String, u32)> = views
+        .iter()
+        .flat_map(|view| {
+            let pos = capability_position(view);
+            view.fluids.keys().map(move |tank| (pos.clone(), *tank))
+        })
+        .collect();
+    shared
+        .fluids
+        .retain(|key, _| !positions.contains(&key.0) || tanks.contains(key));
+
+    for view in views {
+        let pos = capability_position(view);
+        if let Some(energy) = view.energy {
+            shared.energy.insert(pos.clone(), energy);
+        } else {
+            shared.energy.remove(&pos);
+        }
+        for (tank, fluid) in &view.fluids {
+            shared.fluids.insert((pos.clone(), *tank), fluid.clone());
+        }
+    }
+}
+
+fn sync_block_entity_capabilities(
+    shared: &SharedWorld,
+    views: &mut [BlockEntityView],
+    known_handles: &HashSet<u32>,
+) {
+    let mut fluids_by_position: HashMap<&str, Vec<(u32, &FluidView)>> = HashMap::new();
+    for ((pos, tank), fluid) in &shared.fluids {
+        fluids_by_position
+            .entry(pos.as_str())
+            .or_default()
+            .push((*tank, fluid));
+    }
+    for view in views {
+        if !known_handles.contains(&view.handle) {
+            continue;
+        }
+        let pos = capability_position(view);
+        if let Some(energy) = shared.energy.get(&pos).copied()
+            && view.energy != Some(energy)
+        {
+            view.energy = Some(energy);
+            view.changed = true;
+        }
+        if let Some(fluids) = fluids_by_position.get(pos.as_str()) {
+            for (tank, fluid) in fluids {
+                if view.fluids.get(tank) != Some(*fluid) {
+                    view.fluids.insert(*tank, (*fluid).clone());
+                    view.changed = true;
+                }
+            }
+        }
+    }
 }
 
 /// What mods may read of the game, copied once per tick by the game.
@@ -231,6 +299,13 @@ pub enum ServerAction {
         z: i32,
         id: String,
         count: u32,
+    },
+    SpawnMob {
+        dimension: String,
+        x: i32,
+        y: i32,
+        z: i32,
+        entity: String,
     },
     PlaySound {
         dimension: String,
@@ -315,6 +390,9 @@ struct SharedWorld {
     player_inventory: Vec<StackView>,
     open_container: Vec<StackView>,
     energy: HashMap<String, EnergyView>,
+    energy_receive_used: HashMap<String, u64>,
+    energy_extract_used: HashMap<String, u64>,
+    energy_budget_tick: Option<u64>,
     fluids: HashMap<(String, u32), FluidView>,
     item_slots: HashMap<String, BTreeMap<u32, (String, u32)>>,
     attachments: HashMap<(String, String), Vec<u8>>,
@@ -757,6 +835,17 @@ impl Mods {
             .cloned()
     }
 
+    /// Sets a game-owned fluid or chemical tank, clamping it to capacity.
+    pub fn set_fluid_tank(&self, pos: &str, tank: u32, mut view: FluidView) {
+        view.amount = view.amount.min(view.capacity);
+        if view.amount == 0 {
+            view.fluid.clear();
+        }
+        if let Ok(mut sh) = self.shared.lock() {
+            sh.fluids.insert((pos.to_owned(), tank), view);
+        }
+    }
+
     /// Declares a game-owned tank for vanilla interactions before the first mod tick.
     pub fn declare_fluid_tank(&self, pos: &str, tank: u32, capacity: u64) {
         if let Ok(mut sh) = self.shared.lock() {
@@ -974,6 +1063,13 @@ impl Mods {
 
     /// A game tick.
     pub fn tick(&mut self, tick: u64) {
+        if let Ok(mut shared) = self.shared.lock()
+            && shared.energy_budget_tick != Some(tick)
+        {
+            shared.energy_budget_tick = Some(tick);
+            shared.energy_receive_used.clear();
+            shared.energy_extract_used.clear();
+        }
         self.each(
             FUEL_TICK,
             |h| h.tick,
@@ -995,6 +1091,17 @@ impl Mods {
             |h| h.chat,
             |m, s| m.events.horizon_mods_events().call_chat(s, text),
         );
+    }
+
+    /// Dispatches a block callback (API 0.3) to the mod that registered the block.
+    pub fn has_block_hook(&self, block_id: &str) -> bool {
+        let block_id = block_id.split_once('[').map_or(block_id, |(id, _)| id);
+        self.entries.iter().any(|entry| {
+            entry
+                .run
+                .as_ref()
+                .is_some_and(|run| run.logic.blocks.iter().any(|block| block == block_id))
+        })
     }
 
     /// Dispatches a block callback (API 0.3) to the mod that registered the block.
@@ -1300,9 +1407,24 @@ impl Mods {
     }
 
     /// One server tick of the ticking block entities in `views`, one call
-    /// per mod. Each mod sees only its own; their slots and properties come
-    /// back changed. Views of unknown handles or stopped mods are left alone.
+    /// per mod. Each mod sees only its own handles and slots, but the shared
+    /// capability registry contains every loaded mod block entity so networks
+    /// can transfer energy or fluids across mod ownership boundaries. Capability
+    /// mutations are written back to all owning views after every callback.
+    /// Views of unknown handles or stopped mods are left alone.
     pub fn tick_block_entities(&mut self, views: &mut [BlockEntityView]) {
+        // Seed the shared capability registry before any mod runs. Seeding only
+        // the current mod's machines makes cross-mod transfer depend on load
+        // order and can expose stale values for a neighbor that ticks later.
+        if let Ok(mut shared) = self.shared.lock() {
+            let owned: Vec<BlockEntityView> = views
+                .iter()
+                .filter(|view| self.handles.contains_key(&view.handle))
+                .cloned()
+                .collect();
+            seed_block_entity_capabilities(&mut shared, &owned);
+        }
+
         for i in 0..self.entries.len() {
             let Some(run) = self.entries[i].run.as_ref() else {
                 continue;
@@ -1331,9 +1453,17 @@ impl Mods {
                 Some(run) => std::mem::take(&mut run.store.data_mut().views),
                 None => std::mem::take(&mut self.stranded),
             };
-            for (slot, view) in mine.into_iter().zip(returned) {
+            for (&slot, view) in mine.iter().zip(returned) {
                 views[slot] = view;
             }
+        }
+
+        // Any callback can transfer into or out of another mod's block entity.
+        // Reconcile all loaded views once after callbacks finish so the owning
+        // mod entity gets marked dirty and its new capability contents persist.
+        if let Ok(shared) = self.shared.lock() {
+            let known_handles: HashSet<u32> = self.handles.keys().copied().collect();
+            sync_block_entity_capabilities(&shared, views, &known_handles);
         }
     }
 
@@ -2016,6 +2146,14 @@ impl State {
             !path.is_empty() && self.owned_namespaces.iter().any(|o| o == ns)
         })
     }
+    /// Capability definitions belong to the mod that registered the block
+    /// entity at this position. Other mods can transfer resources through the
+    /// shared capability operations, but cannot rewrite its capacity or rate.
+    fn owns_machine_position(&self, pos: &str) -> bool {
+        self.positions
+            .values()
+            .any(|(dimension, x, y, z)| pos == format!("{dimension}:{x},{y},{z}"))
+    }
 }
 impl machine::Host for State {
     fn get_position(&mut self, handle: u32) -> Option<machine::BlockEntityPosition> {
@@ -2084,6 +2222,45 @@ impl machine::Host for State {
             }
             view.changed = true;
         }
+        true
+    }
+    fn insert_slot(&mut self, handle: u32, slot: u32, stack: Stack) -> bool {
+        if stack.count == 0 {
+            return false;
+        }
+        let max = match &self.facts {
+            Some(facts) => facts.max_stack_size(&stack.id),
+            None => u32::MAX,
+        };
+        if max == 0 || stack.count > max {
+            return false;
+        }
+        let Some(view) = self.view(handle) else {
+            return false;
+        };
+        let Some(current) = view.slots.get(slot as usize) else {
+            return false;
+        };
+        let Some(components) = view.slot_components.get(slot as usize) else {
+            return false;
+        };
+        let count = match current {
+            Some(current) if current.id == stack.id && components.is_empty() => current.count,
+            Some(_) => return false,
+            None if components.is_empty() => 0,
+            None => return false,
+        };
+        let Some(total) = count.checked_add(stack.count).filter(|total| *total <= max) else {
+            return false;
+        };
+        let Some(cell) = view.slots.get_mut(slot as usize) else {
+            return false;
+        };
+        *cell = Some(Stack {
+            id: stack.id,
+            count: total,
+        });
+        view.changed = true;
         true
     }
     fn get_property(&mut self, handle: u32, name: String) -> Option<String> {
@@ -2339,6 +2516,24 @@ impl server::Host for State {
             }));
         }
     }
+    fn spawn_mob(
+        &mut self,
+        dimension: String,
+        pos: BlockPos,
+        entity: String,
+    ) -> Result<(), String> {
+        if !valid_id(&entity) {
+            return Err(format!("invalid entity identifier {entity:?}"));
+        }
+        self.out.push(Output::Server(ServerAction::SpawnMob {
+            dimension,
+            x: pos.x,
+            y: pos.y,
+            z: pos.z,
+            entity,
+        }));
+        Ok(())
+    }
     fn play_sound(
         &mut self,
         dimension: String,
@@ -2428,6 +2623,9 @@ impl inventory::Host for State {
 
 impl capabilities::Host for State {
     fn set_energy_buffer(&mut self, pos: String, mut view: EnergyView) {
+        if !self.owns_machine_position(&pos) {
+            return;
+        }
         view.stored = view.stored.min(view.capacity);
         if let Ok(mut sh) = self.shared.lock() {
             sh.energy.insert(pos, view);
@@ -2440,13 +2638,19 @@ impl capabilities::Host for State {
         let Ok(mut sh) = self.shared.lock() else {
             return 0;
         };
+        let used = sh.energy_receive_used.get(&pos).copied().unwrap_or(0);
         let Some(buf) = sh.energy.get_mut(&pos) else {
             return 0;
         };
         let room = buf.capacity.saturating_sub(buf.stored);
-        let accepted = amount.min(buf.max_receive).min(room);
+        let rate_remaining = buf.max_receive.saturating_sub(used);
+        let accepted = amount.min(rate_remaining).min(room);
         if !simulate {
             buf.stored += accepted;
+            if accepted > 0 {
+                let used = sh.energy_receive_used.entry(pos).or_default();
+                *used = used.saturating_add(accepted);
+            }
         }
         accepted
     }
@@ -2454,16 +2658,25 @@ impl capabilities::Host for State {
         let Ok(mut sh) = self.shared.lock() else {
             return 0;
         };
+        let used = sh.energy_extract_used.get(&pos).copied().unwrap_or(0);
         let Some(buf) = sh.energy.get_mut(&pos) else {
             return 0;
         };
-        let extracted = amount.min(buf.max_extract).min(buf.stored);
+        let rate_remaining = buf.max_extract.saturating_sub(used);
+        let extracted = amount.min(rate_remaining).min(buf.stored);
         if !simulate {
             buf.stored -= extracted;
+            if extracted > 0 {
+                let used = sh.energy_extract_used.entry(pos).or_default();
+                *used = used.saturating_add(extracted);
+            }
         }
         extracted
     }
     fn set_fluid_tank(&mut self, pos: String, tank: u32, mut view: FluidView) {
+        if !self.owns_machine_position(&pos) {
+            return;
+        }
         view.amount = view.amount.min(view.capacity);
         if view.amount == 0 {
             view.fluid.clear();
@@ -3236,5 +3449,74 @@ mod recipe_validation_tests {
         assert!(recipe_budget_allows(MAX_MOD_RECIPE_BYTES - 128, 128, 256));
         assert!(!recipe_budget_allows(MAX_MOD_RECIPE_BYTES, 0, 1));
         assert!(!recipe_budget_allows(usize::MAX, 0, 1));
+    }
+}
+
+#[cfg(test)]
+mod capability_sync_tests {
+    use super::*;
+
+    fn machine(x: i32) -> BlockEntityView {
+        BlockEntityView {
+            dimension: "minecraft:overworld".into(),
+            x,
+            y: 64,
+            z: 0,
+            energy: Some(EnergyView {
+                stored: 100,
+                capacity: 1_000,
+                max_receive: 50,
+                max_extract: 50,
+            }),
+            fluids: BTreeMap::from([(
+                0,
+                FluidView {
+                    fluid: "minecraft:water".into(),
+                    amount: 100,
+                    capacity: 1_000,
+                },
+            )]),
+            ..BlockEntityView::default()
+        }
+    }
+
+    #[test]
+    fn capability_changes_sync_back_to_another_mods_machine() {
+        let mut views = [machine(0), machine(1)];
+        let mut shared = SharedWorld::default();
+        let removed = capability_position(&views[0]);
+        views[0].energy = None;
+        views[0].fluids.clear();
+        shared.energy.insert(
+            removed.clone(),
+            EnergyView {
+                stored: 50,
+                capacity: 1_000,
+                max_receive: 50,
+                max_extract: 50,
+            },
+        );
+        shared.fluids.insert(
+            (removed.clone(), 4),
+            FluidView {
+                fluid: "minecraft:lava".into(),
+                amount: 100,
+                capacity: 1_000,
+            },
+        );
+        seed_block_entity_capabilities(&mut shared, &views);
+        assert!(!shared.energy.contains_key(&removed));
+        assert!(!shared.fluids.contains_key(&(removed, 4)));
+
+        let neighbor = capability_position(&views[1]);
+        shared.energy.get_mut(&neighbor).unwrap().stored = 250;
+        shared.fluids.get_mut(&(neighbor, 0)).unwrap().amount = 350;
+
+        let known_handles = views.iter().map(|view| view.handle).collect();
+        sync_block_entity_capabilities(&shared, &mut views, &known_handles);
+        assert_eq!(views[1].energy.unwrap().stored, 250);
+        assert_eq!(views[1].fluids[&0].amount, 350);
+        assert!(views[1].changed);
+        assert!(!views[0].changed);
     }
 }

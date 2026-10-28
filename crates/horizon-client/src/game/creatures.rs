@@ -280,6 +280,16 @@ impl Game<'_> {
         }
         let id = mob.id;
         self.mobs.push(mob);
+        self.mod_server_event(
+            "entity-spawn",
+            id.to_string(),
+            [
+                at[0].floor() as i32,
+                at[1].floor() as i32,
+                at[2].floor() as i32,
+            ],
+            kind.clone(),
+        );
         self.enchant_spawn_equipment(id);
         if !persistent && !scripted {
             self.spawn_jockeys(id, true);
@@ -721,6 +731,16 @@ impl Game<'_> {
                 }
             }
         }
+        self.mod_server_event(
+            "entity-death",
+            m.id.to_string(),
+            [
+                m.position.x.floor() as i32,
+                m.position.y.floor() as i32,
+                m.position.z.floor() as i32,
+            ],
+            m.kind.id.clone(),
+        );
     }
     /// The killer's side of a mob's death: `ServerPlayer.awardKillScore`'s
     /// statistics and scores, and the `player_killed_entity` trigger.

@@ -217,6 +217,7 @@ An item and how many. Read or write its non-default components with `item-data`.
 | --- | --- | --- |
 | `get-slot` | `func(handle: u32, slot: u32) -> option<item-stack>` | The block entity's slot, none when empty or out of range. |
 | `set-slot` | `func(handle: u32, slot: u32, stack: option<item-stack>) -> bool` | Empties the slot with none; a stack over the item's maximum is cut to it. False for a slot out of range, an unknown item or a handle not in this call. |
+| `insert-slot` | `func(handle: u32, slot: u32, stack: item-stack) -> bool` | Atomically adds the whole default-component stack to an empty or matching slot. It will not merge into a slot with custom components, since this record does not carry components. Returns false without changing the slot if it is full, contains another item, has custom components, the item is unknown, or the handle/slot is invalid. Use `max-stack-size` to decide whether a larger result should be split. |
 | `get-position` | `func(handle: u32) -> option<block-entity-position>` | The loaded block entity's dimension and world position. |
 | `get-world-rule` | `func(name: string) -> option<string>` | Reads a game-side rule value attached to this world's mod runtime. |
 | `set-world-rule` | `func(name: string, value: string) -> result<_, string>` | Sets a namespaced rule value for coordination between this mod's machines. |
@@ -326,6 +327,7 @@ Capability `server` (API 0.3): server-side world queries and mutations during bl
 | `set-block` | `func(dimension: string, pos: block-pos, state: string) -> result<_, string>` | Replaces the block at `pos` in `dimension` with `state`. |
 | `schedule-tick` | `func(dimension: string, pos: block-pos, block: string, delay: u32)` | Schedules a block tick for `block` at `pos` after `delay` ticks. |
 | `spawn-drop` | `func(dimension: string, pos: block-pos, drop: item-drop)` | Spawns an item stack drop at `pos` in `dimension`. |
+| `spawn-mob` | `func(dimension: string, pos: block-pos, entity: string) -> result<_, string>` | Spawns a vanilla living entity at `pos` in `dimension`. |
 | `play-sound` | `func(dimension: string, pos: block-pos, sound: string, volume: f32, pitch: f32)` | Plays sound `sound` at `pos` in `dimension`. |
 | `get-rule` | `func(name: string) -> option<string>` | Reads a game rule value as text (`true`, `false`, or integer). |
 | `set-rule` | `func(name: string, value: string) -> result<_, string>` | Sets a game rule value as text. |
@@ -438,11 +440,11 @@ Capability `capabilities` (API 0.4): standard Forge Energy (FE), fluid tanks, it
 
 | Function | Signature | What it does |
 | --- | --- | --- |
-| `set-energy-buffer` | `func(pos: string, view: energy-view)` | Declares or updates the energy buffer at `pos` (`dimension:x,y,z`). |
+| `set-energy-buffer` | `func(pos: string, view: energy-view)` | Declares or updates the energy buffer at `pos` (`dimension:x,y,z`). Only the mod that owns a registered block entity at this position may define it; other mods use receive/extract to transfer energy. |
 | `get-energy` | `func(pos: string) -> option<energy-view>` | Queries the energy buffer at `pos` (`dimension:x,y,z`). |
 | `receive-energy` | `func(pos: string, amount: u64, simulate: bool) -> u64` | Pushes up to `amount` FE into `pos`; returns FE accepted. |
 | `extract-energy` | `func(pos: string, amount: u64, simulate: bool) -> u64` | Pulls up to `amount` FE from `pos`; returns FE extracted. |
-| `set-fluid-tank` | `func(pos: string, tank: u32, view: fluid-view)` | Declares or updates fluid or chemical tank `tank` at `pos`. |
+| `set-fluid-tank` | `func(pos: string, tank: u32, view: fluid-view)` | Declares or updates fluid or chemical tank `tank` at `pos`. Only the mod that owns a registered block entity at this position may define it; other mods use fill/drain to transfer resources. |
 | `get-fluid` | `func(pos: string, tank: u32) -> option<fluid-view>` | Queries fluid or chemical tank `tank` at `pos`. |
 | `fill-fluid` | `func(pos: string, fluid: string, amount: u64, simulate: bool) -> u64` | Fills up to `amount` mB of `fluid` into `pos`; returns mB accepted. |
 | `fill-fluid-tank` | `func(pos: string, tank: u32, fluid: string, amount: u64, simulate: bool) -> u64` | Fills tank `tank` at `pos`; for chemical tanks the id is a chemical id. |

@@ -1022,6 +1022,20 @@ impl Game<'_> {
         if !self.before_block(d) || self.mob_hit().is_some_and(|m| m.1 < d) {
             return false;
         }
+        if let Some(dragon) = self.dragon.as_ref().filter(|dragon| dragon.id == id) {
+            let at = dragon.position;
+            let pos = [
+                at.x.floor() as i32,
+                at.y.floor() as i32,
+                at.z.floor() as i32,
+            ];
+            if let Some(item) = self.held().map(|stack| stack.item.to_string())
+                && self.mod_attack_entity(&item, "minecraft:ender_dragon", pos)
+            {
+                self.swing_arm();
+                return true;
+            }
+        }
         let modifiers = self
             .attack_item_info()
             .map(|i| (i.attack_damage, i.attack_speed))

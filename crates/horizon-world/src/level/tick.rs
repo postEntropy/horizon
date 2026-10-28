@@ -14,6 +14,15 @@ use horizon_core::{
     ticks::TickTypeId,
 };
 
+/// Outcome of consuming one scheduled queue entry. A valid block tick carries
+/// its position so game integrations can dispatch block-owned hooks inline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScheduledStep {
+    Empty,
+    Ran,
+    Block(BlockPos),
+}
+
 impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     fn rand_int(&mut self, bound: i32) -> i32 {
         self.random().next_int_bound(bound).unwrap_or(0)
@@ -210,6 +219,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     pub fn random_tick_at(&mut self, pos: BlockPos) {
         let state = self.state(pos);
         if self.b.is_randomly_ticking(state) {
+            self.ticks.random_block_ticks.push(pos);
             self.random_tick_block(state, pos);
         }
         // Only lava's fluid state ticks randomly. A lava block is ticked twice
@@ -1580,33 +1590,37 @@ impl Behaviours {
         }
         ok
     }
-    /// Run the next due tick; false when none is left.
+    /// Run the next due tick. Valid block ticks report their position so the
+    /// caller can run block-owned hooks before advancing to the next tick.
     pub fn scheduled_step<L: LevelAccess + ?Sized>(
         &self,
         level: &mut L,
         ticks: &mut Ticks,
         fluids: bool,
-    ) -> bool {
+    ) -> ScheduledStep {
         if fluids {
             let Ok(Some(tick)) = ticks.fluids.next_tick() else {
-                return false;
+                return ScheduledStep::Empty;
             };
             let mut sim = self.sim(level, ticks);
             let fluid = self.fluid(sim.state(tick.pos)).kind();
             if TickTypeId(fluid as u32) == tick.kind {
                 sim.fluid_tick(tick.pos);
             }
+            ScheduledStep::Ran
         } else {
             let Ok(Some(tick)) = ticks.blocks.next_tick() else {
-                return false;
+                return ScheduledStep::Empty;
             };
             let mut sim = self.sim(level, ticks);
             let state = sim.state(tick.pos);
             if u32::from(self.block(state).0) == tick.kind.0 {
                 sim.tick_block(state, tick.pos);
+                ScheduledStep::Block(tick.pos)
+            } else {
+                ScheduledStep::Ran
             }
         }
-        true
     }
     /// End a `scheduled_begin` phase.
     pub fn scheduled_finish(&self, ticks: &mut Ticks, fluids: bool) {

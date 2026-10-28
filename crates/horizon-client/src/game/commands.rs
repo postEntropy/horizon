@@ -1752,6 +1752,8 @@ impl Game<'_> {
     ) -> R<bool> {
         let previous = self.world.block(pos[0], pos[1], pos[2]);
         if previous == state {
+            let block = self.res.facts().get(state).name.to_string();
+            self.ensure_mod_block_entity(pos, &block);
             return Ok(false);
         }
         // A different block replaces the block entity (Level.setBlock).
@@ -1791,6 +1793,9 @@ impl Game<'_> {
             && let Some(entity) = horizon_client::containers::BlockEntity::for_block(&new)
         {
             self.world.block_entities.insert(key, entity);
+        }
+        if self.res.facts().get(landed).name == new {
+            self.ensure_mod_block_entity(pos, &new);
         }
         Ok(true)
     }

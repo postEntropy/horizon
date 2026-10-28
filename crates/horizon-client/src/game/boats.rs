@@ -734,6 +734,16 @@ impl Game<'_> {
         let key = (hit[0].floor() as i32 >> 4, hit[2].floor() as i32 >> 4);
         self.world.modified.insert(key);
         self.boats.push(boat);
+        self.mod_server_event(
+            "entity-spawn",
+            self.next_entity.to_string(),
+            [
+                hit[0].floor() as i32,
+                hit[1].floor() as i32,
+                hit[2].floor() as i32,
+            ],
+            stack.item.to_string(),
+        );
         if !self.creative {
             self.consume_held();
         }
@@ -814,6 +824,20 @@ impl Game<'_> {
         };
         if !self.before_block(d) || self.mob_hit().is_some_and(|m| m.1 < d) {
             return false;
+        }
+        let boat = &self.boats[i];
+        let target = boat.entity_type();
+        let at = boat.position;
+        let pos = [
+            at.x.floor() as i32,
+            at.y.floor() as i32,
+            at.z.floor() as i32,
+        ];
+        if let Some(item) = self.held().map(|stack| stack.item.to_string())
+            && self.mod_attack_entity(&item, &target, pos)
+        {
+            self.swing_arm();
+            return true;
         }
         self.vehicle_attack_sounds();
         self.hurt_boat(i, damage, self.creative);

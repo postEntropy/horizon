@@ -1008,6 +1008,16 @@ impl Game<'_> {
             .modified
             .insert((hit.pos[0] >> 4, hit.pos[2] >> 4));
         self.carts.push(cart);
+        self.mod_server_event(
+            "entity-spawn",
+            self.next_entity.to_string(),
+            [
+                at.x.floor() as i32,
+                at.y.floor() as i32,
+                at.z.floor() as i32,
+            ],
+            stack.item.to_string(),
+        );
         if !self.creative {
             self.consume_held();
         }
@@ -1159,6 +1169,20 @@ impl Game<'_> {
         };
         if !self.before_block(d) || self.mob_hit().is_some_and(|m| m.1 < d) {
             return false;
+        }
+        let cart = &self.carts[i];
+        let target = cart.kind.id();
+        let at = cart.position;
+        let pos = [
+            at.x.floor() as i32,
+            at.y.floor() as i32,
+            at.z.floor() as i32,
+        ];
+        if let Some(item) = self.held().map(|stack| stack.item.to_string())
+            && self.mod_attack_entity(&item, target, pos)
+        {
+            self.swing_arm();
+            return true;
         }
         let burning = self
             .held()

@@ -27,13 +27,22 @@ name = "Test Machine"
 version = "0.1.0"
 api = "0.5"
 side = "both"
-capabilities = ["config", "server", "keys", "target", "inventory-read", "capabilities", "ui", "net", "recipes", "world-read", "render", "entities", "models", "dimensions", "vanilla-hooks", "block-entities", "item-data", "item-transfer"]
+capabilities = ["config", "server", "keys", "target", "inventory-read", "capabilities", "ui", "net", "recipes", "world-read", "render", "entities", "models", "dimensions", "vanilla-hooks", "block-entities", "item-data", "item-transfer", "registries"]
 
 [config.speed]
 type = "int"
 default = 2
 min = 1
 max = 10
+"#;
+
+const MACHINE_PEER_MANIFEST: &str = r#"
+id = "test_peer"
+name = "Test Machine Peer"
+version = "0.1.0"
+api = "0.4"
+side = "both"
+capabilities = ["server", "capabilities", "block-entities", "registries"]
 "#;
 
 /// Builds the mods once and writes their `.hmod` files; returns the folder.
@@ -52,6 +61,8 @@ fn mods_dir() -> &'static Path {
                 "horizon-mods-test-guest",
                 "-p",
                 "horizon-mods-test-machine",
+                "-p",
+                "horizon-mods-test-machine-peer",
                 "--target-dir",
             ])
             .arg(&target)
@@ -69,10 +80,35 @@ fn mods_dir() -> &'static Path {
             ("coords_hud", std::fs::read_to_string(example).unwrap()),
             ("horizon_mods_test_guest", GUEST_MANIFEST.to_string()),
             ("horizon_mods_test_machine", MACHINE_MANIFEST.to_string()),
+            (
+                "horizon_mods_test_machine_peer",
+                MACHINE_PEER_MANIFEST.to_string(),
+            ),
         ];
         for (name, manifest) in mods {
             let core = std::fs::read(built.join(format!("{name}.wasm"))).unwrap();
-            let hmod = Package::write(&manifest, &componentize(&core).unwrap()).unwrap();
+            let component = componentize(&core).unwrap();
+            let content_path = match name {
+                "horizon_mods_test_machine" => Some("data/test_machine/horizon/block/smelter.json"),
+                "horizon_mods_test_machine_peer" => Some("data/test_peer/horizon/block/cell.json"),
+                _ => None,
+            };
+            let hmod = if let Some(content_path) = content_path {
+                // The game-level machine fixture must carry its block as a
+                // real API 0.2 content definition, so its API 0.4 block entity
+                // can be placed and exercised by vanilla containers.
+                Package::write_files(
+                    &manifest,
+                    Some(&component),
+                    &[(
+                        content_path,
+                        br#"{"template":"minecraft:furnace","properties":{"hardness":3.5}}"#,
+                    )],
+                )
+                .unwrap()
+            } else {
+                Package::write(&manifest, &component).unwrap()
+            };
             std::fs::write(dir.join(format!("{name}.hmod")), hmod).unwrap();
         }
         dir
@@ -429,8 +465,8 @@ impl ItemFacts for Facts {
     fn burn_time(&self, _id: &str) -> u32 {
         0
     }
-    fn remainder(&self, _id: &str) -> Option<String> {
-        None
+    fn remainder(&self, id: &str) -> Option<String> {
+        (id == "minecraft:milk_bucket").then(|| "minecraft:bucket".into())
     }
     fn cooking_recipe(&self, kind: CookingKind, input: &str) -> Option<CookingRecipe> {
         let output = match (kind, input) {
@@ -465,6 +501,8 @@ fn smelter(handle: u32, input: Option<Stack>) -> BlockEntityView {
         z: 0,
         slots: vec![input, None],
         slot_components: vec![Vec::new(); 2],
+        energy: None,
+        fluids: Default::default(),
         properties: vec![Property {
             name: "lit".into(),
             value: "false".into(),
@@ -498,12 +536,16 @@ fn block_entities_tick_save_and_load() {
     );
     assert_eq!(mods.create_block_entity("minecraft:furnace", &[]), None);
     let (h, slots) = mods
-        .create_block_entity("test_machine:smelter", &[])
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
         .unwrap();
     assert_eq!(slots, 2);
     assert_eq!(mods.slot_access(h, 0, "up"), (false, true));
     assert_eq!(mods.slot_access(h, 0, "down"), (true, false));
-    assert_eq!(mods.slot_access(h, 1, "up"), (true, true));
+    assert_eq!(mods.slot_access(h, 1, "up"), (false, true));
     let mut views = [smelter(h, Some(stack("minecraft:raw_iron", 2)))];
     let components = horizon_world::nbt::write_network(
         &horizon_world::nbt::Tag::compound([(
@@ -521,7 +563,9 @@ fn block_entities_tick_save_and_load() {
     assert_eq!(mods.block_entity_data(h), [1]);
     views[0].changed = false;
     mods.tick_block_entities(&mut views);
-    assert!(!views[0].changed, "nothing the game keeps changed");
+    assert!(views[0].changed, "capability state changed");
+    assert_eq!(views[0].energy.unwrap().stored, 10);
+    assert_eq!(views[0].fluids[&0].amount, 20);
     mods.tick_block_entities(&mut views);
     assert_eq!(
         views[0].slots,
@@ -540,7 +584,11 @@ fn block_entities_tick_save_and_load() {
     assert_eq!(mods.block_entity_data(h), Vec::<i32>::new());
     assert_eq!(mods.slot_access(h, 0, "up"), (true, true));
     let (again, _) = mods
-        .create_block_entity("test_machine:smelter", &saved)
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &saved,
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
         .unwrap();
     assert_ne!(again, h);
     assert_eq!(mods.block_entity_data(again), [1]);
@@ -548,10 +596,84 @@ fn block_entities_tick_save_and_load() {
 }
 
 #[test]
+fn machine_output_insertion_is_atomic_and_respects_stack_capacity() {
+    let mut mods = machines();
+    let (handle, _) = mods
+        .create_block_entity("test_machine:smelter", &[])
+        .unwrap();
+    let mut view = smelter(handle, Some(stack("minecraft:raw_iron", 2)));
+    view.slots[1] = Some(stack("minecraft:iron_ingot", 64));
+    for _ in 0..3 {
+        mods.tick_block_entities(std::slice::from_mut(&mut view));
+    }
+    assert_eq!(
+        view.slots,
+        [
+            Some(stack("minecraft:raw_iron", 2)),
+            Some(stack("minecraft:iron_ingot", 64))
+        ],
+        "a full output must not consume input or change the output"
+    );
+
+    view.slots[1] = Some(stack("minecraft:iron_ingot", 63));
+    let components = horizon_world::nbt::write_network(
+        &horizon_world::nbt::Tag::compound([(
+            "minecraft:custom_name",
+            horizon_world::nbt::Tag::String("Marked ingot".into()),
+        )]),
+        horizon_world::nbt::Limits::default(),
+    )
+    .unwrap();
+    view.slot_components[1] = components.clone();
+    for _ in 0..3 {
+        mods.tick_block_entities(std::slice::from_mut(&mut view));
+    }
+    assert_eq!(
+        view.slots,
+        [
+            Some(stack("minecraft:raw_iron", 2)),
+            Some(stack("minecraft:iron_ingot", 63))
+        ],
+        "a componentful output stack must not merge with a default result"
+    );
+    assert_eq!(view.slot_components[1], components);
+
+    view.slot_components[1].clear();
+    for _ in 0..3 {
+        mods.tick_block_entities(std::slice::from_mut(&mut view));
+    }
+    assert_eq!(
+        view.slots,
+        [
+            Some(stack("minecraft:raw_iron", 1)),
+            Some(stack("minecraft:iron_ingot", 64))
+        ],
+        "a result should fit exactly at the stack limit"
+    );
+
+    view.slots[1] = Some(stack("minecraft:coal", 1));
+    for _ in 0..3 {
+        mods.tick_block_entities(std::slice::from_mut(&mut view));
+    }
+    assert_eq!(
+        view.slots,
+        [
+            Some(stack("minecraft:raw_iron", 1)),
+            Some(stack("minecraft:coal", 1))
+        ],
+        "a different output item must leave both stacks untouched"
+    );
+}
+
+#[test]
 fn block_entities_see_only_their_own() {
     let mut mods = machines();
     let (h, _) = mods
-        .create_block_entity("test_machine:smelter", &[])
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
         .unwrap();
     // A view with a handle the mod never got, and an output no table knows:
     // the stranger is not lent, and the ghost item is refused.
@@ -567,7 +689,56 @@ fn block_entities_see_only_their_own() {
         smelter(h + 100, Some(stack("minecraft:raw_iron", 1)))
     );
     assert_eq!(views[1].slots, [Some(stack("test:haunted", 1)), None]);
+    assert_eq!(views[1].energy.unwrap().stored, 15);
+    assert_eq!(views[1].fluids[&0].amount, 30);
+    assert!(views[1].changed);
     assert_eq!(mods.entries()[0].status, Status::Running);
+}
+
+#[test]
+fn a_mod_cannot_redefine_another_machines_capability_storage() {
+    let paths = [
+        mods_dir().join("horizon_mods_test_machine.hmod"),
+        mods_dir().join("horizon_mods_test_machine_peer.hmod"),
+    ];
+    let mut mods = Mods::load(&paths, |_| true, |_| false);
+    mods.set_item_facts(std::sync::Arc::new(Facts));
+    let (machine_handle, _) = mods
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
+        .unwrap();
+    let (peer_handle, _) = mods
+        .create_block_entity_at(
+            "test_peer:cell",
+            &[],
+            Some(("minecraft:overworld".into(), 1, 64, 0)),
+        )
+        .unwrap();
+    let mut views = [
+        smelter(machine_handle, None),
+        BlockEntityView {
+            handle: peer_handle,
+            dimension: "minecraft:overworld".into(),
+            x: 1,
+            y: 64,
+            z: 0,
+            ..BlockEntityView::default()
+        },
+    ];
+
+    mods.tick_block_entities(&mut views);
+
+    let donor_energy = views[0].energy.unwrap();
+    assert_eq!(donor_energy.capacity, 10_000);
+    assert_eq!(donor_energy.max_receive, 25);
+    assert_eq!(views[0].fluids[&0].fluid, "minecraft:water");
+    assert_eq!(views[0].fluids[&0].capacity, 1_000);
+    assert_eq!(views[1].energy.unwrap().capacity, 1_000);
+    assert_eq!(views[1].fluids[&0].fluid, "");
+    assert_eq!(views[1].fluids[&0].capacity, 16);
 }
 
 #[test]
@@ -621,6 +792,9 @@ fn a_block_entity_that_traps_gives_its_slots_back() {
 fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     let mut mods = machines();
     mods.set_snapshot(player());
+    assert!(mods.has_block_hook("test_machine:smelter"));
+    assert!(!mods.has_block_hook("test_machine:unregistered"));
+    assert!(mods.has_block_hook("test_machine:smelter[lit=false]"));
 
     // 1. Config read/write (API 0.3)
     assert!(mods.command("machine_api config"));
@@ -628,6 +802,14 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
         mods.drain(),
         [Output::Feedback {
             text: "speed 2->5".into(),
+            error: false,
+        }]
+    );
+    assert!(mods.command("machine_api item_facts"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "remainder=minecraft:bucket".into(),
             error: false,
         }]
     );
@@ -655,7 +837,13 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
         }),
         None,
         Vec::new(),
-        Vec::new(),
+        vec![StackView {
+            slot: 0,
+            id: "minecraft:iron_ingot".into(),
+            count: 4,
+            damage: 0,
+            max_damage: 0,
+        }],
     );
     mods.set_world_view(
         "minecraft:overworld",
@@ -683,7 +871,7 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     assert_eq!(
         mods.drain(),
         [Output::Feedback {
-            text: "key=true hit=test_machine:smelter[lit=false] hand=test_machine:wrench*1 blk=test_machine:smelter[lit=false] biome=minecraft:plains light=248".into(),
+            text: "key=true hit=test_machine:smelter[lit=false] hand=test_machine:wrench*1 container=minecraft:iron_ingot*4@0 blk=test_machine:smelter[lit=false] biome=minecraft:plains light=248".into(),
             error: false,
         }]
     );
@@ -691,12 +879,27 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     assert_eq!(mods.ghost_blocks().count(), 1);
 
     // 3. Capabilities (FE, fluid tanks, attachments, Curios accessories) & custom recipes (API 0.4)
+    let (_capability_handle, _) = mods
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
+        .unwrap();
     assert!(mods.command("machine_api caps_and_recipes"));
     assert_eq!(
         mods.drain(),
         [Output::Feedback {
-            text: "fe=500/300/1200 fluid=1500/500 mana=42 ring=test_machine:ring recipes=1/1"
-                .into(),
+            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=1/1".into(),
+            error: false,
+        }]
+    );
+    mods.tick(1);
+    assert!(mods.command("machine_api caps_and_recipes"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "fe=500/500/0/300/300/200/1000 fluid=1500/500/0/400/1000 mana=42 ring=test_machine:ring recipes=1/1".into(),
             error: false,
         }]
     );
@@ -747,6 +950,77 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
         }]
     );
 
+    let place_outcome = mods.block_event(
+        BlockEvent {
+            action: BlockAction::Place,
+            dimension: "minecraft:overworld".into(),
+            x: 1,
+            y: 64,
+            z: 0,
+            state: "test_machine:smelter[lit=false]".into(),
+            actor: "Player".into(),
+            held_item: "test_machine:smelter".into(),
+        },
+        "up".into(),
+    );
+    assert_eq!(place_outcome, EventOutcome::Pass);
+    let scheduled_outcome = mods.block_event(
+        BlockEvent {
+            action: BlockAction::ScheduledTick,
+            dimension: "minecraft:overworld".into(),
+            x: 1,
+            y: 64,
+            z: 0,
+            state: "test_machine:smelter[lit=false]".into(),
+            actor: String::new(),
+            held_item: String::new(),
+        },
+        String::new(),
+    );
+    assert_eq!(scheduled_outcome, EventOutcome::Pass);
+    let inside_outcome = mods.block_event(
+        BlockEvent {
+            action: BlockAction::EntityInside,
+            dimension: "minecraft:overworld".into(),
+            x: 1,
+            y: 64,
+            z: 0,
+            state: "test_machine:smelter[lit=false]".into(),
+            actor: "TestPlayer".into(),
+            held_item: String::new(),
+        },
+        String::new(),
+    );
+    assert_eq!(inside_outcome, EventOutcome::Pass);
+    let neighbor_outcome = mods.block_event(
+        BlockEvent {
+            action: BlockAction::NeighborChanged,
+            dimension: "minecraft:overworld".into(),
+            x: 1,
+            y: 64,
+            z: 0,
+            state: "test_machine:smelter[lit=false]".into(),
+            actor: String::new(),
+            held_item: String::new(),
+        },
+        String::new(),
+    );
+    assert_eq!(neighbor_outcome, EventOutcome::Pass);
+    let random_tick_outcome = mods.block_event(
+        BlockEvent {
+            action: BlockAction::RandomTick,
+            dimension: "minecraft:overworld".into(),
+            x: 1,
+            y: 64,
+            z: 0,
+            state: "test_machine:smelter[lit=false]".into(),
+            actor: String::new(),
+            held_item: String::new(),
+        },
+        String::new(),
+    );
+    assert_eq!(random_tick_outcome, EventOutcome::Pass);
+
     let item_out = mods.item_event(ItemEvent {
         action: ItemAction::UseOnBlock,
         item: "test_machine:wrench".into(),
@@ -776,6 +1050,13 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
                 id: "minecraft:iron_ingot".into(),
                 count: 2,
             }),
+            Output::Server(ServerAction::SpawnMob {
+                dimension: "minecraft:overworld".into(),
+                x: 0,
+                y: 64,
+                z: 0,
+                entity: "minecraft:iron_golem".into(),
+            }),
         ]
     );
 
@@ -795,6 +1076,94 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
             name: "keepInventory".into(),
             value: "true".into(),
         })]
+    );
+    for (kind, name) in [
+        (ServerEventKind::PlayerLeave, "player-leave"),
+        (ServerEventKind::BlockBreak, "block-break"),
+        (ServerEventKind::BlockPlace, "block-place"),
+        (ServerEventKind::EntitySpawn, "entity-spawn"),
+        (ServerEventKind::EntityDeath, "entity-death"),
+    ] {
+        assert_eq!(
+            mods.server_event(ServerEvent {
+                kind,
+                subject: "Player".into(),
+                dimension: "minecraft:overworld".into(),
+                x: 1,
+                y: 64,
+                z: 0,
+                detail: "test_machine:smelter".into(),
+            }),
+            EventOutcome::Pass
+        );
+        assert!(mods.command("machine_api last_server_event"));
+        assert_eq!(
+            mods.drain(),
+            [Output::Feedback {
+                text: format!("{name}:Player:minecraft:overworld:1,64,0:test_machine:smelter"),
+                error: false,
+            }]
+        );
+    }
+
+    assert!(mods.command("machine_api set_other_dimension"));
+    assert_eq!(
+        mods.drain(),
+        [
+            Output::Server(ServerAction::SetBlock {
+                dimension: "minecraft:the_nether".into(),
+                x: 1,
+                y: 64,
+                z: 1,
+                state: "minecraft:gold_block".into(),
+            }),
+            Output::Feedback {
+                text: "requested block in the Nether".into(),
+                error: false,
+            },
+        ]
+    );
+    assert!(mods.command("machine_api schedule_test_tick"));
+    assert_eq!(
+        mods.drain(),
+        [
+            Output::Server(ServerAction::SetBlock {
+                dimension: "minecraft:overworld".into(),
+                x: -31,
+                y: 70,
+                z: -9,
+                state: "minecraft:composter[level=7]".into(),
+            }),
+            Output::Server(ServerAction::ScheduleTick {
+                dimension: "minecraft:overworld".into(),
+                x: -31,
+                y: 70,
+                z: -9,
+                block: "minecraft:composter".into(),
+                delay: 1,
+            }),
+            Output::Feedback {
+                text: "scheduled composter tick".into(),
+                error: false,
+            },
+        ]
+    );
+    assert!(mods.command("machine_api set_machine_block"));
+    assert_eq!(
+        mods.drain(),
+        [
+            Output::Server(ServerAction::SetBlock {
+                dimension: "minecraft:overworld".into(),
+                x: -31,
+                y: 70,
+                z: -9,
+                state: "test_machine:smelter".into(),
+            }),
+            Output::Feedback {
+                text: "requested test machine block".into(),
+                error: false,
+            },
+        ]
     );
 
     mods.deliver_packet("test_machine:sync", b"hello", Some("Alice"));

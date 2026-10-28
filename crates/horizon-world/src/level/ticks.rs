@@ -21,6 +21,10 @@ pub struct Ticks {
     /// `Level.randValue`, the LCG behind `getBlockRandomPos`.
     pub random_tick_value: i32,
     pub(crate) updater: NeighborUpdater,
+    /// Positions receiving `BlockState.handleNeighborChanged`, in dispatch order.
+    pub neighbor_changes: Vec<BlockPos>,
+    /// Positions whose randomly-ticking block behavior ran, in tick order.
+    pub random_block_ticks: Vec<BlockPos>,
     /// `ComparatorBlockEntity.output` per comparator position (block-entity
     /// state owned by the level; persist it with the chunk if desired).
     pub comparator_outputs: std::collections::HashMap<BlockPos, i32>,
@@ -62,6 +66,8 @@ impl Ticks {
             sub_tick: 0,
             random_tick_value: random_tick_seed,
             updater: NeighborUpdater::default(),
+            neighbor_changes: Vec::new(),
+            random_block_ticks: Vec::new(),
             comparator_outputs: Default::default(),
             torch_toggles: Vec::new(),
             moving_pistons: Vec::new(),
