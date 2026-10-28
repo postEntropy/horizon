@@ -716,6 +716,11 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     let (_, backgrounds) = mods.open_screen_backgrounds().next().unwrap();
     assert_eq!(backgrounds.len(), 1);
     assert_eq!(backgrounds[0].texture, "test_machine:smelter");
+    let (_, screen_slots) = mods.open_screen_slots().next().unwrap();
+    assert_eq!(
+        screen_slots.get(&2),
+        Some(&("minecraft:iron_ingot".into(), 3))
+    );
     let _ = mods.drain();
 
     mods.menu_click("test_machine:smelter_menu", 0, 1);
@@ -730,6 +735,7 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     );
     mods.menu_button("test_machine:smelter_menu", 2);
     assert_eq!(mods.open_screens().count(), 0);
+    assert_eq!(mods.open_screen_slots().count(), 0);
     assert_eq!(
         mods.drain(),
         [Output::ScreenClosed {

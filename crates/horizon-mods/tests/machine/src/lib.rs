@@ -111,18 +111,32 @@ impl Mod for Machines {
                 title: "Smelter".into(),
                 width: 176,
                 height: 166,
-                widgets: vec![Widget {
-                    id: 1,
-                    kind: WidgetKind::ProgressArrow,
-                    x: 79,
-                    y: 34,
-                    width: 24,
-                    height: 17,
-                    text: "0%".into(),
-                    value: 0,
-                    max_value: 100,
-                }],
+                widgets: vec![
+                    Widget {
+                        id: 1,
+                        kind: WidgetKind::ProgressArrow,
+                        x: 79,
+                        y: 34,
+                        width: 24,
+                        height: 17,
+                        text: "0%".into(),
+                        value: 0,
+                        max_value: 100,
+                    },
+                    Widget {
+                        id: 2,
+                        kind: WidgetKind::Slot,
+                        x: 20,
+                        y: 20,
+                        width: 18,
+                        height: 18,
+                        text: String::new(),
+                        value: 0,
+                        max_value: 0,
+                    },
+                ],
             });
+            ui::set_slot("test_machine:smelter_menu", 2, "minecraft:iron_ingot", 3);
             ui::set_backgrounds(
                 "test_machine:smelter_menu",
                 &[ui::ScreenBackground {

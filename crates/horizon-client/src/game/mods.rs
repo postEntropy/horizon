@@ -25,6 +25,7 @@ pub(super) struct ModScreenView {
     pub(super) height: u32,
     pub(super) backgrounds: Vec<ModScreenBackground>,
     pub(super) widgets: Vec<ModWidgetView>,
+    pub(super) slot_items: Vec<(u32, String, u32)>,
 }
 #[derive(Clone, Debug)]
 #[cfg_attr(not(feature = "mods"), allow(dead_code))]
@@ -1190,12 +1191,25 @@ impl Game<'_> {
                 max_value: w.max_value,
             })
             .collect();
+        let slot_items = self
+            .mods
+            .mods
+            .open_screen_slots()
+            .find(|(owner, _)| *owner == mod_id)
+            .map(|(_, slots)| {
+                slots
+                    .iter()
+                    .map(|(&slot, (id, count))| (slot, id.clone(), *count))
+                    .collect()
+            })
+            .unwrap_or_default();
         Some(ModScreenView {
             title: spec.title.clone(),
             width: spec.width,
             height: spec.height,
             backgrounds,
             widgets,
+            slot_items,
         })
     }
     pub(super) fn mod_slot_position(&self, slot: usize) -> Option<(f32, f32)> {

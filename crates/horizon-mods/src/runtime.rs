@@ -1196,6 +1196,16 @@ impl Mods {
             Some((s.id.as_str(), s.screen_backgrounds.as_slice()))
         })
     }
+    /// Item stacks supplied for slots in each mod's currently open screen.
+    /// Slot ids correspond to `WidgetKind::Slot` widget ids in its `ScreenSpec`.
+    pub fn open_screen_slots(&self) -> impl Iterator<Item = (&str, &BTreeMap<u32, (String, u32)>)> {
+        self.entries.iter().filter_map(|e| {
+            let run = e.run.as_ref()?;
+            let s = run.store.data();
+            s.open_screen.as_ref()?;
+            Some((s.id.as_str(), &s.screen_slots))
+        })
+    }
     /// The game's container closed a mod-owned screen.
     pub fn close_screen(&mut self, screen_id: &str) {
         let Some(entry) = self.entries.iter_mut().find(|e| {
@@ -1212,6 +1222,8 @@ impl Mods {
         if let Some(run) = entry.run.as_mut() {
             let state = run.store.data_mut();
             state.open_screen = None;
+            state.screen_backgrounds.clear();
+            state.screen_slots.clear();
             state.out.push(Output::ScreenClosed {
                 mod_id: state.id.clone(),
             });
@@ -2564,8 +2576,15 @@ impl ui::Host for State {
                 spec.id
             ));
         }
+        let updating_same_screen = self
+            .open_screen
+            .as_ref()
+            .is_some_and(|current| current.id == spec.id);
         self.open_screen = Some(spec.clone());
-        self.screen_backgrounds.clear();
+        if !updating_same_screen {
+            self.screen_backgrounds.clear();
+            self.screen_slots.clear();
+        }
         self.out.push(Output::ScreenOpened {
             mod_id: self.id.clone(),
             spec,
@@ -2575,6 +2594,7 @@ impl ui::Host for State {
     fn close_screen(&mut self) {
         if self.open_screen.take().is_some() {
             self.screen_backgrounds.clear();
+            self.screen_slots.clear();
             self.out.push(Output::ScreenClosed {
                 mod_id: self.id.clone(),
             });

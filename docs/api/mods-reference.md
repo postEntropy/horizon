@@ -493,7 +493,7 @@ A textured region drawn behind the widgets in a screen.
 | `open-screen` | `func(spec: screen-spec) -> result<_, string>` | Opens or updates a declarative container screen for the player. |
 | `set-backgrounds` | `func(screen-id: string, backgrounds: list<screen-background>)` | Sets the textured regions for the currently open screen. |
 | `close-screen` | `func()` | Closes the mod's open screen, if any. |
-| `set-slot` | `func(screen-id: string, slot: u32, id: string, count: u32)` | Updates slot `slot` in the open screen with `id` and `count`. |
+| `set-slot` | `func(screen-id: string, slot: u32, id: string, count: u32)` | Displays `id` and `count` in the slot widget whose id is `slot` in the open screen. This is display content; use machine `set-slot` for the machine's actual inventory. |
 | `set-gauge` | `func(screen-id: string, widget-id: u32, value: u64, max-value: u64, text: string)` | Updates widget `widget-id`'s value/max-value/text in the open screen. |
 
 ## `net`

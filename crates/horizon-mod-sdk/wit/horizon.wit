@@ -473,7 +473,9 @@ interface ui {
     set-backgrounds: func(screen-id: string, backgrounds: list<screen-background>);
     /// Closes the mod's open screen, if any.
     close-screen: func();
-    /// Updates slot `slot` in the open screen with `id` and `count`.
+    /// Displays `id` and `count` in the slot widget whose id is `slot` in the
+    /// open screen. This is display content; use machine `set-slot` for the
+    /// machine's actual inventory.
     set-slot: func(screen-id: string, slot: u32, id: string, count: u32);
     /// Updates widget `widget-id`'s value/max-value/text in the open screen.
     set-gauge: func(screen-id: string, widget-id: u32, value: u64, max-value: u64, text: string);

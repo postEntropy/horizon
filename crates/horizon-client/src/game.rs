@@ -5459,6 +5459,21 @@ impl Game<'_> {
             let stack = self.slot_view(i);
             self.draw_slot_item(batch, drag.as_ref(), i, stack, ox + sx, oy + sy);
         }
+        // Declarative screens may supply display-only slot contents that are
+        // not part of the machine's game-owned inventory (for example a
+        // preview or a recipe ingredient). Keep these separate from menu slots.
+        if let Some(screen) = self.mod_screen_view() {
+            for (slot, id, count) in screen.slot_items {
+                let Some((x, y)) = self.mod_slot_position(slot as usize) else {
+                    continue;
+                };
+                if count == 0 {
+                    continue;
+                }
+                let stack = ItemStack::new(&id, count);
+                self.draw_item(batch, &stack, ox + x, oy + y);
+            }
+        }
     }
     fn draw_inventory(&mut self, batch: &mut HudBatch) {
         if self.draw_station(batch) {
