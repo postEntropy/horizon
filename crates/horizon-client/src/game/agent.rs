@@ -691,6 +691,36 @@ impl Game<'_> {
                 "0-8 hotbar, 9-35 inventory, 100+ crafting grid (row-major), 200 crafting result, 300+ container, 500-503 armor, 504 offhand, 600+ station"
             );
         }
+        if let Some(screen) = self.mod_screen_view() {
+            v["mod_screen"] = json!({
+                "title": screen.title,
+                "width": screen.width,
+                "height": screen.height,
+                "backgrounds": screen.backgrounds.iter().map(|background| json!({
+                    "texture": background.texture,
+                    "x": background.x,
+                    "y": background.y,
+                    "width": background.width,
+                    "height": background.height,
+                })).collect::<Vec<_>>(),
+                "widgets": screen.widgets.iter().map(|widget| json!({
+                    "id": widget.id,
+                    "kind": format!("{:?}", widget.kind),
+                    "x": widget.x,
+                    "y": widget.y,
+                    "width": widget.width,
+                    "height": widget.height,
+                    "text": widget.text,
+                    "value": widget.value,
+                    "max_value": widget.max_value,
+                })).collect::<Vec<_>>(),
+                "slots": screen.slot_items.iter().map(|(slot, item, count)| json!({
+                    "slot": slot,
+                    "item": item,
+                    "count": count,
+                })).collect::<Vec<_>>(),
+            });
+        }
         v
     }
 

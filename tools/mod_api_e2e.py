@@ -180,6 +180,29 @@ def stop_game(process, log, ctl_bin, socket, cwd, env):
     log.close()
 
 
+def verify_mod_screen(ctl_bin, socket, cwd, env):
+    command(ctl_bin, socket, cwd, env, 'clear @s')
+    command(ctl_bin, socket, cwd, env, 'tp @s -31 70 -11')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    ctl(ctl_bin, socket, cwd, env, 'look-at-block', -31, 70, -9, 'north')
+    target = ctl(ctl_bin, socket, cwd, env, 'looking-at')
+    hit = target.get('block') or {}
+    assert target.get('kind') == 'block' and hit.get('pos') == [-31, 70, -9] and hit.get('face') == 'north', target
+    ctl(ctl_bin, socket, cwd, env, 'mouse', 'right', 'click')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    screen = ctl(ctl_bin, socket, cwd, env, 'screen')
+    assert screen.get('screen') == 'container', f'mod machine screen did not open: {screen}'
+    mod_screen = screen.get('mod_screen')
+    assert mod_screen, f'mod machine screen contents are missing: {screen}'
+    assert mod_screen.get('title') == 'Smelter', mod_screen
+    assert [widget.get('id') for widget in mod_screen.get('widgets', [])] == [1, 2], mod_screen
+    assert mod_screen.get('backgrounds'), mod_screen
+    assert {'slot': 2, 'item': 'minecraft:iron_ingot', 'count': 3} in mod_screen.get('slots', []), mod_screen
+    ctl(ctl_bin, socket, cwd, env, 'key', 'esc', 'tap')
+    closed = ctl(ctl_bin, socket, cwd, env, 'screen')
+    assert closed.get('screen') == 'playing' and 'mod_screen' not in closed, closed
+
+
 def check_mode(client, ctl_bin, mods, *, in_frame):
     mode = 'in-frame' if in_frame else 'integrated'
     work = Path(tempfile.mkdtemp(prefix=f'horizon-mod-api-{mode}-'))
@@ -208,6 +231,7 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
         command(ctl_bin, socket, game_dir, env, 'machine_api set_machine_block')
         command(ctl_bin, socket, game_dir, env, 'peer_api set_peer_block')
         ctl(ctl_bin, socket, game_dir, env, 'wait', 3)
+        verify_mod_screen(ctl_bin, socket, game_dir, env)
         for pos, state in ((OUTPUT, 'minecraft:hopper[facing=down]'),
                            (INPUT, 'minecraft:hopper[facing=south]')):
             x, y, z = pos
@@ -365,6 +389,11 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
         peer_water_after, peer_water_capacity_after = fluid_state(peer, 'minecraft:water')
         assert peer_water_after == peer_water_saved, peer
         assert peer_water_capacity_after == peer_water_capacity, peer
+        ix, iy, iz = INPUT
+        command(ctl_bin, socket, game_dir, env, f'setblock {ix} {iy} {iz} minecraft:air')
+        verify_mod_screen(ctl_bin, socket, game_dir, env)
+        command(ctl_bin, socket, game_dir, env,
+                f'setblock {ix} {iy} {iz} minecraft:hopper[facing=south]')
         print(f'PASS {mode}: XP command hook, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
     except (CheckFailed, AssertionError, subprocess.TimeoutExpired) as error:
         raise CheckFailed(f'{mode}: {error}\n{tail(work / "game.log")}') from error

@@ -81,7 +81,7 @@ Java mod behavior has an equivalent.
 | [x] | Custom recipe registration validates ids, selectors, counts and payload limits (64 KiB per entry, 4 MiB per mod). |
 | [~] | Machine recipe lookup directly understands vanilla cooking recipes; other machine recipes are consumed through the recipe registry. |
 | [~] | FE/fluid/item capability interfaces exist in the WASM host; mod item slots work with vanilla hoppers and `/item` slot commands. Generic sided access, full-stack backpressure and stacked `use_remainder` output through a hopper have live coverage. Game-owned energy buffers and fluid tanks persist in mod block-entity NBT and two distinct mods transfer FE/water between machines in both single-player paths. A two-call-per-tick FE donor is constrained to the peer's 1 FE/tick limit; a 16 mB peer tank fills and blocks further transfer. Only the owning mod can declare energy/fluid capacity and rates: an adversarial peer's attempts to rewrite a neighbor are rejected in sandbox and live tests. Chunk unload, directional networks, item-slot ownership, attachments and real carried-mod recipes still need validation. |
-| [~] | Declarative machine screens, widgets and menu callbacks exist; screen contents have a known reopen/restart rendering issue. |
+| [~] | Declarative machine screens, widgets and menu callbacks exist. `tools/mod_api_e2e.py --mode both` now verifies the title, widgets, slot data and background after opening, closing, saving and fully restarting in both single-player paths; visual pixel/layout QA and menu callback/slot interaction coverage remain. |
 | [x] | World-space boxes and ghost-block previews are available through the render capability. |
 | [x] | Mod packet bridge works between the local window and the integrated single-player server with bounded queues. |
 | [~] | Client/server packet routing has runtime coverage but has not been validated in a complete live gameplay scenario. |
@@ -163,7 +163,7 @@ API/engine work, not a list of individual mods to port.
 | [~] | Define who owns and persists energy/fluid/item capability state across block-entity save, chunk unload, mod reload and world reopen. | Energy/fluid ownership and NBT round-trip are covered through world reopen in both SP paths; chunk unload and mod reload are not yet covered. |
 | [ ] | Persist mod attachments for player/entity/chunk/level targets through the corresponding single-player save files. | Set/read/delete survive save/reopen, while deleting a target removes stale data. |
 | [ ] | Connect accessory-slot APIs to actual player equipment/accessory UI and item transfer, rather than only a shared runtime store. | Equip, inspect, replace and save an accessory in-game through the declared API. |
-| [ ] | Fix the known declarative machine-screen contents/layout bug after a full game restart. | Open, close, save, restart and reopen the same screen with all widgets, slots and backgrounds intact. |
+| [x] | Restore declarative machine-screen contents after a full game restart. | `tools/mod_api_e2e.py --mode both` opens, closes, saves, restarts and reopens the same screen, then verifies its widgets, slots and background in both single-player paths. |
 | [ ] | Validate menu click/button callbacks and slot synchronization in integrated-server single-player, including shift-click and cursor stack behavior. | Server-authoritative menu tests confirm client/server slot agreement. |
 | [ ] | Add reusable matching/consumption helpers for multi-slot machine recipes, counts, tags and item components. | A guest can select a recipe and atomically consume inputs/produce outputs with no duplicate or partial craft. |
 | [ ] | Expand custom recipe data coverage for supported ATM10 recipe JSON forms, item tags, multiple outputs, fluid/chemical ingredients and remainders. | Carry report identifies every dropped recipe shape and fixtures cover each supported form. |
@@ -219,7 +219,7 @@ API/engine work, not a list of individual mods to port.
 
 | Done? | Work remaining | Completion check |
 |---|---|---|
-| [ ] | Add an API integration harness that launches a real modded single-player world in both simulation modes. | CI can verify one representative scenario for logic, machine, screen, recipe and save paths. |
+| [~] | Run the API integration harness that launches a real modded single-player world in both simulation modes. | `tools/mod_api_e2e.py --mode both` covers logic, machine capabilities, screen lifecycle and save paths locally; wire the representative scenario into CI and add recipe coverage. |
 | [ ] | Add missing parity harnesses for API effects that alter vanilla gameplay while preserving RNG order. | Each hook/action has a vanilla oracle and a Rust probe or equivalent fixture. |
 | [ ] | Re-run the full crate suite and fix the existing `content::tests::refuses_content_outside_its_fence` acceptance of `assets/minecraft/...`. | Full `cargo test -p horizon-mods --features runtime,pack` passes. |
 | [ ] | Refresh `docs/research/code-mods-plan.md`, whose original gap table predates APIs 0.3–0.5 and the current game bridges. | Historical research is labelled and current capability/backlog links point here. |

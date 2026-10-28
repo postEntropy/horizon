@@ -4678,6 +4678,9 @@ impl Game<'_> {
             r.menu = None;
             r.menu_title = None;
         }
+        if matches!(self.container_kind(), Some(BlockEntity::Mod { .. })) {
+            self.mod_close_screen();
+        }
         self.mount_menu_reset();
         // The client's menu has no level access: what it holds is the server's.
         self.station = None;
