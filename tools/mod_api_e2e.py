@@ -202,6 +202,9 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
     process = log = socket = None
     try:
         process, log, socket = start_game(client, ctl_bin, mods, work, env, in_frame=in_frame)
+        command(ctl_bin, socket, game_dir, env, 'experience add @s 50 points')
+        xp_levels = command(ctl_bin, socket, game_dir, env, 'experience query @s levels')
+        assert re.search(r'\b7\b', xp_levels), f'xp-gain hook did not double command XP: {xp_levels}'
         command(ctl_bin, socket, game_dir, env, 'machine_api set_machine_block')
         command(ctl_bin, socket, game_dir, env, 'peer_api set_peer_block')
         ctl(ctl_bin, socket, game_dir, env, 'wait', 3)
@@ -362,7 +365,7 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
         peer_water_after, peer_water_capacity_after = fluid_state(peer, 'minecraft:water')
         assert peer_water_after == peer_water_saved, peer
         assert peer_water_capacity_after == peer_water_capacity, peer
-        print(f'PASS {mode}: cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
+        print(f'PASS {mode}: XP command hook, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
     except (CheckFailed, AssertionError, subprocess.TimeoutExpired) as error:
         raise CheckFailed(f'{mode}: {error}\n{tail(work / "game.log")}') from error
     finally:

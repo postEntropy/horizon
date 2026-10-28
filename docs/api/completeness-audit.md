@@ -174,9 +174,11 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   applied. A subscribed mod can multiply the hit or cancel it. This covers the
   local player's melee hit path; projectile, mob, environmental and other
   incoming damage paths do not dispatch it yet.
-- Orb experience and advancement reward points dispatch `xp-gain`. Mods may
-  scale the points or cancel the award. XP from other sources still needs an
-  audit against the same event.
+- Orb experience, advancement rewards and positive `/experience add ... points`
+  awards dispatch `xp-gain`. A live fixture scales a 50-point command award to
+  100 points (7 levels) in both integrated-server and in-frame single-player.
+  Negative point adjustments and direct `set` operations keep their vanilla
+  semantics; other direct XP sources still need an audit against this event.
 - Player-mined block loot and mob-death item drops dispatch `loot-drop` before
   item entities spawn. `pass` preserves vanilla drops and adds mod drops;
   `consume` uses the mod drops instead; `cancel` suppresses item drops. XP orbs
@@ -193,12 +195,12 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
 `cargo test -p horizon-mods --features runtime,pack` passes: 18 unit tests,
 3 API-reference tests, and 20 sandbox tests (one ignored). The live
 `python3 tools/mod_api_e2e.py --mode both` run also passes in integrated-server
-and in-frame single-player. It covers cross-mod FE/fluid transfer, rejected
-cross-owner capability redefinitions, simulation, per-tick limits, sided item
-movement, hopper input/output and remainders, and save/reopen of machine
-inventory and capability state. These checks validate the listed paths only;
-they do not establish complete compatibility with arbitrary machine mods,
-chunk unload/reload, or every network topology.
+and in-frame single-player. It covers positive XP command scaling, cross-mod
+FE/fluid transfer, rejected cross-owner capability redefinitions, simulation,
+per-tick limits, sided item movement, hopper input/output and remainders, and
+save/reopen of machine inventory and capability state. These checks validate
+the listed paths only; they do not establish complete compatibility with
+arbitrary machine mods, chunk unload/reload, or every network topology.
 
 ## Completion gates
 

@@ -2024,6 +2024,11 @@ impl Game<'_> {
     }
     /// Player.giveExperiencePoints including negative amounts.
     fn give_points(&mut self, amount: i32) {
+        let amount = if amount > 0 {
+            self.mod_xp_gain(amount as u32, "minecraft:command") as i32
+        } else {
+            amount
+        };
         let e = &mut self.experience;
         e.progress += amount as f32 / horizon_client::entities::Experience::needed(e.level) as f32;
         e.total = e.total.saturating_add(amount).clamp(0, i32::MAX);

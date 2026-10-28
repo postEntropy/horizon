@@ -95,7 +95,7 @@ Java mod behavior has an equivalent.
 | [x] | WIT/SDK/runtime expose custom entity declarations and create/tick/save/remove/interact/hurt callbacks. |
 | [x] | Runtime tests exercise custom entity state, model, dimension and hook host calls. |
 | [~] | `entity-damage` reaches the local player's melee attack path. |
-| [~] | `xp-gain` reaches XP-orb and advancement reward paths. |
+| [~] | `xp-gain` reaches XP-orb pickup, advancement rewards and positive `/experience add ... points` commands. A live mod doubles 50 command points to 7 levels in both single-player paths; other direct XP sources still need an audit. |
 | [~] | `loot-drop` reaches player-mined block drops and mob-death item drops. |
 | [ ] | Custom entity lifecycle is not connected to actual game-world spawning, simulation, persistence and rendering. |
 | [ ] | Custom model animation/draw data is not connected to game rendering. |
@@ -190,7 +190,7 @@ API/engine work, not a list of individual mods to port.
 | [ ] | Wire `explosion-detonate` before block/entity effects are applied. | Mods can safely pass, alter or cancel an explosion in a parity harness. |
 | [ ] | Wire `enchantment-level` into enchantment selection/level calculation. | Vanilla result is unchanged for pass; bounded mod changes match test expectations. |
 | [ ] | Expand `entity-damage` to projectile, mob, fall, fire, explosion, environmental and other damage sources. | Source-by-source harness confirms exactly one event and correct cancellation/scaling. |
-| [ ] | Expand `xp-gain` to all XP sources and verify ordering with orb creation, pickup, advancement and commands. | XP amount and cancellation are consistent across a source matrix. |
+| [~] | Expand `xp-gain` to every direct XP source and verify ordering with orb creation, pickup, advancement and commands. Orb pickup, advancements and positive command point grants are covered; audit any remaining direct awards. | XP amount and cancellation are consistent across a source matrix. |
 | [ ] | Expand `loot-drop` to container, fishing, structure, block and entity loot contexts. | Pass/consume/cancel semantics preserve vanilla RNG and are tested per context. |
 | [ ] | Add API hooks for other demonstrated pack needs that have no current WIT event (for example entity spawn/death, player lifecycle, inventory changes), after auditing representative mod requirements. | Every new hook has a named event, capability/version rule, security bound, and parity test. |
 
