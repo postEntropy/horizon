@@ -702,7 +702,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `loot-drop` | Modify block or entity loot drops before they spawn. |
 | `entity-damage` | Modify incoming or outgoing entity damage. |
 | `xp-gain` | Modify experience orb or level gains. |
-| `crop-grow` | Modify plant age stages, vertical growth and mushroom spread during vanilla random ticks. |
+| `crop-grow` | Modify plant age stages, vertical growth and vine or mushroom spread during vanilla random ticks. |
 | `explosion-detonate` | Filter or modify blocks affected by an explosion. |
 | `enchantment-level` | Modify effective enchantment levels on an item or entity. |
 
@@ -716,7 +716,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `x` | `s32` | X coordinate. |
 | `y` | `s32` | Y coordinate. |
 | `z` | `s32` | Z coordinate. |
-| `value` | `f32` | Numeric value associated with the event (damage amount, XP, next age stage, target height or spread step). |
+| `value` | `f32` | Numeric value associated with the event (damage amount, XP, next age stage, target height or spread attempt count). |
 | `context` | `string` | Secondary context (attacker id, tool id, enchantment id). |
 
 ### record `logic-hooks`
@@ -942,5 +942,5 @@ Capability `vanilla-hooks` (API 0.5): named hooks into vanilla behaviour (what M
 | `set-damage-multiplier` | `func(factor: f32)` | During an `entity-damage` hook: scales the final damage by `factor`. |
 | `add-loot-drop` | `func(item: string, count: u32)` | During a `loot-drop` hook: appends `count` of `item` to the loot output. |
 | `set-xp-multiplier` | `func(factor: f32)` | During an `xp-gain` hook: scales the experience value by `factor`. |
-| `set-crop-growth-multiplier` | `func(factor: f32)` | During `crop-grow`: scales age stages, vertical segments or spread placements (default 1; values below 1 suppress growth; larger values round down and cap at 64 before each plant's natural cap; pass applies; consume/cancel suppresses the vanilla growth action). |
+| `set-crop-growth-multiplier` | `func(factor: f32)` | During `crop-grow`: scales age stages, vertical segments or spread attempts (default 1; values below 1 suppress growth; larger values round down and cap at 64 before each plant's natural cap; pass applies; consume/cancel suppresses the vanilla growth action). |
 | `add-enchantment-bonus` | `func(bonus: s32)` | During an `enchantment-level` hook: adds `bonus` levels to the queried enchantment. |

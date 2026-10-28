@@ -1298,11 +1298,48 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `VineBlock.randomTick`.
     fn vine_random_tick(&mut self, state: BlockStateId, pos: BlockPos) {
+        let Some(steps) = self.vine_random_tick_once(state, pos, true) else {
+            return;
+        };
+        let block = self.b.block(state);
+        for _ in 1..steps {
+            let current = self.state(pos);
+            if !self.b.is_block(current, block) {
+                break;
+            }
+            let _ = self.vine_random_tick_once(current, pos, false);
+        }
+    }
+    fn vine_set_growth(
+        &mut self,
+        source_state: BlockStateId,
+        source_pos: BlockPos,
+        target: BlockPos,
+        result_state: BlockStateId,
+        dispatch: bool,
+    ) -> Option<i32> {
+        let changed = self.state(target) != result_state;
+        let steps = if !changed {
+            0
+        } else if dispatch {
+            self.crop_growth_steps(source_state, source_pos, 1)?
+        } else {
+            1
+        };
+        self.set_block(target, result_state, 2);
+        Some(steps)
+    }
+    fn vine_random_tick_once(
+        &mut self,
+        state: BlockStateId,
+        pos: BlockPos,
+        dispatch: bool,
+    ) -> Option<i32> {
         let b = self.b;
         let p = b.props;
         let block = b.block(state);
         if self.rand_int(4) != 0 {
-            return;
+            return None;
         }
         let direction = Direction::ALL[self.rand_int(6) as usize];
         let above_pos = above(pos);
@@ -1311,7 +1348,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             && !b.table.bool(state, self.direction_prop(direction))
         {
             if !self.vine_can_spread(pos, block) {
-                return;
+                return None;
             }
             let test = rel(pos, direction);
             let edge = self.state(test);
@@ -1323,16 +1360,20 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 let cw_test = rel(test, cw);
                 let ccw_test = rel(test, ccw);
                 if cw_face && b.multiface_can_attach(self.state(cw_test), cw) {
-                    self.set_block(
+                    return self.vine_set_growth(
+                        state,
+                        pos,
                         test,
                         b.table.set_bool(default, self.direction_prop(cw), true),
-                        2,
+                        dispatch,
                     );
                 } else if ccw_face && b.multiface_can_attach(self.state(ccw_test), ccw) {
-                    self.set_block(
+                    return self.vine_set_growth(
+                        state,
+                        pos,
                         test,
                         b.table.set_bool(default, self.direction_prop(ccw), true),
-                        2,
+                        dispatch,
                     );
                 } else {
                     let opposite = direction.opposite();
@@ -1340,46 +1381,63 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                         && self.is_empty_block(cw_test)
                         && b.multiface_can_attach(self.rel_state(pos, cw), opposite)
                     {
-                        self.set_block(
+                        return self.vine_set_growth(
+                            state,
+                            pos,
                             cw_test,
                             b.table
                                 .set_bool(default, self.direction_prop(opposite), true),
-                            2,
+                            dispatch,
                         );
                     } else if ccw_face
                         && self.is_empty_block(ccw_test)
                         && b.multiface_can_attach(self.rel_state(pos, ccw), opposite)
                     {
-                        self.set_block(
+                        return self.vine_set_growth(
+                            state,
+                            pos,
                             ccw_test,
                             b.table
                                 .set_bool(default, self.direction_prop(opposite), true),
-                            2,
+                            dispatch,
                         );
                     } else if self.random().next_float() < 0.05
                         && b.multiface_can_attach(self.state(above(test)), Direction::Up)
                     {
-                        self.set_block(test, b.table.set_bool(default, p.up, true), 2);
+                        return self.vine_set_growth(
+                            state,
+                            pos,
+                            test,
+                            b.table.set_bool(default, p.up, true),
+                            dispatch,
+                        );
                     }
                 }
             } else if b.multiface_can_attach(edge, direction) {
-                self.set_block(
+                return self.vine_set_growth(
+                    state,
+                    pos,
                     pos,
                     b.table
                         .set_bool(state, self.direction_prop(direction), true),
-                    2,
+                    dispatch,
                 );
             }
-            return;
+            return None;
         }
         if direction == Direction::Up && pos.y < self.level.max_y() - 1 {
             if b.multiface_can_attach(self.state(above_pos), Direction::Up) {
-                self.set_block(pos, b.table.set_bool(state, p.up, true), 2);
-                return;
+                return self.vine_set_growth(
+                    state,
+                    pos,
+                    pos,
+                    b.table.set_bool(state, p.up, true),
+                    dispatch,
+                );
             }
             if self.is_empty_block(above_pos) {
                 if !self.vine_can_spread(pos, block) {
-                    return;
+                    return None;
                 }
                 let mut above_state = state;
                 for d in HORIZONTAL {
@@ -1393,9 +1451,9 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                     .into_iter()
                     .any(|d| b.table.bool(above_state, self.direction_prop(d)))
                 {
-                    self.set_block(above_pos, above_state, 2);
+                    return self.vine_set_growth(state, pos, above_pos, above_state, dispatch);
                 }
-                return;
+                return None;
             }
         }
         if pos.y > self.level.min_y() {
@@ -1418,10 +1476,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                         .into_iter()
                         .any(|d| b.table.bool(after, self.direction_prop(d)))
                 {
-                    self.set_block(below_pos, after, 2);
+                    return self.vine_set_growth(state, pos, below_pos, after, dispatch);
                 }
             }
         }
+        None
     }
     fn vine_can_spread(&self, pos: BlockPos, block: super::states::BlockId) -> bool {
         let mut max = 5;

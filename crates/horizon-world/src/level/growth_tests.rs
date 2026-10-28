@@ -165,6 +165,24 @@ impl World {
             .filter(|&&s| self.f.registry.state(s).unwrap().name.ends_with(suffix))
             .count()
     }
+    fn vine_faces(&self) -> usize {
+        self.level
+            .blocks
+            .values()
+            .filter_map(|&id| self.f.registry.state(id))
+            .filter(|state| state.name.ends_with("vine"))
+            .map(|state| {
+                state
+                    .properties
+                    .iter()
+                    .filter(|(name, value)| {
+                        matches!(name.as_str(), "east" | "north" | "south" | "up" | "west")
+                            && value.as_str() == "true"
+                    })
+                    .count()
+            })
+            .sum()
+    }
 }
 
 fn grow(sapling: &str, soil: &str, positions: &[(i32, i32)], log: &str) {
@@ -628,6 +646,78 @@ fn crop_growth_hook_scales_mushroom_spread_after_a_valid_target() {
         }
     }
     assert!(found_accelerated_spread, "no extra mushroom target found");
+}
+
+#[test]
+fn crop_growth_hook_scales_vine_spread_after_a_valid_target() {
+    let Some(f) = fixture() else { return };
+    let mut found_vanilla_growth = false;
+    let mut found_accelerated_spread = false;
+    for seed in 0..1024 {
+        let seed = i64::from(seed) << 32;
+        let mut vanilla = World::new(f, seed);
+        let mut accelerated = World::new(f, seed);
+        let mut cancelled = World::new(f, seed);
+        let pos = BlockPos::new(0, 64, 0);
+        let north = pos.offset(0, 0, -1);
+        let supports = [
+            pos.offset(1, 0, 0),
+            north,
+            pos.offset(0, 0, 1),
+            pos.offset(-1, 0, 0),
+            pos.offset(0, 1, 0),
+        ];
+        let vine = vanilla.id("vine", &[("north", "true")]);
+        assert!(
+            f.behaviours.is_randomly_ticking(vine),
+            "fixture vine state must be randomly ticking"
+        );
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            let stone = world.id("stone", &[]);
+            world.put(pos, vine);
+            for support in supports {
+                world.put(support, stone);
+            }
+        }
+        accelerated.level.crop_growth_multiplier = 3.0;
+        cancelled.level.crop_growth_multiplier = 0.0;
+
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            f.behaviours
+                .random_tick(&mut world.level, &mut world.ticks, pos);
+        }
+        if vanilla.level.crop_growth_calls == 0 {
+            continue;
+        }
+        found_vanilla_growth = true;
+
+        assert_eq!(vanilla.level.crop_growth_calls, 1);
+        assert_eq!(accelerated.level.crop_growth_calls, 1);
+        assert_eq!(cancelled.level.crop_growth_calls, 1);
+        assert_eq!(cancelled.level.blocks, {
+            let mut original = HashMap::new();
+            original.insert(pos, cancelled.id("vine", &[("north", "true")]));
+            for support in supports {
+                original.insert(support, cancelled.id("stone", &[]));
+            }
+            original
+        });
+        let vanilla_faces = vanilla.vine_faces();
+        assert!(vanilla_faces > 0);
+        let accelerated_faces = accelerated.vine_faces();
+        let vanilla_next = vanilla.level.random.next_int_bound(1_000_000);
+        let cancelled_next = cancelled.level.random.next_int_bound(1_000_000);
+        assert_eq!(vanilla_next, cancelled_next, "cancelled spread RNG");
+        if accelerated_faces > vanilla_faces {
+            found_accelerated_spread = true;
+            break;
+        }
+    }
+    assert!(
+        found_vanilla_growth,
+        "no vanilla vine spread hook dispatched"
+    );
+    assert!(found_accelerated_spread, "no extra vine spread found");
 }
 
 #[test]

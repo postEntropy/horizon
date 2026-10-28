@@ -4,7 +4,7 @@
 Every block state is put at the origin of a random neighbourhood and `randomTick`
 (or `tick`) is run with a seeded RNG on both sides; the resulting block changes,
 scheduled ticks, side effects and the RNG fingerprint after the call must match.
-The `--crop-growth` mode adds focused cases for all age-stage and bamboo growth blocks.
+The `--crop-growth` mode adds focused cases for supported age-stage, vertical and spreading plants.
 The Rust probe defaults to the release profile; set `HORIZON_PARITY_PROFILE=fast`
 to use the optimized fast profile with shorter link times during local iteration.
 """
@@ -37,7 +37,7 @@ def crop_growth_cases(facts, per_block, seed):
         'pumpkin_stem', 'melon_stem', 'cocoa', 'nether_wart',
         'sweet_berry_bush', 'pitcher_crop', 'cactus', 'sugar_cane',
         'red_mushroom', 'brown_mushroom',
-        'bamboo', 'bamboo_sapling',
+        'bamboo', 'bamboo_sapling', 'vine',
     )
     for block in targets:
         pool = [i for i, state in enumerate(facts.states) if state[0] == f'minecraft:{block}']
@@ -55,7 +55,7 @@ def main():
     parser = h.argument_parser(__doc__)
     parser.add_argument(
         '--crop-growth', action='store_true',
-        help='run `--count` random-tick cases for each crop-grow age-stage and bamboo block',
+        help='run `--count` random-tick cases for every crop-grow target block',
     )
     args = parser.parse_args()
     facts = h.load_facts()
