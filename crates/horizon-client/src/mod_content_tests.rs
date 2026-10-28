@@ -1,5 +1,5 @@
 use super::*;
-use crate::{assets::Assets, blocks::BlockFacts, items::Items};
+use crate::{assets::Assets, blocks::BlockFacts, containers::Providers, items::Items};
 
 #[test]
 fn renames_ids_keys_and_states() {
@@ -292,6 +292,86 @@ fn content_root_loads_with_every_table() {
             .is_file()
     );
     fs::remove_dir_all(&scratch).unwrap();
+}
+
+/// NeoForge's static furnace-fuel map updates existing, vanilla, and newly
+/// declared items in the same resource root.
+#[test]
+fn neoforge_furnace_fuels_update_item_components() {
+    let Some(base) = prepared() else {
+        return;
+    };
+    let scratch =
+        std::env::temp_dir().join(format!("horizon-mod-furnace-fuels-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&scratch);
+    let dir = scratch.join("ruby");
+    let manifest = "id = \"ruby\"\nname = \"Ruby\"\nversion = \"0.1.0\"\napi = \"0.2\"\nside = \"both\"\ncapabilities = [\"registries\"]\n";
+    for (name, text) in [
+        ("horizon-mod.toml", manifest),
+        (
+            "data/ruby/horizon/item/ruby.json",
+            r#"{"template":"minecraft:diamond"}"#,
+        ),
+        (
+            "data/neoforge/data_maps/item/furnace_fuels.json",
+            r#"{"values":{"minecraft:coal":{"burn_time":1600},"minecraft:stick":{"burn_time":40},"ruby:ruby":{"burn_time":800}},"remove":["minecraft:oak_sapling"]}"#,
+        ),
+    ] {
+        let path = dir.join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+    let package = horizon_mods::Package::read(&dir).unwrap();
+    let mod_content = ContentMod {
+        id: "ruby".into(),
+        content: Content::read(&dir, &package.manifest).unwrap(),
+    };
+    let root = resource_root(&base, &[mod_content], &scratch.join("cache")).unwrap();
+    let items: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join("items.json")).unwrap()).unwrap();
+    assert_eq!(
+        items["minecraft:coal"]["minecraft:cooking_fuel"]["burn_time"],
+        1600
+    );
+    assert!(items["minecraft:coal"]["minecraft:cooking_fuel"]["speed_multiplier"].is_string());
+    assert_eq!(
+        items["minecraft:stick"]["minecraft:cooking_fuel"]["burn_time"],
+        40
+    );
+    assert_eq!(
+        items["minecraft:stick"]["minecraft:cooking_fuel"]["speed_multiplier"],
+        "minecraft:cooking/speed_default"
+    );
+    assert_eq!(
+        items["ruby:ruby"]["minecraft:cooking_fuel"]["burn_time"],
+        800
+    );
+    assert!(items["minecraft:oak_sapling"]["minecraft:cooking_fuel"].is_null());
+    let catalog = Items::catalog(&root).unwrap();
+    assert_eq!(
+        catalog.items["minecraft:coal"].fuel.as_ref().unwrap().0,
+        1600
+    );
+    assert_eq!(catalog.items["ruby:ruby"].fuel.as_ref().unwrap().0, 800);
+    assert!(catalog.items["minecraft:oak_sapling"].fuel.is_none());
+    let providers = Providers::load(&root);
+    assert_eq!(
+        providers.burn_time(
+            &catalog,
+            &crate::items::ItemStack::new("minecraft:coal", 1),
+            false
+        ),
+        1600
+    );
+    assert_eq!(
+        providers.burn_time(
+            &catalog,
+            &crate::items::ItemStack::new("minecraft:stick", 1),
+            false
+        ),
+        40
+    );
+    let _ = fs::remove_dir_all(&scratch);
 }
 
 #[test]

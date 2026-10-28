@@ -19,7 +19,7 @@ use horizon_mods::content::{Block, Content, Rarity};
 use horizon_world::nbt::{self, JavaString, Limits, Tag};
 use serde::{Deserialize, Serialize, de};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt, fs,
     io::{BufWriter, Write},
     ops::Range,
@@ -244,6 +244,10 @@ struct NewItem {
 struct Plan<'a> {
     blocks: Vec<NewBlock<'a>>,
     items: Vec<NewItem>,
+    /// NeoForge's static fuel map, applied after new item templates are copied.
+    furnace_fuels: BTreeMap<String, Option<u32>>,
+    replace_furnace_fuels: bool,
+    warnings: Vec<String>,
     /// Vanilla's state count (the tables' length before).
     states: usize,
     /// Each vanilla block's default state.
@@ -427,9 +431,85 @@ impl<'a> Plan<'a> {
                 });
             }
         }
+        let mut furnace_fuels = BTreeMap::new();
+        let mut replace_furnace_fuels = false;
+        let mut warnings = Vec::new();
+        const FURNACE_FUELS: &str = "data/neoforge/data_maps/item/furnace_fuels.json";
+        for m in mods {
+            if !m.content.files.iter().any(|file| file == FURNACE_FUELS) {
+                continue;
+            }
+            let doc: serde_json::Value =
+                match serde_json::from_slice(&m.content.file(FURNACE_FUELS)?) {
+                    Ok(doc) => doc,
+                    Err(error) => {
+                        warnings.push(format!("mod {}: {FURNACE_FUELS}: {error}", m.id));
+                        continue;
+                    }
+                };
+            if doc.get("replace") == Some(&serde_json::Value::Bool(true)) {
+                replace_furnace_fuels = true;
+                furnace_fuels.clear();
+            }
+            if let Some(values) = doc.get("values").and_then(serde_json::Value::as_object) {
+                for (item, value) in values {
+                    if item.starts_with('#') {
+                        warnings.push(format!(
+                            "mod {}: {FURNACE_FUELS}: item tag {item} is not supported yet",
+                            m.id
+                        ));
+                        continue;
+                    }
+                    let burn_time = value
+                        .get("burn_time")
+                        .and_then(serde_json::Value::as_u64)
+                        .and_then(|value| u32::try_from(value).ok())
+                        .filter(|value| *value > 0);
+                    if let Some(burn_time) = burn_time {
+                        furnace_fuels.insert(item.clone(), Some(burn_time));
+                    } else {
+                        warnings.push(format!(
+                            "mod {}: {FURNACE_FUELS}: invalid burn_time for {item}",
+                            m.id
+                        ));
+                    }
+                }
+            }
+            if let Some(remove) = doc.get("remove").and_then(serde_json::Value::as_array) {
+                for item in remove.iter().filter_map(serde_json::Value::as_str) {
+                    if item.starts_with('#') {
+                        warnings.push(format!(
+                            "mod {}: {FURNACE_FUELS}: item tag removal {item} is not supported yet",
+                            m.id
+                        ));
+                    } else {
+                        furnace_fuels.insert(item.to_owned(), None);
+                    }
+                }
+            }
+        }
+        if !furnace_fuels.is_empty() {
+            let mut known: BTreeSet<String> = match read_json(&base.join("items.json"))? {
+                J::Obj(entries) => entries.into_iter().map(|(id, _)| id).collect(),
+                _ => return Err("items.json: no item registry".into()),
+            };
+            known.extend(items.iter().map(|item| item.rename.to.clone()));
+            furnace_fuels.retain(|item, _| {
+                let exists = known.contains(item);
+                if !exists {
+                    warnings.push(format!(
+                        "{FURNACE_FUELS}: {item} is not registered in this mod set; ignored"
+                    ));
+                }
+                exists
+            });
+        }
         Ok(Plan {
             blocks,
             items,
+            furnace_fuels,
+            replace_furnace_fuels,
+            warnings,
             states: names.len(),
             defaults,
             sounds,
@@ -628,6 +708,53 @@ impl<'a> Plan<'a> {
         }
     }
 
+    /// Applies NeoForge's static furnace-fuel data map to Horizon's item
+    /// component table. Data-map entries override only the burn time; retain
+    /// a template's speed provider, or use vanilla's default for new fuels.
+    fn furnace_fuels(&self, doc: &mut J) -> Result<()> {
+        let J::Obj(items) = doc else {
+            return Err("items.json: no item registry".into());
+        };
+        if self.replace_furnace_fuels {
+            for (_, components) in items.iter_mut() {
+                if let J::Obj(components) = components {
+                    components.retain(|(name, _)| name != "minecraft:cooking_fuel");
+                }
+            }
+        }
+        for (id, burn_time) in &self.furnace_fuels {
+            let Some((_, components)) = items.iter_mut().find(|(name, _)| name == id) else {
+                continue;
+            };
+            let J::Obj(components) = components else {
+                return Err(format!("items.json: {id} is not an item component object").into());
+            };
+            match burn_time {
+                Some(burn_time) => {
+                    let speed = components
+                        .iter()
+                        .find(|(name, _)| name == "minecraft:cooking_fuel")
+                        .and_then(|(_, fuel)| fuel.get("speed_multiplier"))
+                        .cloned()
+                        .unwrap_or_else(|| J::Str("minecraft:cooking/speed_default".into()));
+                    let mut fuel = J::Obj(Vec::new());
+                    fuel.set("burn_time", J::Num((*burn_time).into()));
+                    fuel.set("speed_multiplier", speed);
+                    if let Some((_, old)) = components
+                        .iter_mut()
+                        .find(|(name, _)| name == "minecraft:cooking_fuel")
+                    {
+                        *old = fuel;
+                    } else {
+                        components.push(("minecraft:cooking_fuel".into(), fuel));
+                    }
+                }
+                None => components.retain(|(name, _)| name != "minecraft:cooking_fuel"),
+            }
+        }
+        Ok(())
+    }
+
     /// One JSON table, rewritten.
     fn json(&self, name: &str, doc: &mut J) -> Result<()> {
         let states = |doc: &mut J, path: &str, ids: bool, gameplay: bool| -> Result<()> {
@@ -683,7 +810,10 @@ impl<'a> Plan<'a> {
                     self.names(map, false);
                 }
             }
-            "items.json" => self.items(doc, true),
+            "items.json" => {
+                self.items(doc, true);
+                self.furnace_fuels(doc)?;
+            }
             "registries.json" => {
                 // Network ids: the game and its server map items and blocks through
                 // this report, so new ones get the ids after vanilla's, in plan order.
@@ -2768,7 +2898,7 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
     // Mod files, and every tag addition gathered per tag file.
     let mut tags: BTreeMap<String, TagMerge> = BTreeMap::new();
     let mut shared_registry_files: BTreeMap<String, String> = BTreeMap::new();
-    let mut warnings = Vec::new();
+    let mut warnings = plan.warnings.clone();
     let mut worldgen: BTreeMap<&str, Vec<(String, String)>> = BTreeMap::new();
     let mut additions: BTreeMap<&str, Vec<Addition>> = BTreeMap::new();
     let mut biome_modifiers: Vec<String> = Vec::new();
@@ -3230,7 +3360,7 @@ fn stamp(base: &Path, mods: &[ContentMod]) -> Result<String> {
             modified.as_nanos()
         ))
     };
-    let mut parts = vec!["horizon mod content 3".to_owned()];
+    let mut parts = vec!["horizon mod content 4".to_owned()];
     let base = std::path::absolute(base)?;
     parts.push(
         String::from_utf8_lossy(&fs::read(base.join("horizon-resources.json"))?).into_owned(),

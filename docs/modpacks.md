@@ -368,8 +368,10 @@ only): content 54, library 33, client-ui 26, performance 25, other 14, unknown 2
 40 rows matched the reviewed ATM10 table; three dependency layers (93 / 57 / 5).
 
 `carry` copies a jar's `assets/<id>/`, `data/<id>/`, additions to vanilla recipes, advancements,
-loot tables and tags, and `data/c/tags/` into `mods/<id>/carry/`, a folder content mod (API 0.2)
-the game loads with `--dev-mod`, and keeps what a content mod may not hold (other namespaces,
+loot tables and tags, including shared `data/forge/tags/` and `data/neoforge/tags/` additions,
+and supported NeoForge `furnace_fuels` data maps for game-time item component overrides,
+into `mods/<id>/carry/`, a folder content mod (API 0.2) the game loads with `--dev-mod`, and
+keeps what a content mod may not hold (other namespaces,
 unsupported vanilla data) in `outside/`. After all selected jars are carried, the pack-wide pass
 checks recipe outputs against the prepared vanilla item registry and every carried mod's item and
 block declarations. Recipes for missing optional mods or undeclared items move to `outside/` and

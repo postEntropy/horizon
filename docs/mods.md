@@ -116,7 +116,7 @@ and minimum API versions are listed in [the API reference](api/mods-reference.md
 | `world-read` | loaded block states, biomes and packed light within four blocks of the player | local overlays and machine logic |
 | `render` | world-space lines, boxes and ghost blocks in a per-frame budget | Litematica-style placement, waypoints |
 | `registries` | new blocks, items, entities and recipes, mostly data: JSON models, textures, loot and recipes in the `.hmod`'s `assets/` and `data/` | server side; see [Multiplayer](#multiplayer) |
-| `server` | world events (block break/place, entity spawn/death, player join), game rules, server commands | runs where the world is simulated |
+| `server` | world events (block break/place, entity spawn/death, player join), game rules, block scheduling, item drops, vanilla mob spawning and sounds; world actions target a dimension | integrated single-player routes actions to registered dimensions; in-frame mode has one active dimension |
 | `net` | a mod's own client↔server channel (custom payloads) | only between the two halves of the same mod |
 
 There is no file, socket, process or raw-input interface, on purpose.
@@ -293,10 +293,13 @@ blocks and items by declaring them in `data/<id>/horizon/block/*.json` and
 
 The fence: files go in the mod's own namespaces (`assets/<id>/`,
 `data/<id>/`, and those its manifest lists), plus additions to vanilla tags
-(`data/minecraft/tags/`), to the vanilla recipe, advancement and loot-table
+(`data/minecraft/tags/`), shared Forge/NeoForge tag additions, to the vanilla recipe, advancement and loot-table
 registries, and to the convention tags NeoForge and Fabric mods share
 (`data/c/tags/`). Assets may also add or override files under
-`assets/minecraft/`, as resource packs do. Known shared definitions merge by
+`assets/minecraft/`, as resource packs do. The supported
+`data/neoforge/data_maps/item/furnace_fuels.json` map updates the
+`minecraft:cooking_fuel` component for registered items; item-tag selectors are
+reported and skipped until Horizon can expand them correctly. Known shared definitions merge by
 vanilla's rules: language keys override, atlas sources append, font providers
 use resource-stack order, and sound events append unless replaced. Other
 same-path assets use the later mod in load order. These files do not claim the
@@ -316,8 +319,8 @@ namespaces = ["kaisyn", "towns_and_towers"]
 
 A listed namespace is the mod's as its id is: its `assets/` and `data/`
 files load, and the game reads its tags, recipes, names and loot. Blocks and
-items are still declared under `data/<id>/horizon/` only. `minecraft`, `c`
-and `horizon` cannot be listed. Two mods that are on may not own the same
+items are still declared under `data/<id>/horizon/` only. `minecraft`, `c`,
+`forge`, `neoforge` and `horizon` cannot be listed. Two mods that are on may not own the same
 namespace (one's id or listed namespace being the other's): the game keeps
 the first in load order and leaves the other's content out, with
 "mods A and B both use the namespace N; turn one of them off" in the log. Paths
@@ -387,17 +390,19 @@ none.
     "top": "carve", "bottom": "none", "rigid_junctions": true, "inflate": true } }
 ```
 
-### Block entities (API 0.4, preview)
+### Block entities (API 0.4, single-player)
 
-The first piece of the machines tier ([research/code-mods-plan.md](research/code-mods-plan.md)):
-a mod with `api = "0.4"` and capability `block-entities` gives its own blocks
-block entities whose code ticks in the sandbox. The runtime and the SDK have
-it; the game does not create, tick or save them yet (next step in the plan).
+A mod with `api = "0.4"` and capability `block-entities` gives its own content
+blocks block entities whose slots and properties the game owns, while the mod
+supplies machine behavior and private saved bytes. Horizon creates these block
+entities through `/setblock`, `server::set_block`, normal placement and chunk
+restore; it ticks them and saves their slots and mod data. This is a working
+single-player foundation, not broad compatibility with arbitrary machines.
 
 | Part | What |
 |---|---|
 | export `block-entities` | `types()`: the mod's blocks with a block entity, their slot count and whether they tick; `create(handle, block, saved)`, `tick(handles)`, `save(handle)`, `remove(handle)`, `data(handle)` (the menu's values, vanilla's `ContainerData`) |
-| import `machine` | during `tick` only: `get-slot`, `set-slot` and `get-property`, `set-property` (the block state) of the block entities lent to the call; any time: `max-stack-size`, `burn-time`, `remainder`, `cooking(kind, input)` from the game's item, fuel and recipe tables |
+| import `machine` | during `tick` only: `get-slot`, `set-slot`, atomic `insert-slot`, and `get-property`, `set-property` (the block state) of the block entities lent to the call; any time: `max-stack-size`, `burn-time`, `remainder`, `cooking(kind, input)` from the game's item, fuel and recipe tables |
 | import `item-transfer` (`api = "0.4"`) | set per-slot, per-face permissions for hopper insertion and extraction; unconfigured faces remain accessible |
 | import `item-data` (`api = "0.4"`) | read or replace a machine slot's opaque binary network-NBT compound of item data components; an empty byte list clears it, and values are capped at 64 KiB |
 
@@ -420,11 +425,42 @@ mod-to-mod item transfer are not connected to this path yet.
 - **One call per mod per tick** for all its ticking block entities, under the
   tick's fuel budget. A block entity sees only the handles lent to that call; a
   slot write of an unknown item is refused, a stack over the item's maximum is
-  cut to it, a property value the block does not allow is refused.
+  cut to it, and a property value the block does not allow is refused. Use
+  `insert-slot` for output: it adds the entire stack only when it fits and
+  leaves a full, mismatched or componentful slot untouched. It handles default
+  item components; use the `item-data` API for stacks with custom components.
 - **Types are checked at start:** each for a block in the mod's own namespaces,
   at most once, at most 256 slots. A component that exports block entities
   without the capability does not start.
 - Components built before 0.4 (no `block-entities` export) load as before.
+- `capabilities::receive_energy` and `extract_energy` aggregate each buffer's
+  `max_receive` and `max_extract` across calls and mods for the current server
+  tick. Simulated operations report the remaining amount without consuming the
+  budget; the next game tick resets both counters. Fluid fill/drain simulation
+  likewise leaves tank contents unchanged, and a nonempty tank rejects a
+  different fluid id.
+
+`python3 tools/mod_api_e2e.py` checks a test smelter in both integrated-server
+and in-frame single-player: the mod's `server::set_block` creates the machine,
+`/item` writes and clears a machine slot, a vanilla hopper inserts raw iron,
+the mod processes a vanilla recipe, a second hopper extracts the ingot, and the
+output survives a save/reopen. It checks denied side access, that a full
+64-item output stack blocks recipe consumption until room is made, and that
+two honey bottles produce glass bottles, remain correct when the output fills,
+and can be extracted by a vanilla hopper. The test machine also writes energy
+and water through the machine capability API; both are stored in the game's
+block-entity NBT and checked after saving and reopening in both modes. This
+confirms persistence across world reopen. A second `test_peer` mod places an
+adjacent cell; the smelter transfers FE to it, and the E2E checks the received
+charge after reopening in both modes. It attempts two FE transfers each tick
+against the peer's 1 FE/tick limit and confirms the limit holds through the
+run. Its 16 mB water tank fills; transfer stops there and the source tank
+recovers to capacity. Chunk unload, mod reload, directional energy networks
+and full-tank behavior with a real pipe still need live coverage. Runtime tests
+also check that a simulated drain leaves the source unchanged and that a tank
+rejects an incompatible fluid. Remaining item interoperability work includes
+more container types. Run it after preparing the Minecraft resources; Linux
+needs `vscreen` or an active X11 display.
 
 ## Versions and compatibility
 

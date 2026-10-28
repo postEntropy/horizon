@@ -4,9 +4,9 @@
 //!
 //! Content is data, not code: nothing here runs in the sandbox. What a mod
 //! may add is fenced instead. Its own namespaces (its id and the ones its
-//! manifest lists), plus additions to vanilla tags, selected vanilla data
-//! registries and mergeable vanilla resources, and convention tags (`c`, which
-//! NeoForge and Fabric mods share). Paths are plain, files and totals are
+//! manifest lists), plus additions to vanilla and loader tags, selected vanilla
+//! data registries and mergeable vanilla resources, and convention tags (`c`,
+//! which NeoForge and Fabric mods share). Paths are plain, files and totals are
 //! capped, vanilla ids cannot be redefined, and no two mods share a namespace
 //! ([`clash`]).
 use crate::manifest::{Capability, MANIFEST, Manifest};
@@ -65,6 +65,23 @@ pub fn minecraft_registry_addition(path: &str) -> bool {
 pub fn minecraft_resource_addition(path: &str) -> bool {
     path.strip_prefix("assets/minecraft/")
         .is_some_and(|rest| !rest.is_empty())
+}
+
+/// Tag files in namespaces shared by loader APIs may be contributed by any
+/// content mod. Tags are merged by the game in load order, so this does not
+/// grant ownership of the namespace or allow arbitrary loader data.
+pub fn shared_tag_addition(path: &str) -> bool {
+    let mut parts = path.splitn(3, '/');
+    matches!(parts.next(), Some("data"))
+        && matches!(parts.next(), Some("minecraft" | "c" | "forge" | "neoforge"))
+        && parts.next().is_some_and(|rest| rest.starts_with("tags/"))
+}
+
+/// Built-in NeoForge data maps with direct vanilla component equivalents.
+/// Unknown loader data stays outside the content fence until Horizon has a
+/// concrete gameplay mapping for it.
+pub fn shared_builtin_data_map(path: &str) -> bool {
+    matches!(path, "data/neoforge/data_maps/item/furnace_fuels.json")
 }
 
 /// A vanilla identifier, `minecraft:path`.
@@ -339,17 +356,15 @@ impl Content {
             let own = namespace == id;
             let owned = own || manifest.namespaces.iter().any(|n| n == namespace);
             let contributes = manifest.contributes.iter().any(|n| n == namespace);
-            // Vanilla's own files stay vanilla's; a mod may only add to its
-            // tags, and to the convention tags mods share.
-            let shared = matches!(namespace, "minecraft" | "c");
             let allowed = owned
                 || contributes
-                || (top == "data" && shared && rest.starts_with("tags/"))
+                || shared_tag_addition(name)
+                || shared_builtin_data_map(name)
                 || (namespace == "minecraft" && minecraft_registry_addition(name))
                 || minecraft_resource_addition(name);
             if !allowed {
                 return Err(format!(
-                    "{name}: a mod adds files in its own namespaces ({top}/{id}/ and those listed in namespaces), vanilla tags and registries, or mergeable vanilla resources"
+                    "{name}: a mod adds files in its own namespaces ({top}/{id}/ and those listed in namespaces), shared tags, supported NeoForge data maps, vanilla registries, or mergeable vanilla resources"
                 ));
             }
             if !own && top == "data" && rest.starts_with("horizon/") {
@@ -586,10 +601,14 @@ capabilities = ["registries"]
             ("data/ruby/recipe/ruby_block.json", b"{}"),
             ("data/minecraft/tags/block/mineable/pickaxe.json", b"{}"),
             ("data/c/tags/item/gems/ruby.json", b"{}"),
+            (
+                "data/neoforge/data_maps/item/furnace_fuels.json",
+                br#"{"values":{"minecraft:coal":{"burn_time":1600}}}"#,
+            ),
             ("assets/ruby/textures/block/ruby_block.png", b"png"),
         ];
         let content = hmod("ok", MANIFEST_TEXT, files).unwrap();
-        assert_eq!(content.files.len(), 6);
+        assert_eq!(content.files.len(), 7);
         assert_eq!(
             content.blocks,
             [Block {
@@ -633,14 +652,23 @@ capabilities = ["registries"]
         };
         let e = refused("other-ns", &[("data/other/horizon/block/a.json", BLOCK)]);
         assert!(e.contains("own namespaces"), "{e}");
-        refused(
-            "vanilla-asset",
+        let vanilla_resource = hmod(
+            "vanilla-resource",
+            MANIFEST_TEXT,
             &[("assets/minecraft/textures/block/stone.png", b"x")],
+        )
+        .unwrap();
+        assert_eq!(
+            vanilla_resource.files,
+            ["assets/minecraft/textures/block/stone.png"]
         );
-        refused(
+        let vanilla_recipe = hmod(
             "vanilla-recipe",
+            MANIFEST_TEXT,
             &[("data/minecraft/recipe/stone.json", b"{}")],
-        );
+        )
+        .unwrap();
+        assert_eq!(vanilla_recipe.files, ["data/minecraft/recipe/stone.json"]);
         refused("convention-recipe", &[("data/c/recipe/stone.json", b"{}")]);
         refused("convention-asset", &[("assets/c/lang/en_us.json", b"{}")]);
         let e = refused(

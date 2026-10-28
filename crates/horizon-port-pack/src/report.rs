@@ -283,6 +283,12 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     let (left_blocks, left_items) = (count("blocks_unknown"), count("items_unknown"));
     let copied = carry["copied"].as_u64().unwrap_or(0);
     let outside = carry["outside"].as_array().map_or(0, Vec::len);
+    let data_map_unsupported = carry["data_map_unsupported"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(_, entries)| entries.as_array().map_or(0, Vec::len))
+        .sum::<usize>();
     let unreadable = count("unreadable");
     let model_aliases = count("model_aliases");
     let models_unresolved = count("models_unresolved");
@@ -348,6 +354,11 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     }
     if outside > 0 {
         gaps.push(format!("{outside} files outside supported namespaces"));
+    }
+    if data_map_unsupported > 0 {
+        gaps.push(format!(
+            "{data_map_unsupported} unsupported data-map entries"
+        ));
     }
     if unreadable > 0 {
         gaps.push(format!("{unreadable} unreadable files left out"));

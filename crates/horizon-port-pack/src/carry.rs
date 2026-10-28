@@ -35,6 +35,10 @@ pub struct Report {
     /// Files outside what a content mod may hold (other namespaces, vanilla
     /// data other than tags), kept in `outside/` for review.
     pub outside: Vec<String>,
+    /// Shared loader data maps carried into Horizon's content root.
+    pub data_maps: Vec<String>,
+    /// Entries in carried data maps Horizon could not apply, grouped by file.
+    pub data_map_unsupported: BTreeMap<String, Vec<String>>,
     /// Files of the mod's own content the game would refuse, kept in
     /// `outside/` too, with why: a path vanilla does not read (upper case),
     /// JSON that does not parse.
@@ -1119,7 +1123,29 @@ fn split(name: &str) -> Option<(&str, &str, &str)> {
 
 /// Additions to vanilla and convention tags, which every mod may hold.
 fn shared_tag(root: &str, ns: &str, rest: &str) -> bool {
-    root == "data" && (ns == "minecraft" || ns == "c") && rest.starts_with("tags/")
+    root == "data"
+        && matches!(ns, "minecraft" | "c" | "forge" | "neoforge")
+        && rest.starts_with("tags/")
+}
+
+/// NeoForge/Forge registries still use plural block/item tag directories;
+/// Horizon and the vanilla 26.3 reader use their singular registry names.
+fn canonical_tag_path(name: &str) -> String {
+    if !name.starts_with("data/forge/tags/") && !name.starts_with("data/neoforge/tags/") {
+        return name.to_owned();
+    }
+    let Some((prefix, tag)) = name.split_once("/tags/") else {
+        return name.to_owned();
+    };
+    let Some((kind, rest)) = tag.split_once('/') else {
+        return name.to_owned();
+    };
+    let kind = match kind {
+        "blocks" => "block",
+        "items" => "item",
+        _ => kind,
+    };
+    format!("{prefix}/tags/{kind}/{rest}")
 }
 
 /// Where a jar entry goes: `Some(true)` inside the content mod (its own
@@ -1137,6 +1163,7 @@ fn place(name: &str, owned: &[&str], contributes: &[&str]) -> Option<bool> {
         owned.contains(&ns)
             || contributes.contains(&ns)
             || shared_tag(root, ns, rest)
+            || horizon_mods::content::shared_builtin_data_map(name)
             || shared_registry
             || shared_resource,
     )
@@ -1539,9 +1566,37 @@ fn carry_kind(
         if let Some(why) = unreadable {
             report.unreadable.insert(name.clone(), why);
         }
+        if keep && horizon_mods::content::shared_builtin_data_map(&name) {
+            report.data_maps.push(name.clone());
+            if name == "data/neoforge/data_maps/item/furnace_fuels.json"
+                && let Ok(doc) = serde_json::from_slice::<Value>(&bytes)
+            {
+                let mut unsupported = Vec::new();
+                if let Some(values) = doc.get("values").and_then(Value::as_object) {
+                    for (item, value) in values {
+                        if item.starts_with('#') {
+                            unsupported
+                                .push(format!("{item}: item-tag selectors are not supported"));
+                        } else if value
+                            .get("burn_time")
+                            .and_then(Value::as_u64)
+                            .is_none_or(|time| time == 0 || time > u32::MAX as u64)
+                        {
+                            unsupported.push(format!("{item}: invalid burn_time"));
+                        }
+                    }
+                }
+                if !unsupported.is_empty() {
+                    report
+                        .data_map_unsupported
+                        .insert(name.clone(), unsupported);
+                }
+            }
+        }
+        let carried_name = canonical_tag_path(&name);
         let dest = if keep {
             report.copied += 1;
-            inside.join(&name)
+            inside.join(&carried_name)
         } else {
             report.outside.push(name.clone());
             outside.join(&name)
@@ -2705,6 +2760,18 @@ mod tests {
             ),
             ("data/c/tags/item/gems.json", r#"{"values": ["gem:gem"]}"#),
             (
+                "data/neoforge/tags/item/foods.json",
+                r#"{"values": ["gem:gem"]}"#,
+            ),
+            (
+                "data/forge/tags/blocks/ores.json",
+                r#"{"values": ["gem:gem_block"]}"#,
+            ),
+            (
+                "data/neoforge/data_maps/item/furnace_fuels.json",
+                r##"{"values": {"gem:gem": {"burn_time": 1600}, "#c:planks": {"burn_time": 300}}}"##,
+            ),
+            (
                 "data/gem/lithostitched/worldgen_modifier/houses.json",
                 r#"{"type": "lithostitched:add_template_pool_elements",
                     "template_pools": "minecraft:village/plains/houses",
@@ -2751,7 +2818,7 @@ mod tests {
             &BTreeMap::new(),
         )
         .unwrap();
-        assert_eq!(report.copied, 15);
+        assert_eq!(report.copied, 18);
         let unreadable: Vec<&str> = report.unreadable.keys().map(String::as_str).collect();
         assert_eq!(
             unreadable,
@@ -2780,10 +2847,8 @@ mod tests {
         assert_eq!(report.item_definitions_added, 2);
         assert_eq!(report.blocks["gem_door"], "minecraft:oak_door");
         assert_eq!(report.blocks["gem_block"], "minecraft:stone");
-        assert_eq!(
-            report.blocks_unknown.keys().collect::<Vec<_>>(),
-            ["gem_core"]
-        );
+        // The carried-state fallback now preserves custom axes on stone.
+        assert!(report.blocks_unknown.is_empty());
         assert_eq!(report.items, 1);
         let carried = out.join("carry");
         assert!(!carried.join("com").exists());
@@ -2816,9 +2881,37 @@ mod tests {
         let package = horizon_mods::Package::read(&carried).unwrap();
         let content = horizon_mods::Content::read(&carried, &package.manifest).unwrap();
         let blocks: Vec<&str> = content.blocks.iter().map(|b| b.id.as_str()).collect();
-        assert_eq!(blocks, ["gem:gem_block", "gem:gem_door"]);
+        assert_eq!(blocks, ["gem:gem_block", "gem:gem_core", "gem:gem_door"]);
         assert_eq!(content.items.len(), 1);
         assert_eq!(content.items[0].id, "gem:gem");
+        assert!(
+            content
+                .files
+                .contains(&"data/neoforge/tags/item/foods.json".to_owned())
+        );
+        assert!(
+            content
+                .files
+                .contains(&"data/forge/tags/block/ores.json".to_owned())
+        );
+        assert!(
+            !content
+                .files
+                .contains(&"data/forge/tags/blocks/ores.json".to_owned())
+        );
+        assert!(
+            content
+                .files
+                .contains(&"data/neoforge/data_maps/item/furnace_fuels.json".to_owned())
+        );
+        assert_eq!(
+            report.data_maps,
+            ["data/neoforge/data_maps/item/furnace_fuels.json"]
+        );
+        assert_eq!(
+            report.data_map_unsupported["data/neoforge/data_maps/item/furnace_fuels.json"],
+            ["#c:planks: item-tag selectors are not supported"]
+        );
         fs::remove_dir_all(&dir).unwrap();
     }
 

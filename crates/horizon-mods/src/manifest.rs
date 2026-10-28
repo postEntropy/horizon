@@ -27,7 +27,7 @@ pub const API: &str = "0.1";
 pub const APIS: [&str; 5] = [API, "0.2", "0.3", "0.4", "0.5"];
 /// Namespaces no mod may claim: vanilla's, the convention tags' (mods add
 /// to those, docs/mods.md) and the game's own.
-const RESERVED_NAMESPACES: [&str; 3] = ["minecraft", "c", "horizon"];
+const RESERVED_NAMESPACES: [&str; 5] = ["minecraft", "c", "forge", "horizon", "neoforge"];
 /// The biggest `mod.wasm` a mod may ship.
 const MAX_WASM: u64 = 32 << 20;
 
@@ -746,7 +746,7 @@ capabilities = ["registries", "block-entities", "capabilities", "ui", "net", "re
         let m = with("\"kaisyn\", \"towns_and_towers\"").unwrap();
         let owned: Vec<&str> = m.owned_namespaces().collect();
         assert_eq!(owned, ["t_and_t", "kaisyn", "towns_and_towers"]);
-        for reserved in ["minecraft", "c", "horizon"] {
+        for reserved in ["minecraft", "c", "forge", "horizon", "neoforge"] {
             let e = with(&format!("\"{reserved}\"")).unwrap_err();
             assert!(e.contains("not a mod's to claim"), "{e}");
         }
