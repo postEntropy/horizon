@@ -27,7 +27,7 @@ name = "Test Machine"
 version = "0.1.0"
 api = "0.5"
 side = "both"
-capabilities = ["config", "server", "keys", "target", "inventory-read", "capabilities", "ui", "net", "recipes", "world-read", "render", "entities", "models", "dimensions", "vanilla-hooks", "block-entities", "item-data"]
+capabilities = ["config", "server", "keys", "target", "inventory-read", "capabilities", "ui", "net", "recipes", "world-read", "render", "entities", "models", "dimensions", "vanilla-hooks", "block-entities", "item-data", "item-transfer"]
 
 [config.speed]
 type = "int"
@@ -501,6 +501,9 @@ fn block_entities_tick_save_and_load() {
         .create_block_entity("test_machine:smelter", &[])
         .unwrap();
     assert_eq!(slots, 2);
+    assert_eq!(mods.slot_access(h, 0, "up"), (false, true));
+    assert_eq!(mods.slot_access(h, 0, "down"), (true, false));
+    assert_eq!(mods.slot_access(h, 1, "up"), (true, true));
     let mut views = [smelter(h, Some(stack("minecraft:raw_iron", 2)))];
     let components = horizon_world::nbt::write_network(
         &horizon_world::nbt::Tag::compound([(
@@ -535,6 +538,7 @@ fn block_entities_tick_save_and_load() {
     let saved = mods.save_block_entity(h).unwrap();
     mods.remove_block_entity(h);
     assert_eq!(mods.block_entity_data(h), Vec::<i32>::new());
+    assert_eq!(mods.slot_access(h, 0, "up"), (true, true));
     let (again, _) = mods
         .create_block_entity("test_machine:smelter", &saved)
         .unwrap();

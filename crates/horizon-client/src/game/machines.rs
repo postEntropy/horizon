@@ -41,6 +41,7 @@ enum Kind {
     Crafter,
     /// `BrewingStandBlockEntity` (a `WorldlyContainer`).
     Brewing,
+    Mod,
     /// `ComposterBlock.getContainer` at this level (a `WorldlyContainerHolder`
     /// without a block entity): input below 7, empty at 7, bone meal at 8.
     Composter(i32),
@@ -164,6 +165,7 @@ impl Containers<'_> {
             return None;
         }
         let kind = match (entity, name) {
+            (BlockEntity::Mod { .. }, _) => Kind::Mod,
             (BlockEntity::Furnace(_), _) => Kind::Furnace,
             (BlockEntity::Crafter(_), _) => Kind::Crafter,
             (BlockEntity::Brewing(_), _) => Kind::Brewing,
@@ -416,6 +418,26 @@ impl Game<'_> {
             .slots_mut()
             .get_mut(i)
     }
+    fn mod_slot_access(&self, view: &View, slot: usize, face: Direction) -> (bool, bool) {
+        if view.kind != Kind::Mod {
+            return (true, true);
+        }
+        let Some((pos, local_slot)) = view.locate(slot) else {
+            return (false, false);
+        };
+        let Some(BlockEntity::Mod { handle, .. }) = self.world.block_entities.get(&pos) else {
+            return (true, true);
+        };
+        let face = match face {
+            Direction::Down => "down",
+            Direction::Up => "up",
+            Direction::North => "north",
+            Direction::South => "south",
+            Direction::West => "west",
+            Direction::East => "east",
+        };
+        self.mod_item_slot_access(*handle, local_slot, face)
+    }
     /// `BlockEntity.setChanged` for every block entity of a container.
     fn view_changed(&mut self, view: &View) {
         // A composter's containers change its block state instead.
@@ -449,7 +471,13 @@ impl Game<'_> {
         view: &View,
         mut stack: ItemStack,
         slot: usize,
+        face: Option<Direction>,
     ) -> Option<ItemStack> {
+        if let Some(face) = face
+            && !self.mod_slot_access(view, slot, face).0
+        {
+            return Some(stack);
+        }
         let c = self.containers();
         if !c.can_place(view, slot, &stack) {
             return Some(stack);
@@ -510,7 +538,7 @@ impl Game<'_> {
         let mut rest = Some(stack);
         for slot in slots {
             let Some(stack) = rest.take() else { break };
-            rest = self.try_move_in_item(from_hopper, view, stack, slot);
+            rest = self.try_move_in_item(from_hopper, view, stack, slot, face);
         }
         rest
     }
@@ -649,7 +677,9 @@ impl Game<'_> {
                 let Some(stack) = c.get(&source, slot) else {
                     continue;
                 };
-                if !c.can_take(&source, slot, stack, Direction::Down) {
+                if !c.can_take(&source, slot, stack, Direction::Down)
+                    || !self.mod_slot_access(&source, slot, Direction::Down).1
+                {
                     continue;
                 }
                 let Some(one) = self.take_one(&source, slot) else {

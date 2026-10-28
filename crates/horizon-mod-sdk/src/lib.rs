@@ -22,7 +22,8 @@
 //!
 //! Every interface but `log` is a capability: list the ones the mod uses in
 //! `horizon-mod.toml` (`game-read`, `chat`, `hud`, `storage`, and
-//! `block-entities` for [`machine`] with `api = "0.4"`).
+//! `block-entities` for [`machine`] with `api = "0.4"`). Machine mods may also
+//! use `item-transfer` to define the sides from which hoppers move items.
 //!
 //! Block entities (API 0.4): a mod whose blocks are machines returns their
 //! types from [`Mod::block_entity_types`], keeps each one's state by its
@@ -48,9 +49,9 @@ pub use exports::horizon::mods::mod_entities::{
     AiGoal, EntityType, Guest as __ModEntitiesGuest, SpawnCategory,
 };
 pub use horizon::mods::{
-    capabilities, chat, config, dimensions, entities, game, hud, inventory, item_data, keys, log,
-    machine, models, net, recipes, render, server, storage, target, ui, vanilla_hooks,
-    world_read as world,
+    capabilities, chat, config, dimensions, entities, game, hud, inventory, item_data,
+    item_transfer, keys, log, machine, models, net, recipes, render, server, storage, target, ui,
+    vanilla_hooks, world_read as world,
 };
 
 /// The game's calls into a mod. Only the hooks [`Registration`] or

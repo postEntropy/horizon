@@ -439,6 +439,14 @@ impl Game<'_> {
     pub(super) fn mod_slot_position(&self, _slot: usize) -> Option<(f32, f32)> {
         None
     }
+    pub(super) fn mod_item_slot_access(
+        &self,
+        _handle: u32,
+        _slot: usize,
+        _face: &str,
+    ) -> (bool, bool) {
+        (true, true)
+    }
     pub(super) fn mod_button_at(&self, _x: f32, _y: f32) -> Option<u8> {
         None
     }
@@ -1220,6 +1228,16 @@ impl Game<'_> {
             .into_iter()
             .find(|w| w.kind == ModWidgetKind::Slot && w.id == slot)?;
         Some((w.x as f32, w.y as f32))
+    }
+    pub(super) fn mod_item_slot_access(
+        &self,
+        handle: u32,
+        slot: usize,
+        face: &str,
+    ) -> (bool, bool) {
+        u32::try_from(slot).ok().map_or((true, true), |slot| {
+            self.mods.mods.slot_access(handle, slot, face)
+        })
     }
     pub(super) fn mod_button_at(&self, x: f32, y: f32) -> Option<u8> {
         self.mod_screen_view()?

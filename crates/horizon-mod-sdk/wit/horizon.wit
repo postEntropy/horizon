@@ -177,6 +177,23 @@ interface machine {
     cooking: func(kind: cooking-kind, input: string) -> option<cooking-recipe>;
 }
 
+/// Capability `item-transfer` (API 0.4): sided access for mod machine slots.
+/// Rules are owned by the mod's block entity and reset when it is recreated.
+interface item-transfer {
+    enum face {
+        down,
+        up,
+        north,
+        south,
+        west,
+        east,
+    }
+    /// Sets whether hoppers may insert into or
+    /// extract from one slot through `face`. Unconfigured slot faces allow both.
+    /// Returns false for an unknown block entity handle or out-of-range slot.
+    set-slot-access: func(handle: u32, slot: u32, face: face, insert: bool, extract: bool) -> bool;
+}
+
 /// Capability `item-data` (API 0.4): opaque data components on machine slots.
 interface item-data {
     /// Returns the stack's `minecraft:components` compound as binary network
@@ -977,6 +994,7 @@ world horizon-machine-mod {
     import target;
     import inventory;
     import machine;
+    import item-transfer;
     import item-data;
     import capabilities;
     import ui;
@@ -1001,6 +1019,7 @@ world machine-host {
     import target;
     import inventory;
     import machine;
+    import item-transfer;
     import item-data;
     import capabilities;
     import ui;

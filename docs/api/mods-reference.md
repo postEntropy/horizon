@@ -18,6 +18,7 @@ The contract between Horizon and its mods: the WIT package `horizon:mods@0.1.0`,
 | `target` | [`target`](#target) | see the block or entity you are looking at |
 | `inventory-read` | [`inventory`](#inventory) | see the items in your inventory and open container |
 | `block-entities` | [`machine`](#machine) | run its blocks' machines in your worlds |
+| `item-transfer` | [`item-transfer`](#item-transfer) | control which sides allow item insertion and extraction |
 | `item-data` | [`item-data`](#item-data) | preserve item data components in machine inventories |
 | `capabilities` | [`capabilities`](#capabilities) | exchange energy, fluids, items, attachments and accessories |
 | `ui` | [`ui`](#ui) | open custom machine and container screens |
@@ -39,14 +40,14 @@ The contract between Horizon and its mods: the WIT package `horizon:mods@0.1.0`,
 
 A mod with API 0.3 logic, API 0.4 machines and API 0.5 deep systems: the SDK builds every mod against this world. Mods built for `horizon-mod` alone still load.
 
-- Imports (what the game offers): `config`, `server`, `keys`, `target`, `inventory`, `machine`, `item-data`, `capabilities`, `ui`, `net`, `recipes`, `world-read`, `render`, `entities`, `models`, `dimensions`, `vanilla-hooks`, `log`, `game`, `chat`, `hud`, `storage`
+- Imports (what the game offers): `config`, `server`, `keys`, `target`, `inventory`, `machine`, `item-transfer`, `item-data`, `capabilities`, `ui`, `net`, `recipes`, `world-read`, `render`, `entities`, `models`, `dimensions`, `vanilla-hooks`, `log`, `game`, `chat`, `hud`, `storage`
 - Exports (what the mod provides): `block-entities`, `logic`, `mod-entities`, `events`
 
 ## World `machine-host`
 
 The game's side of `horizon-machine-mod` beyond `horizon-mod`.
 
-- Imports (what the game offers): `config`, `server`, `keys`, `target`, `inventory`, `machine`, `item-data`, `capabilities`, `ui`, `net`, `recipes`, `world-read`, `render`, `entities`, `models`, `dimensions`, `vanilla-hooks`
+- Imports (what the game offers): `config`, `server`, `keys`, `target`, `inventory`, `machine`, `item-transfer`, `item-data`, `capabilities`, `ui`, `net`, `recipes`, `world-read`, `render`, `entities`, `models`, `dimensions`, `vanilla-hooks`
 - Exports (what the mod provides): `block-entities`, `mod-entities`
 
 ## `log`
@@ -225,6 +226,27 @@ An item and how many. Read or write its non-default components with `item-data`.
 | `burn-time` | `func(id: string) -> u32` | Ticks `id` burns as a furnace's fuel (the game's fuel values), 0 if it is no fuel. |
 | `remainder` | `func(id: string) -> option<string>` | What is left of `id` once used up as fuel or an ingredient (a bucket from a lava bucket). |
 | `cooking` | `func(kind: cooking-kind, input: string) -> option<cooking-recipe>` | The data pack's cooking recipe of `kind` for `input`. |
+
+## `item-transfer`
+
+Access: capability `item-transfer`.
+
+Capability `item-transfer` (API 0.4): sided access for mod machine slots. Rules are owned by the mod's block entity and reset when it is recreated.
+
+### enum `face`
+
+| Case | |
+| --- | --- |
+| `down` |  |
+| `up` |  |
+| `north` |  |
+| `south` |  |
+| `west` |  |
+| `east` |  |
+
+| Function | Signature | What it does |
+| --- | --- | --- |
+| `set-slot-access` | `func(handle: u32, slot: u32, face: face, insert: bool, extract: bool) -> bool` | Sets whether hoppers may insert into or extract from one slot through `face`. Unconfigured slot faces allow both. Returns false for an unknown block entity handle or out-of-range slot. |
 
 ## `item-data`
 

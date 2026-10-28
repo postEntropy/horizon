@@ -15,7 +15,7 @@ use horizon_mod_sdk::{
     capabilities::{self, EnergyView, FluidView},
     config,
     dimensions::{self, DimensionSpec, GeneratorKind, PortalSpec},
-    entities, item_data,
+    entities, item_data, item_transfer,
     keys::{self, KeyBinding},
     machine::{self, CookingKind, ItemStack},
     models::{self, BonePose, DrawPart, DrawPartKind},
@@ -415,6 +415,9 @@ impl Mod for Machines {
         if block == "test_machine:smelter" {
             let progress = saved.try_into().map_or(0, u32::from_le_bytes);
             self.progress.insert(handle, progress);
+            let _ = item_transfer::set_slot_access(handle, 0, item_transfer::Face::Up, false, true);
+            let _ =
+                item_transfer::set_slot_access(handle, 0, item_transfer::Face::Down, true, false);
         }
     }
     fn tick_block_entities(&mut self, handles: &[u32]) {

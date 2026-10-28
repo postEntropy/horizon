@@ -132,6 +132,8 @@ pub enum Capability {
     /// Block entities for the mod's own blocks (API 0.4): the `machine`
     /// interface and the `block-entities` export.
     BlockEntities,
+    /// Per-face item insertion and extraction rules for mod machine slots (API 0.4).
+    ItemTransfer,
     /// Read and write opaque Minecraft data components on machine slots (API 0.4).
     ItemData,
     /// Energy (FE), fluid tanks, item slots, data attachments and accessories (API 0.4).
@@ -156,7 +158,7 @@ pub enum Capability {
     VanillaHooks,
 }
 impl Capability {
-    pub const ALL: [Capability; 22] = [
+    pub const ALL: [Capability; 23] = [
         Capability::GameRead,
         Capability::Chat,
         Capability::Hud,
@@ -168,6 +170,7 @@ impl Capability {
         Capability::Target,
         Capability::InventoryRead,
         Capability::BlockEntities,
+        Capability::ItemTransfer,
         Capability::ItemData,
         Capability::Capabilities,
         Capability::Ui,
@@ -194,6 +197,7 @@ impl Capability {
             | Capability::InventoryRead
             | Capability::WorldRead => "0.3",
             Capability::BlockEntities
+            | Capability::ItemTransfer
             | Capability::ItemData
             | Capability::Capabilities
             | Capability::Ui
@@ -220,6 +224,7 @@ impl Capability {
             Capability::Target => "target",
             Capability::InventoryRead => "inventory",
             Capability::BlockEntities => "machine",
+            Capability::ItemTransfer => "item-transfer",
             Capability::ItemData => "item-data",
             Capability::Capabilities => "capabilities",
             Capability::Ui => "ui",
@@ -247,6 +252,7 @@ impl Capability {
             Capability::Target => "see the block or entity you are looking at",
             Capability::InventoryRead => "see the items in your inventory and open container",
             Capability::BlockEntities => "run its blocks' machines in your worlds",
+            Capability::ItemTransfer => "control which sides allow item insertion and extraction",
             Capability::ItemData => "preserve item data components in machine inventories",
             Capability::Capabilities => {
                 "exchange energy, fluids, items, attachments and accessories"
@@ -296,6 +302,7 @@ impl fmt::Display for Capability {
             Capability::Target => "target",
             Capability::InventoryRead => "inventory-read",
             Capability::BlockEntities => "block-entities",
+            Capability::ItemTransfer => "item-transfer",
             Capability::ItemData => "item-data",
             Capability::Capabilities => "capabilities",
             Capability::Ui => "ui",

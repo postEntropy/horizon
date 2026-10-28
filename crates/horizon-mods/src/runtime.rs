@@ -53,8 +53,9 @@ pub use logic_bindings::exports::horizon::mods::logic::{
 use machine_bindings::{
     MachineHost,
     horizon::mods::{
-        capabilities, config, dimensions, entities, inventory, item_data, keys, machine, models,
-        net, recipes, render, server, target, ui, vanilla_hooks, world_read as world,
+        capabilities, config, dimensions, entities, inventory, item_data, item_transfer, keys,
+        machine, models, net, recipes, render, server, target, ui, vanilla_hooks,
+        world_read as world,
     },
 };
 use wasmtime::component::{Func, Val};
@@ -392,6 +393,8 @@ struct State {
     views: Vec<BlockEntityView>,
     /// Position retained between callbacks so create/save hooks can address capabilities.
     positions: HashMap<u32, (String, i32, i32, i32)>,
+    block_entity_slots: HashMap<u32, u32>,
+    slot_access: BTreeMap<(u32, u32, String), (bool, bool)>,
     /// Capability `config`: typed schema and values.
     config_schemas: BTreeMap<String, ConfigSchema>,
     configs: BTreeMap<String, ConfigValue>,
@@ -564,6 +567,8 @@ impl Mods {
             facts,
             views: Vec::new(),
             positions: HashMap::new(),
+            block_entity_slots: HashMap::new(),
+            slot_access: BTreeMap::new(),
             config_schemas: m.config.clone(),
             configs,
             key_bindings: Vec::new(),
@@ -1279,6 +1284,12 @@ impl Mods {
                 run.store.data_mut().positions.insert(handle, position);
             }
         }
+        if let Some(run) = self.entries[i].run.as_mut() {
+            run.store
+                .data_mut()
+                .block_entity_slots
+                .insert(handle, slots);
+        }
         self.call(i, FUEL_EVENT, |m, s| {
             machine_of(m)?
                 .horizon_mods_block_entities()
@@ -1358,7 +1369,10 @@ impl Mods {
                     .call_remove(s, handle)
             });
             if let Some(run) = self.entries[i].run.as_mut() {
-                if let Some((dimension, x, y, z)) = run.store.data_mut().positions.remove(&handle) {
+                let state = run.store.data_mut();
+                state.block_entity_slots.remove(&handle);
+                state.slot_access.retain(|(h, _, _), _| *h != handle);
+                if let Some((dimension, x, y, z)) = state.positions.remove(&handle) {
                     let pos = format!("{dimension}:{x},{y},{z}");
                     if let Ok(mut shared) = self.shared.lock() {
                         shared.energy.remove(&pos);
@@ -1368,6 +1382,25 @@ impl Mods {
                 }
             }
         }
+    }
+
+    /// Whether a game item mover may insert/extract through a side of a mod
+    /// machine slot. Unconfigured sides preserve the previous all-access behavior.
+    pub fn slot_access(&self, handle: u32, slot: u32, face: &str) -> (bool, bool) {
+        let Some(&owner) = self.handles.get(&handle) else {
+            return (true, true);
+        };
+        self.entries[owner]
+            .run
+            .as_ref()
+            .and_then(|run| {
+                run.store
+                    .data()
+                    .slot_access
+                    .get(&(handle, slot, face.to_owned()))
+                    .copied()
+            })
+            .unwrap_or((true, true))
     }
 
     /// Every running mod's custom entity types (API 0.5).
@@ -2085,6 +2118,36 @@ impl machine::Host for State {
     }
     fn cooking(&mut self, kind: CookingKind, input: String) -> Option<CookingRecipe> {
         self.facts.as_ref()?.cooking_recipe(kind, &input)
+    }
+}
+
+impl item_transfer::Host for State {
+    fn set_slot_access(
+        &mut self,
+        handle: u32,
+        slot: u32,
+        face: item_transfer::Face,
+        insert: bool,
+        extract: bool,
+    ) -> bool {
+        if self
+            .block_entity_slots
+            .get(&handle)
+            .is_none_or(|slots| slot >= *slots)
+        {
+            return false;
+        }
+        let face = match face {
+            item_transfer::Face::Down => "down",
+            item_transfer::Face::Up => "up",
+            item_transfer::Face::North => "north",
+            item_transfer::Face::South => "south",
+            item_transfer::Face::West => "west",
+            item_transfer::Face::East => "east",
+        };
+        self.slot_access
+            .insert((handle, slot, face.to_owned()), (insert, extract));
+        true
     }
 }
 
