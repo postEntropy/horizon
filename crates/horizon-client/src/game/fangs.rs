@@ -81,26 +81,33 @@ impl Game<'_> {
         };
         bite(self);
         self.each_guest_hit(bite);
-        for m in &mut self.mobs {
-            let ally = matches!(
-                m.species(),
-                Species::Evoker
-                    | Species::Illusioner
-                    | Species::Vex
-                    | Species::Pillager
-                    | Species::Vindicator
-                    | Species::Witch
-            );
-            if m.id != f.owner && !ally && m.alive() && m.bounds().intersects(b) {
-                m.damage(
-                    6.0,
-                    horizon_client::mobs::Damage {
-                        kind: horizon_client::mobs::DamageKind::Magic,
-                        attacker: Some(horizon_client::mobs::Who::Mob(f.owner)),
-                        from: Some(f.pos),
-                    },
+        let targets: Vec<u32> = self
+            .mobs
+            .iter()
+            .filter(|m| {
+                let ally = matches!(
+                    m.species(),
+                    Species::Evoker
+                        | Species::Illusioner
+                        | Species::Vex
+                        | Species::Pillager
+                        | Species::Vindicator
+                        | Species::Witch
                 );
-            }
+                m.id != f.owner && !ally && m.alive() && m.bounds().intersects(b)
+            })
+            .map(|m| m.id)
+            .collect();
+        for id in targets {
+            self.mod_mob_damage(
+                id,
+                6.0,
+                horizon_client::mobs::Damage {
+                    kind: horizon_client::mobs::DamageKind::Magic,
+                    attacker: Some(horizon_client::mobs::Who::Mob(f.owner)),
+                    from: Some(f.pos),
+                },
+            );
         }
     }
     /// `EvokerFangsRenderer`: the jaws snapping up and closing.

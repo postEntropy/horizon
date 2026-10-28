@@ -311,17 +311,16 @@ impl Game<'_> {
                     });
                     let damage = 8.0 + if aquatic { 2.5 * impaling } else { 0.0 };
                     t.dealt_damage = true;
-                    if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-                        let from = Some([t.position.x, t.position.y, t.position.z]);
-                        m.damage(
-                            damage,
-                            Damage {
-                                kind: DamageKind::Arrow,
-                                attacker: Some(Who::Player),
-                                from,
-                            },
-                        );
-                    }
+                    let from = Some([t.position.x, t.position.y, t.position.z]);
+                    self.mod_mob_damage(
+                        id,
+                        damage,
+                        Damage {
+                            kind: DamageKind::Arrow,
+                            attacker: Some(Who::Player),
+                            from,
+                        },
+                    );
                     self.audio.play(
                         "minecraft:item.trident.hit",
                         Some([t.position.x, t.position.y, t.position.z]),

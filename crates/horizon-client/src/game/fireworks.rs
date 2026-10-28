@@ -257,16 +257,15 @@ impl Game<'_> {
                     .collect()
             };
             for (id, amount) in hits {
-                if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-                    m.damage(
-                        amount,
-                        Damage {
-                            kind: DamageKind::Explosion,
-                            attacker: None,
-                            from: Some(at),
-                        },
-                    );
-                }
+                self.mod_mob_damage(
+                    id,
+                    amount,
+                    Damage {
+                        kind: DamageKind::Explosion,
+                        attacker: None,
+                        from: Some(at),
+                    },
+                );
             }
         }
         let camera = self.eye_position().unwrap_or(at);

@@ -950,23 +950,19 @@ impl Game<'_> {
                     source,
                 } => {
                     let mut killed = false;
-                    let mut hurt = false;
-                    if let Some(t) = self.mobs.iter_mut().find(|m| m.id == target) {
-                        let hit = t.damage(amount, source);
-                        hurt = hit;
-                        if hit {
-                            killed = !t.alive();
-                            // The hurt or death sound the mob raised.
-                            let center = t.center();
-                            for event in std::mem::take(&mut t.outbox) {
-                                if let MobEvent::Sound(s, _, volume, pitch) = event {
-                                    self.audio.play(
-                                        &format!("minecraft:{s}"),
-                                        Some(center),
-                                        volume,
-                                        pitch,
-                                    );
-                                }
+                    let hurt = self.mod_mob_damage(target, amount, source);
+                    if hurt && let Some(t) = self.mobs.iter_mut().find(|m| m.id == target) {
+                        killed = !t.alive();
+                        // The hurt or death sound the mob raised.
+                        let center = t.center();
+                        for event in std::mem::take(&mut t.outbox) {
+                            if let MobEvent::Sound(s, _, volume, pitch) = event {
+                                self.audio.play(
+                                    &format!("minecraft:{s}"),
+                                    Some(center),
+                                    volume,
+                                    pitch,
+                                );
                             }
                         }
                     }
@@ -1023,9 +1019,7 @@ impl Game<'_> {
                     }
                 }
                 MobEvent::HurtSelf { mob, kind, amount } => {
-                    if let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob) {
-                        m.damage(amount, horizon_client::mobs::Damage::of(kind));
-                    }
+                    self.mod_mob_damage(mob, amount, horizon_client::mobs::Damage::of(kind));
                 }
                 MobEvent::SetTarget { mob, target } => {
                     if let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob) {
@@ -2110,11 +2104,7 @@ impl Game<'_> {
                         hurt
                     }
                     Who::Mob(id) => {
-                        let hurt = self
-                            .mobs
-                            .iter_mut()
-                            .find(|m| m.id == id)
-                            .is_some_and(|m| m.damage(amount, source));
+                        let hurt = self.mod_mob_damage(id, amount, source);
                         if p.owner == Some(Who::Player) {
                             self.last_hurt_by_player.insert(id, self.lan_acting);
                         }
@@ -2150,15 +2140,19 @@ impl Game<'_> {
                 if let Hit::Entity {
                     who: Who::Mob(id), ..
                 } = hit
-                    && let Some(m) = self.mobs.iter_mut().find(|m| m.id == id)
                 {
                     // Snowball.onHitEntity: 3 damage to blazes, 0 otherwise.
-                    let amount = if m.species() == Species::Blaze {
+                    let amount = if self
+                        .mobs
+                        .iter()
+                        .find(|m| m.id == id)
+                        .is_some_and(|m| m.species() == Species::Blaze)
+                    {
                         3.0
                     } else {
                         0.0
                     };
-                    m.damage(amount, source);
+                    self.mod_mob_damage(id, amount, source);
                 }
                 self.item_burst(atp, "minecraft:snowball");
             }
@@ -2166,9 +2160,8 @@ impl Game<'_> {
                 if let Hit::Entity {
                     who: Who::Mob(id), ..
                 } = hit
-                    && let Some(m) = self.mobs.iter_mut().find(|m| m.id == id)
                 {
-                    m.damage(0.0, source);
+                    self.mod_mob_damage(id, 0.0, source);
                 }
                 // ThrownEgg.onHit: 1/8 chance of a chick, 1/32 of four.
                 if self.world.random.next_int_bound(8).unwrap_or(1) == 0 {
@@ -2191,9 +2184,8 @@ impl Game<'_> {
                 if let Hit::Entity {
                     who: Who::Mob(id), ..
                 } = hit
-                    && let Some(m) = self.mobs.iter_mut().find(|m| m.id == id)
                 {
-                    m.damage(0.0, source);
+                    self.mod_mob_damage(id, 0.0, source);
                 }
                 if p.owner == Some(Who::Player) && self.player.is_some() {
                     // ThrownEnderpearl: 5% endermite where the player was
@@ -2239,12 +2231,16 @@ impl Game<'_> {
                         }
                     }
                     Who::Mob(id) => {
-                        if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-                            if !m.kind.flags.fire_immune {
+                        if self
+                            .mobs
+                            .iter()
+                            .any(|m| m.id == id && !m.kind.flags.fire_immune)
+                        {
+                            if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
                                 m.ignite_for_ticks(100);
                             }
-                            m.damage(5.0, source);
                         }
+                        self.mod_mob_damage(id, 5.0, source);
                     }
                 },
                 Hit::Block { pos, face, .. } => {
@@ -2278,9 +2274,7 @@ impl Game<'_> {
                             );
                         }
                         Who::Mob(id) => {
-                            if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-                                m.damage(6.0, source);
-                            }
+                            self.mod_mob_damage(id, 6.0, source);
                         }
                     }
                 }
@@ -2362,9 +2356,7 @@ impl Game<'_> {
                     );
                 }
                 Who::Mob(id) => {
-                    if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-                        m.damage(1.0, source);
-                    }
+                    self.mod_mob_damage(id, 1.0, source);
                 }
             },
             // ShulkerBullet.onHitEntity: 4 damage, then levitation for 10 s.
@@ -2380,8 +2372,8 @@ impl Game<'_> {
                     }
                 }
                 Who::Mob(id) => {
-                    if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id)
-                        && m.damage(4.0, source)
+                    if self.mod_mob_damage(id, 4.0, source)
+                        && let Some(m) = self.mobs.iter_mut().find(|m| m.id == id)
                     {
                         m.extra.levitation = 200;
                     }

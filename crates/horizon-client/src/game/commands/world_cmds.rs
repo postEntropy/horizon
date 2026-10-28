@@ -155,10 +155,7 @@ impl Game<'_> {
                     attacker,
                     from,
                 };
-                self.mobs
-                    .iter_mut()
-                    .find(|m| m.id == id)
-                    .is_some_and(|m| m.damage(amount, damage))
+                self.mod_mob_damage(id, amount, damage)
             }
             _ => false,
         };

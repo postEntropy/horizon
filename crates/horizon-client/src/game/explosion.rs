@@ -396,8 +396,24 @@ impl Game<'_> {
                 attacker: None,
                 from: Some(center),
             };
-            if hurtable && !m.damage(damage(dist, exposure), source) {
-                continue;
+            if hurtable {
+                let position = feet.map(|v| v.floor() as i32);
+                let subject = if m.kind.id.contains(':') {
+                    m.kind.id.clone()
+                } else {
+                    format!("minecraft:{}", m.kind.id)
+                };
+                let Some(amount) = self.mod_entity_damage(
+                    &subject,
+                    position,
+                    damage(dist, exposure),
+                    "minecraft:explosion",
+                ) else {
+                    continue;
+                };
+                if !m.damage(amount, source) {
+                    continue;
+                }
             }
             // `EXPLOSION_KNOCKBACK_RESISTANCE`, not `KNOCKBACK_RESISTANCE`: its
             // base is 0 for every mob type, so iron golems and ravagers are pushed.

@@ -94,14 +94,14 @@ Java mod behavior has an equivalent.
 |---|---|
 | [x] | WIT/SDK/runtime expose custom entity declarations and create/tick/save/remove/interact/hurt callbacks. |
 | [x] | Runtime tests exercise custom entity state, model, dimension and hook host calls. |
-| [~] | `entity-damage` reaches outgoing local-player melee hits against mobs and incoming damage to the local player through the shared `mob_hits_player` path (mob attacks, projectile damage and in-process PvP). Other outgoing sources, environmental damage and every dedicated/LAN route still need an audit. |
+| [~] | `entity-damage` reaches outgoing local-player melee hits against mobs and incoming damage to the local player through the shared `mob_hits_player` path. Outgoing damage to mobs also dispatches for mob attacks, most projectiles, explosions, wind charges, fangs, tridents, fireworks, wither skulls and `/damage`. Lightning damage, other environmental/special entities and every dedicated/LAN route still need an audit. |
 | [~] | `xp-gain` reaches XP-orb pickup, advancement rewards and positive `/experience add ... points` commands. A live mod doubles 50 command points to 7 levels in both single-player paths; other direct XP sources still need an audit. |
 | [~] | `loot-drop` reaches player-mined block drops and mob-death item drops. |
 | [ ] | Custom entity lifecycle is not connected to actual game-world spawning, simulation, persistence and rendering. |
 | [ ] | Custom model animation/draw data is not connected to game rendering. |
 | [ ] | Registered custom dimensions and portals are not connected to actual world travel/generation. |
 | [ ] | `crop-grow`, `explosion-detonate` and `enchantment-level` hooks are not connected to gameplay. |
-| [ ] | Audit remaining outgoing projectile/mob damage, environmental sources, special entities and dedicated/LAN damage routes for `entity-damage`; incoming player damage through `mob_hits_player` and player melee against mobs now dispatch. |
+| [ ] | Audit remaining outgoing lightning damage, environmental sources, special entities and dedicated/LAN routes for `entity-damage`; incoming player damage and the listed mob/projectile damage sources now dispatch. |
 | [ ] | XP from all sources and all loot contexts (containers, fishing and structures) are not covered. |
 
 ## Out of scope for this single-player snapshot
@@ -189,7 +189,7 @@ API/engine work, not a list of individual mods to port.
 | [ ] | Wire `crop-grow` at the vanilla growth decision point, preserving vanilla RNG draw order and allowing pass/consume/cancel. | Parity harness compares random growth and cancellation against the vanilla oracle. |
 | [ ] | Wire `explosion-detonate` before block/entity effects are applied. | Mods can safely pass, alter or cancel an explosion in a parity harness. |
 | [ ] | Wire `enchantment-level` into enchantment selection/level calculation. | Vanilla result is unchanged for pass; bounded mod changes match test expectations. |
-| [ ] | Expand `entity-damage` to projectile, mob, fall, fire, explosion, environmental and other damage sources. | Source-by-source harness confirms exactly one event and correct cancellation/scaling. |
+| [ ] | Complete `entity-damage` coverage for lightning, fall/fire and other environmental damage, special entities, and dedicated/LAN routes. Player incoming damage and listed mob/projectile sources now dispatch. | Source-by-source harness confirms exactly one event and correct cancellation/scaling. |
 | [~] | Expand `xp-gain` to every direct XP source and verify ordering with orb creation, pickup, advancement and commands. Orb pickup, advancements and positive command point grants are covered; audit any remaining direct awards. | XP amount and cancellation are consistent across a source matrix. |
 | [ ] | Expand `loot-drop` to container, fishing, structure, block and entity loot contexts. | Pass/consume/cancel semantics preserve vanilla RNG and are tested per context. |
 | [ ] | Add API hooks for other demonstrated pack needs that have no current WIT event (for example entity spawn/death, player lifecycle, inventory changes), after auditing representative mod requirements. | Every new hook has a named event, capability/version rule, security bound, and parity test. |

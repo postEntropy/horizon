@@ -604,6 +604,18 @@ impl Game<'_> {
     ) -> Option<f32> {
         Some(amount)
     }
+    pub(super) fn mod_entity_death(&mut self, _id: u32, _kind: &str, _pos: [f64; 3]) {}
+    pub(super) fn mod_mob_damage(
+        &mut self,
+        id: u32,
+        amount: f32,
+        source: horizon_client::mobs::Damage,
+    ) -> bool {
+        self.mobs
+            .iter_mut()
+            .find(|m| m.id == id)
+            .is_some_and(|m| m.damage(amount, source))
+    }
     pub(super) fn mod_xp_gain(&mut self, amount: u32, _context: &str) -> u32 {
         amount
     }
@@ -1468,9 +1480,9 @@ impl Game<'_> {
         self.mods.mods.chat(line);
         self.show_mod_output();
     }
-    /// Runs the API 0.5 entity-damage hook for a player melee hit. A cancelled
-    /// hit never reaches the normal damage pipeline; otherwise mods' accepted
-    /// multipliers are applied before vanilla armor and damage handling.
+    /// Runs the API 0.5 entity-damage hook. A cancelled hit never reaches the
+    /// normal damage pipeline; accepted multipliers apply before vanilla armor
+    /// and damage handling.
     pub(super) fn mod_entity_damage(
         &mut self,
         subject: &str,
@@ -1504,6 +1516,57 @@ impl Game<'_> {
             let _ = (subject, position, context);
             Some(amount)
         }
+    }
+    /// Applies an entity-damage hook before ordinary mob damage. Keep the
+    /// vanilla Damage source intact; the hook only cancels or scales its value.
+    pub(super) fn mod_mob_damage(
+        &mut self,
+        id: u32,
+        amount: f32,
+        source: horizon_client::mobs::Damage,
+    ) -> bool {
+        let Some((subject, position)) = self.mobs.iter().find(|m| m.id == id).map(|m| {
+            (
+                if m.kind.id.contains(':') {
+                    m.kind.id.clone()
+                } else {
+                    format!("minecraft:{}", m.kind.id)
+                },
+                [m.position.x, m.position.y, m.position.z].map(|v| v.floor() as i32),
+            )
+        }) else {
+            return false;
+        };
+        let context = match source.kind {
+            horizon_client::mobs::DamageKind::PlayerAttack => "minecraft:player_attack",
+            horizon_client::mobs::DamageKind::MaceSmash => "minecraft:mace_smash",
+            horizon_client::mobs::DamageKind::MobAttack => "minecraft:mob_attack",
+            horizon_client::mobs::DamageKind::Arrow => "minecraft:arrow",
+            horizon_client::mobs::DamageKind::Thrown => "minecraft:thrown",
+            horizon_client::mobs::DamageKind::Fireball => "minecraft:fireball",
+            horizon_client::mobs::DamageKind::Explosion => "minecraft:explosion",
+            horizon_client::mobs::DamageKind::Fall => "minecraft:fall",
+            horizon_client::mobs::DamageKind::FallingBlock => "minecraft:falling_block",
+            horizon_client::mobs::DamageKind::OnFire => "minecraft:on_fire",
+            horizon_client::mobs::DamageKind::InFire => "minecraft:in_fire",
+            horizon_client::mobs::DamageKind::Lava => "minecraft:lava",
+            horizon_client::mobs::DamageKind::Drown => "minecraft:drown",
+            horizon_client::mobs::DamageKind::Magic => "minecraft:magic",
+            horizon_client::mobs::DamageKind::Sting => "minecraft:sting",
+            horizon_client::mobs::DamageKind::Cactus => "minecraft:cactus",
+            horizon_client::mobs::DamageKind::Generic => "minecraft:generic",
+            horizon_client::mobs::DamageKind::InWall => "minecraft:in_wall",
+            horizon_client::mobs::DamageKind::Thorns => "minecraft:thorns",
+            horizon_client::mobs::DamageKind::SonicBoom => "minecraft:sonic_boom",
+            horizon_client::mobs::DamageKind::OutOfWorld => "minecraft:out_of_world",
+        };
+        let Some(amount) = self.mod_entity_damage(&subject, position, amount, context) else {
+            return false;
+        };
+        self.mobs
+            .iter_mut()
+            .find(|m| m.id == id)
+            .is_some_and(|m| m.damage(amount, source))
     }
     pub(super) fn mod_xp_gain(&mut self, amount: u32, context: &str) -> u32 {
         #[cfg(feature = "mods")]

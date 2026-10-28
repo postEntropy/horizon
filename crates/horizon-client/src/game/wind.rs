@@ -131,13 +131,15 @@ impl Game<'_> {
                     attacker: p.owner,
                     from: Some([p.previous.x, p.previous.y, p.previous.z]),
                 };
-                if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-                    // Breeze.isInvulnerableTo: its own kind's charges.
-                    if owner_breeze && m.species() == Species::Breeze {
-                        return;
-                    }
-                    m.damage(1.0, source);
+                if owner_breeze
+                    && self
+                        .mobs
+                        .iter()
+                        .any(|m| m.id == id && m.species() == Species::Breeze)
+                {
+                    return;
                 }
+                self.mod_mob_damage(id, 1.0, source);
                 if p.owner == Some(Who::Player) {
                     self.last_hurt_by_player.insert(id, self.lan_acting);
                 }
