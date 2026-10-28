@@ -185,8 +185,9 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   remain separate from item loot.
 - No game-side dispatch was found for `tick_entities`, custom entity
   lifecycle/interactions, registered dimensions or model animation. `crop-grow`
-  now dispatches for simple crops after the vanilla random-tick success roll;
-  stems and other plant growth paths remain uncovered. `explosion-detonate` and
+  now dispatches for crops, stems, cocoa, nether wart, pitcher crops and sweet
+  berries after the vanilla random-tick success roll; non-stage plant growth
+  paths remain uncovered. `explosion-detonate` and
   `enchantment-level` are still not connected to gameplay. Container, fishing
   and structure loot paths still need review.
 - Status: **partial live integration; API coverage remains incomplete**.

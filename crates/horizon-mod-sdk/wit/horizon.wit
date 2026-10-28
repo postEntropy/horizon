@@ -707,7 +707,7 @@ interface logic {
         entity-damage,
         /// Modify experience orb or level gains.
         xp-gain,
-        /// Modify simple crop age stages after successful vanilla random-tick growth.
+        /// Modify crop and plant age stages after successful vanilla random-tick growth.
         crop-grow,
         /// Filter or modify blocks affected by an explosion.
         explosion-detonate,

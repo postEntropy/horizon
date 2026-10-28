@@ -437,6 +437,48 @@ fn crop_growth_multiplier_preserves_the_vanilla_roll_and_rng_order() {
     }
     panic!("no successful vanilla wheat growth roll found in 256 seeds");
 }
+
+#[test]
+fn crop_growth_hook_covers_other_age_stage_plants() {
+    let Some(f) = fixture() else { return };
+    for name in [
+        "pumpkin_stem",
+        "cocoa",
+        "nether_wart",
+        "sweet_berry_bush",
+        "pitcher_crop",
+    ] {
+        let mut grew = false;
+        for seed in 0..128 {
+            let mut w = World::new(f, seed);
+            let pos = BlockPos::new(0, 64, 0);
+            if matches!(name, "pumpkin_stem" | "pitcher_crop") {
+                let farmland = w.id("farmland", &[]);
+                w.put(BlockPos::new(0, 63, 0), farmland);
+            }
+            let plant = if name == "pitcher_crop" {
+                w.id(name, &[("half", "lower")])
+            } else {
+                w.id(name, &[])
+            };
+            w.put(pos, plant);
+            w.level.crop_growth_multiplier = 3.0;
+            f.behaviours.random_tick(&mut w.level, &mut w.ticks, pos);
+            if w.level.crop_growth_calls == 0 {
+                continue;
+            }
+            let age = f
+                .behaviours
+                .table
+                .int(w.level.block_state(pos), f.behaviours.props.age);
+            assert!(age >= 2, "{name} should advance multiple stages, got {age}");
+            assert_eq!(w.level.crop_growth_calls, 1);
+            grew = true;
+            break;
+        }
+        assert!(grew, "no successful random growth roll found for {name}");
+    }
+}
 #[test]
 fn tall_flowers_and_seagrass() {
     let Some(f) = fixture() else { return };

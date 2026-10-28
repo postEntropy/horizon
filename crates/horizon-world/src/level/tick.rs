@@ -271,7 +271,13 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                     if self.rand_int(5) == 0 {
                         let age = b.table.int(state, p.age);
                         if age < 2 {
-                            self.set_block(pos, b.table.set_int(state, p.age, age + 1), 2);
+                            if let Some(steps) = self.crop_growth_steps(state, pos, age + 1) {
+                                self.set_block(
+                                    pos,
+                                    b.table.set_int(state, p.age, (age + steps).min(2)),
+                                    2,
+                                );
+                            }
                         }
                     }
                 }
@@ -342,7 +348,13 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 Class::NetherWart => {
                     let age = b.table.int(state, p.age);
                     if age < 3 && self.rand_int(10) == 0 {
-                        self.set_block(pos, b.table.set_int(state, p.age, age + 1), 2);
+                        if let Some(steps) = self.crop_growth_steps(state, pos, age + 1) {
+                            self.set_block(
+                                pos,
+                                b.table.set_int(state, p.age, (age + steps).min(3)),
+                                2,
+                            );
+                        }
                     }
                 }
                 Class::Nylium => {
@@ -353,7 +365,10 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 Class::PitcherCrop => {
                     let speed = self.crop_growth_speed(block, pos);
                     if self.rand_int((25.0 / speed) as i32 + 1) == 0 {
-                        self.pitcher_grow(state, pos, 1);
+                        let age = b.table.int(state, p.age);
+                        if let Some(steps) = self.crop_growth_steps(state, pos, age + 1) {
+                            self.pitcher_grow(state, pos, steps.min(4 - age));
+                        }
                     }
                 }
                 Class::Speleothem => self.speleothem_random_tick(state, pos),
@@ -391,9 +406,11 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 Class::SweetBerryBush => {
                     let age = b.table.int(state, p.age);
                     if age < 3 && self.rand_int(5) == 0 && self.raw_brightness(above(pos), 0) >= 9 {
-                        let next = b.table.set_int(state, p.age, age + 1);
-                        self.set_block(pos, next, 2);
-                        self.game_event(pos, "minecraft:block_change");
+                        if let Some(steps) = self.crop_growth_steps(state, pos, age + 1) {
+                            let next = b.table.set_int(state, p.age, (age + steps).min(3));
+                            self.set_block(pos, next, 2);
+                            self.game_event(pos, "minecraft:block_change");
+                        }
                     }
                 }
                 Class::Vine => self.vine_random_tick(state, pos),
@@ -764,15 +781,24 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         if age < max {
             let speed = self.crop_growth_speed(b.block(state), pos);
             if self.rand_int((25.0 / speed) as i32 + 1) == 0 {
-                let multiplier = self.level.crop_growth_multiplier(pos, state, age + 1);
-                if !multiplier.is_finite() || multiplier < 1.0 {
-                    return;
+                if let Some(steps) = self.crop_growth_steps(state, pos, age + 1) {
+                    let next = self.crop_state_for_age(state, (age + steps).min(max));
+                    self.set_block(pos, next, 2);
                 }
-                let steps = multiplier.floor().clamp(1.0, 64.0) as i32;
-                let next = self.crop_state_for_age(state, (age + steps).min(max));
-                self.set_block(pos, next, 2);
             }
         }
+    }
+    fn crop_growth_steps(
+        &mut self,
+        state: BlockStateId,
+        pos: BlockPos,
+        next_age: i32,
+    ) -> Option<i32> {
+        let multiplier = self.level.crop_growth_multiplier(pos, state, next_age);
+        if !multiplier.is_finite() || multiplier < 1.0 {
+            return None;
+        }
+        Some(multiplier.floor().clamp(1.0, 64.0) as i32)
     }
     fn stem_random_tick(&mut self, state: BlockStateId, pos: BlockPos) {
         let b = self.b;
@@ -785,7 +811,13 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         }
         let age = b.table.int(state, b.props.age);
         if age < 7 {
-            self.set_block(pos, b.table.set_int(state, b.props.age, age + 1), 2);
+            if let Some(steps) = self.crop_growth_steps(state, pos, age + 1) {
+                self.set_block(
+                    pos,
+                    b.table.set_int(state, b.props.age, (age + steps).min(7)),
+                    2,
+                );
+            }
             return;
         }
         let direction = HORIZONTAL[self.rand_int(4) as usize];
