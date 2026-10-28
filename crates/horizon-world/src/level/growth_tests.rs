@@ -775,6 +775,41 @@ fn crop_growth_hook_scales_sapling_tree_attempts_after_the_vanilla_roll() {
 }
 
 #[test]
+fn crop_growth_hook_scales_hanging_mangrove_propagule_age() {
+    let Some(f) = fixture() else { return };
+    let mut vanilla = World::new(f, 29);
+    let mut accelerated = World::new(f, 29);
+    let mut cancelled = World::new(f, 29);
+    let pos = BlockPos::new(0, 64, 0);
+    for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+        let propagule = world.id("mangrove_propagule", &[("hanging", "true"), ("age", "0")]);
+        world.put(pos, propagule);
+    }
+    accelerated.level.crop_growth_multiplier = 3.0;
+    cancelled.level.crop_growth_multiplier = 0.0;
+
+    for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+        f.behaviours
+            .random_tick(&mut world.level, &mut world.ticks, pos);
+    }
+
+    let age = |world: &World| {
+        f.behaviours
+            .table
+            .int(world.level.block_state(pos), f.behaviours.props.age)
+    };
+    assert_eq!(age(&vanilla), 1);
+    assert_eq!(age(&accelerated), 3);
+    assert_eq!(age(&cancelled), 0);
+    assert_eq!(vanilla.level.crop_growth_calls, 1);
+    assert_eq!(accelerated.level.crop_growth_calls, 1);
+    assert_eq!(cancelled.level.crop_growth_calls, 1);
+    let vanilla_next = vanilla.level.random.next_int_bound(1_000_000);
+    let cancelled_next = cancelled.level.random.next_int_bound(1_000_000);
+    assert_eq!(vanilla_next, cancelled_next, "cancelled propagule RNG");
+}
+
+#[test]
 fn crop_growth_hook_scales_chorus_vertical_growth() {
     let Some(f) = fixture() else { return };
     let mut vanilla = World::new(f, 19);
@@ -852,6 +887,54 @@ fn crop_growth_hook_scales_chorus_branch_attempts() {
     assert!(
         found_extra_branch,
         "multiplier did not create extra chorus branches"
+    );
+}
+
+#[test]
+fn crop_growth_hook_scales_growing_plant_head_segments() {
+    let Some(f) = fixture() else { return };
+    let mut found_extra_segment = false;
+    for seed in 0..1024 {
+        let seed = i64::from(seed) << 32;
+        let mut vanilla = World::new(f, seed);
+        let mut accelerated = World::new(f, seed);
+        let mut cancelled = World::new(f, seed);
+        let pos = BlockPos::new(0, 64, 0);
+        let vine = vanilla.id("weeping_vines", &[]);
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            world.put(pos, vine);
+        }
+        accelerated.level.crop_growth_multiplier = 3.0;
+        cancelled.level.crop_growth_multiplier = 0.0;
+
+        for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+            f.behaviours
+                .random_tick(&mut world.level, &mut world.ticks, pos);
+        }
+        if vanilla.level.crop_growth_calls == 0 {
+            continue;
+        }
+
+        assert_eq!(vanilla.level.crop_growth_calls, 1);
+        assert_eq!(accelerated.level.crop_growth_calls, 1);
+        assert_eq!(cancelled.level.crop_growth_calls, 1);
+        assert_eq!(cancelled.name(pos), "minecraft:weeping_vines");
+        assert_eq!(cancelled.level.blocks.len(), 1);
+        let vanilla_next = vanilla.level.random.next_int_bound(1_000_000);
+        let cancelled_next = cancelled.level.random.next_int_bound(1_000_000);
+        assert_eq!(vanilla_next, cancelled_next, "cancelled vine-head RNG");
+        let vanilla_segments =
+            vanilla.count("weeping_vines") + vanilla.count("weeping_vines_plant");
+        let accelerated_segments =
+            accelerated.count("weeping_vines") + accelerated.count("weeping_vines_plant");
+        if accelerated_segments > vanilla_segments {
+            found_extra_segment = true;
+            break;
+        }
+    }
+    assert!(
+        found_extra_segment,
+        "multiplier did not grow extra vine segments"
     );
 }
 

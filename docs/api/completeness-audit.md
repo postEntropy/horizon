@@ -185,9 +185,10 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   remain separate from item loot.
 - No game-side dispatch was found for `tick_entities`, custom entity
   lifecycle/interactions, registered dimensions or model animation. `crop-grow`
-  now dispatches for crop age stages, cactus and sugar-cane age/height growth,
-  bamboo height growth, mushroom spread, vine spread, sapling-tree attempts and chorus
-  growth after vanilla random-tick conditions succeed; growing-plant heads remain uncovered. `explosion-detonate` and
+  now dispatches for crop age stages, hanging mangrove propagule ages,
+  bamboo/cactus/sugar-cane heights, sapling-tree attempts, mushroom/vine/chorus
+  spreading and growing-plant-head segments after vanilla random-tick conditions
+  succeed. `explosion-detonate` and
   `enchantment-level` are still not connected to gameplay. Container, fishing
   and structure loot paths still need review.
 - Status: **partial live integration; API coverage remains incomplete**.

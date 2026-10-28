@@ -4,7 +4,7 @@
 Every block state is put at the origin of a random neighbourhood and `randomTick`
 (or `tick`) is run with a seeded RNG on both sides; the resulting block changes,
 scheduled ticks, side effects and the RNG fingerprint after the call must match.
-The `--crop-growth` mode adds focused cases for supported age-stage, vertical and spreading plants.
+The `--crop-growth` mode adds focused cases for supported age-stage, tree, vertical and spreading plants.
 The Rust probe defaults to the release profile; set `HORIZON_PARITY_PROFILE=fast`
 to use the optimized fast profile with shorter link times during local iteration.
 """
@@ -40,7 +40,8 @@ def crop_growth_cases(facts, per_block, seed):
         'pumpkin_stem', 'melon_stem', 'cocoa', 'nether_wart',
         'sweet_berry_bush', 'pitcher_crop', 'cactus', 'sugar_cane',
         'red_mushroom', 'brown_mushroom',
-        'bamboo', 'bamboo_sapling', 'vine', 'chorus_flower',
+        'bamboo', 'bamboo_sapling', 'vine', 'chorus_flower', 'kelp',
+        'weeping_vines', 'twisting_vines', 'cave_vines',
         'oak_sapling', 'spruce_sapling',
         'birch_sapling', 'jungle_sapling', 'acacia_sapling', 'cherry_sapling',
         'dark_oak_sapling', 'pale_oak_sapling', 'poplar_sapling',
@@ -62,9 +63,14 @@ def crop_growth_cases(facts, per_block, seed):
             raise ValueError(f'no states found for crop-growth target {block}')
         for n in range(per_block):
             state = pool[n % len(pool)]
+            state_info = facts.states[state]
+            if block == 'mangrove_propagule' and state_info[4].get('properties', {}).get('hanging') == 'true':
+                cells = [[0, 0, 0, state]]
+            else:
+                cells = facts.cells(rng, state)
             yield {
                 **h.environment(rng), 'pos': [0, 0, 0],
-                'cells': facts.cells(rng, state), 'mode': 'random',
+                'cells': cells, 'mode': 'random',
             }
 
 

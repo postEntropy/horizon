@@ -321,17 +321,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                         });
                     }
                 }
-                Class::GrowingPlantHead => {
-                    if b.table.int(state, p.age) < 25
-                        && self.random().next_double() < data.grow_probability
-                    {
-                        let growth = rel(pos, data.growth_direction);
-                        if self.growing_plant_can_grow_into(state, self.state(growth)) {
-                            let next = self.growing_plant_grow_into_state(state);
-                            self.set_block_and_update(growth, next);
-                        }
-                    }
-                }
+                Class::GrowingPlantHead => self.growing_plant_head_random_tick(state, pos),
                 Class::Ice => {
                     if self.level.block_light(pos) > 11 - i32::from(b.facts(state).dampening) {
                         self.ice_melt(pos, state);
@@ -356,8 +346,17 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                         if self.rand_int(7) == 0 {
                             self.sapling_advance_tree(pos, state);
                         }
-                    } else if b.table.int(state, p.age) != 4 {
-                        self.set_block(pos, b.table.cycle(state, p.age), 2);
+                    } else {
+                        let age = b.table.int(state, p.age);
+                        if age < 4 {
+                            if let Some(steps) = self.crop_growth_steps(state, pos, age + 1) {
+                                self.set_block(
+                                    pos,
+                                    b.table.set_int(state, p.age, (age + steps).min(4)),
+                                    2,
+                                );
+                            }
+                        }
                     }
                 }
                 Class::Sapling => {
@@ -945,6 +944,53 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             return b.table.set_bool(next, b.props.berries, berries);
         }
         next
+    }
+    fn growing_plant_head_random_tick(&mut self, state: BlockStateId, pos: BlockPos) {
+        let Some((mut pos, _, steps)) = self.growing_plant_head_random_tick_once(state, pos, true)
+        else {
+            return;
+        };
+        for _ in 1..steps {
+            let current = self.state(pos);
+            if !self.b.data(current).is(Class::GrowingPlantHead) {
+                break;
+            }
+            let Some((next, _, _)) = self.growing_plant_head_random_tick_once(current, pos, false)
+            else {
+                break;
+            };
+            pos = next;
+        }
+    }
+    fn growing_plant_head_random_tick_once(
+        &mut self,
+        state: BlockStateId,
+        pos: BlockPos,
+        dispatch: bool,
+    ) -> Option<(BlockPos, BlockStateId, i32)> {
+        let b = self.b;
+        let data = b.data(state);
+        if b.table.int(state, b.props.age) >= 25 {
+            return None;
+        }
+        let probability = data.grow_probability;
+        let direction = data.growth_direction;
+        if self.random().next_double().partial_cmp(&probability) != Some(std::cmp::Ordering::Less) {
+            return None;
+        }
+        let growth = rel(pos, direction);
+        if !self.growing_plant_can_grow_into(state, self.state(growth)) {
+            return None;
+        }
+        let age = b.table.int(state, b.props.age);
+        let steps = if dispatch {
+            self.crop_growth_steps(state, pos, age + 1)?
+        } else {
+            1
+        };
+        let next = self.growing_plant_grow_into_state(state);
+        self.set_block_and_update(growth, next);
+        Some((growth, next, steps))
     }
     fn cactus_random_tick(&mut self, state: BlockStateId, pos: BlockPos) {
         let b = self.b;
