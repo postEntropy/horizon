@@ -339,7 +339,26 @@ impl Mod for Machines {
                 let before = config::get_int("speed").unwrap_or(0);
                 config::set_int("speed", 5)?;
                 let after = config::get_int("speed").unwrap_or(0);
-                Ok(Some(format!("speed {before}->{after}")))
+                let int_rejected = config::set_int("speed", 99).is_err();
+                let int_after_rejection = config::get_int("speed").unwrap_or(0);
+
+                let bool_default = config::get_bool("enabled").unwrap_or(false);
+                config::set_bool("enabled", false)?;
+                let bool_after = config::get_bool("enabled").unwrap_or(true);
+
+                let float_default = config::get_float("scale").unwrap_or(0.0);
+                config::set_float("scale", 1.5)?;
+                let float_rejected = config::set_float("scale", 3.0).is_err();
+                let float_after = config::get_float("scale").unwrap_or(0.0);
+
+                let string_default = config::get_string("mode").unwrap_or_default();
+                config::set_string("mode", "fast")?;
+                let choice_rejected = config::set_string("mode", "chaotic").is_err();
+                let string_after = config::get_string("mode").unwrap_or_default();
+
+                Ok(Some(format!(
+                    "speed={before}->{after}/reject={int_rejected}/kept={int_after_rejection} bool={bool_default}->{bool_after} float={float_default}->{float_after}/reject={float_rejected} mode={string_default}->{string_after}/reject={choice_rejected}"
+                )))
             }
             "item_facts" => {
                 let remainder =

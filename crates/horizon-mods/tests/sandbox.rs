@@ -34,6 +34,21 @@ type = "int"
 default = 2
 min = 1
 max = 10
+
+[config.enabled]
+type = "bool"
+default = true
+
+[config.scale]
+type = "float"
+default = 1.0
+min = 0.5
+max = 2.0
+
+[config.mode]
+type = "string"
+default = "safe"
+choices = ["safe", "fast"]
 "#;
 
 const MACHINE_PEER_MANIFEST: &str = r#"
@@ -801,7 +816,7 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     assert_eq!(
         mods.drain(),
         [Output::Feedback {
-            text: "speed 2->5".into(),
+            text: "speed=2->5/reject=true/kept=5 bool=true->false float=1->1.5/reject=true mode=safe->fast/reject=true".into(),
             error: false,
         }]
     );
