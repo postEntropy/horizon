@@ -1,6 +1,6 @@
 # Mod API completeness audit
 
-Audit date: 2026-10-27. This records what is present in the API contract, SDK,
+Audit date: 2026-10-28. This records what is present in the API contract, SDK,
 WASM runtime and game bridge. An interface declared in WIT, or a runtime unit
 test, does not by itself mean a pack feature works in a playable world.
 
@@ -9,7 +9,7 @@ test, does not by itself mean a pack feature works in a playable world.
 | Line | Contract / SDK | Runtime | Game integration | Status |
 |---|---|---|---|---|
 | 0.3 logic | Present | Present | Present for the client and local game hooks inspected | Implemented in parts; full multiplayer and per-capability gameplay coverage is not established |
-| 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist; mod packets now bridge the integrated single-player client and server | Usable foundation; feature behavior, LAN/dedicated networking and persistence coverage are incomplete |
+| 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist; mod packets bridge the integrated single-player client and server | Usable foundation; neighboring FE/fluid transfer, broad recipe behavior, LAN/dedicated networking and some persistence cases remain incomplete |
 | 0.5 deep | Present | Present, including runtime tests | Melee damage, XP awards and block/mob loot dispatch hooks; custom entity lifecycle, models and other hooks remain unwired | Partial live bridge; not a complete player-facing API |
 
 ## Scope for the current ATM10 core milestone
@@ -43,6 +43,35 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   light in a four-block neighborhood around the player. Queries are scoped to
   the active dimension; runtime sandbox coverage checks two dimensions sharing
   the same coordinates.
+- The `server` capability can spawn vanilla mobs at a position. Registered
+  custom entities are not handled by this action. In integrated single-player,
+  server actions enter their requested registered level; in-frame mode has only
+  the current dimension. Unknown ids and unavailable dimensions are logged by
+  the game bridge. A live single-player check set a block in an already-loaded
+  Nether chunk from the Overworld and read it back through `horizon-ctl`.
+- World mutations to unloaded chunks now request a temporary chunk ticket and
+  remain queued until the chunk loads. The queue is capped at 256 actions and
+  each action has a deadline 1,200 world ticks after it was queued; overflow
+  and timeout are logged. Pending dimensions are included in the integrated
+  server's tick list, and tickets owned by this queue are removed after
+  application. A fresh isolated single-player world verified unloaded
+  `set-block`, `spawn-drop` and `spawn-mob`: the mod's player-join callback
+  targeted the Nether while the player stayed in the Overworld; after 100
+  ticks, `execute in minecraft:the_nether` found the gold block, dropped
+  diamond and cow before travel. A separate in-frame run requested a block at
+  `(240,64,0)` through a temporary ticket; the game logged ticket creation and
+  readiness, and after a force-load/reload `execute` found the block, diamond
+  drop and cow at x=240–242. A separate integrated run on an initially
+  unloaded Nether chunk logged ticket request, readiness and a scheduled tick
+  at `(1,64,1)`; an `execute in minecraft:the_nether` check found its gold
+  block while the player stayed in the Overworld. Thus set-block/drop/mob have
+  live evidence in both single-player paths. Scheduled-tick actions now request
+  a block-ticking ticket, retain it until execution and release it after the
+  callback. An effectful composter fixture changed to emerald through the mod's
+  scheduled-tick callback in both in-frame and integrated mode; a separate
+  world-level test confirms vanilla's composter tick advances level 7 to level
+  8. The bridge records whether scheduling was added, already present, rejected
+  for a missing tick chunk, or rejected because the block id did not match.
 - Status: **implemented, integration coverage incomplete**.
 
 ### 0.4 — machines
@@ -52,7 +81,51 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
 - `horizon-mods` hosts those interfaces. Sandbox tests cover machine create,
   tick, save/load, UI/menu callbacks and the capability checks.
 - Game code creates and ticks mod block entities, saves their private bytes and
-  slots, exposes menu interactions, and connects energy/fluid operations.
+  slots, exposes menu interactions, and bridges energy/fluid capabilities to
+  game-owned block-entity state. Energy buffers and fluid tanks are serialized
+  in the block entity's `horizon_energy` and `horizon_fluids` fields. The E2E
+  fixture changes both through the runtime, saves and reopens the world, and
+  verifies the energy has not decreased and the fluid amount and identity
+  remain. This runs in both integrated-server and in-frame single-player.
+  This persistence check by itself doesn't cover neighboring transfers; the
+  separate two-mod scenario below covers FE and fluid transfer. Chunk unload
+  and mod reload are still not covered.
+- Before machine callbacks, the runtime now seeds capability state from all
+  loaded mod block entities, then writes capability mutations back to all of
+  their owners after callbacks. This removes callback/load-order dependence for
+  cross-mod energy and fluid access. A runtime test verifies a change to a
+  neighbor's energy and tank is reconciled into that neighbor's owning view and
+  marked dirty. `tools/mod_api_e2e.py` loads separate `test_machine` and
+  `test_peer` mods; the smelter sends FE into the peer cell and the script
+  verifies the receiver's stored energy survives save/reopen in integrated
+  and in-frame single-player. The same scenario transfers water into a peer
+  tank and verifies that it survives reopen. This proves basic cross-mod FE
+  and fluid transfer. FE receive/extract quotas are now accumulated per buffer
+  per game tick across API calls and mods; simulated calls do not spend the
+  quota. Sandbox coverage exercises repeated calls and verifies that a new tick
+  restores the budget. Directional transfer rules and saturated-rate behavior
+  now have live coverage: the peer accepts only 1 FE per tick while the donor
+  attempts two transfers, and the E2E verifies it remains below the buffer's
+  capacity across the run. The peer fluid tank also fills to its 16 mB capacity;
+  the donor recovers to a full 1,000 mB tank without overfilling the peer.
+  Directional transfer rules remain uncovered.
+- `tools/mod_api_e2e.py` now verifies block creation through the mod's
+  `server::set_block` action, direct `/item` access to mod slots, hopper input,
+  vanilla cooking and hopper output in both integrated-server and in-frame
+  single-player. It saves and reopens each world and confirms the output
+  remains. The test also verifies denied top-side insertion and bottom-side
+  extraction. API 0.4 now offers atomic `machine::insert_slot`: it adds the
+  whole stack only when the slot can hold it. The test mod uses it for recipe
+  output, and runtime coverage proves a full or mismatched output leaves the
+  input untouched while a stack that exactly fits succeeds; a componentful
+  same-id stack is also left untouched rather than merged. The live test
+  verifies a full 64-item output blocks recipe consumption until room is made.
+  `machine::remainder` now uses the full item remainder (including `use_remainder`);
+  runtime coverage checks the milk-bucket remainder, while the E2E exercises two
+  honey bottles producing glass bottles, including output-full backpressure and
+  extraction through a vanilla hopper. Other container types still need
+  automated coverage. It also verifies persisted machine energy and fluid
+  state after save/reopen in both single-player paths.
 - The game now routes bounded `net` packets between the local window and its
   integrated server: 256 packet queue entries per direction, at most 64
   delivered per server/client tick. This covers the built-in single-player
@@ -110,11 +183,14 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
 
 ## Verification run
 
-`cargo test -p horizon-mods --features runtime,pack` passes: 14 unit tests,
-3 API-reference tests, and 18 sandbox tests (one ignored). These validate the
-contract/runtime, not the complete game integrations listed above. The first
-run caught a stale generated `docs/api/mods-reference.md` after WIT changes; it
-was regenerated with the documented command and the full run then passed.
+`cargo test -p horizon-mods --features runtime,pack` passes: 18 unit tests,
+3 API-reference tests, and 19 sandbox tests (one ignored). The live
+`python3 tools/mod_api_e2e.py --mode both` run also passes in integrated-server
+and in-frame single-player. It covers cross-mod FE/fluid transfer, simulation,
+per-tick limits, sided item movement, hopper input/output and remainders, and
+save/reopen of machine inventory and capability state. These checks validate
+the listed paths only; they do not establish complete compatibility with
+arbitrary machine mods, chunk unload/reload, or every network topology.
 
 ## Completion gates
 
@@ -125,9 +201,10 @@ was regenerated with the documented command and the full run then passed.
    persistence through a world save/reopen. Still add Java-side power injection
    for direct parity and verify integrated-server client updates.
 2. **0.4 generalization:** run the `net-bridge` example in an integrated world;
-   test representative item, fluid, energy, UI, and recipe flows in a real game;
-   document unsupported item components and recipe shapes; finish and verify
-   LAN/dedicated packet delivery before marking networking complete.
+   extend `tools/mod_api_e2e.py` with chunk unload/mod reload and screen-restart
+   scenarios; verify real carried-mod recipes, item components and directional
+   energy/fluid networks. LAN and dedicated-server packet delivery remains
+   deferred until after the single-player API work.
 3. Keep the generated API reference synchronized with WIT and this audit
    synchronized with actual end-to-end evidence.
 
