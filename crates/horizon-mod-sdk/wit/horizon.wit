@@ -707,7 +707,7 @@ interface logic {
         entity-damage,
         /// Modify experience orb or level gains.
         xp-gain,
-        /// Modify plant age stages and bamboo height during vanilla random ticks.
+        /// Modify plant age stages and vertical growth for bamboo, cactus and sugar cane during vanilla random ticks.
         crop-grow,
         /// Filter or modify blocks affected by an explosion.
         explosion-detonate,
@@ -727,7 +727,7 @@ interface logic {
         y: s32,
         /// Z coordinate.
         z: s32,
-        /// Numeric value associated with the event (damage amount, XP, next growth stage or bamboo height).
+        /// Numeric value associated with the event (damage amount, XP, next age stage or target plant height).
         value: f32,
         /// Secondary context (attacker id, tool id, enchantment id).
         context: string,
@@ -993,7 +993,7 @@ interface vanilla-hooks {
     add-loot-drop: func(item: string, count: u32);
     /// During an `xp-gain` hook: scales the experience value by `factor`.
     set-xp-multiplier: func(factor: f32);
-    /// During `crop-grow`: scales age stages or bamboo segments grown (default 1; values below 1 suppress growth; larger values round down and cap at 64 before each plant's natural age/height cap; pass applies; consume/cancel suppresses the vanilla growth action).
+    /// During `crop-grow`: scales age stages or vertical segments grown (default 1; values below 1 suppress growth; larger values round down and cap at 64 before each plant's natural age/height cap; pass applies; consume/cancel suppresses the vanilla growth action).
     set-crop-growth-multiplier: func(factor: f32);
     /// During an `enchantment-level` hook: adds `bonus` levels to the queried enchantment.
     add-enchantment-bonus: func(bonus: s32);

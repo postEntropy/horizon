@@ -522,6 +522,72 @@ fn crop_growth_hook_scales_cactus_and_sugar_cane_age_without_extra_rng() {
 }
 
 #[test]
+fn crop_growth_hook_scales_cactus_and_sugar_cane_height() {
+    let Some(f) = fixture() else { return };
+    for name in ["cactus", "sugar_cane"] {
+        for height in [1, 2] {
+            let mut vanilla = World::new(f, 37);
+            let mut accelerated = World::new(f, 37);
+            let mut cancelled = World::new(f, 37);
+            let pos = BlockPos::new(0, 64, 0);
+            for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+                let soil_pos = BlockPos::new(0, 64 - height, 0);
+                let soil = world.id("sand", &[]);
+                world.put(soil_pos, soil);
+                if name == "sugar_cane" {
+                    let water = world.id("water", &[]);
+                    world.put(soil_pos.offset(1, 0, 0), water);
+                }
+                for segment in 0..height {
+                    let at = pos.offset(0, -segment, 0);
+                    let plant = if segment == 0 {
+                        world.id(name, &[("age", "15")])
+                    } else {
+                        world.id(name, &[])
+                    };
+                    world.put(at, plant);
+                }
+            }
+            accelerated.level.crop_growth_multiplier = 3.0;
+            cancelled.level.crop_growth_multiplier = 0.0;
+
+            for world in [&mut vanilla, &mut accelerated, &mut cancelled] {
+                f.behaviours
+                    .random_tick(&mut world.level, &mut world.ticks, pos);
+            }
+
+            assert_eq!(vanilla.level.crop_growth_calls, 1);
+            assert_eq!(accelerated.level.crop_growth_calls, 1);
+            assert_eq!(cancelled.level.crop_growth_calls, 1);
+            assert_eq!(
+                vanilla.count(name),
+                (height + 1) as usize,
+                "vanilla {name} height"
+            );
+            assert_eq!(accelerated.count(name), 3, "accelerated {name} height");
+            assert_eq!(
+                cancelled.count(name),
+                height as usize,
+                "cancelled {name} height"
+            );
+            let age = |world: &World| {
+                f.behaviours
+                    .table
+                    .int(world.level.block_state(pos), f.behaviours.props.age)
+            };
+            assert_eq!(age(&vanilla), 0, "vanilla {name} age reset");
+            assert_eq!(age(&accelerated), 0, "accelerated {name} age reset");
+            assert_eq!(age(&cancelled), 15, "cancelled {name} keeps age");
+            let vanilla_next = vanilla.level.random.next_int_bound(1_000_000);
+            let accelerated_next = accelerated.level.random.next_int_bound(1_000_000);
+            let cancelled_next = cancelled.level.random.next_int_bound(1_000_000);
+            assert_eq!(vanilla_next, accelerated_next, "{name} accelerated RNG");
+            assert_eq!(vanilla_next, cancelled_next, "{name} cancelled RNG");
+        }
+    }
+}
+
+#[test]
 fn crop_growth_hook_scales_bamboo_height_after_the_vanilla_roll() {
     let Some(f) = fixture() else { return };
     for kind in ["bamboo_sapling", "bamboo"] {

@@ -407,8 +407,25 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                         if height < 3 {
                             let age = b.table.int(state, p.age);
                             if age == 15 {
-                                self.set_block_and_update(above(pos), b.default_of(block));
-                                self.set_block(pos, b.table.set_int(state, p.age, 0), 260);
+                                if let Some(steps) = self.crop_growth_steps(state, pos, height + 1)
+                                {
+                                    let mut grow = above(pos);
+                                    let mut grown = 0;
+                                    for _ in 0..steps.min(3 - height) {
+                                        if !self.is_empty_block(grow) {
+                                            break;
+                                        }
+                                        self.set_block_and_update(grow, b.default_of(block));
+                                        grown += 1;
+                                        if !b.is_block(self.state(grow), block) {
+                                            break;
+                                        }
+                                        grow = above(grow);
+                                    }
+                                    if grown > 0 {
+                                        self.set_block(pos, b.table.set_int(state, p.age, 0), 260);
+                                    }
+                                }
                             } else if let Some(steps) = self.crop_growth_steps(state, pos, age + 1)
                             {
                                 self.set_block(
@@ -941,10 +958,26 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 self.set_block_and_update(above_pos, b.default_of(b.named.cactus_flower));
             }
         } else if age == 15 && height < 3 {
-            self.set_block_and_update(above_pos, b.default_of(block));
-            let reset = b.table.set_int(state, b.props.age, 0);
-            self.set_block(pos, reset, 260);
-            self.neighbor_changed_full(reset, above_pos, block, false);
+            if let Some(steps) = self.crop_growth_steps(state, pos, height + 1) {
+                let mut grow = above_pos;
+                let mut first = None;
+                for _ in 0..steps.min(3 - height) {
+                    if !self.is_empty_block(grow) {
+                        break;
+                    }
+                    self.set_block_and_update(grow, b.default_of(block));
+                    first.get_or_insert(grow);
+                    if !b.is_block(self.state(grow), block) {
+                        break;
+                    }
+                    grow = above(grow);
+                }
+                if let Some(first) = first {
+                    let reset = b.table.set_int(state, b.props.age, 0);
+                    self.set_block(pos, reset, 260);
+                    self.neighbor_changed_full(reset, first, block, false);
+                }
+            }
         }
         if age < 15 {
             if let Some(steps) = self.crop_growth_steps(state, pos, age + 1) {
