@@ -94,14 +94,14 @@ Java mod behavior has an equivalent.
 |---|---|
 | [x] | WIT/SDK/runtime expose custom entity declarations and create/tick/save/remove/interact/hurt callbacks. |
 | [x] | Runtime tests exercise custom entity state, model, dimension and hook host calls. |
-| [~] | `entity-damage` reaches the local player's melee attack path. |
+| [~] | `entity-damage` reaches outgoing local-player melee hits against mobs and incoming damage to the local player through the shared `mob_hits_player` path (mob attacks, projectile damage and in-process PvP). Other outgoing sources, environmental damage and every dedicated/LAN route still need an audit. |
 | [~] | `xp-gain` reaches XP-orb pickup, advancement rewards and positive `/experience add ... points` commands. A live mod doubles 50 command points to 7 levels in both single-player paths; other direct XP sources still need an audit. |
 | [~] | `loot-drop` reaches player-mined block drops and mob-death item drops. |
 | [ ] | Custom entity lifecycle is not connected to actual game-world spawning, simulation, persistence and rendering. |
 | [ ] | Custom model animation/draw data is not connected to game rendering. |
 | [ ] | Registered custom dimensions and portals are not connected to actual world travel/generation. |
 | [ ] | `crop-grow`, `explosion-detonate` and `enchantment-level` hooks are not connected to gameplay. |
-| [ ] | Projectile, mob, environmental and other non-melee damage paths do not all dispatch `entity-damage`. |
+| [ ] | Audit remaining outgoing projectile/mob damage, environmental sources, special entities and dedicated/LAN damage routes for `entity-damage`; incoming player damage through `mob_hits_player` and player melee against mobs now dispatch. |
 | [ ] | XP from all sources and all loot contexts (containers, fishing and structures) are not covered. |
 
 ## Out of scope for this single-player snapshot
