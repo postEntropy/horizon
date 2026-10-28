@@ -15,7 +15,7 @@ use horizon_mod_sdk::{
     capabilities::{self, EnergyView, FluidView},
     config,
     dimensions::{self, DimensionSpec, GeneratorKind, PortalSpec},
-    entities,
+    entities, item_data,
     keys::{self, KeyBinding},
     machine::{self, CookingKind, ItemStack},
     models::{self, BonePose, DrawPart, DrawPartKind},
@@ -404,6 +404,10 @@ impl Mod for Machines {
     }
     fn tick_block_entities(&mut self, handles: &[u32]) {
         for &h in handles {
+            let components = item_data::get_slot_components(h, 0);
+            if !components.is_empty() {
+                let _ = item_data::set_slot_components(h, 0, &components);
+            }
             let progress = self.progress.entry(h).or_default();
             if machine::get_slot(h, 0).is_some_and(|s| s.id == "minecraft:tnt") {
                 machine::set_property(h, "lit", "true");

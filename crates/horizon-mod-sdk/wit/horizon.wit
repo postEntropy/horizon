@@ -132,7 +132,7 @@ interface machine {
         y: s32,
         z: s32,
     }
-    /// An item and how many. Item components are not carried yet.
+    /// An item and how many. Read or write its non-default components with `item-data`.
     record item-stack {
         /// `minecraft:coal`, `<mod>:<path>`, ...
         id: string,
@@ -175,6 +175,17 @@ interface machine {
     remainder: func(id: string) -> option<string>;
     /// The data pack's cooking recipe of `kind` for `input`.
     cooking: func(kind: cooking-kind, input: string) -> option<cooking-recipe>;
+}
+
+/// Capability `item-data` (API 0.4): opaque data components on machine slots.
+interface item-data {
+    /// Returns the stack's `minecraft:components` compound as binary network
+    /// NBT (empty when the stack has only defaults, or the slot is empty).
+    get-slot-components: func(handle: u32, slot: u32) -> list<u8>;
+    /// Replaces the compound with binary network NBT; empty clears it. The
+    /// value must be a compound root and at most 64 KiB. False for an invalid
+    /// value, empty slot, or out-of-range slot.
+    set-slot-components: func(handle: u32, slot: u32, components: list<u8>) -> bool;
 }
 
 /// What the game calls on a mod's block entities (API 0.4). Only for the
@@ -960,6 +971,7 @@ world horizon-machine-mod {
     import target;
     import inventory;
     import machine;
+    import item-data;
     import capabilities;
     import ui;
     import net;
@@ -983,6 +995,7 @@ world machine-host {
     import target;
     import inventory;
     import machine;
+    import item-data;
     import capabilities;
     import ui;
     import net;

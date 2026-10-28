@@ -48,8 +48,9 @@ pub use exports::horizon::mods::mod_entities::{
     AiGoal, EntityType, Guest as __ModEntitiesGuest, SpawnCategory,
 };
 pub use horizon::mods::{
-    capabilities, chat, config, dimensions, entities, game, hud, inventory, keys, log, machine,
-    models, net, recipes, render, server, storage, target, ui, vanilla_hooks, world_read as world,
+    capabilities, chat, config, dimensions, entities, game, hud, inventory, item_data, keys, log,
+    machine, models, net, recipes, render, server, storage, target, ui, vanilla_hooks,
+    world_read as world,
 };
 
 /// The game's calls into a mod. Only the hooks [`Registration`] or

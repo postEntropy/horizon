@@ -145,6 +145,33 @@ impl ItemFacts for GameFacts {
     }
 }
 
+#[cfg(feature = "mods")]
+fn item_components(stack: &ItemStack) -> Vec<u8> {
+    horizon_client::item_data::encode_components(stack)
+        .and_then(|tag| {
+            horizon_world::nbt::write_network(&tag, horizon_world::nbt::Limits::default()).ok()
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(feature = "mods")]
+fn restore_item_components(stack: &mut ItemStack, encoded: &[u8]) {
+    if encoded.is_empty() {
+        return;
+    }
+    let Ok((tag, used)) =
+        horizon_world::nbt::read_network(encoded, horizon_world::nbt::Limits::default())
+    else {
+        return;
+    };
+    if used != encoded.len() {
+        return;
+    }
+    let (damage, extra) = horizon_client::item_data::decode_components(Some(&tag));
+    stack.damage = damage;
+    stack.extra = extra;
+}
+
 #[derive(Default)]
 pub(super) struct ModsState {
     #[cfg(feature = "mods")]
@@ -1342,13 +1369,17 @@ impl Game<'_> {
                     y: pos[1],
                     z: pos[2],
                     slots: items
-                        .into_iter()
-                        .map(|s| {
-                            s.map(|s| Stack {
+                        .iter()
+                        .map(|slot| {
+                            slot.as_ref().map(|s| Stack {
                                 id: s.item.to_string(),
                                 count: s.count,
                             })
                         })
+                        .collect(),
+                    slot_components: items
+                        .iter()
+                        .map(|slot| slot.as_ref().map_or_else(Vec::new, item_components))
                         .collect(),
                     ..Default::default()
                 },
@@ -2546,6 +2577,10 @@ impl Game<'_> {
                         })
                     })
                     .collect(),
+                slot_components: items
+                    .iter()
+                    .map(|slot| slot.as_ref().map_or_else(Vec::new, item_components))
+                    .collect(),
                 properties,
                 changed: false,
             });
@@ -2559,12 +2594,15 @@ impl Game<'_> {
                 items = view
                     .slots
                     .iter()
-                    .map(|slot| {
-                        slot.as_ref().map(|s| ItemStack {
-                            item: Arc::from(s.id.as_str()),
-                            count: s.count,
-                            damage: 0,
-                            extra: None,
+                    .enumerate()
+                    .map(|(index, slot)| {
+                        slot.as_ref().map(|s| {
+                            let mut stack = ItemStack::new(&s.id, s.count);
+                            restore_item_components(
+                                &mut stack,
+                                view.slot_components.get(index).map_or(&[], Vec::as_slice),
+                            );
+                            stack
                         })
                     })
                     .collect();

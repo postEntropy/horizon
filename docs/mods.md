@@ -397,6 +397,12 @@ it; the game does not create, tick or save them yet (next step in the plan).
 |---|---|
 | export `block-entities` | `types()`: the mod's blocks with a block entity, their slot count and whether they tick; `create(handle, block, saved)`, `tick(handles)`, `save(handle)`, `remove(handle)`, `data(handle)` (the menu's values, vanilla's `ContainerData`) |
 | import `machine` | during `tick` only: `get-slot`, `set-slot` and `get-property`, `set-property` (the block state) of the block entities lent to the call; any time: `max-stack-size`, `burn-time`, `remainder`, `cooking(kind, input)` from the game's item, fuel and recipe tables |
+| import `item-data` (`api = "0.4"`) | read or replace a machine slot's opaque binary network-NBT compound of item data components; an empty byte list clears it, and values are capped at 64 KiB |
+
+The game preserves item components when older machine mods use only `machine`'s
+id-and-count slot interface. Mods that need to inspect or alter components
+directly declare the separate `item-data` capability. Invalid or oversized NBT
+is rejected.
 
 - **The game owns the slots and the block state**, so hoppers, menus, drops and
   saves see them as they see vanilla's. The mod owns the rest and saves it as

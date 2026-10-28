@@ -27,7 +27,7 @@ name = "Test Machine"
 version = "0.1.0"
 api = "0.5"
 side = "both"
-capabilities = ["config", "server", "keys", "target", "inventory-read", "capabilities", "ui", "net", "recipes", "world-read", "render", "entities", "models", "dimensions", "vanilla-hooks", "block-entities"]
+capabilities = ["config", "server", "keys", "target", "inventory-read", "capabilities", "ui", "net", "recipes", "world-read", "render", "entities", "models", "dimensions", "vanilla-hooks", "block-entities", "item-data"]
 
 [config.speed]
 type = "int"
@@ -460,6 +460,7 @@ fn smelter(handle: u32, input: Option<Stack>) -> BlockEntityView {
         y: 64,
         z: 0,
         slots: vec![input, None],
+        slot_components: vec![Vec::new(); 2],
         properties: vec![Property {
             name: "lit".into(),
             value: "false".into(),
@@ -496,7 +497,17 @@ fn block_entities_tick_save_and_load() {
         .unwrap();
     assert_eq!(slots, 2);
     let mut views = [smelter(h, Some(stack("minecraft:raw_iron", 2)))];
+    let components = horizon_world::nbt::write_network(
+        &horizon_world::nbt::Tag::compound([(
+            "minecraft:custom_name",
+            horizon_world::nbt::Tag::String("Forged iron".into()),
+        )]),
+        horizon_world::nbt::Limits::default(),
+    )
+    .unwrap();
+    views[0].slot_components[0] = components.clone();
     mods.tick_block_entities(&mut views);
+    assert_eq!(views[0].slot_components[0], components);
     assert!(views[0].changed, "lit turned on");
     assert_eq!(views[0].properties[0].value, "true");
     assert_eq!(mods.block_entity_data(h), [1]);
@@ -511,6 +522,7 @@ fn block_entities_tick_save_and_load() {
             Some(stack("minecraft:iron_ingot", 1))
         ]
     );
+    assert_eq!(views[0].slot_components[0], components);
     mods.tick_block_entities(&mut views);
     assert_eq!(mods.block_entity_data(h), [1]);
 
@@ -557,7 +569,7 @@ fn block_entities_need_their_capability_and_blocks() {
         .unwrap();
     let cases = [
         (
-            MACHINE_MANIFEST.replace("\"block-entities\"", ""),
+            MACHINE_MANIFEST.replace(", \"block-entities\"", ""),
             "uses capability block-entities, missing from horizon-mod.toml",
         ),
         (

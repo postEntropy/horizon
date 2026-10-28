@@ -56,9 +56,11 @@ bridge coverage and the missing 0.5 game integration in a later milestone.
   connected to mod packet dispatch yet; packet routing has not been exercised
   in a live multiplayer session.
 - The general machine API's direct recipe lookup is limited to vanilla cooking
-  recipes; custom machine recipes must use the recipe registry. Item-stack
-  components are not carried by the machine slot contract. Those limits matter
-  for broad mod compatibility.
+  recipes; custom machine recipes must use the recipe registry. The new
+  `item-data` capability reads and writes opaque item components on machine
+  slots; the game also preserves them when older mods use the original slot
+  API. Both paths have sandbox coverage, while live compatibility across a
+  broad set of mods remains to be established.
 - The Mekanism port has recipe-processing code. The Enrichment Chamber has now
   been exercised in a live in-frame world: a creative energy cube powered a
   clay recipe, the machine produced four clay balls, and the output remained

@@ -1,5 +1,6 @@
 //! Loading and calling mods with wasmtime's component model.
 use crate::manifest::{Capability, ConfigSchema, ConfigValue, Manifest, Package};
+use horizon_world::nbt::{Limits as NbtLimits, Tag as NbtTag, read_network};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
@@ -52,8 +53,8 @@ pub use logic_bindings::exports::horizon::mods::logic::{
 use machine_bindings::{
     MachineHost,
     horizon::mods::{
-        capabilities, config, dimensions, entities, inventory, keys, machine, models, net, recipes,
-        render, server, target, ui, vanilla_hooks, world_read as world,
+        capabilities, config, dimensions, entities, inventory, item_data, keys, machine, models,
+        net, recipes, render, server, target, ui, vanilla_hooks, world_read as world,
     },
 };
 use wasmtime::component::{Func, Val};
@@ -128,6 +129,8 @@ const BLOCK_ENTITIES_EXPORT: &str = "horizon:mods/block-entities@0.1.0";
 const MAX_SLOTS: u32 = 256;
 /// Max packet payload on `net` channels (32 KiB).
 const MAX_PACKET_BYTES: usize = 32 << 10;
+/// Opaque data components on one machine-slot stack.
+const MAX_ITEM_COMPONENT_BYTES: usize = 64 << 10;
 /// Max attachment payload in `capabilities` (64 KiB).
 const MAX_ATTACHMENT_BYTES: usize = 64 << 10;
 /// Max 3D wireframe boxes and ghost blocks per mod.
@@ -166,6 +169,8 @@ pub struct BlockEntityView {
     pub y: i32,
     pub z: i32,
     pub slots: Vec<Option<Stack>>,
+    /// Opaque binary network-NBT components aligned with `slots`.
+    pub slot_components: Vec<Vec<u8>>,
     pub properties: Vec<Property>,
     pub changed: bool,
 }
@@ -1886,7 +1891,12 @@ impl machine::Host for State {
             return false;
         };
         if *cell != stack {
+            let item_changed = cell.as_ref().map(|current| &current.id)
+                != stack.as_ref().map(|replacement| &replacement.id);
             *cell = stack;
+            if item_changed && let Some(components) = view.slot_components.get_mut(slot as usize) {
+                components.clear();
+            }
             view.changed = true;
         }
         true
@@ -1923,6 +1933,48 @@ impl machine::Host for State {
     }
     fn cooking(&mut self, kind: CookingKind, input: String) -> Option<CookingRecipe> {
         self.facts.as_ref()?.cooking_recipe(kind, &input)
+    }
+}
+
+impl item_data::Host for State {
+    fn get_slot_components(&mut self, handle: u32, slot: u32) -> Vec<u8> {
+        let Some(view) = self.view(handle) else {
+            return Vec::new();
+        };
+        if view.slots.get(slot as usize).is_none_or(Option::is_none) {
+            return Vec::new();
+        }
+        view.slot_components
+            .get(slot as usize)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn set_slot_components(&mut self, handle: u32, slot: u32, components: Vec<u8>) -> bool {
+        if components.len() > MAX_ITEM_COMPONENT_BYTES {
+            return false;
+        }
+        if !components.is_empty()
+            && !read_network(&components, NbtLimits::default()).is_ok_and(|(tag, used)| {
+                used == components.len() && matches!(tag, NbtTag::Compound(_))
+            })
+        {
+            return false;
+        }
+        let Some(view) = self.view(handle) else {
+            return false;
+        };
+        if view.slots.get(slot as usize).is_none_or(Option::is_none) {
+            return false;
+        }
+        let Some(value) = view.slot_components.get_mut(slot as usize) else {
+            return false;
+        };
+        if *value != components {
+            *value = components;
+            view.changed = true;
+        }
+        true
     }
 }
 
