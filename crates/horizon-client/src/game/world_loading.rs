@@ -95,9 +95,17 @@ impl WorldRequest {
             make_streaming(res, pack, options, settings, &save_root, dim, level.seed)?;
         streaming.radius = settings.render_distance;
         let mut world = World::new(res.facts().air, level.seed);
-        world.fast_lava = dim == Dim::Nether;
+        world.fast_lava =
+            super::mod_dimension_spec(dim.id()).map_or(dim == Dim::Nether, |s| s.ultrawarm);
         world.game_time = level.time;
-        world.day_time = options.time.unwrap_or(level.day_time);
+        world.day_time = options
+            .time
+            .or_else(|| {
+                super::mod_dimension_spec(dim.id())
+                    .and_then(|s| s.fixed_time)
+                    .map(|t| t as i64)
+            })
+            .unwrap_or(level.day_time);
         world.weather = level.weather;
         if let Some(w) = options.weather.as_deref() {
             // /weather: clear, rain or thunder for a long duration.
@@ -232,16 +240,31 @@ pub(super) fn make_streaming(
         dim.id(),
     )));
     let mut locator = None;
-    let flat = (dim == Dim::Overworld)
-        .then(|| horizon_client::save::world_gen_settings(world_root))
-        .flatten()
-        .and_then(|s| {
-            horizon_client::flatgen::FlatTerrain::from_settings(
-                &s,
+    let mod_spec = super::mod_dimension_spec(dim.id());
+    let mod_flat = mod_spec
+        .as_ref()
+        .filter(|spec| spec.generator != super::ModDimensionGenerator::Noise)
+        .map(|spec| {
+            horizon_client::flatgen::FlatTerrain::for_mod_dimension(
+                dim.min_y(),
+                spec.generator == super::ModDimensionGenerator::VoidWorld,
+                spec.surface_block.as_deref().unwrap_or(""),
                 pack.assets.registry,
                 res.biomes(),
             )
         });
+    let flat = mod_flat.or_else(|| {
+        (dim == Dim::Overworld)
+            .then(|| horizon_client::save::world_gen_settings(world_root))
+            .flatten()
+            .and_then(|s| {
+                horizon_client::flatgen::FlatTerrain::from_settings(
+                    &s,
+                    pack.assets.registry,
+                    res.biomes(),
+                )
+            })
+    });
     let mut streaming = if let Some(inner) = flat {
         Streaming::new(
             Arc::new(Persistent {
@@ -269,28 +292,70 @@ pub(super) fn make_streaming(
         // WorldOptions.generateStructures, from the world's settings.
         let structures =
             horizon_client::save::WorldGen::read(world_root).is_none_or(|w| w.structures);
-        let inner = Arc::new(VanillaTerrain::for_world(&options.resources.join("worldgen"), pack.assets.registry, res.biomes(), seed, dim.id(), structures).map_err(|e| {
-                format!("{e}\nPrepare the worldgen bundle with the launcher, or: horizon-prepare --prepare")
-            })?);
-        locator = Some(inner.clone());
-        Streaming::new(
-            Arc::new(Persistent {
-                inner,
-                save: save.clone(),
-                registry: pack.assets.clone(),
-                biomes: res.biomes().clone(),
-            }),
-            pack.context.clone(),
-            res.threads(),
-        )
+        match VanillaTerrain::for_world(
+            &options.resources.join("worldgen"),
+            pack.assets.registry,
+            res.biomes(),
+            seed,
+            dim.id(),
+            structures,
+        ) {
+            Ok(terrain) => {
+                let inner = Arc::new(terrain);
+                locator = Some(inner.clone());
+                Streaming::new(
+                    Arc::new(Persistent {
+                        inner,
+                        save: save.clone(),
+                        registry: pack.assets.clone(),
+                        biomes: res.biomes().clone(),
+                    }),
+                    pack.context.clone(),
+                    res.threads(),
+                )
+            }
+            Err(_) if matches!(dim, Dim::Custom(_)) => {
+                let inner = horizon_client::flatgen::FlatTerrain::for_mod_dimension(
+                    dim.min_y(),
+                    false,
+                    mod_spec
+                        .as_ref()
+                        .and_then(|s| s.surface_block.as_deref())
+                        .unwrap_or(""),
+                    pack.assets.registry,
+                    res.biomes(),
+                );
+                Streaming::new(
+                    Arc::new(Persistent {
+                        inner: Arc::new(inner),
+                        save: save.clone(),
+                        registry: pack.assets.clone(),
+                        biomes: res.biomes().clone(),
+                    }),
+                    pack.context.clone(),
+                    res.threads(),
+                )
+            }
+            Err(e) => {
+                return Err(format!(
+                    "{e}\nPrepare the worldgen bundle with the launcher, or: horizon-prepare --prepare"
+                )
+                .into());
+            }
+        }
     };
     streaming.radius = settings.render_distance;
     streaming.biome_blend = settings.biome_blend;
     streaming.smooth_lighting = settings.smooth_lighting;
     streaming.cutout_leaves = settings.cutout_leaves;
     streaming.biome_zoom = BiomeZoom::new(obfuscate_seed(seed));
-    streaming.sky_light = dim != Dim::Nether;
-    streaming.nether_shading = dim == Dim::Nether;
+    if let Some(spec) = &mod_spec {
+        streaming.sky_light = spec.has_skylight;
+        streaming.nether_shading = spec.has_ceiling;
+    } else {
+        streaming.sky_light = dim != Dim::Nether;
+        streaming.nether_shading = dim == Dim::Nether;
+    }
     // A server draws nothing: neither the integrated server nor the
     // dedicated one meshes sections.
     streaming.mesh = !options.integrated && options.dedicated.is_none();

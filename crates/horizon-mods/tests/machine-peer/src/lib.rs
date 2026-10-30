@@ -73,6 +73,7 @@ impl Mod for Peer {
                             capacity: u64::MAX,
                         },
                     );
+                    capabilities::set_item_slot(&neighbor, 0, "minecraft:bedrock", 64);
                 }
                 if capabilities::get_energy(&key).is_none() {
                     capabilities::set_energy_buffer(

@@ -57,15 +57,15 @@ impl Mod for Machines {
             id: "test_machine:twilight".into(),
             ultrawarm: false,
             natural: true,
-            coordinate_scale: 1.0,
+            coordinate_scale: 2.0,
             has_skylight: true,
             has_ceiling: false,
-            min_y: 0,
-            height: 256,
+            min_y: -64,
+            height: 384,
             ambient_light: 0.1,
             fixed_time: Some(12000),
-            generator: GeneratorKind::Noise,
-            surface_block: "minecraft:grass_block".into(),
+            generator: GeneratorKind::Flat,
+            surface_block: "minecraft:moss_block".into(),
         });
         let _ = dimensions::register_portal(&PortalSpec {
             id: "test_machine:twilight_portal".into(),
@@ -360,6 +360,62 @@ impl Mod for Machines {
                     "speed={before}->{after}/reject={int_rejected}/kept={int_after_rejection} bool={bool_default}->{bool_after} float={float_default}->{float_after}/reject={float_rejected} mode={string_default}->{string_after}/reject={choice_rejected}"
                 )))
             }
+            "read_config" => {
+                let speed = config::get_int("speed").unwrap_or(0);
+                let enabled = config::get_bool("enabled").unwrap_or(false);
+                let scale = config::get_float("scale").unwrap_or(0.0);
+                let mode = config::get_string("mode").unwrap_or_default();
+                Ok(Some(format!(
+                    "speed={speed} bool={enabled} float={scale} mode={mode}"
+                )))
+            }
+            "slot_cap_bridge" => {
+                let pos = "minecraft:overworld:0,64,0";
+                capabilities::set_item_slot(pos, 0, "minecraft:raw_iron", 2);
+                capabilities::set_item_slot(pos, 9, "minecraft:diamond", 1);
+                capabilities::set_item_slot(pos, 1, "minecraft:iron_ingot", 99);
+                let summary = capabilities::get_item_slots(pos)
+                    .into_iter()
+                    .map(|s| format!("{}={}*{}", s.slot, s.id, s.count))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                Ok(Some(format!("slots={summary}")))
+            }
+            "slot_cap_bridge_e2e" => {
+                let pos = "minecraft:overworld:-31,70,-9";
+                capabilities::set_item_slot(pos, 0, "minecraft:raw_iron", 3);
+                capabilities::set_item_slot(pos, 9, "minecraft:diamond", 1);
+                let slots = capabilities::get_item_slots(pos);
+                let slot0 = slots
+                    .iter()
+                    .find(|s| s.slot == 0)
+                    .map(|s| format!("{}*{}", s.id, s.count))
+                    .unwrap_or_else(|| "none".into());
+                Ok(Some(format!("slot0={slot0} len={}", slots.len())))
+            }
+            "read_slot_caps" => {
+                let pos = "minecraft:overworld:0,64,0";
+                let summary = capabilities::get_item_slots(pos)
+                    .into_iter()
+                    .map(|s| format!("{}={}*{}", s.slot, s.id, s.count))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                Ok(Some(format!("slots={summary}")))
+            }
+            "get_ring" => {
+                let ring = capabilities::get_accessory("player", "ring", 0)
+                    .map(|s| format!("{}*{}", s.id, s.count))
+                    .unwrap_or_else(|| "none".into());
+                let over_stack_rejected =
+                    capabilities::set_accessory("player", "ring", 1, "test_machine:ring", 99)
+                        .is_err();
+                let bad_index_rejected =
+                    capabilities::set_accessory("player", "ring", 32, "test_machine:ring", 1)
+                        .is_err();
+                Ok(Some(format!(
+                    "ring={ring} reject_stack={over_stack_rejected} reject_idx={bad_index_rejected}"
+                )))
+            }
             "item_facts" => {
                 let remainder =
                     machine::remainder("minecraft:milk_bucket").unwrap_or_else(|| "none".into());
@@ -648,6 +704,18 @@ impl Mod for Machines {
                     return Err("failed to control automaton".into());
                 }
                 Ok(Some(format!("controlled={h}")))
+            }
+            "dims" => Ok(Some(format!(
+                "dims={}",
+                dimensions::list_dimensions().join(",")
+            ))),
+            "tp_twilight" => {
+                dimensions::teleport("@s", "test_machine:twilight", 8.5, 64.0, 8.5)?;
+                Ok(Some("tp_twilight=ok".into()))
+            }
+            "tp_overworld" => {
+                dimensions::teleport("@s", "minecraft:overworld", -31.5, 70.0, -11.5)?;
+                Ok(Some("tp_overworld=ok".into()))
             }
             _ => Err("unknown subcommand".into()),
         }

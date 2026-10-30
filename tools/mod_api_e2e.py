@@ -461,14 +461,76 @@ def verify_custom_entity_after_reopen(ctl_bin, socket, cwd, env, age_before_save
     assert 'entity.test_machine.automaton' in nbt and 'horizon_mod_data:' in nbt, nbt
 
 
+def wait_for_dimension(ctl_bin, socket, cwd, env, expected, *, attempts=40):
+    last = None
+    for _ in range(attempts):
+        last = ctl(ctl_bin, socket, cwd, env, 'state')
+        if last.get('dimension') == expected and last.get('player') is not None:
+            return last
+        ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    raise AssertionError(f'expected dimension {expected} with spawned player, got {last}')
+
+
+def verify_custom_dimension(ctl_bin, socket, cwd, env):
+    dims_out = command(ctl_bin, socket, cwd, env, 'machine_api dims')
+    assert 'test_machine:twilight' in dims_out, dims_out
+
+    # Custom portal activation: right-clicking the registered frame_block
+    # (`minecraft:mossy_cobblestone`) with `minecraft:diamond` teleports the
+    # player into `test_machine:twilight` with coordinate_scale=2.0 and generates
+    # the custom flat surface (`minecraft:moss_block` at y=63).
+    command(ctl_bin, socket, cwd, env, 'fill -32 69 -12 -30 69 -10 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'setblock -31 70 -12 minecraft:mossy_cobblestone')
+    command(ctl_bin, socket, cwd, env, 'tp @s -30.5 70.0 -10.5')
+    command(ctl_bin, socket, cwd, env, 'clear @s')
+    command(ctl_bin, socket, cwd, env, 'item replace entity @s weapon.mainhand with minecraft:diamond')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    ctl(ctl_bin, socket, cwd, env, 'look-at-block', -31, 70, -12, 'south')
+    ctl(ctl_bin, socket, cwd, env, 'mouse', 'right', 'click')
+
+    twilight_state = wait_for_dimension(ctl_bin, socket, cwd, env, 'test_machine:twilight')
+    player_pos = (twilight_state.get('player') or {}).get('position') or [0.0, 0.0, 0.0]
+    assert abs(player_pos[0] - (-15.25)) < 1.5 and abs(player_pos[2] - (-5.25)) < 1.5, twilight_state
+    wait_for_block(ctl_bin, socket, cwd, env, (-16, 63, -6), 'minecraft:moss_block', attempts=30)
+    wait_for_block(ctl_bin, socket, cwd, env, (-16, -64, -6), 'minecraft:bedrock', attempts=10)
+
+    # Return to Overworld by activating the portal inside the custom dimension.
+    command(ctl_bin, socket, cwd, env, 'setblock -16 64 -7 minecraft:mossy_cobblestone')
+    command(ctl_bin, socket, cwd, env, 'tp @s -15.5 64.0 -5.5')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    ctl(ctl_bin, socket, cwd, env, 'look-at-block', -16, 64, -7, 'south')
+    ctl(ctl_bin, socket, cwd, env, 'mouse', 'right', 'click')
+    wait_for_dimension(ctl_bin, socket, cwd, env, 'minecraft:overworld')
+
+    # Direct mod teleport (`dimensions::teleport`) to and from the custom dimension.
+    tp_out = command(ctl_bin, socket, cwd, env, 'machine_api tp_twilight')
+    assert 'tp_twilight=ok' in tp_out, tp_out
+    wait_for_dimension(ctl_bin, socket, cwd, env, 'test_machine:twilight')
+    wait_for_block(ctl_bin, socket, cwd, env, (8, 63, 8), 'minecraft:moss_block', attempts=30)
+
+    back_out = command(ctl_bin, socket, cwd, env, 'machine_api tp_overworld')
+    assert 'tp_overworld=ok' in back_out, back_out
+    wait_for_dimension(ctl_bin, socket, cwd, env, 'minecraft:overworld')
+    command(ctl_bin, socket, cwd, env, 'setblock -31 70 -12 minecraft:air')
+    command(ctl_bin, socket, cwd, env, 'clear @s')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+
+
 def check_mode(client, ctl_bin, mods, *, in_frame):
     mode = 'in-frame' if in_frame else 'integrated'
     work = Path(tempfile.mkdtemp(prefix=f'horizon-mod-api-{mode}-'))
     game_dir = work / 'game'
     runtime = work / 'runtime'
-    for path in (game_dir, runtime, work / 'home', work / 'launcher',
+    mods_dir = work / 'mods'
+    for path in (game_dir, runtime, mods_dir, work / 'home', work / 'launcher',
                  work / 'xdg-data', work / 'xdg-config'):
         path.mkdir(parents=True, exist_ok=True)
+    local_mods = []
+    for mod in mods:
+        dest = mods_dir / mod.name
+        shutil.copy2(mod, dest)
+        local_mods.append(dest)
+    mods = local_mods
     runtime.chmod(0o700)
     env = game_environment(mode)
     env.update({
@@ -487,6 +549,10 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
         command(ctl_bin, socket, game_dir, env, 'experience add @s 50 points')
         xp_levels = command(ctl_bin, socket, game_dir, env, 'experience query @s levels')
         assert re.search(r'\b7\b', xp_levels), f'xp-gain hook did not double command XP: {xp_levels}'
+        cfg_before = command(ctl_bin, socket, game_dir, env, 'machine_api read_config')
+        assert 'speed=2 bool=true float=1 mode=safe' in cfg_before, cfg_before
+        cfg_set = command(ctl_bin, socket, game_dir, env, 'machine_api config')
+        assert 'speed=2->5/reject=true/kept=5' in cfg_set and 'mode=safe->fast/reject=true' in cfg_set, cfg_set
         verify_recipe_api(ctl_bin, socket, game_dir, env)
         command(ctl_bin, socket, game_dir, env, 'machine_api set_machine_block')
         command(ctl_bin, socket, game_dir, env, 'peer_api set_peer_block')
@@ -637,10 +703,15 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
         assert peer_water_saved == peer_water_capacity and peer_water_saved >= peer_water_initial, peer_before_save
         verify_vanilla_hooks(ctl_bin, socket, game_dir, env)
         entity_age_before_save = verify_custom_entity(ctl_bin, socket, game_dir, env)
+        verify_custom_dimension(ctl_bin, socket, game_dir, env)
 
         stop_game(process, log, ctl_bin, socket, game_dir, env)
         process = log = socket = None
         process, log, socket = start_game(client, ctl_bin, mods, work, env, in_frame=in_frame)
+        cfg_after = command(ctl_bin, socket, game_dir, env, 'machine_api read_config')
+        assert 'speed=5 bool=false float=1.5 mode=fast' in cfg_after, cfg_after
+        ring_after = command(ctl_bin, socket, game_dir, env, 'machine_api get_ring')
+        assert 'ring=test_machine:ring*1 reject_stack=true reject_idx=true' in ring_after, ring_after
         output = command(ctl_bin, socket, game_dir, env, f'data get block {ox} {oy} {oz} Items')
         assert 'minecraft:iron_ingot' in output, f'output was lost on reopen: {output}'
         machine = command(ctl_bin, socket, game_dir, env, f'data get block {mx} {my} {mz}')
@@ -655,11 +726,19 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
         command(ctl_bin, socket, game_dir, env, f'setblock {ix} {iy} {iz} minecraft:air')
         verify_mod_screen(
             ctl_bin, socket, game_dir, env, verify_restored_attachment=True)
+        slot_bridge = command(ctl_bin, socket, game_dir, env, 'machine_api slot_cap_bridge_e2e')
+        assert 'slot0=minecraft:raw_iron*3 len=1' in slot_bridge, slot_bridge
+        ctl(ctl_bin, socket, game_dir, env, 'wait', 2)
+        bridged_items = command(ctl_bin, socket, game_dir, env, f'data get block {mx} {my} {mz} Items')
+        assert 'id: "minecraft:raw_iron"' in bridged_items and 'count: 3' in bridged_items, bridged_items
+        assert 'minecraft:bedrock' not in bridged_items, bridged_items
+        command(ctl_bin, socket, game_dir, env,
+                f'item replace block {mx} {my} {mz} container.0 with minecraft:air')
         command(ctl_bin, socket, game_dir, env,
                 f'setblock {ix} {iy} {iz} minecraft:hopper[facing=south]')
         verify_custom_entity_after_reopen(
             ctl_bin, socket, game_dir, env, entity_age_before_save)
-        print(f'PASS {mode}: per-block explosion filter, XP command hook, recipe API queries and replacement, custom entity lifecycle/persistence, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
+        print(f'PASS {mode}: per-block explosion filter, XP command hook, recipe API queries and replacement, config/accessory persistence, item-slot capability bridging and ownership, custom entity lifecycle/persistence, custom dimension worldgen/portals/travel, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
     except (CheckFailed, AssertionError, subprocess.TimeoutExpired) as error:
         raise CheckFailed(f'{mode}: {error}\n{tail(work / "game.log")}') from error
     finally:

@@ -482,16 +482,10 @@ impl ModsState {
             false
         }
     }
+    #[cfg(feature = "mods")]
     pub(super) fn has_entity_damage_hook(&self) -> bool {
-        #[cfg(feature = "mods")]
-        {
-            self.mods
-                .has_vanilla_hook_subscription(&VanillaHookKind::EntityDamage)
-        }
-        #[cfg(not(feature = "mods"))]
-        {
-            false
-        }
+        self.mods
+            .has_vanilla_hook_subscription(&VanillaHookKind::EntityDamage)
     }
     pub(super) fn with_player_damage_hook<R>(
         &mut self,
@@ -1083,6 +1077,13 @@ impl Game<'_> {
         false
     }
     pub(super) fn mod_save_block_entity(&mut self, _pos: [i32; 3]) {}
+    pub(super) fn mod_flush_block_entities(&mut self) {}
+    pub(super) fn mod_prepare_chunk_unload(
+        &mut self,
+        _unloaded: &horizon_client::fast_hash::FxHashSet<(i32, i32)>,
+    ) {
+    }
+    pub(super) fn mod_remove_block_at(&mut self, _pos: [i32; 3]) {}
     pub(super) fn mod_save_attachments(&mut self) {}
     pub(super) fn mod_load_attachments(&mut self) {}
     pub(super) fn tick_mod_block_entities(&mut self, _positions: &[(i32, i32, i32)]) {}
@@ -1160,6 +1161,13 @@ impl Game<'_> {
         None
     }
     pub(super) fn remove_mod_entity(&mut self, _id: u32) {}
+    pub(super) fn mod_try_activate_portal(
+        &mut self,
+        _pos: [i32; 3],
+        _held_item: Option<&str>,
+    ) -> bool {
+        false
+    }
 }
 
 #[cfg(feature = "mods")]
@@ -1281,6 +1289,201 @@ impl Game<'_> {
         if let Some(entry) = reg.by_registry.get_mut("minecraft:entity_type") {
             entry.ids.sort();
             entry.ids.dedup();
+        }
+    }
+
+    pub(super) fn sync_mod_dimension_registries(&mut self) {
+        let specs: Vec<_> = self.mods.mods.dimensions().into_iter().collect();
+        let reg = &mut self.ui.registries;
+        for spec in specs {
+            let generator = match spec.generator {
+                horizon_mods::GeneratorKind::Noise => super::ModDimensionGenerator::Noise,
+                horizon_mods::GeneratorKind::Flat => super::ModDimensionGenerator::Flat,
+                horizon_mods::GeneratorKind::VoidWorld => super::ModDimensionGenerator::VoidWorld,
+                horizon_mods::GeneratorKind::Custom => super::ModDimensionGenerator::Custom,
+            };
+            if let Some(entry) = reg.by_registry.get_mut("minecraft:dimension")
+                && !entry.ids.contains(&spec.id)
+            {
+                entry.ids.push(spec.id.clone());
+                entry.ids.sort();
+                entry.ids.dedup();
+            }
+            let height = spec.height as i32;
+            super::register_mod_dimension_spec(super::ModDimensionSpec {
+                id: spec.id,
+                has_skylight: spec.has_skylight,
+                has_ceiling: spec.has_ceiling,
+                ultrawarm: spec.ultrawarm,
+                coordinate_scale: spec.coordinate_scale,
+                min_y: spec.min_y,
+                height,
+                logical_height: height,
+                fixed_time: spec.fixed_time,
+                generator,
+                surface_block: (!spec.surface_block.is_empty()).then_some(spec.surface_block),
+            });
+        }
+    }
+
+    pub(super) fn mod_try_activate_portal(
+        &mut self,
+        pos: [i32; 3],
+        held_item: Option<&str>,
+    ) -> bool {
+        if self.remote.is_some() {
+            return false;
+        }
+        let portals = self.mods.mods.portals();
+        if portals.is_empty() {
+            return false;
+        }
+        let normalize = |id: &str| {
+            if id.is_empty() || id.contains(':') {
+                id.to_owned()
+            } else {
+                format!("minecraft:{id}")
+            }
+        };
+        let clicked_block = self
+            .res
+            .facts()
+            .get(self.world.block(pos[0], pos[1], pos[2]))
+            .name
+            .to_string();
+        let held_norm = held_item.map(normalize).unwrap_or_default();
+        let Some(portal) = portals.into_iter().find(|spec| {
+            let frame_ok = normalize(&spec.frame_block) == clicked_block;
+            let item_ok = if spec.activation_item.is_empty() {
+                true
+            } else {
+                normalize(&spec.activation_item) == held_norm
+            };
+            frame_ok && item_ok
+        }) else {
+            return false;
+        };
+        let portal_target = super::Dim::from_id(&normalize(&portal.target_dimension));
+        let dest_dim = if self.dim == portal_target {
+            super::Dim::Overworld
+        } else {
+            portal_target
+        };
+        let from_pos = self
+            .player
+            .as_ref()
+            .map(|p| [p.position.x, p.position.y, p.position.z])
+            .unwrap_or([
+                f64::from(pos[0]) + 0.5,
+                f64::from(pos[1]) + 1.0,
+                f64::from(pos[2]) + 0.5,
+            ]);
+        let scale = self.dim.coordinate_scale() / dest_dim.coordinate_scale();
+        let spec = super::mod_dimension_spec(dest_dim.id());
+        let (dest_x, dest_y, dest_z) = match spec.map(|s| s.generator) {
+            Some(super::ModDimensionGenerator::VoidWorld) => (0.5, 64.0, 0.5),
+            Some(super::ModDimensionGenerator::Flat | super::ModDimensionGenerator::Custom) => {
+                (from_pos[0] * scale, 64.0, from_pos[2] * scale)
+            }
+            _ => (
+                from_pos[0] * scale,
+                from_pos[1].clamp(
+                    f64::from(dest_dim.min_y() + 1),
+                    f64::from(dest_dim.max_y() - 2),
+                ),
+                from_pos[2] * scale,
+            ),
+        };
+        self.mod_teleport_subject("@s", dest_dim.id(), dest_x, dest_y, dest_z);
+        true
+    }
+
+    fn mod_teleport_subject(&mut self, subject: &str, dimension: &str, x: f64, y: f64, z: f64) {
+        let full_dim = if dimension.contains(':') {
+            dimension.to_owned()
+        } else {
+            format!("minecraft:{dimension}")
+        };
+        let target_dim = super::Dim::from_id(&full_dim);
+        if let Ok(raw_id) = subject.parse::<u32>()
+            && let Some(mob_id) = self
+                .mods
+                .handle_mobs
+                .get(&raw_id)
+                .copied()
+                .or_else(|| self.mobs.iter().any(|m| m.id == raw_id).then_some(raw_id))
+        {
+            if target_dim == self.dim
+                && let Some(mob) = self.mobs.iter_mut().find(|m| m.id == mob_id)
+            {
+                let v = horizon_core::geometry::Vec3::new(x, y, z);
+                mob.position = v;
+                mob.previous = v;
+                mob.velocity = horizon_core::geometry::Vec3::ZERO;
+            }
+            return;
+        }
+        if let Some(conn) = self.lan_acting {
+            if target_dim == self.dim {
+                if let Some(p) = self.player.as_mut() {
+                    let v = horizon_core::geometry::Vec3::new(x, y, z);
+                    p.position = v;
+                    p.velocity = horizon_core::geometry::Vec3::ZERO;
+                    p.fall_distance = 0.0;
+                    p.ground.on_ground = false;
+                    p.teleported = true;
+                    self.previous_position = v;
+                }
+            } else if self.serving.is_some() || self.options.dedicated.is_some() {
+                self.level_teleports
+                    .push(super::server_travel::LevelTeleport {
+                        conn,
+                        dim: target_dim,
+                        at: [x, y, z],
+                        rotation: None,
+                    });
+            }
+            return;
+        }
+        if (self.serving.is_some() || self.options.dedicated.is_some())
+            && let Some(host) = self.lan.as_mut()
+        {
+            let index = if matches!(subject, "" | "@s" | "@p" | "player") {
+                host.hub
+                    .guests
+                    .iter()
+                    .position(|g| g.dimension == self.dim.id())
+                    .or_else(|| (!host.hub.guests.is_empty()).then_some(0))
+            } else {
+                host.hub.guests.iter().position(|g| g.name == subject)
+            };
+            if let Some(i) = index {
+                let conn = host.hub.guests[i].conn;
+                let guest_dim = super::Dim::from_id(&host.hub.guests[i].dimension);
+                if target_dim == guest_dim {
+                    if let Some(m) = host.hub.guests[i].motion.as_mut() {
+                        m.position = horizon_core::geometry::Vec3::new(x, y, z);
+                        m.velocity = horizon_core::geometry::Vec3::ZERO;
+                        m.fall_distance = 0.0;
+                        m.ground.on_ground = false;
+                    }
+                    host.hub.teleport(i, Some([x, y, z]));
+                } else {
+                    self.level_teleports
+                        .push(super::server_travel::LevelTeleport {
+                            conn,
+                            dim: target_dim,
+                            at: [x, y, z],
+                            rotation: None,
+                        });
+                }
+                return;
+            }
+        }
+        if target_dim == self.dim {
+            self.teleport_to(super::commands::Target::Player, [x, y, z], None);
+        } else {
+            let _ = self.teleport_player_to_dimension(target_dim, [x, y, z], None);
         }
     }
 
@@ -1745,6 +1948,18 @@ impl Game<'_> {
         if self.remote.is_some() || !self.mods.mods.is_running() {
             return;
         }
+        if kind == "block-break" {
+            self.mod_clear_block_attachments(&dimension, pos);
+            if self.dim.id() == dimension {
+                self.mods.block_entities.remove(&pos);
+                if let Some(horizon_client::containers::BlockEntity::Mod { handle, .. }) =
+                    self.world.block_entities.remove(&(pos[0], pos[1], pos[2]))
+                    && handle != 0
+                {
+                    self.mods.mods.remove_block_entity(handle);
+                }
+            }
+        }
         let kind = match kind {
             "player-join" => ServerEventKind::PlayerJoin,
             "player-leave" => ServerEventKind::PlayerLeave,
@@ -1812,6 +2027,7 @@ impl Game<'_> {
 
     pub(super) fn reset_mod_player_session(&mut self) {
         self.mods.local_player_session_active = false;
+        self.mods.mods.clear_accessories();
     }
 
     pub(super) fn dispatch_mod_neighbor_events(&mut self) {
@@ -2061,6 +2277,9 @@ impl Game<'_> {
 
     /// Reads `horizon-mods/` and the dev mods, and starts the ones turned on.
     pub(super) fn start_mods(&mut self) {
+        self.mod_flush_block_entities();
+        let attachments = self.mods.mods.attachment_snapshot();
+        let accessories = self.mods.mods.accessory_snapshot();
         let dir = Self::options_path().with_file_name(mod_list::DIR);
         let dev = &self.mods.dev;
         let mut paths = horizon_mods::find(&dir);
@@ -2074,9 +2293,9 @@ impl Game<'_> {
             .collect();
         let enabled = &self.settings.mods.enabled;
         let on = |id: &str| enabled.contains(id) || dev_ids.iter().any(|d| d == id);
-        let attachments = self.mods.mods.attachment_snapshot();
         let mut mods = Mods::load(&paths, on, vanilla_command);
         mods.restore_attachments(attachments);
+        mods.restore_accessories(accessories);
         let running = mods
             .entries()
             .iter()
@@ -2149,6 +2368,7 @@ impl Game<'_> {
             .is_some()
             .then(|| vanilla::game_dispatcher().with_mod_commands(names));
         self.sync_mod_entity_registries();
+        self.sync_mod_dimension_registries();
     }
     /// After the options changed: restart the mods if the list of the ones
     /// turned on did.
@@ -2176,17 +2396,42 @@ impl Game<'_> {
     }
     /// What mods read this tick.
     fn mod_snapshot(&self) -> Snapshot {
-        let player = self.player.as_ref().map(|p| Player {
-            x: p.position.x,
-            y: p.position.y,
-            z: p.position.z,
-            yaw: self.yaw,
-            pitch: self.pitch,
-            health: p.health.health(),
-            food: p.health.food.food.max(0) as u32,
-            dimension: self.dim.id().to_owned(),
-        });
-        let clock = player.is_some().then(|| Clock {
+        let player = self
+            .player
+            .as_ref()
+            .map(|p| Player {
+                x: p.position.x,
+                y: p.position.y,
+                z: p.position.z,
+                yaw: self.yaw,
+                pitch: self.pitch,
+                health: p.health.health(),
+                food: p.health.food.food.max(0) as u32,
+                dimension: self.dim.id().to_owned(),
+            })
+            .or_else(|| {
+                let host = self.lan.as_ref()?;
+                let g = host
+                    .hub
+                    .guests
+                    .iter()
+                    .find(|g| g.dimension == self.dim.id())
+                    .or_else(|| host.hub.guests.first())?;
+                Some(Player {
+                    x: g.position[0],
+                    y: g.position[1],
+                    z: g.position[2],
+                    yaw: g.yaw,
+                    pitch: g.pitch,
+                    health: g.health,
+                    food: g.food.max(0) as u32,
+                    dimension: g.dimension.clone(),
+                })
+            });
+        let clock = (player.is_some()
+            || self.serving.is_some()
+            || self.options.dedicated.is_some())
+        .then(|| Clock {
             game_time: self.world.game_time.max(0) as u64,
             day_time: self.world.day_time.max(0) as u64,
         });
@@ -2194,21 +2439,26 @@ impl Game<'_> {
     }
     #[cfg(feature = "mods")]
     fn mod_world_view(&self) -> Option<Vec<WorldCell>> {
-        let player = self.player.as_ref()?;
+        let pos = self
+            .player
+            .as_ref()
+            .map(|p| [p.position.x, p.position.y, p.position.z])
+            .or_else(|| {
+                let host = self.lan.as_ref()?;
+                let g = host
+                    .hub
+                    .guests
+                    .iter()
+                    .find(|g| g.dimension == self.dim.id())?;
+                Some(g.position)
+            })?;
         let center = [
-            player.position.x.floor() as i32,
-            player.position.y.floor() as i32,
-            player.position.z.floor() as i32,
+            pos[0].floor() as i32,
+            pos[1].floor() as i32,
+            pos[2].floor() as i32,
         ];
         const RADIUS: i32 = 4;
-        let (min_y, max_y) = if self.dim.id() == "minecraft:overworld" {
-            (
-                horizon_client::chunk::MIN_Y,
-                horizon_client::chunk::MIN_Y + horizon_client::chunk::HEIGHT - 1,
-            )
-        } else {
-            (0, 255)
-        };
+        let (min_y, max_y) = (self.dim.min_y(), self.dim.max_y());
         let mut cells = Vec::with_capacity(9 * 9 * 9);
         for x in center[0] - RADIUS..=center[0] + RADIUS {
             for y in (center[1] - RADIUS).max(min_y)..=(center[1] + RADIUS).min(max_y) {
@@ -2266,7 +2516,7 @@ impl Game<'_> {
                 let live = matches!(
                     self.world.block_entities.get(&(pos[0], pos[1], pos[2])),
                     Some(horizon_client::containers::BlockEntity::Mod { handle, .. })
-                        if *handle == view.handle
+                        if *handle == view.handle && self.mods.mods.has_block_entity(*handle)
                 );
                 (!live).then_some((pos, view.handle))
             })
@@ -2274,6 +2524,15 @@ impl Game<'_> {
         for (pos, handle) in stale {
             self.mods.block_entities.remove(&pos);
             self.mods.mods.remove_block_entity(handle);
+            if self.world.loaded(pos[0], pos[2])
+                && !matches!(
+                    self.world.block_entities.get(&(pos[0], pos[1], pos[2])),
+                    Some(horizon_client::containers::BlockEntity::Mod { .. })
+                )
+            {
+                let dim = self.dim.id().to_owned();
+                self.mod_clear_block_attachments(&dim, pos);
+            }
         }
         let snapshot = self.mod_snapshot();
         self.mods.mods.set_snapshot(snapshot);
@@ -3100,19 +3359,20 @@ impl Game<'_> {
         let key = (pos[0], pos[1], pos[2]);
         if let Some(horizon_client::containers::BlockEntity::Mod {
             block,
-            handle: 0,
+            handle: existing_handle,
             saved,
             items,
             energy,
             fluids,
         }) = self.world.block_entities.get(&key)
+            && (*existing_handle == 0 || !self.mods.mods.has_block_entity(*existing_handle))
         {
-            let (block, saved, items, energy, fluids) = (
+            let (block, mut items, energy, fluids, saved) = (
                 block.clone(),
-                saved.clone(),
                 items.clone(),
                 energy.clone(),
                 fluids.clone(),
+                saved.clone(),
             );
             let Some((handle, slots)) = self.mods.mods.create_block_entity_at(
                 &block,
@@ -3121,6 +3381,7 @@ impl Game<'_> {
             ) else {
                 return false;
             };
+            items.resize(slots as usize, None);
             if let Some(energy) = &energy {
                 self.mods.mods.set_energy_buffer(
                     &format!("{}:{},{},{}", self.dim.id(), pos[0], pos[1], pos[2]),
@@ -3151,7 +3412,7 @@ impl Game<'_> {
             }) = self.world.block_entities.get_mut(&key)
             {
                 *current_handle = handle;
-                current_items.resize(slots as usize, None);
+                *current_items = items.clone();
                 *current_saved = self.mods.mods.save_block_entity(handle).unwrap_or(saved);
             }
             self.mods.block_entities.insert(
@@ -3246,15 +3507,162 @@ impl Game<'_> {
         }) else {
             return;
         };
-        let Some(saved) = self.mods.mods.save_block_entity(handle) else {
-            return;
-        };
-        if let Some(horizon_client::containers::BlockEntity::Mod { saved: current, .. }) =
-            self.world.block_entities.get_mut(&key)
-            && *current != saved
+        let saved = self.mods.mods.save_block_entity(handle);
+        let (cap_energy, cap_fluids, cap_slots) =
+            self.mods
+                .mods
+                .block_entity_capabilities(self.dim.id(), pos[0], pos[1], pos[2]);
+        let mut modified = false;
+        if let Some(horizon_client::containers::BlockEntity::Mod {
+            saved: current_saved,
+            items: current_items,
+            energy: current_energy,
+            fluids: current_fluids,
+            ..
+        }) = self.world.block_entities.get_mut(&key)
         {
-            *current = saved;
+            if let Some(saved) = saved
+                && *current_saved != saved
+            {
+                *current_saved = saved;
+                modified = true;
+            }
+            if let Some(cap_energy) = &cap_energy {
+                let next_energy = horizon_client::containers::ModEnergyBuffer {
+                    stored: cap_energy.stored,
+                    capacity: cap_energy.capacity,
+                    max_receive: cap_energy.max_receive,
+                    max_extract: cap_energy.max_extract,
+                };
+                if current_energy.as_ref() != Some(&next_energy) {
+                    *current_energy = Some(next_energy);
+                    modified = true;
+                }
+            }
+            for (tank, fluid) in &cap_fluids {
+                let next_fluid = horizon_client::containers::ModFluidTank {
+                    fluid: fluid.fluid.clone(),
+                    amount: fluid.amount,
+                    capacity: fluid.capacity,
+                };
+                if current_fluids.get(tank) != Some(&next_fluid) {
+                    current_fluids.insert(*tank, next_fluid);
+                    modified = true;
+                }
+            }
+            if let Some(slots_map) = &cap_slots {
+                for (index, target) in current_items.iter_mut().enumerate() {
+                    let next = slots_map.get(&(index as u32));
+                    let changed = match (&target, next) {
+                        (Some(existing), Some((id, count))) => {
+                            existing.item.as_ref() != id || existing.count != *count
+                        }
+                        (None, None) => false,
+                        _ => true,
+                    };
+                    if changed {
+                        *target = next.map(|(id, count)| ItemStack::new(id, *count));
+                        modified = true;
+                    }
+                }
+            }
+        }
+        if let Some(view) = self.mods.block_entities.get_mut(&pos) {
+            if let Some(cap_energy) = cap_energy {
+                view.energy = Some(cap_energy);
+            }
+            for (tank, fluid) in cap_fluids {
+                view.fluids.insert(tank, fluid);
+            }
+            if let Some(slots_map) = cap_slots {
+                for (index, target) in view.slots.iter_mut().enumerate() {
+                    let next = slots_map.get(&(index as u32));
+                    let item_changed = match (&target, next) {
+                        (Some(existing), Some((id, _))) => existing.id != *id,
+                        (None, None) => false,
+                        _ => true,
+                    };
+                    *target = next.map(|(id, count)| Stack {
+                        id: id.clone(),
+                        count: *count,
+                    });
+                    if item_changed && let Some(components) = view.slot_components.get_mut(index) {
+                        components.clear();
+                    }
+                }
+            }
+        }
+        if modified {
             self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
+        }
+    }
+    pub(super) fn mod_flush_block_entities(&mut self) {
+        let positions: Vec<[i32; 3]> = self
+            .world
+            .block_entities
+            .iter()
+            .filter_map(|(pos, entity)| match entity {
+                horizon_client::containers::BlockEntity::Mod { handle, .. }
+                    if *handle != 0 && self.mods.mods.has_block_entity(*handle) =>
+                {
+                    Some([pos.0, pos.1, pos.2])
+                }
+                _ => None,
+            })
+            .collect();
+        for pos in positions {
+            self.mod_save_block_entity(pos);
+        }
+    }
+    pub(super) fn mod_prepare_chunk_unload(
+        &mut self,
+        unloaded: &horizon_client::fast_hash::FxHashSet<(i32, i32)>,
+    ) {
+        if unloaded.is_empty() {
+            return;
+        }
+        let positions: Vec<[i32; 3]> = self
+            .world
+            .block_entities
+            .iter()
+            .filter_map(|(pos, entity)| {
+                (unloaded.contains(&(pos.0 >> 4, pos.2 >> 4))
+                    && matches!(entity, horizon_client::containers::BlockEntity::Mod { .. }))
+                .then_some([pos.0, pos.1, pos.2])
+            })
+            .collect();
+        for pos in positions {
+            self.mod_save_block_entity(pos);
+            self.mods.block_entities.remove(&pos);
+            if let Some(horizon_client::containers::BlockEntity::Mod { handle, .. }) =
+                self.world.block_entities.get_mut(&(pos[0], pos[1], pos[2]))
+            {
+                let old_handle = *handle;
+                *handle = 0;
+                if old_handle != 0 {
+                    self.mods.mods.remove_block_entity(old_handle);
+                }
+            }
+        }
+    }
+    fn mod_clear_block_attachments(&mut self, dimension: &str, pos: [i32; 3]) {
+        self.mods.mods.remove_target_attachments(&format!(
+            "block:{dimension}:{},{},{}",
+            pos[0], pos[1], pos[2]
+        ));
+        self.mods
+            .mods
+            .remove_target_attachments(&format!("block:{},{},{}", pos[0], pos[1], pos[2]));
+    }
+    pub(super) fn mod_remove_block_at(&mut self, pos: [i32; 3]) {
+        let dim = self.dim.id().to_owned();
+        self.mod_clear_block_attachments(&dim, pos);
+        self.mods.block_entities.remove(&pos);
+        if let Some(horizon_client::containers::BlockEntity::Mod { handle, .. }) =
+            self.world.block_entities.remove(&(pos[0], pos[1], pos[2]))
+            && handle != 0
+        {
+            self.mods.mods.remove_block_entity(handle);
         }
     }
     /// Restore capability attachments after the world root is known. The
@@ -3300,6 +3708,45 @@ impl Game<'_> {
             }
         };
         self.mods.mods.restore_attachments(attachments);
+
+        let accessories_path = self.world_root.join("data/horizon/mod-accessories.json");
+        let accessories = match std::fs::metadata(&accessories_path) {
+            Ok(metadata) if metadata.len() > MAX_ATTACHMENT_SAVE_BYTES => {
+                log::warn!(
+                    "Horizon: mod accessories file {} exceeds the 64 MiB save limit",
+                    accessories_path.display()
+                );
+                Vec::new()
+            }
+            Ok(_) => match std::fs::read(&accessories_path) {
+                Ok(bytes) => match serde_json::from_slice(&bytes) {
+                    Ok(accessories) => accessories,
+                    Err(error) => {
+                        log::warn!(
+                            "Horizon: could not read mod accessories {}: {error}",
+                            accessories_path.display()
+                        );
+                        Vec::new()
+                    }
+                },
+                Err(error) => {
+                    log::warn!(
+                        "Horizon: could not read mod accessories {}: {error}",
+                        accessories_path.display()
+                    );
+                    Vec::new()
+                }
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(error) => {
+                log::warn!(
+                    "Horizon: could not inspect mod accessories {}: {error}",
+                    accessories_path.display()
+                );
+                Vec::new()
+            }
+        };
+        self.mods.mods.restore_accessories(accessories);
     }
 
     /// Persist world-scoped attachments beside level metadata. Write and sync
@@ -3322,6 +3769,28 @@ impl Game<'_> {
             log::warn!(
                 "Horizon: could not save mod attachments {}: {error}",
                 path.display()
+            );
+        }
+
+        let accessories_path = self.world_root.join("data/horizon/mod-accessories.json");
+        let accessories_result = (|| -> std::io::Result<()> {
+            let bytes = serde_json::to_vec(&self.mods.mods.accessory_snapshot())
+                .map_err(std::io::Error::other)?;
+            let parent = accessories_path
+                .parent()
+                .expect("world accessories file has a parent");
+            std::fs::create_dir_all(parent)?;
+            let temporary = accessories_path.with_extension("json.tmp");
+            let mut file = std::fs::File::create(&temporary)?;
+            use std::io::Write;
+            file.write_all(&bytes)?;
+            file.sync_all()?;
+            std::fs::rename(&temporary, &accessories_path)
+        })();
+        if let Err(error) = accessories_result {
+            log::warn!(
+                "Horizon: could not save mod accessories {}: {error}",
+                accessories_path.display()
             );
         }
     }
@@ -4408,7 +4877,7 @@ impl Game<'_> {
             else {
                 continue;
             };
-            if handle == 0 {
+            if handle == 0 || !self.mods.mods.has_block_entity(handle) {
                 let Some((new_handle, slots)) = self.mods.mods.create_block_entity_at(
                     &block,
                     &saved,
@@ -4418,7 +4887,7 @@ impl Game<'_> {
                         pos,
                         horizon_client::containers::BlockEntity::Mod {
                             block,
-                            handle,
+                            handle: 0,
                             saved,
                             items,
                             energy,
@@ -4954,15 +5423,14 @@ impl Game<'_> {
                     continue;
                 }
                 Output::Teleported {
-                    dimension, x, y, z, ..
+                    subject,
+                    dimension,
+                    x,
+                    y,
+                    z,
+                    ..
                 } => {
-                    if dimension == self.dim.id()
-                        && let Some(p) = self.player.as_mut()
-                    {
-                        p.position.x = x;
-                        p.position.y = y;
-                        p.position.z = z;
-                    }
+                    self.mod_teleport_subject(&subject, &dimension, x, y, z);
                     continue;
                 }
                 Output::PacketToServer {
@@ -5078,7 +5546,7 @@ fn mod_action_chunk(action: &ServerAction) -> Option<(&str, i32, i32)> {
     }
 }
 
-#[cfg(any(feature = "mods", test))]
+#[cfg(feature = "mods")]
 fn scaled_xp(amount: u32, multiplier: f32) -> u32 {
     let scaled = f64::from(amount) * f64::from(multiplier);
     let maximum = f64::from(i32::MAX);

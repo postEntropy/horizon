@@ -1613,12 +1613,46 @@ enum Dim {
     End,
     Custom(&'static DimensionInfo),
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug)]
 struct DimensionInfo {
     id: &'static str,
     min_y: i32,
     height: i32,
     logical_height: i32,
+}
+impl PartialEq for DimensionInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for DimensionInfo {}
+impl std::hash::Hash for DimensionInfo {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+#[cfg_attr(not(feature = "mods"), allow(dead_code))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ModDimensionGenerator {
+    Noise,
+    Flat,
+    VoidWorld,
+    Custom,
+}
+#[cfg_attr(not(feature = "mods"), allow(dead_code))]
+#[derive(Clone, Debug)]
+pub(super) struct ModDimensionSpec {
+    pub(super) id: String,
+    pub(super) has_skylight: bool,
+    pub(super) has_ceiling: bool,
+    pub(super) ultrawarm: bool,
+    pub(super) coordinate_scale: f64,
+    pub(super) min_y: i32,
+    pub(super) height: i32,
+    pub(super) logical_height: i32,
+    pub(super) fixed_time: Option<u64>,
+    pub(super) generator: ModDimensionGenerator,
+    pub(super) surface_block: Option<String>,
 }
 impl Dim {
     fn id(self) -> &'static str {
@@ -1662,6 +1696,40 @@ impl Dim {
             Self::Custom(info) => info.min_y + info.height - 1,
         }
     }
+    /// `DimensionType.coordinateScale`.
+    pub(super) fn coordinate_scale(self) -> f64 {
+        match self {
+            Self::Nether => 8.0,
+            Self::Overworld | Self::End => 1.0,
+            Self::Custom(info) => {
+                mod_dimension_spec(info.id).map_or(1.0, |spec| spec.coordinate_scale.max(0.00001))
+            }
+        }
+    }
+}
+
+fn mod_dimension_specs()
+-> &'static std::sync::Mutex<std::collections::HashMap<String, ModDimensionSpec>> {
+    use std::sync::{Mutex, OnceLock};
+    static SPECS: OnceLock<Mutex<std::collections::HashMap<String, ModDimensionSpec>>> =
+        OnceLock::new();
+    SPECS.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+#[cfg(feature = "mods")]
+pub(super) fn register_mod_dimension_spec(spec: ModDimensionSpec) {
+    register_dimension_info(&spec.id, spec.min_y, spec.height, spec.logical_height);
+    let mut specs = mod_dimension_specs()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    specs.insert(spec.id.clone(), spec);
+}
+
+pub(super) fn mod_dimension_spec(id: &str) -> Option<ModDimensionSpec> {
+    let specs = mod_dimension_specs()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    specs.get(id).cloned()
 }
 
 /// Dimension ids live for the game's lifetime because `Dim` is copied into
@@ -2641,14 +2709,8 @@ impl Game<'_> {
         });
         self.process_level_events()?;
         let landed = self.world.block(pos[0], pos[1], pos[2]);
-        if old_name != new_name
-            && self.res.facts().get(landed).name.as_ref() == new_name
-            && matches!(
-                self.world.block_entities.get(&(pos[0], pos[1], pos[2])),
-                Some(BlockEntity::Mod { .. })
-            )
-        {
-            self.world.block_entities.remove(&(pos[0], pos[1], pos[2]));
+        if old_name != new_name && self.res.facts().get(landed).name.as_ref() == new_name {
+            self.mod_remove_block_at(pos);
         }
         if self.res.facts().get(landed).name.as_ref() == new_name {
             self.ensure_mod_block_entity(pos, &new_name);
@@ -3708,6 +3770,15 @@ impl Game<'_> {
                 self.swing_arm();
                 return Ok(true);
             }
+            if self.hand == Hand::Main
+                && self.mod_try_activate_portal(
+                    hit.pos,
+                    held.as_ref().map(|stack| stack.item.as_ref()),
+                )
+            {
+                self.swing_arm();
+                return Ok(true);
+            }
             match self.use_respawn_anchor(hit.pos, held.as_ref())? {
                 respawn_anchor::AnchorUse::Charged => {
                     self.swing_arm();
@@ -3757,6 +3828,10 @@ impl Game<'_> {
         };
         if let Some(hit) = block_hit {
             if self.mod_use_item_on_block(&stack.item, hit.pos) {
+                self.swing_arm();
+                return Ok(true);
+            }
+            if self.mod_try_activate_portal(hit.pos, Some(stack.item.as_ref())) {
                 self.swing_arm();
                 return Ok(true);
             }
@@ -8205,8 +8280,14 @@ impl Game<'_> {
             r.clear_sections();
         }
         self.apply_settings();
-        self.streaming.sky_light = dim != Dim::Nether;
-        self.streaming.nether_shading = dim == Dim::Nether;
+        if let Some(spec) = mod_dimension_spec(dim.id()) {
+            self.streaming.sky_light = spec.has_skylight;
+            self.streaming.nether_shading = spec.has_ceiling;
+            self.world.fast_lava = spec.ultrawarm;
+        } else {
+            self.streaming.sky_light = dim != Dim::Nether;
+            self.streaming.nether_shading = dim == Dim::Nether;
+        }
         self.load_world_state();
         Ok(())
     }
@@ -8248,17 +8329,24 @@ impl Game<'_> {
     /// (scaled coordinates, or the End portal's fixed destination).
     pub(super) fn switch_level(&mut self, target: Dim, from: Vec3) -> Result<Vec3> {
         // Save the departing dimension's changed chunks.
+        self.mod_flush_block_entities();
+        let all_chunks: horizon_client::fast_hash::FxHashSet<(i32, i32)> =
+            self.world.chunks.keys().copied().collect();
+        self.mod_prepare_chunk_unload(&all_chunks);
         self.streaming.save(&mut self.world, true);
         let keys: Vec<_> = self.world.modified.drain().collect();
         let chunks = self.with_entities(keys.iter().filter_map(|k| self.world.chunks.get(k)));
         self.save
             .save(&chunks, self.pack.assets.registry, self.res.biomes())?;
         self.save_dimension_entities()?;
-        // Coordinates scale by 8 between the Overworld and the Nether.
+        // Coordinates scale by DimensionType.coordinateScale between dimensions.
         let scale = match (self.dim, target) {
             (Dim::Overworld, Dim::Nether) => 1.0 / 8.0,
             (Dim::Nether, Dim::Overworld) => 8.0,
             (Dim::End, Dim::Nether) => 1.0 / 8.0,
+            (from_dim, to_dim) if from_dim != to_dim => {
+                from_dim.coordinate_scale() / to_dim.coordinate_scale()
+            }
             _ => 1.0,
         };
         let destination = self.end_destination(target).unwrap_or(Vec3::new(
@@ -8269,9 +8357,12 @@ impl Game<'_> {
         let (streaming, save) =
             self.make_streaming(&self.world_root.clone(), target, self.level.seed)?;
         let mut world = World::new(self.res.facts().air, self.level.seed);
-        world.fast_lava = target == Dim::Nether;
+        world.fast_lava =
+            mod_dimension_spec(target.id()).map_or(target == Dim::Nether, |s| s.ultrawarm);
         world.game_time = self.world.game_time;
-        world.day_time = self.world.day_time;
+        world.day_time = mod_dimension_spec(target.id())
+            .and_then(|s| s.fixed_time)
+            .map_or(self.world.day_time, |t| t as i64);
         world.weather = self.world.weather;
         // The game rules and the difficulty hold in every dimension.
         world.health_rules = self.world.health_rules;
@@ -10302,6 +10393,7 @@ impl Game<'_> {
     }
     /// Save the level in place: its changed chunks, its entities and its raids.
     fn save_level(&mut self, wait: bool) -> Result<()> {
+        self.mod_flush_block_entities();
         self.streaming.save(&mut self.world, wait);
         let keys: Vec<_> = self.world.modified.drain().collect();
         let chunks = self.with_entities(keys.iter().filter_map(|k| self.world.chunks.get(k)));
@@ -11116,6 +11208,11 @@ impl Game<'_> {
                     }
                 }
             });
+        }
+        if !unloaded.is_empty() {
+            let gone: horizon_client::fast_hash::FxHashSet<(i32, i32)> =
+                unloaded.iter().map(|c| (c.x, c.z)).collect();
+            self.mod_prepare_chunk_unload(&gone);
         }
         let dirty: Vec<_> = unloaded
             .iter()

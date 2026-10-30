@@ -7,6 +7,7 @@ pub struct FlatTerrain {
     layers: Vec<u32>,
     biome: u16,
     surface: Option<crate::lod::Surface>,
+    platform: Option<u32>,
 }
 impl FlatTerrain {
     /// The overworld generator of `world_gen_settings` (`data.dimensions`), if it
@@ -69,10 +70,69 @@ impl FlatTerrain {
             layers,
             biome,
             surface,
+            platform: None,
         })
+    }
+    /// Flat or void terrain for a custom mod dimension without a noise preset.
+    pub fn for_mod_dimension(
+        min_y: i32,
+        void_world: bool,
+        surface_block: &str,
+        registry: &BlockRegistry,
+        biomes: &crate::biome::Biomes,
+    ) -> Self {
+        let biome = biomes.id("minecraft:plains");
+        let surface_id = if surface_block.trim().is_empty() {
+            "minecraft:stone".to_owned()
+        } else if surface_block.contains(':') {
+            surface_block.to_owned()
+        } else {
+            format!("minecraft:{surface_block}")
+        };
+        let surface_state = registry
+            .default_state(&surface_id)
+            .or_else(|| registry.default_state("minecraft:stone"))
+            .map_or(0, |id| id.0);
+        if void_world {
+            return Self {
+                layers: Vec::new(),
+                biome,
+                surface: None,
+                platform: (surface_state != 0).then_some(surface_state),
+            };
+        }
+        let bedrock = registry
+            .default_state("minecraft:bedrock")
+            .map_or(surface_state, |id| id.0);
+        let stone = registry
+            .default_state("minecraft:stone")
+            .map_or(surface_state, |id| id.0);
+        let floor_y = min_y.clamp(crate::chunk::MIN_Y, 60);
+        let air_layers = (floor_y - crate::chunk::MIN_Y).max(0) as usize;
+        let filler_layers = (63 - floor_y - 1).max(0) as usize;
+        let mut layers = Vec::with_capacity(air_layers + 1 + filler_layers + 1);
+        layers.extend(std::iter::repeat_n(0, air_layers));
+        layers.push(bedrock);
+        layers.extend(std::iter::repeat_n(stone, filler_layers));
+        layers.push(surface_state);
+        let surface = (surface_state != 0).then_some(crate::lod::Surface {
+            height: 64,
+            state: horizon_world::registry::BlockStateId(surface_state),
+            water: None,
+            biome,
+        });
+        Self {
+            layers,
+            biome,
+            surface,
+            platform: None,
+        }
     }
     /// FlatLevelSource.getSpawnHeight: the top of the layers.
     pub fn spawn_height(&self) -> i32 {
+        if self.platform.is_some() && self.layers.is_empty() {
+            return 64;
+        }
         crate::chunk::MIN_Y + self.layers.len().min(crate::chunk::HEIGHT as usize) as i32
     }
 }
@@ -204,6 +264,18 @@ impl ChunkGenerator for FlatTerrain {
             for z in 0..16 {
                 for x in 0..16 {
                     chunk.set(x, -64 + i as i32, z, block);
+                }
+            }
+        }
+        if let Some(block) = self.platform
+            && (-1..=0).contains(&cx)
+            && (-1..=0).contains(&cz)
+        {
+            for wx in -2..=2_i32 {
+                for wz in -2..=2_i32 {
+                    if (wx >> 4) == cx && (wz >> 4) == cz {
+                        chunk.set(wx.rem_euclid(16), 63, wz.rem_euclid(16), block);
+                    }
                 }
             }
         }

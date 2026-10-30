@@ -1,5 +1,5 @@
 //! `horizon-mod.toml`, a mod's manifest, and the `.hmod` file around it.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fmt,
@@ -32,7 +32,7 @@ const RESERVED_NAMESPACES: [&str; 5] = ["minecraft", "c", "forge", "horizon", "n
 const MAX_WASM: u64 = 32 << 20;
 
 /// A typed value in `[config.<key>]`.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(untagged)]
 pub enum ConfigValue {
     Bool(bool),

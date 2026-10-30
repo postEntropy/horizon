@@ -556,8 +556,7 @@ impl Game<'_> {
                     return Ok(vec![s]);
                 };
                 let dimension = Dim::from_id(dim);
-                let coordinate_scale = |dim| if dim == Dim::Nether { 8.0 } else { 1.0 };
-                let scale = coordinate_scale(s.dimension) / coordinate_scale(dimension);
+                let scale = s.dimension.coordinate_scale() / dimension.coordinate_scale();
                 vec![Source {
                     pos: [s.pos[0] * scale, s.pos[1], s.pos[2] * scale],
                     dimension,

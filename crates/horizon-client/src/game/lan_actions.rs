@@ -91,8 +91,6 @@ pub(super) struct GuestCommand {
     conn: u32,
     command: String,
     permission: u8,
-    /// An integrated server's: no level teleports (yet).
-    integrated: bool,
 }
 
 /// The game's own state while a guest's is swapped in (`enter_guest`), and
@@ -1481,7 +1479,6 @@ impl Game<'_> {
             conn,
             command: command.trim_start_matches('/').to_owned(),
             permission,
-            integrated,
         });
     }
 
@@ -1510,10 +1507,8 @@ impl Game<'_> {
             let mut host = self.lan.take().expect("a command puts the hub back");
             self.leave_guest(&mut host, swap);
             host.hub.sync_all_effects();
-            if !c.integrated {
-                // A teleport into another level happens before its feedback is sent.
-                self.run_level_teleports(&mut host);
-            }
+            // A teleport into another level happens before its feedback is sent.
+            self.run_level_teleports(&mut host);
             // What the command earned is announced before its feedback.
             self.announce_guest_advancements(&mut host);
             for line in lines {

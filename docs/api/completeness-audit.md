@@ -10,7 +10,7 @@ test, does not by itself mean a pack feature works in a playable world.
 |---|---|---|---|---|
 | 0.3 logic | Present | Present | Present for the client and local game hooks inspected | Implemented in parts; full multiplayer and per-capability gameplay coverage is not established |
 | 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist; mod packets bridge the integrated single-player client and server | Usable foundation; directional transfer, broad recipe behavior, LAN/dedicated networking and some persistence cases remain incomplete |
-| 0.5 deep | Present | Present, including runtime tests | Custom entity lifecycle (`mod-entities` + `entities`), crop growth, explosion filtering, enchantment reads, damage, XP and loot hooks have live single-player integration; custom models and dimensions remain unwired | Partial live bridge; not a complete player-facing API |
+| 0.5 deep | Present | Present, including runtime tests | Custom entity lifecycle (`mod-entities` + `entities`), custom dimensions/portals/travel/worldgen (`dimensions`), crop growth, explosion filtering, enchantment reads, damage, XP and loot hooks have live single-player integration; custom models remain unwired | Partial live bridge; not a complete player-facing API |
 
 ## Scope for the current ATM10 core milestone
 
@@ -33,7 +33,9 @@ this audit records concrete evidence and its limits.
 - The WIT contract and SDK expose config, server mutations, keybindings, target,
   inventory snapshots, block/item callbacks and server events.
 - `horizon-mods` implements the host interfaces and has sandbox coverage for
-  logic hooks, manifest capability checks and storage.
+  logic hooks, manifest capability checks, storage and validated config
+  persistence (`.horizon-mod-data/<mod_id>.config.json`) across mod reload and
+  game restart (`tools/mod_api_e2e.py --mode both`).
 - `horizon-client/src/game/mods.rs` dispatches block interactions, commands,
   chat, ticks, frames, target and inventory snapshots. This is evidence of an
   in-game path, but does not verify every action in both in-frame and integrated
@@ -80,41 +82,49 @@ this audit records concrete evidence and its limits.
 - `horizon-mods` hosts those interfaces. Sandbox tests cover machine create,
   tick, save/load, UI/menu callbacks and the capability checks.
 - Game code creates and ticks mod block entities, saves their private bytes and
-  slots, exposes menu interactions, and bridges energy/fluid capabilities to
-  game-owned block-entity state. Energy buffers and fluid tanks are serialized
-  in the block entity's `horizon_energy` and `horizon_fluids` fields. The E2E
-  fixture changes both through the runtime, saves and reopens the world, and
-  verifies the energy has not decreased and the fluid amount and identity
-  remain. This runs in both integrated-server and in-frame single-player.
+  slots, exposes menu interactions, and bridges energy/fluid/item-slot
+  capabilities to game-owned block-entity state. Energy buffers and fluid tanks
+  are serialized in the block entity's `horizon_energy` and `horizon_fluids`
+  fields, flushed before chunk/world saves and chunk unloads, and re-bound when
+  a chunk reloads or a mod hot-reloads (`reloaded_saves`). The E2E fixture
+  changes both through the runtime, saves and reopens the world, and verifies
+  the energy has not decreased and the fluid amount and identity remain. This
+  runs in both integrated-server and in-frame single-player.
   This persistence check by itself doesn't cover neighboring transfers; the
-  separate two-mod scenario below covers FE and fluid transfer. Chunk unload
-  and mod reload are still not covered.
-- Before machine callbacks, the runtime now seeds capability state from all
-  loaded mod block entities, then writes capability mutations back to all of
-  their owners after callbacks. This removes callback/load-order dependence for
-  cross-mod energy and fluid access. A runtime test verifies a change to a
-  neighbor's energy and tank is reconciled into that neighbor's owning view and
-  marked dirty. `tools/mod_api_e2e.py` loads separate `test_machine` and
-  `test_peer` mods; the smelter sends FE into the peer cell and the script
-  verifies the receiver's stored energy survives save/reopen in integrated
-  and in-frame single-player. The same scenario transfers water into a peer
-  tank and verifies that it survives reopen. This proves basic cross-mod FE
-  and fluid transfer. FE receive/extract quotas are now accumulated per buffer
-  per game tick across API calls and mods; simulated calls do not spend the
-  quota. Sandbox coverage exercises repeated calls and verifies that a new tick
-  restores the budget. Rate limits and saturated-buffer behavior now have live
-  coverage: the peer accepts only 1 FE per tick while the donor
-  attempts two transfers, and the E2E verifies it remains below the buffer's
-  capacity across the run. The peer fluid tank also fills to its 16 mB capacity;
-  the donor recovers to a full 1,000 mB tank without overfilling the peer.
-  Directional transfer rules remain uncovered. Capability definitions are now
-  owner-scoped: `set-energy-buffer` and `set-fluid-tank` only affect positions
-  with a block entity registered by the calling mod; cross-mod transfer remains
-  available through receive/extract/fill/drain. A malicious peer fixture tries
-  to replace the donor's 10,000 FE capacity and rate limits and change its water
-  tank to lava; a sandbox test and both live single-player paths confirm those
-  writes are ignored while normal transfer still works. This does not yet
-  define ownership for the separate item-slot capability or attachments.
+  separate two-mod scenario below covers FE and fluid transfer.
+- Before machine callbacks, the runtime now seeds capability state (energy,
+  fluid and item slots) from all loaded mod block entities, then writes
+  capability mutations back to all of their owners after callbacks. This removes
+  callback/load-order dependence for cross-mod energy, fluid and item-slot
+  access. A runtime test verifies a change to a neighbor's energy and tank is
+  reconciled into that neighbor's owning view and marked dirty, and that
+  `capabilities::set-item-slot` and `machine::set-slot` / `insert-slot` stay
+  synchronized across in-tick and out-of-tick calls. `tools/mod_api_e2e.py`
+  loads separate `test_machine` and `test_peer` mods; the smelter sends FE into
+  the peer cell and the script verifies the receiver's stored energy survives
+  save/reopen in integrated and in-frame single-player. The same scenario
+  transfers water into a peer tank and verifies that it survives reopen. This
+  proves basic cross-mod FE and fluid transfer. FE receive/extract quotas are
+  now accumulated per buffer per game tick across API calls and mods; simulated
+  calls do not spend the quota. Sandbox coverage exercises repeated calls and
+  verifies that a new tick restores the budget. Rate limits and saturated-buffer
+  behavior now have live coverage: the peer accepts only 1 FE per tick while the
+  donor attempts two transfers, and the E2E verifies it remains below the
+  buffer's capacity across the run. The peer fluid tank also fills to its 16 mB
+  capacity; the donor recovers to a full 1,000 mB tank without overfilling the
+  peer. Directional transfer rules remain uncovered. Capability definitions are
+  now owner-scoped: `set-energy-buffer`, `set-fluid-tank` and `set-item-slot`
+  only affect positions with a block entity registered by the calling mod (and
+  respect slot count and item `max_stack_size` bounds); cross-mod transfer
+  remains available through receive/extract/fill/drain. A malicious peer fixture
+  tries to replace the donor's 10,000 FE capacity and rate limits, change its
+  water tank to lava, and overwrite slot 0 with bedrock; a sandbox test and both
+  live single-player paths confirm those writes are ignored while normal
+  transfer still works. Target-scoped attachments (`entity:<handle>` and
+  `block:<x>,<y>,<z>`) are cleaned up when entities despawn/die or blocks are
+  broken/replaced, and accessory slots validate stack/slot bounds and persist in
+  `data/horizon/mod-accessories.json` across world save/reopen in both
+  single-player modes.
 - `tools/mod_api_e2e.py` now verifies block creation through the mod's
   `server::set_block` action, direct `/item` access to mod slots, hopper input,
   vanilla cooking and hopper output in both integrated-server and in-frame
@@ -209,8 +219,18 @@ this audit records concrete evidence and its limits.
   cactus and `/damage`), driven by custom AI goal weights (`AiGoal`), and
   persisted across world save/reopen and `/data get entity` via the
   `horizon_mod_data` NBT byte array. Visual fallback uses the iron golem mesh
-  and network type until custom entity model rendering is wired. No game-side
-  dispatch was found for registered dimensions or model animation. `crop-grow`
+  and network type until custom entity model rendering is wired. Custom
+  dimensions and portals (`dimensions`: `register-dimension`, `register-portal`,
+  `list-dimensions`, `teleport`) are now connected to live world registration,
+  chunk generation (`flat`/`custom` with mod-specified `surface_block`,
+  `void-world` with a 5×5 spawn platform, and `noise` falling back to custom
+  flat generation when no datapack noise settings exist), dimension properties
+  (`min_y`, `height`, `coordinate_scale`, `has_skylight`, `has_ceiling`,
+  `ultrawarm`, `fixed_time`), portal frame activation with `activation_item` and
+  return travel to Overworld, `/execute in <custom_dim>` coordinate scaling and
+  tab completion, and direct `dimensions::teleport` in both `--in-frame` and
+  integrated-server single-player (`tools/mod_api_e2e.py --mode both`). No
+  game-side dispatch was found for model animation. `crop-grow`
   now dispatches for crop age stages, hanging mangrove propagule ages,
   bamboo/cactus/sugar-cane heights, sapling-tree attempts, mushroom/vine/chorus
   spreading and growing-plant-head segments after vanilla random-tick conditions
@@ -234,24 +254,25 @@ this audit records concrete evidence and its limits.
 ## Verification run
 
 `cargo test -p horizon-mods --features runtime,pack` passes: 18 unit tests,
-3 API-reference tests, and 20 sandbox tests (one ignored). The live
+3 API-reference tests, and 23 sandbox tests (one ignored). The live
 `python3 tools/mod_api_e2e.py --mode both` run also passes in integrated-server
 and in-frame single-player. It covers positive XP command scaling, cross-mod
-FE/fluid transfer, rejected cross-owner capability redefinitions, simulation,
+FE/fluid transfer, rejected cross-owner capability redefinitions (energy, fluid,
+and item slots), config and accessory persistence across restart, item-slot
+capability bridging to `BlockEntity::Mod`, simulation,
 per-tick limits, sided item movement, hopper input/output and remainders, and
 save/reopen of machine inventory and capability state. These checks validate
 the listed paths only; they do not establish complete compatibility with
-arbitrary machine mods, chunk unload/reload, or every network topology.
+arbitrary machine mods or every network topology.
 
 ## Completion gates
 
 1. **Single-player coverage:** use the current matrix to select the next API
    gap; expand `tools/mod_api_e2e.py` where game behavior needs live evidence.
-2. **Machines:** verify carried-mod recipes, chunk unload/reload, mod reload,
-   directional energy/fluid networks, and ownership rules for item-slot
-   capabilities and attachments.
+2. **Machines:** verify carried-mod recipes and directional energy/fluid
+   networks.
 3. Keep the generated API reference synchronized with WIT and this audit
    synchronized with actual end-to-end evidence.
 
-Custom rendering and custom dimensions remain major 0.5 gaps; LAN and
+Custom rendering remains a major 0.5 gap; LAN and
 dedicated-server parity remain deferred.

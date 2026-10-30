@@ -1033,6 +1033,9 @@ impl Game<'_> {
             self.tick_guests(&mut host);
         }
         self.lan_living_flags(&mut host);
+        if !self.level_teleports.is_empty() {
+            self.run_level_teleports(&mut host);
+        }
         self.tick_server_travel(&mut host);
         self.lan_swings(&mut host);
         self.lan_update_streaming(&host);

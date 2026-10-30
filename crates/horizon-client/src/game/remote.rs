@@ -947,7 +947,8 @@ impl Game<'_> {
             return;
         };
         let dimension = r.registries.dimension(spawn.dimension_type);
-        let same = r.dimension.name == dimension.name && keep_world;
+        let next_dim = Dim::from_id(&spawn.dimension);
+        let same = self.dim == next_dim && r.dimension.name == dimension.name && keep_world;
         r.dimension = dimension;
         r.game_mode = spawn.game_type;
         r.loaded_sent = false;
@@ -955,7 +956,7 @@ impl Game<'_> {
         r.position_sender = Default::default();
         r.predictions.clear();
         self.set_mode_id(spawn.game_type);
-        self.dim = Dim::from_id(&spawn.dimension);
+        self.dim = next_dim;
         if !same {
             let mut streaming = Streaming::new(
                 Arc::new(NoTerrain),
@@ -995,12 +996,17 @@ impl Game<'_> {
                 renderer.clear_sections();
             }
         }
-        let has_sky = self
-            .remote
-            .as_ref()
-            .is_none_or(|r| r.dimension.has_skylight);
+        let mod_spec = super::mod_dimension_spec(self.dim.id());
+        let has_sky = mod_spec.as_ref().map_or_else(
+            || {
+                self.remote
+                    .as_ref()
+                    .is_none_or(|r| r.dimension.has_skylight)
+            },
+            |s| s.has_skylight,
+        );
         self.streaming.sky_light = has_sky;
-        self.streaming.nether_shading = self.dim == Dim::Nether;
+        self.streaming.nether_shading = mod_spec.map_or(self.dim == Dim::Nether, |s| s.has_ceiling);
         // The seed in SpawnInfo is already the hashed one the client's BiomeManager holds.
         self.streaming.biome_zoom = horizon_core::biome::BiomeZoom::new(spawn.seed);
         self.player = None;

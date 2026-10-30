@@ -751,6 +751,7 @@ fn a_mod_cannot_redefine_another_machines_capability_storage() {
     assert_eq!(donor_energy.max_receive, 25);
     assert_eq!(views[0].fluids[&0].fluid, "minecraft:water");
     assert_eq!(views[0].fluids[&0].capacity, 1_000);
+    assert_eq!(views[0].slots, [None, None]);
     assert_eq!(views[1].energy.unwrap().capacity, 1_000);
     assert_eq!(views[1].fluids[&0].fluid, "");
     assert_eq!(views[1].fluids[&0].capacity, 16);
@@ -805,6 +806,11 @@ fn a_block_entity_that_traps_gives_its_slots_back() {
 
 #[test]
 fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
+    let _ = std::fs::remove_file(
+        mods_dir()
+            .join(".horizon-mod-data")
+            .join("test_machine.config.json"),
+    );
     let mut mods = machines();
     mods.add_resource_recipes([
         RecipeEntry {
@@ -1391,4 +1397,178 @@ fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
     });
     assert_eq!(outcome8, EventOutcome::Cancel);
     assert_eq!(cancelled_bonus, 0);
+}
+
+#[test]
+fn config_overrides_persist_and_validate_on_reload() {
+    let dir = mods_dir().join("config_reload");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("machine.hmod");
+    std::fs::copy(mods_dir().join("horizon_mods_test_machine.hmod"), &path).unwrap();
+
+    let mut mods = Mods::load(std::slice::from_ref(&path), |_| true, |_| false);
+    assert!(mods.command("machine_api config"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "speed=2->5/reject=true/kept=5 bool=true->false float=1->1.5/reject=true mode=safe->fast/reject=true".into(),
+            error: false,
+        }]
+    );
+
+    let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(later)
+        .unwrap();
+    assert!(mods.reload_changed(|_| false));
+    assert!(mods.command("machine_api read_config"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "speed=5 bool=false float=1.5 mode=fast".into(),
+            error: false,
+        }]
+    );
+
+    let config_file = dir
+        .join(".horizon-mod-data")
+        .join("test_machine.config.json");
+    std::fs::write(
+        &config_file,
+        br#"{"speed":999,"enabled":false,"scale":1.25,"mode":"bogus"}"#,
+    )
+    .unwrap();
+    let restarted = Mods::load(std::slice::from_ref(&path), |_| true, |_| false);
+    let mut restarted = restarted;
+    assert!(restarted.command("machine_api read_config"));
+    assert_eq!(
+        restarted.drain(),
+        [Output::Feedback {
+            text: "speed=2 bool=false float=1.25 mode=safe".into(),
+            error: false,
+        }]
+    );
+}
+
+#[test]
+fn item_slot_capabilities_bridge_with_block_entity_views_and_reload() {
+    let dir = mods_dir().join("slot_bridge_reload");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("machine.hmod");
+    std::fs::copy(mods_dir().join("horizon_mods_test_machine.hmod"), &path).unwrap();
+
+    let mut mods = Mods::load(std::slice::from_ref(&path), |_| true, |_| false);
+    mods.set_item_facts(std::sync::Arc::new(Facts));
+    let (h, _) = mods
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
+        .unwrap();
+    assert!(mods.has_block_entity(h));
+    assert!(mods.command("machine_api slot_cap_bridge"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "slots=0=minecraft:raw_iron*2".into(),
+            error: false,
+        }]
+    );
+
+    let mut views = [smelter(h, None)];
+    mods.tick_block_entities(&mut views);
+    assert_eq!(views[0].slots, [Some(stack("minecraft:raw_iron", 2)), None]);
+    assert_eq!(mods.block_entity_data(h), [1]);
+
+    // Hot-reload the mod and verify that re-binding the block entity at the
+    // same position restores its saved progress automatically.
+    let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(later)
+        .unwrap();
+    assert!(mods.reload_changed(|_| false));
+    mods.set_item_facts(std::sync::Arc::new(Facts));
+    assert!(!mods.has_block_entity(h));
+    let (rebound, _) = mods
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
+        .unwrap();
+    assert_eq!(mods.block_entity_data(rebound), [1]);
+    views[0].handle = rebound;
+    mods.tick_block_entities(&mut views);
+    mods.tick_block_entities(&mut views);
+    assert_eq!(
+        views[0].slots,
+        [
+            Some(stack("minecraft:raw_iron", 1)),
+            Some(stack("minecraft:iron_ingot", 1))
+        ]
+    );
+    assert!(mods.command("machine_api read_slot_caps"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "slots=0=minecraft:raw_iron*1,1=minecraft:iron_ingot*1".into(),
+            error: false,
+        }]
+    );
+}
+
+#[test]
+fn entity_despawn_cleans_attachments_and_accessories_snapshot_restores() {
+    let mut mods = machines();
+    let h = mods.create_entity("test_machine:automaton", &[]).unwrap();
+    mods.tick_entities(&[h]);
+    assert!(mods.model_animation(&format!("entity:{h}")).is_some());
+    mods.restore_attachments(vec![(
+        format!("entity:{h}"),
+        "test_machine:tag".into(),
+        vec![7],
+    )]);
+    assert_eq!(mods.attachment_snapshot().len(), 1);
+    mods.remove_entity(h);
+    assert!(mods.model_animation(&format!("entity:{h}")).is_none());
+    assert!(mods.attachment_snapshot().is_empty());
+
+    let (_be_handle, _) = mods
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
+        .unwrap();
+    assert!(mods.command("machine_api caps_and_recipes"));
+    let _ = mods.drain();
+    let saved_accessories = mods.accessory_snapshot();
+    assert_eq!(saved_accessories.len(), 1);
+    mods.clear_accessories();
+    assert!(mods.command("machine_api get_ring"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "ring=none reject_stack=true reject_idx=true".into(),
+            error: false,
+        }]
+    );
+    mods.restore_accessories(saved_accessories);
+    assert!(mods.command("machine_api get_ring"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "ring=test_machine:ring*1 reject_stack=true reject_idx=true".into(),
+            error: false,
+        }]
+    );
 }

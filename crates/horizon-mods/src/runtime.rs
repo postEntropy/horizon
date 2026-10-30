@@ -204,10 +204,19 @@ fn capability_position(view: &BlockEntityView) -> String {
     format!("{}:{},{},{}", view.dimension, view.x, view.y, view.z)
 }
 
-fn seed_block_entity_capabilities(shared: &mut SharedWorld, views: &[BlockEntityView]) {
-    let positions: HashSet<String> = views.iter().map(capability_position).collect();
+fn seed_block_entity_capabilities(
+    shared: &mut SharedWorld,
+    views: &mut [BlockEntityView],
+    known_handles: &HashSet<u32>,
+) {
+    let positions: HashSet<String> = views
+        .iter()
+        .filter(|view| known_handles.contains(&view.handle))
+        .map(capability_position)
+        .collect();
     let tanks: HashSet<(String, u32)> = views
         .iter()
+        .filter(|view| known_handles.contains(&view.handle))
         .flat_map(|view| {
             let pos = capability_position(view);
             view.fluids.keys().map(move |tank| (pos.clone(), *tank))
@@ -218,6 +227,9 @@ fn seed_block_entity_capabilities(shared: &mut SharedWorld, views: &[BlockEntity
         .retain(|key, _| !positions.contains(&key.0) || tanks.contains(key));
 
     for view in views {
+        if !known_handles.contains(&view.handle) {
+            continue;
+        }
         let pos = capability_position(view);
         if let Some(energy) = view.energy {
             shared.energy.insert(pos.clone(), energy);
@@ -226,6 +238,42 @@ fn seed_block_entity_capabilities(shared: &mut SharedWorld, views: &[BlockEntity
         }
         for (tank, fluid) in &view.fluids {
             shared.fluids.insert((pos.clone(), *tank), fluid.clone());
+        }
+        if shared.dirty_item_slots.remove(&pos) {
+            let slot_map = shared.item_slots.get(&pos);
+            for (idx, cell) in view.slots.iter_mut().enumerate() {
+                let next = slot_map
+                    .and_then(|m| m.get(&(idx as u32)))
+                    .filter(|(id, count)| !id.is_empty() && *count > 0)
+                    .map(|(id, count)| Stack {
+                        id: id.clone(),
+                        count: *count,
+                    });
+                if *cell != next {
+                    let item_changed = cell.as_ref().map(|s| &s.id) != next.as_ref().map(|s| &s.id);
+                    *cell = next;
+                    if item_changed && let Some(components) = view.slot_components.get_mut(idx) {
+                        components.clear();
+                    }
+                    view.changed = true;
+                }
+            }
+        } else {
+            let slots: BTreeMap<u32, (String, u32)> = view
+                .slots
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, slot)| {
+                    let stack = slot.as_ref()?;
+                    (!stack.id.is_empty() && stack.count > 0)
+                        .then(|| (idx as u32, (stack.id.clone(), stack.count)))
+                })
+                .collect();
+            if slots.is_empty() {
+                shared.item_slots.remove(&pos);
+            } else {
+                shared.item_slots.insert(pos, slots);
+            }
         }
     }
 }
@@ -259,6 +307,24 @@ fn sync_block_entity_capabilities(
                     view.fluids.insert(*tank, (*fluid).clone());
                     view.changed = true;
                 }
+            }
+        }
+        let slot_map = shared.item_slots.get(&pos);
+        for (idx, cell) in view.slots.iter_mut().enumerate() {
+            let next = slot_map
+                .and_then(|m| m.get(&(idx as u32)))
+                .filter(|(id, count)| !id.is_empty() && *count > 0)
+                .map(|(id, count)| Stack {
+                    id: id.clone(),
+                    count: *count,
+                });
+            if *cell != next {
+                let item_changed = cell.as_ref().map(|s| &s.id) != next.as_ref().map(|s| &s.id);
+                *cell = next;
+                if item_changed && let Some(components) = view.slot_components.get_mut(idx) {
+                    components.clear();
+                }
+                view.changed = true;
             }
         }
     }
@@ -434,6 +500,7 @@ struct SharedWorld {
     energy_budget_tick: Option<u64>,
     fluids: HashMap<(String, u32), FluidView>,
     item_slots: HashMap<String, BTreeMap<u32, (String, u32)>>,
+    dirty_item_slots: HashSet<String>,
     attachments: HashMap<(String, String), Vec<u8>>,
     accessories: HashMap<(String, String, u32), (String, u32)>,
     recipes: Vec<RecipeEntry>,
@@ -520,7 +587,8 @@ struct State {
     positions: HashMap<u32, (String, i32, i32, i32)>,
     block_entity_slots: HashMap<u32, u32>,
     slot_access: BTreeMap<(u32, u32, String), (bool, bool)>,
-    /// Capability `config`: typed schema and values.
+    /// Capability `config`: typed schema, values, and persistence path.
+    config_file: PathBuf,
     config_schemas: BTreeMap<String, ConfigSchema>,
     configs: BTreeMap<String, ConfigValue>,
     /// Capability `keys`: registered bindings and current key states.
@@ -561,6 +629,9 @@ pub struct Mods {
     /// The block entities a mod held when it stopped mid-call, saved from
     /// its dropped store so the game gets their slots back.
     stranded: Vec<BlockEntityView>,
+    /// Saved block-entity bytes captured immediately before `reload_changed`
+    /// drops a running mod instance, keyed by `(dimension, x, y, z)`.
+    reloaded_saves: HashMap<(String, i32, i32, i32), Vec<u8>>,
     /// Hook subscriptions across all running mods, for O(1) empty-hook checks.
     vanilla_hook_mask: Arc<AtomicU8>,
 }
@@ -607,6 +678,74 @@ impl Mods {
                 restored.insert(id, value);
             }
             shared.attachments = restored;
+        }
+    }
+
+    /// Removes all attachments and model states targeting `target` (e.g. a broken block or removed entity).
+    pub fn remove_target_attachments(&self, target: &str) {
+        if let Ok(mut shared) = self.shared.lock() {
+            shared.attachments.retain(|(t, _), _| t != target);
+            shared.animations.remove(target);
+            shared.bone_poses.remove(target);
+            shared.draw_lists.remove(target);
+        }
+    }
+
+    /// A stable snapshot of equipped accessories, for the game save layer.
+    pub fn accessory_snapshot(&self) -> Vec<(String, String, u32, String, u32)> {
+        self.shared
+            .lock()
+            .map(|shared| {
+                shared
+                    .accessories
+                    .iter()
+                    .map(|((entity, slot_kind, index), (id, count))| {
+                        (
+                            entity.clone(),
+                            slot_kind.clone(),
+                            *index,
+                            id.clone(),
+                            *count,
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Replaces the live accessory store when a world is opened or restored.
+    pub fn restore_accessories(&mut self, accessories: Vec<(String, String, u32, String, u32)>) {
+        if let Ok(mut shared) = self.shared.lock() {
+            let mut restored = HashMap::new();
+            for (entity, slot_kind, index, id, count) in accessories {
+                if entity.is_empty()
+                    || entity.len() > MAX_ATTACHMENT_TARGET_BYTES
+                    || slot_kind.is_empty()
+                    || slot_kind.len() > MAX_ATTACHMENT_KEY_BYTES
+                    || index >= 16
+                    || id.is_empty()
+                    || !valid_id(&id)
+                    || count == 0
+                    || restored.len() >= MAX_ATTACHMENTS
+                {
+                    continue;
+                }
+                let max = self
+                    .facts
+                    .as_ref()
+                    .map(|facts| facts.max_stack_size(&id))
+                    .filter(|&max| max > 0)
+                    .unwrap_or(64);
+                restored.insert((entity, slot_kind, index), (id, count.min(max)));
+            }
+            shared.accessories = restored;
+        }
+    }
+
+    /// Clears all equipped accessories (used when closing or switching worlds).
+    pub fn clear_accessories(&mut self) {
+        if let Ok(mut shared) = self.shared.lock() {
+            shared.accessories.clear();
         }
     }
 
@@ -740,11 +879,8 @@ impl Mods {
             .unwrap_or(Path::new("."))
             .join(STORAGE_DIR)
             .join(&m.id);
-        let configs = m
-            .config
-            .iter()
-            .map(|(k, v)| (k.clone(), v.default.clone()))
-            .collect();
+        let config_file = data_dir.with_extension("config.json");
+        let configs = load_persisted_configs(&config_file, &m.config);
         let state = State {
             name: m.name.clone(),
             id: m.id.clone(),
@@ -764,6 +900,7 @@ impl Mods {
             positions: HashMap::new(),
             block_entity_slots: HashMap::new(),
             slot_access: BTreeMap::new(),
+            config_file,
             config_schemas: m.config.clone(),
             configs,
             key_bindings: Vec::new(),
@@ -1504,6 +1641,41 @@ impl Mods {
         self.create_block_entity_at(block, saved, None)
     }
 
+    /// True when `handle` is a live block-entity handle owned by a running mod.
+    pub fn has_block_entity(&self, handle: u32) -> bool {
+        self.handles.contains_key(&handle)
+    }
+
+    /// Returns the current capability snapshot (`energy`, `fluids`, `item_slots`)
+    /// stored in the shared capability registry for a block entity at `(dimension, x, y, z)`.
+    pub fn block_entity_capabilities(
+        &self,
+        dimension: &str,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> (
+        Option<EnergyView>,
+        BTreeMap<u32, FluidView>,
+        Option<BTreeMap<u32, (String, u32)>>,
+    ) {
+        let Ok(mut shared) = self.shared.lock() else {
+            return (None, BTreeMap::new(), None);
+        };
+        let pos = format!("{dimension}:{x},{y},{z}");
+        let energy = shared.energy.get(&pos).copied();
+        let fluids: BTreeMap<u32, FluidView> = shared
+            .fluids
+            .iter()
+            .filter_map(|((at, tank), view)| (at == &pos).then(|| (*tank, view.clone())))
+            .collect();
+        let item_slots = shared
+            .dirty_item_slots
+            .remove(&pos)
+            .then(|| shared.item_slots.get(&pos).cloned().unwrap_or_default());
+        (energy, fluids, item_slots)
+    }
+
     /// Creates a block entity with its world position available during restore.
     pub fn create_block_entity_at(
         &mut self,
@@ -1513,6 +1685,10 @@ impl Mods {
     ) -> Option<(u32, u32)> {
         let (i, ty) = self.block_entity_type(block)?;
         let slots = ty.slots;
+        let reloaded = position
+            .as_ref()
+            .and_then(|pos| self.reloaded_saves.remove(pos));
+        let saved = reloaded.as_deref().unwrap_or(saved);
         let handle = self.next_handle;
         self.next_handle = self.next_handle.wrapping_add(1);
         if let Some(position) = position {
@@ -1546,12 +1722,8 @@ impl Mods {
         // the current mod's machines makes cross-mod transfer depend on load
         // order and can expose stale values for a neighbor that ticks later.
         if let Ok(mut shared) = self.shared.lock() {
-            let owned: Vec<BlockEntityView> = views
-                .iter()
-                .filter(|view| self.handles.contains_key(&view.handle))
-                .cloned()
-                .collect();
-            seed_block_entity_capabilities(&mut shared, &owned);
+            let known_handles: HashSet<u32> = self.handles.keys().copied().collect();
+            seed_block_entity_capabilities(&mut shared, views, &known_handles);
         }
 
         for i in 0..self.entries.len() {
@@ -1633,10 +1805,12 @@ impl Mods {
                 state.slot_access.retain(|(h, _, _), _| *h != handle);
                 if let Some((dimension, x, y, z)) = state.positions.remove(&handle) {
                     let pos = format!("{dimension}:{x},{y},{z}");
+                    self.reloaded_saves.remove(&(dimension, x, y, z));
                     if let Ok(mut shared) = self.shared.lock() {
                         shared.energy.remove(&pos);
                         shared.fluids.retain(|(at, _), _| at != &pos);
                         shared.item_slots.remove(&pos);
+                        shared.dirty_item_slots.remove(&pos);
                     }
                 }
             }
@@ -1843,6 +2017,7 @@ impl Mods {
 
     /// Removes a custom entity (API 0.5).
     pub fn remove_entity(&mut self, handle: u32) {
+        let target = format!("entity:{handle}");
         if let Ok(mut sh) = self.shared.lock() {
             sh.entities.remove(&handle);
             sh.pending_entity_spawns.retain(|&h| h != handle);
@@ -1850,6 +2025,11 @@ impl Mods {
             sh.dirty_entity_velocities.remove(&handle);
             sh.dirty_entity_health.remove(&handle);
             sh.dirty_entity_navigation.remove(&handle);
+            sh.attachments.retain(|(t, _), _| t != &target);
+            sh.accessories.retain(|(e, _, _), _| e != &target);
+            sh.animations.remove(&target);
+            sh.bone_poses.remove(&target);
+            sh.draw_lists.remove(&target);
         }
         if let Some(i) = self.entity_handles.remove(&handle) {
             self.call(i, FUEL_EVENT, |m, s| {
@@ -2001,6 +2181,25 @@ impl Mods {
                 continue;
             }
             any = true;
+            let owned_handles: Vec<(u32, Option<(String, i32, i32, i32)>)> = self
+                .handles
+                .iter()
+                .filter(|(_, owner)| **owner == i)
+                .map(|(&h, _)| {
+                    let pos = self.entries[i]
+                        .run
+                        .as_ref()
+                        .and_then(|run| run.store.data().positions.get(&h).cloned());
+                    (h, pos)
+                })
+                .collect();
+            for (handle, pos) in owned_handles {
+                if let Some(pos) = pos
+                    && let Some(saved) = self.save_block_entity(handle)
+                {
+                    self.reloaded_saves.insert(pos, saved);
+                }
+            }
             self.entries[i].modified = now;
             self.entries[i].run = None;
             // The new instance knows none of the old one's block entities:
@@ -2430,6 +2629,67 @@ fn storage_key_ok(key: &str) -> bool {
     chars_ok && key != "." && key != ".."
 }
 
+fn validate_config_override(schema: &ConfigSchema, value: ConfigValue) -> Option<ConfigValue> {
+    match (schema.kind.as_str(), value) {
+        ("bool", ConfigValue::Bool(v)) => Some(ConfigValue::Bool(v)),
+        ("int", ConfigValue::Int(v)) => {
+            if schema.min.is_some_and(|min| (v as f64) < min)
+                || schema.max.is_some_and(|max| (v as f64) > max)
+            {
+                return None;
+            }
+            Some(ConfigValue::Int(v))
+        }
+        ("float", ConfigValue::Float(v)) => {
+            if !v.is_finite()
+                || schema.min.is_some_and(|min| v < min)
+                || schema.max.is_some_and(|max| v > max)
+            {
+                return None;
+            }
+            Some(ConfigValue::Float(v))
+        }
+        ("float", ConfigValue::Int(v)) => {
+            let f = v as f64;
+            if schema.min.is_some_and(|min| f < min) || schema.max.is_some_and(|max| f > max) {
+                return None;
+            }
+            Some(ConfigValue::Float(f))
+        }
+        ("string", ConfigValue::String(v)) => {
+            if !schema.choices.is_empty() && !schema.choices.contains(&v) {
+                return None;
+            }
+            Some(ConfigValue::String(v))
+        }
+        _ => None,
+    }
+}
+
+fn load_persisted_configs(
+    path: &Path,
+    schemas: &BTreeMap<String, ConfigSchema>,
+) -> BTreeMap<String, ConfigValue> {
+    let mut configs: BTreeMap<String, ConfigValue> = schemas
+        .iter()
+        .map(|(k, v)| (k.clone(), v.default.clone()))
+        .collect();
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return configs;
+    };
+    let Ok(persisted) = serde_json::from_str::<BTreeMap<String, ConfigValue>>(&raw) else {
+        return configs;
+    };
+    for (k, v) in persisted {
+        if let Some(schema) = schemas.get(&k)
+            && let Some(valid) = validate_config_override(schema, v)
+        {
+            configs.insert(k, valid);
+        }
+    }
+    configs
+}
+
 impl State {
     /// The block entity `handle` lent to this call.
     fn view(&mut self, handle: u32) -> Option<&mut BlockEntityView> {
@@ -2447,6 +2707,48 @@ impl State {
         self.positions
             .values()
             .any(|(dimension, x, y, z)| pos == format!("{dimension}:{x},{y},{z}"))
+    }
+    fn machine_position_string(&self, handle: u32) -> Option<String> {
+        if let Some(view) = self.views.iter().find(|v| v.handle == handle) {
+            return Some(capability_position(view));
+        }
+        let (dimension, x, y, z) = self.positions.get(&handle)?;
+        Some(format!("{dimension}:{x},{y},{z}"))
+    }
+    fn sync_shared_item_slot(&self, handle: u32, slot: u32, stack: Option<&Stack>) {
+        let Some(pos) = self.machine_position_string(handle) else {
+            return;
+        };
+        let Ok(mut sh) = self.shared.lock() else {
+            return;
+        };
+        match stack {
+            Some(s) if s.count > 0 && !s.id.is_empty() => {
+                sh.item_slots
+                    .entry(pos)
+                    .or_default()
+                    .insert(slot, (s.id.clone(), s.count));
+            }
+            _ => {
+                if let Some(map) = sh.item_slots.get_mut(&pos) {
+                    map.remove(&slot);
+                    if map.is_empty() {
+                        sh.item_slots.remove(&pos);
+                    }
+                }
+            }
+        }
+    }
+    fn save_configs(&self) {
+        if self.config_file.as_os_str().is_empty() {
+            return;
+        }
+        if let Some(parent) = self.config_file.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(bytes) = serde_json::to_vec_pretty(&self.configs) {
+            let _ = std::fs::write(&self.config_file, bytes);
+        }
     }
 }
 impl machine::Host for State {
@@ -2510,12 +2812,13 @@ impl machine::Host for State {
         if *cell != stack {
             let item_changed = cell.as_ref().map(|current| &current.id)
                 != stack.as_ref().map(|replacement| &replacement.id);
-            *cell = stack;
+            *cell = stack.clone();
             if item_changed && let Some(components) = view.slot_components.get_mut(slot as usize) {
                 components.clear();
             }
             view.changed = true;
         }
+        self.sync_shared_item_slot(handle, slot, stack.as_ref());
         true
     }
     fn insert_slot(&mut self, handle: u32, slot: u32, stack: Stack) -> bool {
@@ -2550,11 +2853,13 @@ impl machine::Host for State {
         let Some(cell) = view.slots.get_mut(slot as usize) else {
             return false;
         };
-        *cell = Some(Stack {
+        let updated = Stack {
             id: stack.id,
             count: total,
-        });
+        };
+        *cell = Some(updated.clone());
         view.changed = true;
+        self.sync_shared_item_slot(handle, slot, Some(&updated));
         true
     }
     fn get_property(&mut self, handle: u32, name: String) -> Option<String> {
@@ -2699,6 +3004,7 @@ impl config::Host for State {
             return Err(format!("config {key} is not a bool"));
         }
         self.configs.insert(key, ConfigValue::Bool(value));
+        self.save_configs();
         Ok(())
     }
     fn set_int(&mut self, key: String, value: i64) -> Result<(), String> {
@@ -2720,6 +3026,7 @@ impl config::Host for State {
             return Err(format!("value {value} is above max {max}"));
         }
         self.configs.insert(key, ConfigValue::Int(value));
+        self.save_configs();
         Ok(())
     }
     fn set_float(&mut self, key: String, value: f64) -> Result<(), String> {
@@ -2729,6 +3036,9 @@ impl config::Host for State {
             .ok_or_else(|| format!("unknown config key {key}"))?;
         if schema.kind != "float" {
             return Err(format!("config {key} is not a float"));
+        }
+        if !value.is_finite() {
+            return Err(format!("value {value} is not finite"));
         }
         if let Some(min) = schema.min
             && value < min
@@ -2741,6 +3051,7 @@ impl config::Host for State {
             return Err(format!("value {value} is above max {max}"));
         }
         self.configs.insert(key, ConfigValue::Float(value));
+        self.save_configs();
         Ok(())
     }
     fn set_string(&mut self, key: String, value: String) -> Result<(), String> {
@@ -2755,6 +3066,7 @@ impl config::Host for State {
             return Err(format!("value {value:?} is not in choices"));
         }
         self.configs.insert(key, ConfigValue::String(value));
+        self.save_configs();
         Ok(())
     }
 }
@@ -3060,12 +3372,73 @@ impl capabilities::Host for State {
         drained
     }
     fn set_item_slot(&mut self, pos: String, slot: u32, id: String, count: u32) {
+        let Some((&handle, _)) = self
+            .positions
+            .iter()
+            .find(|(_, (dimension, x, y, z))| pos == format!("{dimension}:{x},{y},{z}"))
+        else {
+            return;
+        };
+        let Some(&slot_count) = self.block_entity_slots.get(&handle) else {
+            return;
+        };
+        if slot >= slot_count {
+            return;
+        }
+        let next = if count == 0 || id.is_empty() {
+            None
+        } else {
+            if !valid_id(&id) {
+                return;
+            }
+            let max = match &self.facts {
+                Some(facts) => match facts.max_stack_size(&id) {
+                    0 => return,
+                    max => max,
+                },
+                None => 99,
+            };
+            if count > max {
+                return;
+            }
+            Some((id, count))
+        };
+        let in_lent_view = self.views.iter().any(|v| v.handle == handle);
         if let Ok(mut sh) = self.shared.lock() {
-            let map = sh.item_slots.entry(pos).or_default();
-            if count == 0 || id.is_empty() {
-                map.remove(&slot);
-            } else {
-                map.insert(slot, (id, count));
+            if !in_lent_view {
+                sh.dirty_item_slots.insert(pos.clone());
+            }
+            match &next {
+                Some((item_id, item_count)) => {
+                    sh.item_slots
+                        .entry(pos)
+                        .or_default()
+                        .insert(slot, (item_id.clone(), *item_count));
+                }
+                None => {
+                    if let Some(map) = sh.item_slots.get_mut(&pos) {
+                        map.remove(&slot);
+                        if map.is_empty() {
+                            sh.item_slots.remove(&pos);
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(view) = self.view(handle)
+            && let Some(cell) = view.slots.get_mut(slot as usize)
+        {
+            let replacement = next.map(|(id, count)| Stack { id, count });
+            if *cell != replacement {
+                let item_changed =
+                    cell.as_ref().map(|s| &s.id) != replacement.as_ref().map(|s| &s.id);
+                *cell = replacement;
+                if item_changed
+                    && let Some(components) = view.slot_components.get_mut(slot as usize)
+                {
+                    components.clear();
+                }
+                view.changed = true;
             }
         }
     }
@@ -3169,15 +3542,47 @@ impl capabilities::Host for State {
         id: String,
         count: u32,
     ) -> Result<(), String> {
+        if entity.is_empty() || entity.len() > MAX_ATTACHMENT_TARGET_BYTES {
+            return Err("invalid accessory entity target".into());
+        }
+        if slot_kind.is_empty() || slot_kind.len() > MAX_ATTACHMENT_KEY_BYTES {
+            return Err("invalid accessory slot kind".into());
+        }
         if index >= 16 {
             return Err("accessory slot index out of range (max 16)".into());
         }
+        let next = if count == 0 || id.is_empty() {
+            None
+        } else {
+            if !valid_id(&id) {
+                return Err(format!("invalid accessory item id {id:?}"));
+            }
+            let max = self
+                .facts
+                .as_ref()
+                .map(|facts| facts.max_stack_size(&id))
+                .filter(|&max| max > 0)
+                .unwrap_or(64);
+            if count > max {
+                return Err(format!(
+                    "accessory stack count {count} exceeds max stack size {max}"
+                ));
+            }
+            Some((id, count))
+        };
         if let Ok(mut sh) = self.shared.lock() {
-            if count == 0 || id.is_empty() {
-                sh.accessories.remove(&(entity, slot_kind, index));
-            } else {
-                sh.accessories
-                    .insert((entity, slot_kind, index), (id, count));
+            let key = (entity, slot_kind, index);
+            match next {
+                Some(entry) => {
+                    if !sh.accessories.contains_key(&key) && sh.accessories.len() >= MAX_ATTACHMENTS
+                    {
+                        return Err("accessory store is full".into());
+                    }
+                    sh.accessories.insert(key, entry);
+                }
+                None => {
+                    sh.accessories.remove(&key);
+                }
             }
         }
         Ok(())
@@ -3499,11 +3904,17 @@ impl entities::Host for State {
             return false;
         };
         if sh.entities.remove(&handle).is_some() {
+            let target = format!("entity:{handle}");
             sh.pending_entity_spawns.retain(|&h| h != handle);
             sh.dirty_entity_positions.remove(&handle);
             sh.dirty_entity_velocities.remove(&handle);
             sh.dirty_entity_health.remove(&handle);
             sh.dirty_entity_navigation.remove(&handle);
+            sh.attachments.retain(|(t, _), _| t != &target);
+            sh.accessories.retain(|(e, _, _), _| e != &target);
+            sh.animations.remove(&target);
+            sh.bone_poses.remove(&target);
+            sh.draw_lists.remove(&target);
             sh.pending_entity_despawns.push(handle);
             true
         } else {
@@ -3897,7 +4308,8 @@ mod capability_sync_tests {
                 capacity: 1_000,
             },
         );
-        seed_block_entity_capabilities(&mut shared, &views);
+        let known_handles: HashSet<u32> = views.iter().map(|view| view.handle).collect();
+        seed_block_entity_capabilities(&mut shared, &mut views, &known_handles);
         assert!(!shared.energy.contains_key(&removed));
         assert!(!shared.fluids.contains_key(&(removed, 4)));
 
@@ -3905,7 +4317,6 @@ mod capability_sync_tests {
         shared.energy.get_mut(&neighbor).unwrap().stored = 250;
         shared.fluids.get_mut(&(neighbor, 0)).unwrap().amount = 350;
 
-        let known_handles = views.iter().map(|view| view.handle).collect();
         sync_block_entity_capabilities(&shared, &mut views, &known_handles);
         assert_eq!(views[1].energy.unwrap().stored, 250);
         assert_eq!(views[1].fluids[&0].amount, 350);

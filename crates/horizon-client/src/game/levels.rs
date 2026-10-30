@@ -120,7 +120,13 @@ impl Game<'_> {
             self.level.seed,
         )?;
         let mut world = World::new(self.res.facts().air, self.level.seed);
-        world.fast_lava = dim == Dim::Nether;
+        let mod_spec = super::mod_dimension_spec(dim.id());
+        world.fast_lava = mod_spec
+            .as_ref()
+            .map_or(dim == Dim::Nether, |s| s.ultrawarm);
+        if let Some(fixed_time) = mod_spec.and_then(|s| s.fixed_time) {
+            world.day_time = fixed_time as i64;
+        }
         Ok(Parked {
             world,
             streaming,
@@ -438,6 +444,9 @@ impl Game<'_> {
         for dim in closing {
             self.enter_level(None, dim)?;
             self.save_level(true)?;
+            let gone: horizon_client::fast_hash::FxHashSet<(i32, i32)> =
+                self.world.chunks.keys().copied().collect();
+            self.mod_prepare_chunk_unload(&gone);
             let ids: Vec<u32> = self.mobs.iter().map(|m| m.id).collect();
             for id in ids {
                 self.remove_mod_entity(id);

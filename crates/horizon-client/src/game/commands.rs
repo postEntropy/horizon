@@ -1075,7 +1075,7 @@ impl Game<'_> {
         self.feedback(message);
         Ok(targets.len() as i32)
     }
-    fn teleport_to(&mut self, t: Target, pos: [f64; 3], rotation: Option<[f32; 2]>) {
+    pub(super) fn teleport_to(&mut self, t: Target, pos: [f64; 3], rotation: Option<[f32; 2]>) {
         let v = Vec3::new(pos[0], pos[1], pos[2]);
         match t {
             Target::Guest(_) => {
@@ -1163,7 +1163,7 @@ impl Game<'_> {
     }
     /// Teleport the local player into the command source's dimension. Unlike
     /// portal travel, `/tp` keeps the coordinates given by the command.
-    fn teleport_player_to_dimension(
+    pub(super) fn teleport_player_to_dimension(
         &mut self,
         dimension: Dim,
         pos: [f64; 3],
@@ -1214,7 +1214,9 @@ impl Game<'_> {
             _ => None,
         };
         let at = self.target_level(t);
-        let Some(conn) = conn.filter(|_| at != level && self.options.dedicated.is_some()) else {
+        let Some(conn) = conn.filter(|_| {
+            at != level && (self.options.dedicated.is_some() || self.serving.is_some())
+        }) else {
             return false;
         };
         self.level_teleports

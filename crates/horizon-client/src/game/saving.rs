@@ -142,6 +142,7 @@ impl Game<'_> {
                         return Err("chunk generation did not finish before saving".into());
                     }
                     if self.streaming.poll_save(&mut self.world) {
+                        self.mod_flush_block_entities();
                         save.stage = Stage::Chunks(self.world.modified.iter().copied().collect());
                     }
                     Ok(false)
