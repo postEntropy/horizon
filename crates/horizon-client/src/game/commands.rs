@@ -1610,19 +1610,22 @@ impl Game<'_> {
             return Err(err("commands.summon.invalidPosition", &[]));
         }
         let short = kind.trim_start_matches("minecraft:").to_owned();
+        let full_kind = if kind.contains(':') {
+            kind.clone()
+        } else {
+            format!("minecraft:{short}")
+        };
         if let Some(Arg::Str(nbt)) = ctx.get("nbt").cloned() {
             // With an NBT argument the entity is built from it, unfinalized.
             if self.ui.difficulty == 0
                 && self
-                    .res
-                    .mob_types()
-                    .get(&format!("minecraft:{short}"))
+                    .mob_type(&full_kind)
                     .is_some_and(|t| t.category == "monster")
             {
                 return Err(err("commands.summon.failed.peaceful", &[]));
             }
             let before = self.spawned_mark();
-            let name = match self.summon_with_nbt(&format!("minecraft:{short}"), pos, &nbt)? {
+            let name = match self.summon_with_nbt(&full_kind, pos, &nbt)? {
                 Some(target) => self.target_name(target),
                 // Spawned as a kind no command target stands for (primed
                 // TNT, falling blocks, projectiles): its type's name.
@@ -1635,17 +1638,18 @@ impl Game<'_> {
             return Ok(1);
         }
         let name;
-        if let Some(t) = self
-            .res
-            .mob_types()
-            .get(&format!("minecraft:{short}"))
-            .cloned()
-        {
+        if let Some(t) = self.mob_type(&full_kind) {
             if self.ui.difficulty == 0 && t.category == "monster" {
                 return Err(err("commands.summon.failed.peaceful", &[]));
             }
-            self.spawn_mob(&short, pos, true);
-            name = Text::translate(&format!("entity.minecraft.{short}"), &[]);
+            self.spawn_mob(&full_kind, pos, true);
+            name = if let Some((ns, p)) = full_kind.split_once(':')
+                && ns != "minecraft"
+            {
+                Text::translate(&format!("entity.{ns}.{p}"), &[])
+            } else {
+                Text::translate(&format!("entity.minecraft.{short}"), &[])
+            };
         } else {
             match short.as_str() {
                 "item" => {

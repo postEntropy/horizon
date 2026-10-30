@@ -202,7 +202,7 @@ impl Mod for Machines {
         EventOutcome::Pass
     }
     fn on_item(&mut self, event: ItemEvent) -> EventOutcome {
-        if event.action == ItemAction::UseOnBlock {
+        if event.action == ItemAction::UseOnBlock && event.item != "minecraft:bone_meal" {
             let pos = BlockPos {
                 x: event.x,
                 y: event.y,
@@ -589,16 +589,99 @@ impl Mod for Machines {
                 dimensions::teleport("Player", "test_machine:twilight", 0.5, 80.0, 0.5)?;
                 Ok(Some(format!("spawned={h} near={near} dims={dims}")))
             }
+            "spawn_automaton" => {
+                let h = entities::spawn(
+                    "minecraft:overworld",
+                    "test_machine:automaton",
+                    -36.5,
+                    70.0,
+                    -9.5,
+                )?;
+                let near = entities::nearby("minecraft:overworld", -36.5, 70.0, -9.5, 4.0)
+                    .into_iter()
+                    .filter(|s| s.kind == "test_machine:automaton")
+                    .count();
+                let temp = entities::spawn(
+                    "minecraft:overworld",
+                    "test_machine:automaton",
+                    -36.5,
+                    70.0,
+                    -9.5,
+                )?;
+                let despawned = entities::despawn(temp) && entities::get_state(temp).is_none();
+                Ok(Some(format!(
+                    "spawned={h} near={near} despawned={despawned}"
+                )))
+            }
+            "entity_status" => {
+                let mut found = None;
+                for (&h, &age) in &self.entity_ticks {
+                    if let Some(state) = entities::get_state(h) {
+                        found = Some((h, age, state));
+                        break;
+                    }
+                }
+                let Some((h, age, state)) = found else {
+                    return Ok(Some(format!("count={}", self.entity_ticks.len())));
+                };
+                Ok(Some(format!(
+                    "count={} handle={h} age={age} hp={:.1} pos={:.1},{:.1},{:.1}",
+                    self.entity_ticks.len(),
+                    state.health,
+                    state.x,
+                    state.y,
+                    state.z
+                )))
+            }
+            "control_automaton" => {
+                let Some(&h) = self
+                    .entity_ticks
+                    .keys()
+                    .find(|&&h| entities::get_state(h).is_some())
+                else {
+                    return Err("no active automaton".into());
+                };
+                if !entities::set_position(h, -36.5, 70.0, -10.5, 90.0, 0.0)
+                    || !entities::set_velocity(h, 0.0, 0.0, 0.0)
+                    || !entities::navigate_to(h, -36.5, 70.0, -10.5, 0.25)
+                {
+                    return Err("failed to control automaton".into());
+                }
+                Ok(Some(format!("controlled={h}")))
+            }
             _ => Err("unknown subcommand".into()),
         }
     }
     fn on_vanilla_hook(&mut self, event: VanillaHookEvent) -> EventOutcome {
         match event.kind {
             VanillaHookKind::LootDrop => {
-                vanilla_hooks::add_loot_drop("minecraft:diamond", 1);
-                EventOutcome::Consume
+                if event.subject.starts_with("minecraft:chest") {
+                    if event.context != "minecraft:container_contents" {
+                        return EventOutcome::Cancel;
+                    }
+                    if event.x == -33 {
+                        return EventOutcome::Cancel;
+                    }
+                    if event.x == -34 {
+                        vanilla_hooks::add_loot_drop("minecraft:emerald", 2);
+                        return EventOutcome::Pass;
+                    }
+                    vanilla_hooks::add_loot_drop("minecraft:diamond", 1);
+                    return EventOutcome::Consume;
+                }
+                if matches!(
+                    event.subject.as_str(),
+                    "minecraft:stone" | "minecraft:blocks/gravel" | "minecraft:coal_ore"
+                ) {
+                    vanilla_hooks::add_loot_drop("minecraft:diamond", 1);
+                    return EventOutcome::Consume;
+                }
+                EventOutcome::Pass
             }
             VanillaHookKind::EntityDamage => {
+                if event.subject == "minecraft:player" && event.context.contains("cactus") {
+                    return EventOutcome::Cancel;
+                }
                 vanilla_hooks::set_damage_multiplier(0.5);
                 EventOutcome::Consume
             }
@@ -620,6 +703,10 @@ impl Mod for Machines {
                 }
                 "minecraft:fortune" => {
                     vanilla_hooks::add_enchantment_bonus(4);
+                    EventOutcome::Consume
+                }
+                "minecraft:sharpness" if event.context.starts_with("minecraft:wooden_sword") => {
+                    vanilla_hooks::add_enchantment_bonus(5);
                     EventOutcome::Consume
                 }
                 "minecraft:silk_touch" => EventOutcome::Cancel,
@@ -656,7 +743,9 @@ impl Mod for Machines {
         for &h in handles {
             let age = self.entity_ticks.entry(h).or_default();
             *age += 1;
-            let _ = entities::navigate_to(h, 10.0, 64.0, 10.0, 0.5);
+            if entities::get_state(h).is_none_or(|s| s.x.abs() < 1.0 && s.z.abs() < 1.0) {
+                let _ = entities::navigate_to(h, 10.0, 64.0, 10.0, 0.5);
+            }
             models::set_animation(&format!("entity:{h}"), "walk", true, 1.0);
         }
     }
@@ -672,14 +761,14 @@ impl Mod for Machines {
         self.entity_ticks.remove(&handle);
     }
     fn on_entity_interact(&mut self, handle: u32, _player: &str, held_item: &str) -> bool {
-        if held_item == "test_machine:wrench" {
+        if held_item == "test_machine:wrench" || held_item == "minecraft:iron_ingot" {
             let _ = entities::set_health(handle, 20.0);
             return true;
         }
         false
     }
-    fn on_entity_hurt(&mut self, _handle: u32, _amount: f32, _source: &str) -> bool {
-        true
+    fn on_entity_hurt(&mut self, _handle: u32, _amount: f32, source: &str) -> bool {
+        source != "minecraft:cactus" && source != "cactus"
     }
     fn create_block_entity(&mut self, handle: u32, block: &str, saved: &[u8]) {
         if block == "test_machine:smelter" {

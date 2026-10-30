@@ -56,10 +56,14 @@ impl PlayerMotion {
     }
     pub fn food_tick(&mut self, resources: &HealthResources, rules: HealthRules) -> Result<()> {
         let h = &mut self.health;
+        let position =
+            [self.position.x, self.position.y, self.position.z].map(|v| v.floor() as i32);
         let mut world = TickWorld {
             resources,
             rules,
             invulnerable: self.invulnerable || self.spectator,
+            position,
+            damage_hook: &mut self.damage_hook,
             attributes: &mut self.attributes,
             data: &mut h.data,
             ids: h.ids,
@@ -77,6 +81,8 @@ struct TickWorld<'a> {
     resources: &'a HealthResources,
     rules: HealthRules,
     invulnerable: bool,
+    position: [i32; 3],
+    damage_hook: &'a mut Option<Box<dyn FnMut(&str, [i32; 3], f32) -> Option<f32>>>,
     attributes: &'a mut Attributes,
     data: &'a mut SyncedFloats,
     ids: PlayerFloatIds,
@@ -133,6 +139,14 @@ impl FoodWorld for TickWorld<'_> {
         if self.invulnerable {
             return Ok(());
         }
+        let amount = if let Some(hook) = self.damage_hook.as_mut() {
+            let Some(scaled) = hook("minecraft:starve", self.position, amount) else {
+                return Ok(());
+            };
+            scaled
+        } else {
+            amount
+        };
         let id = self
             .resources
             .damage

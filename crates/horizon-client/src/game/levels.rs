@@ -438,6 +438,10 @@ impl Game<'_> {
         for dim in closing {
             self.enter_level(None, dim)?;
             self.save_level(true)?;
+            let ids: Vec<u32> = self.mobs.iter().map(|m| m.id).collect();
+            for id in ids {
+                self.remove_mod_entity(id);
+            }
             self.enter_level(None, back)?;
             self.levels.parked.remove(&dim);
         }

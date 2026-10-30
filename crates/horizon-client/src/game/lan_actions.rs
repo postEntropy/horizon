@@ -1991,74 +1991,80 @@ impl Game<'_> {
         let sounds = self.as_guest(host, conn, |game| {
             let (rules, motion) = (game.world.health_rules, game.motion);
             let health = &motion.health;
+            let dim = game.dim.id();
             let Some(player) = game.player.as_mut() else {
                 return (Vec::new(), None);
             };
-            let mut w = MotionWorld {
-                entities: &[],
-                player,
-                scene: &mut game.world,
-                assets: &game.pack.assets,
-                collision_binding: game.collision,
-                resources: game.motion,
-            };
-            w.player.health.advance_clock();
-            let _ = w.fluid_base_tick();
-            w.player.ground.on_ground = from_ground;
             let travelled: Vec<[f64; 3]> = moves.iter().map(|m| m.0).collect();
-            // Entity.move's movementThisTick: each move, from where the
-            // tick's first one started.
-            let end = w.player.position;
-            let start = travelled
-                .iter()
-                .fold(end, |p, d| p.subtract(Vec3::new(d[0], d[1], d[2])));
-            w.player.history.clear();
-            let mut from = start;
-            for d in &travelled {
-                let delta = Vec3::new(d[0], d[1], d[2]);
-                let to = from.add_vector(delta);
-                w.player
-                    .history
-                    .add(horizon_world::entity_move::MovementRecord {
-                        from,
-                        to,
-                        original: Some(delta),
-                    });
-                from = to;
-            }
-            for (moved, on_ground) in moves {
-                let movement = Vec3::new(moved[0], moved[1], moved[2]);
-                if w.player.ground.on_ground && !on_ground && moved[1] > 0.0 {
-                    let sprinting = w.player.sprinting;
+            let scene = &mut game.world;
+            let assets = &game.pack.assets;
+            let collision_binding = game.collision;
+            let mut events = game.mods.with_player_damage_hook(player, dim, |player| {
+                let mut w = MotionWorld {
+                    entities: &[],
+                    player,
+                    scene,
+                    assets,
+                    collision_binding,
+                    resources: motion,
+                };
+                w.player.health.advance_clock();
+                let _ = w.fluid_base_tick();
+                w.player.ground.on_ground = from_ground;
+                // Entity.move's movementThisTick: each move, from where the
+                // tick's first one started.
+                let end = w.player.position;
+                let start = travelled
+                    .iter()
+                    .fold(end, |p, d| p.subtract(Vec3::new(d[0], d[1], d[2])));
+                w.player.history.clear();
+                let mut from = start;
+                for d in &travelled {
+                    let delta = Vec3::new(d[0], d[1], d[2]);
+                    let to = from.add_vector(delta);
                     w.player
-                        .cause_food_exhaustion(if sprinting { 0.2 } else { 0.05 });
+                        .history
+                        .add(horizon_world::entity_move::MovementRecord {
+                            from,
+                            to,
+                            original: Some(delta),
+                        });
+                    from = to;
                 }
-                let landed = (|| -> horizon_client::Result<()> {
-                    w.set_on_ground_with_movement(on_ground, false, movement)?;
-                    let pos = w.legacy_on_position()?;
-                    let state = w.block_state(pos)?;
-                    w.check_fall_damage(moved[1], on_ground, state, pos)?;
-                    w.check_movement_statistics(movement)
-                })();
-                if landed.is_err() {
-                    break;
+                for (moved, on_ground) in moves {
+                    let movement = Vec3::new(moved[0], moved[1], moved[2]);
+                    if w.player.ground.on_ground && !on_ground && moved[1] > 0.0 {
+                        let sprinting = w.player.sprinting;
+                        w.player
+                            .cause_food_exhaustion(if sprinting { 0.2 } else { 0.05 });
+                    }
+                    let landed = (|| -> horizon_client::Result<()> {
+                        w.set_on_ground_with_movement(on_ground, false, movement)?;
+                        let pos = w.legacy_on_position()?;
+                        let state = w.block_state(pos)?;
+                        w.check_fall_damage(moved[1], on_ground, state, pos)?;
+                        w.check_movement_statistics(movement)
+                    })();
+                    if landed.is_err() {
+                        break;
+                    }
                 }
-            }
-            // A ServerPlayer travels on the server too
-            // (MoveSimulationType.AUTHORITATIVE_SIDE_AND_SERVER), so every tick
-            // on a ladder or vine LivingEntity.handleOnClimbable resets its fall
-            // distance: climbing down doesn't hurt where it lands (#1255).
-            if w.climbable().unwrap_or(false) {
-                w.player.fall_distance = 0.0;
-            }
-            // Entity.applyEffectsFromBlocks along those moves: magma, cactus,
-            // lit campfires and grown sweet berry bushes hurt (#1305).
-            w.player.shift_key_down = sneaking;
-            let _ = w.server_block_damage(start);
-            let _ = w.tick_environment_damage();
-            let _ = w.apply_fire_contact();
-            let _ = w.server_hazards_tick(in_wall);
-            let mut events = std::mem::take(&mut w.player.events);
+                // A ServerPlayer travels on the server too
+                // (MoveSimulationType.AUTHORITATIVE_SIDE_AND_SERVER), so every tick
+                // on a ladder or vine LivingEntity.handleOnClimbable resets its fall
+                // distance: climbing down doesn't hurt where it lands (#1255).
+                if w.climbable().unwrap_or(false) {
+                    w.player.fall_distance = 0.0;
+                }
+                // Entity.applyEffectsFromBlocks along those moves: magma, cactus,
+                // lit campfires and grown sweet berry bushes hurt (#1305).
+                w.player.shift_key_down = sneaking;
+                let _ = w.server_block_damage(start);
+                let _ = w.tick_environment_damage();
+                let _ = w.apply_fire_contact();
+                let _ = w.server_hazards_tick(in_wall);
+                std::mem::take(&mut w.player.events)
+            });
             // ServerGamePacketListenerImpl.handleMovePlayer:
             // Player.checkMovementStatistics for each move.
             for d in travelled {
@@ -2071,7 +2077,9 @@ impl Game<'_> {
                 return (Vec::new(), None);
             };
             let _ = player.peaceful_regeneration(rules);
-            let _ = player.food_tick(health, rules);
+            game.mods.with_player_damage_hook(player, dim, |player| {
+                let _ = player.food_tick(health, rules);
+            });
             events.append(&mut player.events);
             let _ = MotionWorld {
                 entities: &[],

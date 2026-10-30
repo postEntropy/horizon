@@ -437,17 +437,25 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             Kind::Crop => {
                 let max = self.crop_max_age(state);
                 let increase = self.crop_bonemeal_increase(state);
-                let age = max.min(b.table.int(state, p.age) + increase);
-                let next = self.crop_state_for_age(state, age);
-                self.set_block(pos, next, 2);
+                let current_age = b.table.int(state, p.age);
+                let target_age = max.min(current_age + increase);
+                if let Some(steps) = self.crop_growth_steps(state, pos, target_age) {
+                    let age = max.min(current_age + increase.saturating_mul(steps));
+                    let next = self.crop_state_for_age(state, age);
+                    self.set_block(pos, next, 2);
+                }
             }
             Kind::Stem => {
                 let increase = next_int_between(self.random(), 2, 5);
-                let age = 7.min(b.table.int(state, p.age) + increase);
-                let next = b.table.set_int(state, p.age, age);
-                self.set_block(pos, next, 2);
-                if age == 7 {
-                    self.random_tick_block(next, pos);
+                let current_age = b.table.int(state, p.age);
+                let target_age = 7.min(current_age + increase);
+                if let Some(steps) = self.crop_growth_steps(state, pos, target_age) {
+                    let age = 7.min(current_age + increase.saturating_mul(steps));
+                    let next = b.table.set_int(state, p.age, age);
+                    self.set_block(pos, next, 2);
+                    if age == 7 {
+                        self.random_tick_block(next, pos);
+                    }
                 }
             }
             Kind::Pitcher => {
@@ -477,11 +485,15 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             }
             Kind::Cocoa => {
                 let age = b.table.int(state, p.age);
-                self.set_block(pos, b.table.set_int(state, p.age, age + 1), 2);
+                if let Some(steps) = self.crop_growth_steps(state, pos, age + 1) {
+                    self.set_block(pos, b.table.set_int(state, p.age, (age + steps).min(2)), 2);
+                }
             }
             Kind::SweetBerry => {
-                let age = 3.min(b.table.int(state, p.age) + 1);
-                self.set_block(pos, b.table.set_int(state, p.age, age), 2);
+                let age = b.table.int(state, p.age);
+                if let Some(steps) = self.crop_growth_steps(state, pos, (age + 1).min(3)) {
+                    self.set_block(pos, b.table.set_int(state, p.age, (age + steps).min(3)), 2);
+                }
             }
             Kind::TallGrass => {
                 if let Some(grown) = self.tall_grass_grown(state) {

@@ -314,6 +314,8 @@ pub struct PlayerMotion {
     /// The level's world border, whose walls stop the player's movement
     /// from inside (the game keeps it current; None: no border).
     pub border: Option<horizon_core::geometry::border::BorderGeometry>,
+    /// Optional API 0.5 entity-damage hook invoked before player hurts.
+    pub damage_hook: Option<Box<dyn FnMut(&str, [i32; 3], f32) -> Option<f32>>>,
 }
 fn attribute_error(error: impl std::fmt::Debug) -> io::Error {
     io::Error::other(format!("movement attribute: {error:?}"))
@@ -470,6 +472,7 @@ impl PlayerMotion {
             hurt_log: Vec::new(),
             attack_log: Vec::new(),
             border: None,
+            damage_hook: None,
         })
     }
     /// LivingEntity.aiStep: speeds too small to matter stop.

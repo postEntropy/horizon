@@ -328,7 +328,7 @@ impl Game<'_> {
                             self.persist.unknown.entry(key).or_default().push(tag);
                         }
                     }
-                    _ if self.res.mob_types().contains_key(&kind) => {
+                    _ if self.mob_type(&kind).is_some() => {
                         self.load_mob(tag, None);
                     }
                     _ if !kind.is_empty() && entity_nbt::position(&tag).is_some() => {
@@ -347,11 +347,15 @@ impl Game<'_> {
         // they were finalized at placement, or a placement that could not.
         let mut tag = tag;
         let mut finalize = false;
+        let mut mod_saved = Vec::new();
         if let Tag::Compound(c) = &mut tag {
             finalize = c.remove(&"horizon:finalize".into()).is_some();
+            if let Some(Tag::ByteArray(bytes)) = c.get(&"horizon_mod_data".into()) {
+                mod_saved = bytes.clone();
+            }
         }
         let riders = self.take_mob_passengers(&mut tag);
-        let mut m = entity_nbt::mob_from_nbt(&tag, self.res.mob_types(), self.next_entity)?;
+        let mut m = self.mob_from_nbt(&tag, self.next_entity)?;
         m.extra.mount = mount;
         m.extra.passenger = mount.is_some();
         if finalize {
@@ -380,6 +384,7 @@ impl Game<'_> {
         let id = m.id;
         self.remember(id, uuid, tag);
         self.mobs.push(m);
+        self.register_mod_mob(id, &mod_saved);
         if finalize {
             self.enchant_spawn_equipment(id);
         }
@@ -401,8 +406,7 @@ impl Game<'_> {
         {
             let mut unknown = Vec::new();
             for p in list {
-                let known =
-                    entity_nbt::kind(&p).is_some_and(|k| self.res.mob_types().contains_key(&k));
+                let known = entity_nbt::kind(&p).is_some_and(|k| self.mob_type(&k).is_some());
                 if known {
                     riders.push(p);
                 } else {
@@ -509,13 +513,22 @@ impl Game<'_> {
     pub(super) fn mob_tree_nbt(&mut self, i: usize) -> Tag {
         let id = self.mobs[i].id;
         let uuid = self.uuid_for(id);
+        let mod_saved = self.save_mod_entity(id);
         let mut tag = entity_nbt::mob_to_nbt(&self.mobs[i], uuid, self.persist.raw.get(&id));
+        if let Tag::Compound(c) = &mut tag {
+            if let Some(bytes) = mod_saved.filter(|b| !b.is_empty()) {
+                c.insert("horizon_mod_data".into(), Tag::ByteArray(bytes));
+            } else {
+                c.remove(&"horizon_mod_data".into());
+            }
+        }
         self.write_leash(&mut tag, i);
         self.put_mob_passengers(&mut tag, id);
         tag
     }
     /// Forget an entity that left the world (its UUID and loaded compound).
     pub(super) fn forget_entity(&mut self, id: u32) {
+        self.remove_mod_entity(id);
         self.persist.uuids.remove(&id);
         self.persist.raw.remove(&id);
     }

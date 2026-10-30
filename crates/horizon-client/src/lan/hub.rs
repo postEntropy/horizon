@@ -224,7 +224,12 @@ fn entity_type(
     if let Some(id) = types.get(kind) {
         return Some(*id);
     }
-    let id = sync.builtin.get("minecraft:entity_type")?.id(kind)?;
+    let reg = sync.builtin.get("minecraft:entity_type")?;
+    let id = reg.id(kind).or_else(|| {
+        (kind.contains(':') && !kind.starts_with("minecraft:"))
+            .then(|| reg.id("minecraft:iron_golem"))
+            .flatten()
+    })?;
     types.insert(kind.to_owned(), id);
     Some(id)
 }

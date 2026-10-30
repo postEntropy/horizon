@@ -472,7 +472,14 @@ impl Game<'_> {
     }
     pub(super) fn cmd_loot(&mut self, id: &str, ctx: &Context) -> R<i32> {
         // The drops.
-        let (drops, table): (Vec<ItemStack>, Option<String>) = match id {
+        let source_pos = self.source_position().map(|v| v.floor() as i32);
+        let (drops, table, hook_subject, hook_pos, hook_context): (
+            Vec<ItemStack>,
+            Option<String>,
+            String,
+            [i32; 3],
+            String,
+        ) = match id {
             "loot.loot" | "loot.fish" => {
                 let Some(Arg::Resource(table)) = ctx.get("loot_table").cloned() else {
                     return Ok(0);
@@ -486,13 +493,20 @@ impl Game<'_> {
                         .res
                         .items()
                         .inline_loot_table(&json, &mut self.world.random);
-                    (drops, None)
+                    (
+                        drops,
+                        None,
+                        "minecraft:inline_loot_table".into(),
+                        source_pos,
+                        id.to_owned(),
+                    )
                 } else {
                     if !self.res.items().has_loot_table(&table) {
                         return Err(err("argument.resource_or_id.failed_to_parse", &[&table]));
                     }
                     let held = if id == "loot.fish" {
                         self.tool_stack(ctx)?
+                            .map(|stack| self.effective_loot_tool(&stack))
                     } else {
                         None
                     };
@@ -510,7 +524,7 @@ impl Game<'_> {
                             &mut self.world.random,
                         ),
                     };
-                    (drops, None)
+                    (drops, None, table, source_pos, id.to_owned())
                 }
             }
             "loot.kill" => {
@@ -530,7 +544,9 @@ impl Game<'_> {
                     self.command_source.map(|s| s.entity),
                     None | Some(Some(Target::Player))
                 );
-                let held = self.slot_get(&super::items::Slot::Inv(self.selected));
+                let held = self
+                    .slot_get(&super::items::Slot::Inv(self.selected))
+                    .map(|stack| self.effective_loot_tool(&stack));
                 let drops = match self.res.items().loot_sequence(&table) {
                     Some(seq) => {
                         let random = self.rand_sequences.get(&seq, self.level.seed);
@@ -545,7 +561,7 @@ impl Game<'_> {
                         &mut self.world.random,
                     ),
                 };
-                (drops, Some(table))
+                (drops, Some(table.clone()), ty, source_pos, table)
             }
             _ => {
                 // loot mine
@@ -556,7 +572,9 @@ impl Game<'_> {
                 if !self.res.items().has_loot_table(&table) {
                     return Err(err("commands.drop.no_loot_table.block", &[&name]));
                 }
-                let tool = self.tool_stack(ctx)?;
+                let tool = self
+                    .tool_stack(ctx)?
+                    .map(|stack| self.effective_loot_tool(&stack));
                 let drops = match self.res.items().loot_sequence(&table) {
                     Some(seq) => {
                         let random = self.rand_sequences.get(&seq, self.level.seed);
@@ -574,9 +592,10 @@ impl Game<'_> {
                         &mut self.world.random,
                     ),
                 };
-                (drops, Some(table))
+                (drops, Some(table.clone()), name, p, table)
             }
         };
+        let drops = self.mod_loot_table_drops(&hook_subject, hook_pos, &hook_context, drops);
         let drops: Vec<ItemStack> = drops.into_iter().filter(|d| d.count > 0).collect();
         // Where they go.
         let mut used: Vec<ItemStack> = Vec::new();

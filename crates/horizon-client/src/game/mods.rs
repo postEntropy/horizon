@@ -84,7 +84,7 @@ pub(super) struct ModItemDrop {
     pub(super) count: u32,
 }
 
-fn apply_loot_drop_result(
+pub(super) fn apply_loot_drop_result(
     outcome: ModHookOutcome,
     vanilla: Vec<ItemStack>,
     extra: Vec<ModItemDrop>,
@@ -115,10 +115,10 @@ use {
     },
     horizon_core::ticks::ScheduleResult,
     horizon_mods::{
-        BlockAction, BlockEntityView, BlockEvent, BlockHit, Clock, CookingKind, CookingRecipe,
-        EventOutcome, ItemAction, ItemDrop, ItemEvent, ItemFacts, Mods, Output, Player,
-        ServerAction, ServerEvent, ServerEventKind, Snapshot, Stack, StackView, Status,
-        VanillaHookEvent, VanillaHookKind, WorldCell,
+        AiGoal, BlockAction, BlockEntityView, BlockEvent, BlockHit, Clock, CookingKind,
+        CookingRecipe, EntityState, EventOutcome, ItemAction, ItemDrop, ItemEvent, ItemFacts, Mods,
+        Output, Player, ServerAction, ServerEvent, ServerEventKind, Snapshot, SpawnCategory, Stack,
+        StackView, Status, VanillaHookEvent, VanillaHookKind, WorldCell,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -185,6 +185,31 @@ fn item_components(stack: &ItemStack) -> Vec<u8> {
 }
 
 #[cfg(feature = "mods")]
+fn apply_mod_mob_goals(mods: &Mods, mob: &mut horizon_client::mobs::Mob) {
+    let Some(spec) = mods.entity_type(&mob.kind.id) else {
+        return;
+    };
+    let goals: Vec<horizon_client::mobs::CustomGoal> = spec
+        .goals
+        .iter()
+        .map(|goal| match goal {
+            AiGoal::FloatInWater => horizon_client::mobs::CustomGoal::FloatInWater,
+            AiGoal::MeleeAttack => horizon_client::mobs::CustomGoal::MeleeAttack,
+            AiGoal::RandomStroll => horizon_client::mobs::CustomGoal::RandomStroll,
+            AiGoal::LookAtPlayer => horizon_client::mobs::CustomGoal::LookAtPlayer,
+            AiGoal::HurtByTarget => horizon_client::mobs::CustomGoal::HurtByTarget,
+            AiGoal::NearestAttackablePlayer => {
+                horizon_client::mobs::CustomGoal::NearestAttackablePlayer
+            }
+            AiGoal::FollowOwner => horizon_client::mobs::CustomGoal::FollowOwner,
+            AiGoal::Tempt => horizon_client::mobs::CustomGoal::Tempt,
+            AiGoal::FlyWander => horizon_client::mobs::CustomGoal::FlyWander,
+        })
+        .collect();
+    mob.set_custom_goals(&goals);
+}
+
+#[cfg(feature = "mods")]
 fn mod_block_state(text: &str) -> Option<horizon_world::chunk::BlockState> {
     let (name, properties) = match text.split_once('[') {
         Some((name, rest)) if rest.ends_with(']') => (name, &rest[..rest.len() - 1]),
@@ -213,6 +238,30 @@ fn mod_block_state(text: &str) -> Option<horizon_world::chunk::BlockState> {
         name,
         properties: parsed,
     })
+}
+
+#[cfg(feature = "mods")]
+fn mob_entity_state(handle: u32, dimension: &str, mob: &horizon_client::mobs::Mob) -> EntityState {
+    let kind = if mob.kind.id.contains(':') {
+        mob.kind.id.clone()
+    } else {
+        format!("minecraft:{}", mob.kind.id)
+    };
+    EntityState {
+        handle,
+        kind,
+        dimension: dimension.to_owned(),
+        x: mob.position.x,
+        y: mob.position.y,
+        z: mob.position.z,
+        vx: mob.velocity.x,
+        vy: mob.velocity.y,
+        vz: mob.velocity.z,
+        yaw: mob.yaw,
+        pitch: mob.head_pitch,
+        health: mob.health,
+        max_health: mob.kind.max_health,
+    }
 }
 
 /// Runs the API damage hook from inside the Mob simulation tick without
@@ -259,6 +308,15 @@ pub(super) fn mob_tick_damage_hook(
             horizon_client::mobs::DamageKind::SonicBoom => "minecraft:sonic_boom",
             horizon_client::mobs::DamageKind::OutOfWorld => "minecraft:out_of_world",
         };
+        if let Some(&(handle, _)) = mods.mob_handles.get(&mob.id) {
+            mods.mods
+                .sync_entity_state(mob_entity_state(handle, dimension, mob));
+            if mods.mods.entity_type(&subject).is_some()
+                && !mods.mods.entity_hurt(handle, amount, context)
+            {
+                return None;
+            }
+        }
         let (outcome, multiplier, _, _, _) = mods.mods.vanilla_hook(&VanillaHookEvent {
             kind: VanillaHookKind::EntityDamage,
             subject,
@@ -332,6 +390,9 @@ pub(super) struct ModsState {
     /// Mod scheduled ticks that still need their chunk's temporary ticket.
     #[cfg(feature = "mods")]
     scheduled_mod_action_tickets: HashMap<(String, i32, i32, i32), (i32, i32, i64)>,
+    /// Mod-requested vanilla random ticks, independent of the block-tick queue.
+    #[cfg(feature = "mods")]
+    scheduled_mod_random_ticks: HashMap<(String, i32, i32, i32), (String, i64)>,
     /// `--dev-mod PATH`: always on, reloaded when rebuilt.
     pub(super) dev: Vec<PathBuf>,
     /// When dev mods were last checked for a rebuild.
@@ -343,6 +404,15 @@ pub(super) struct ModsState {
     /// Active mod block entities in the loaded world, keyed by `[x, y, z]`.
     #[cfg(feature = "mods")]
     block_entities: HashMap<[i32; 3], BlockEntityView>,
+    /// Live mob id -> `(mod handle, dimension id)`.
+    #[cfg(feature = "mods")]
+    mob_handles: HashMap<u32, (u32, String)>,
+    /// Mod entity handle -> live mob id.
+    #[cfg(feature = "mods")]
+    handle_mobs: HashMap<u32, u32>,
+    /// Active navigation goals requested via `entities::navigate-to`, keyed by mob id.
+    #[cfg(feature = "mods")]
+    mob_nav_targets: HashMap<u32, ([f64; 3], f64)>,
     #[cfg(feature = "mods")]
     resource_recipes_loaded: bool,
     #[cfg(feature = "mods")]
@@ -412,6 +482,63 @@ impl ModsState {
             false
         }
     }
+    pub(super) fn has_entity_damage_hook(&self) -> bool {
+        #[cfg(feature = "mods")]
+        {
+            self.mods
+                .has_vanilla_hook_subscription(&VanillaHookKind::EntityDamage)
+        }
+        #[cfg(not(feature = "mods"))]
+        {
+            false
+        }
+    }
+    pub(super) fn with_player_damage_hook<R>(
+        &mut self,
+        player: &mut horizon_client::motion::PlayerMotion,
+        dimension: &str,
+        f: impl FnOnce(&mut horizon_client::motion::PlayerMotion) -> R,
+    ) -> R {
+        #[cfg(feature = "mods")]
+        {
+            if !self.has_entity_damage_hook() {
+                return f(player);
+            }
+            let dim = dimension.to_owned();
+            let shared = std::rc::Rc::new(std::cell::RefCell::new(std::mem::take(&mut self.mods)));
+            let hook_mods = shared.clone();
+            player.damage_hook = Some(Box::new(move |context, position, amount| {
+                let (outcome, multiplier, _, _, _) =
+                    hook_mods.borrow_mut().vanilla_hook(&VanillaHookEvent {
+                        kind: VanillaHookKind::EntityDamage,
+                        subject: "minecraft:player".to_owned(),
+                        dimension: dim.clone(),
+                        x: position[0],
+                        y: position[1],
+                        z: position[2],
+                        value: amount,
+                        context: context.to_owned(),
+                    });
+                if outcome == EventOutcome::Cancel {
+                    None
+                } else {
+                    Some(amount * multiplier)
+                }
+            }));
+            let out = f(player);
+            player.damage_hook = None;
+            self.mods = std::rc::Rc::try_unwrap(shared)
+                .ok()
+                .expect("player damage_hook cleared")
+                .into_inner();
+            out
+        }
+        #[cfg(not(feature = "mods"))]
+        {
+            let _ = dimension;
+            f(player)
+        }
+    }
     pub(super) fn has_enchantment_level_hook(&self) -> bool {
         #[cfg(feature = "mods")]
         {
@@ -457,6 +584,42 @@ impl ModsState {
             let _ = (item, enchantment, dimension, position);
             base
         }
+    }
+    pub(super) fn effective_stack(
+        &mut self,
+        stack: &ItemStack,
+        dimension: &str,
+        position: [i32; 3],
+        probe_ids: &[&str],
+    ) -> ItemStack {
+        if !self.has_enchantment_level_hook() {
+            return stack.clone();
+        }
+        let mut levels: Vec<(std::sync::Arc<str>, u32)> = Vec::new();
+        for (id, base) in stack.enchantments() {
+            let effective =
+                self.effective_enchantment_level(&stack.item, id, *base, dimension, position);
+            if effective > 0 {
+                levels.push((id.clone(), effective));
+            }
+        }
+        for &probe in probe_ids {
+            if stack.enchantments().iter().any(|(id, _)| &**id == probe) {
+                continue;
+            }
+            let effective =
+                self.effective_enchantment_level(&stack.item, probe, 0, dimension, position);
+            if effective > 0 {
+                levels.push((std::sync::Arc::from(probe), effective));
+            }
+        }
+        let mut out = stack.clone();
+        if levels.is_empty() && out.data().is_none() {
+            return out;
+        }
+        out.data_mut().enchantments = levels;
+        out.tidy();
+        out
     }
     pub(super) fn loot_drop_hook(
         &mut self,
@@ -762,6 +925,24 @@ impl Game<'_> {
         self.mods
             .effective_enchantment_level(&stack.item, enchantment, base, dimension, position)
     }
+    pub(super) fn effective_stack(&mut self, stack: &ItemStack, probe_ids: &[&str]) -> ItemStack {
+        let position = self.mod_hook_position();
+        let dimension = self.dim.id();
+        self.mods
+            .effective_stack(stack, dimension, position, probe_ids)
+    }
+    pub(super) fn effective_loot_tool(&mut self, stack: &ItemStack) -> ItemStack {
+        self.effective_stack(
+            stack,
+            &[
+                "minecraft:fortune",
+                "minecraft:looting",
+                "minecraft:silk_touch",
+                "minecraft:fire_aspect",
+                "minecraft:flame",
+            ],
+        )
+    }
     /// Applies the generic loot hook to an already-rolled table result.
     /// The loot table draws its vanilla random sequence before this dispatch.
     pub(super) fn mod_loot_table_drops(
@@ -943,10 +1124,436 @@ impl Game<'_> {
         (ModHookOutcome::Pass, Vec::new())
     }
     pub(super) fn draw_mod_panels(&self, _batch: &mut HudBatch, _corners: &mut Corners) {}
+    pub(super) fn mob_type(
+        &self,
+        kind: &str,
+    ) -> Option<std::sync::Arc<horizon_client::mobs::MobType>> {
+        let full = if kind.contains(':') {
+            kind.to_owned()
+        } else {
+            format!("minecraft:{kind}")
+        };
+        self.res
+            .mob_types()
+            .get(&full)
+            .or_else(|| self.res.mob_types().get(kind))
+            .cloned()
+    }
+    pub(super) fn mob_from_nbt(
+        &self,
+        tag: &horizon_world::nbt::Tag,
+        id: u32,
+    ) -> Option<horizon_client::mobs::Mob> {
+        let raw_id = horizon_client::entity_nbt::kind(tag)?;
+        let kind = raw_id.strip_prefix("minecraft:").unwrap_or(&raw_id);
+        let mt = self.mob_type(kind)?;
+        horizon_client::entity_nbt::mob_from_nbt_with_type(tag, mt, id)
+    }
+    pub(super) fn sync_mod_entity_registries(&mut self) {}
+    pub(super) fn register_mod_mob(&mut self, _id: u32, _saved: &[u8]) {}
+    pub(super) fn sync_mod_entities(&mut self) {}
+    pub(super) fn tick_mod_entities(&mut self) {}
+    pub(super) fn mod_entity_interact(&mut self, _index: usize, _held_item: &str) -> bool {
+        false
+    }
+    pub(super) fn save_mod_entity(&mut self, _id: u32) -> Option<Vec<u8>> {
+        None
+    }
+    pub(super) fn remove_mod_entity(&mut self, _id: u32) {}
 }
 
 #[cfg(feature = "mods")]
 impl Game<'_> {
+    pub(super) fn mob_type(&self, kind: &str) -> Option<Arc<horizon_client::mobs::MobType>> {
+        let full = if kind.contains(':') {
+            kind.to_owned()
+        } else {
+            format!("minecraft:{kind}")
+        };
+        if let Some(mt) = self
+            .res
+            .mob_types()
+            .get(&full)
+            .or_else(|| self.res.mob_types().get(kind))
+        {
+            return Some(mt.clone());
+        }
+        let spec = self
+            .mods
+            .mods
+            .entity_type(&full)
+            .or_else(|| self.mods.mods.entity_type(kind))?;
+        let mut base = (**self
+            .res
+            .mob_types()
+            .get("minecraft:iron_golem")
+            .or_else(|| self.res.mob_types().get("iron_golem"))?)
+        .clone();
+        base.id = spec.id.clone();
+        base.category = match spec.category {
+            SpawnCategory::Monster => "monster",
+            SpawnCategory::Creature => "creature",
+            SpawnCategory::Ambient => "ambient",
+            SpawnCategory::WaterCreature => "water_creature",
+            SpawnCategory::Misc => "misc",
+        }
+        .to_owned();
+        base.width = f64::from(spec.width.max(0.1));
+        base.height = f64::from(spec.height.max(0.1));
+        base.eye_height = f64::from((spec.height * 0.85).max(0.1));
+        base.max_health = spec.max_health.max(1.0);
+        base.speed = f64::from(spec.move_speed.max(0.0));
+        base.attack_damage = spec.attack_damage.max(0.0);
+        base.armor = 0.0;
+        base.armor_toughness = 0.0;
+        base.knockback_resistance = 0.0;
+        base.step_height = 0.6;
+        base.safe_fall_distance = 3.0;
+        base.fall_damage_multiplier = 1.0;
+        base.flags = horizon_client::mobs::Flags {
+            fire_immune: spec.fire_immune,
+            ..horizon_client::mobs::Flags::default()
+        };
+        let mut attrs = (*base.attributes).clone();
+        attrs.insert(
+            "minecraft:max_health".to_owned(),
+            f64::from(base.max_health),
+        );
+        attrs.insert("minecraft:movement_speed".to_owned(), base.speed);
+        attrs.insert(
+            "minecraft:attack_damage".to_owned(),
+            f64::from(base.attack_damage),
+        );
+        attrs.insert("minecraft:armor".to_owned(), 0.0);
+        attrs.insert("minecraft:armor_toughness".to_owned(), 0.0);
+        attrs.insert("minecraft:knockback_resistance".to_owned(), 0.0);
+        attrs.insert("minecraft:step_height".to_owned(), base.step_height);
+        attrs.insert(
+            "minecraft:safe_fall_distance".to_owned(),
+            base.safe_fall_distance,
+        );
+        attrs.insert(
+            "minecraft:fall_damage_multiplier".to_owned(),
+            base.fall_damage_multiplier,
+        );
+        base.attributes = Arc::new(attrs);
+        Some(Arc::new(base))
+    }
+
+    pub(super) fn mob_from_nbt(
+        &self,
+        tag: &horizon_world::nbt::Tag,
+        id: u32,
+    ) -> Option<horizon_client::mobs::Mob> {
+        let raw_id = horizon_client::entity_nbt::kind(tag)?;
+        let kind = raw_id.strip_prefix("minecraft:").unwrap_or(&raw_id);
+        let mt = self.mob_type(kind).or_else(|| self.mob_type(&raw_id))?;
+        let mut mob = horizon_client::entity_nbt::mob_from_nbt_with_type(tag, mt, id)?;
+        apply_mod_mob_goals(&self.mods.mods, &mut mob);
+        Some(mob)
+    }
+
+    pub(super) fn sync_mod_entity_registries(&mut self) {
+        let ids: Vec<String> = self
+            .mods
+            .mods
+            .entity_types()
+            .map(|(_, ty)| ty.id.clone())
+            .collect();
+        let reg = &mut self.ui.registries;
+        for id in ids {
+            if !reg.summonable.contains(&id) {
+                reg.summonable.push(id.clone());
+            }
+            if !reg.entity_types.contains(&id) {
+                reg.entity_types.push(id.clone());
+            }
+            if let Some(entry) = reg.by_registry.get_mut("minecraft:entity_type")
+                && !entry.ids.contains(&id)
+            {
+                entry.ids.push(id);
+            }
+        }
+        reg.summonable.sort();
+        reg.summonable.dedup();
+        reg.entity_types.sort();
+        reg.entity_types.dedup();
+        if let Some(entry) = reg.by_registry.get_mut("minecraft:entity_type") {
+            entry.ids.sort();
+            entry.ids.dedup();
+        }
+    }
+
+    pub(super) fn register_mod_mob(&mut self, id: u32, saved: &[u8]) {
+        self.register_mod_mob_inner(id, None, saved);
+    }
+
+    pub(super) fn register_mod_mob_with_handle(&mut self, id: u32, handle: u32, saved: &[u8]) {
+        self.register_mod_mob_inner(id, Some(handle), saved);
+    }
+
+    fn register_mod_mob_inner(&mut self, id: u32, preset_handle: Option<u32>, saved: &[u8]) {
+        if let Some(mob) = self.mobs.iter_mut().find(|m| m.id == id) {
+            apply_mod_mob_goals(&self.mods.mods, mob);
+        }
+        let Some((kind, state_without_handle)) = self.mobs.iter().find(|m| m.id == id).map(|m| {
+            let kind = if m.kind.id.contains(':') {
+                m.kind.id.clone()
+            } else {
+                format!("minecraft:{}", m.kind.id)
+            };
+            (kind, mob_entity_state(0, self.dim.id(), m))
+        }) else {
+            return;
+        };
+        let dim = self.dim.id().to_owned();
+        if let Some(&(existing_handle, _)) = self.mods.mob_handles.get(&id) {
+            let mut state = state_without_handle;
+            state.handle = existing_handle;
+            self.mods.mods.sync_entity_state(state);
+            return;
+        }
+        let is_custom = self.mods.mods.entity_type(&kind).is_some();
+        let handle = preset_handle.unwrap_or_else(|| self.mods.mods.alloc_entity_handle());
+        let mut state = state_without_handle;
+        state.handle = handle;
+        self.mods.mods.sync_entity_state(state);
+        self.mods.mob_handles.insert(id, (handle, dim));
+        self.mods.handle_mobs.insert(handle, id);
+        if is_custom {
+            if !self.mods.mods.bind_custom_entity(handle, &kind, saved) {
+                return;
+            }
+            self.reconcile_mod_entities();
+        }
+    }
+
+    pub(super) fn sync_mod_entities(&mut self) {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return;
+        }
+        let current_dim = self.dim.id().to_owned();
+        let live_ids: HashSet<u32> = self.mobs.iter().map(|m| m.id).collect();
+        let stale: Vec<u32> = self
+            .mods
+            .mob_handles
+            .iter()
+            .filter_map(|(&id, (_, dim))| {
+                (*dim == current_dim && !live_ids.contains(&id)).then_some(id)
+            })
+            .collect();
+        for id in stale {
+            self.remove_mod_entity(id);
+        }
+        let ids: Vec<u32> = self.mobs.iter().map(|m| m.id).collect();
+        for id in ids {
+            if !self.mods.mob_handles.contains_key(&id) {
+                self.register_mod_mob(id, &[]);
+            }
+        }
+        for mob in &self.mobs {
+            if let Some(&(handle, _)) = self.mods.mob_handles.get(&mob.id) {
+                self.mods
+                    .mods
+                    .sync_entity_state(mob_entity_state(handle, &current_dim, mob));
+            }
+        }
+        for (id, (handle, dim)) in &mut self.mods.mob_handles {
+            if live_ids.contains(id) {
+                *dim = current_dim.clone();
+                self.mods.handle_mobs.insert(*handle, *id);
+            }
+        }
+    }
+
+    pub(super) fn reconcile_mod_entities(&mut self) {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return;
+        }
+        let changes = self.mods.mods.take_entity_changes();
+        if changes.is_empty() {
+            return;
+        }
+        for state in changes.spawns {
+            let handle = state.handle;
+            let kind = state.kind;
+            let dimension = state.dimension;
+            let pos = [state.x, state.y, state.z];
+            let spawned = self
+                .with_mod_dimension(&dimension, |game| {
+                    game.spawn_mob_for_mod_handle(handle, &kind, pos).is_some()
+                })
+                .unwrap_or(false);
+            if !spawned {
+                self.mods.mods.remove_entity(handle);
+            }
+        }
+        for (handle, x, y, z, yaw, pitch) in changes.positions {
+            let Some(&id) = self.mods.handle_mobs.get(&handle) else {
+                continue;
+            };
+            let Some((_, dim)) = self.mods.mob_handles.get(&id).cloned() else {
+                continue;
+            };
+            let _ = self.with_mod_dimension(&dim, |game| {
+                if let Some(mob) = game.mobs.iter_mut().find(|m| m.id == id) {
+                    mob.position = horizon_core::geometry::Vec3::new(x, y, z);
+                    mob.yaw = yaw;
+                    mob.body_yaw = yaw;
+                    mob.head_yaw = yaw;
+                    mob.head_pitch = pitch;
+                }
+            });
+        }
+        for (handle, vx, vy, vz) in changes.velocities {
+            let Some(&id) = self.mods.handle_mobs.get(&handle) else {
+                continue;
+            };
+            let Some((_, dim)) = self.mods.mob_handles.get(&id).cloned() else {
+                continue;
+            };
+            let _ = self.with_mod_dimension(&dim, |game| {
+                if let Some(mob) = game.mobs.iter_mut().find(|m| m.id == id) {
+                    mob.velocity = horizon_core::geometry::Vec3::new(vx, vy, vz);
+                }
+            });
+        }
+        for (handle, health) in changes.health {
+            let Some(&id) = self.mods.handle_mobs.get(&handle) else {
+                continue;
+            };
+            let Some((_, dim)) = self.mods.mob_handles.get(&id).cloned() else {
+                continue;
+            };
+            let _ = self.with_mod_dimension(&dim, |game| {
+                if let Some(mob) = game.mobs.iter_mut().find(|m| m.id == id) {
+                    let max_health = mob.kind.max_health;
+                    mob.health = health.clamp(0.0, max_health);
+                    if mob.health <= 0.0 && mob.death_time == 0 {
+                        mob.death_time = 1;
+                    }
+                }
+            });
+        }
+        for (handle, x, y, z, speed) in changes.navigation {
+            let Some(&id) = self.mods.handle_mobs.get(&handle) else {
+                continue;
+            };
+            let Some((_, dim)) = self.mods.mob_handles.get(&id).cloned() else {
+                continue;
+            };
+            let target = [x, y, z];
+            let speed = f64::from(speed);
+            self.mods.mob_nav_targets.insert(id, (target, speed));
+            let _ = self.with_mod_dimension(&dim, |game| {
+                if let Some(mob) = game.mobs.iter_mut().find(|m| m.id == id) {
+                    mob.ai
+                        .mov
+                        .set_wanted(target[0], target[1], target[2], speed);
+                    mob.ai.look.set_look_at(target, 30.0, 30.0);
+                }
+            });
+        }
+        for handle in changes.despawns {
+            if let Some(id) = self.mods.handle_mobs.remove(&handle) {
+                let dim = self
+                    .mods
+                    .mob_handles
+                    .remove(&id)
+                    .map(|(_, dim)| dim)
+                    .unwrap_or_else(|| self.dim.id().to_owned());
+                self.mods.mob_nav_targets.remove(&id);
+                let _ = self.with_mod_dimension(&dim, |game| {
+                    game.mobs.retain(|m| m.id != id);
+                    game.forget_entity(id);
+                });
+            }
+            self.mods.mods.remove_entity(handle);
+        }
+        self.sync_mod_entities();
+    }
+
+    pub(super) fn tick_mod_entities(&mut self) {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return;
+        }
+        self.sync_mod_entities();
+        let handles: Vec<u32> = self
+            .mobs
+            .iter()
+            .filter_map(|m| {
+                self.mods.mods.entity_type(&m.kind.id)?;
+                self.mods.mob_handles.get(&m.id).map(|&(h, _)| h)
+            })
+            .collect();
+        if !handles.is_empty() {
+            self.mods.mods.tick_entities(&handles);
+            self.show_mod_output();
+        }
+        let active_nav: Vec<(u32, [f64; 3], f64)> = self
+            .mods
+            .mob_nav_targets
+            .iter()
+            .map(|(&id, &(target, speed))| (id, target, speed))
+            .collect();
+        for (id, target, speed) in active_nav {
+            let Some(mob) = self.mobs.iter_mut().find(|m| m.id == id) else {
+                continue;
+            };
+            let dx = target[0] - mob.position.x;
+            let dz = target[2] - mob.position.z;
+            if dx * dx + dz * dz <= 0.25 {
+                self.mods.mob_nav_targets.remove(&id);
+            } else {
+                mob.ai
+                    .mov
+                    .set_wanted(target[0], target[1], target[2], speed);
+                mob.ai.look.set_look_at(target, 30.0, 30.0);
+            }
+        }
+    }
+
+    pub(super) fn mod_entity_interact(&mut self, index: usize, held_item: &str) -> bool {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return false;
+        }
+        let Some((id, kind)) = self.mobs.get(index).map(|m| (m.id, m.kind.id.clone())) else {
+            return false;
+        };
+        if self.mods.mods.entity_type(&kind).is_none() {
+            return false;
+        }
+        self.sync_mod_entities();
+        let Some(&(handle, _)) = self.mods.mob_handles.get(&id) else {
+            return false;
+        };
+        let player = self.acting_player_name().to_owned();
+        let outcome = self.mods.mods.entity_interact(handle, &player, held_item);
+        self.show_mod_output();
+        outcome
+    }
+
+    pub(super) fn save_mod_entity(&mut self, id: u32) -> Option<Vec<u8>> {
+        if !self.mods.mods.is_running() {
+            return None;
+        }
+        let &(handle, _) = self.mods.mob_handles.get(&id)?;
+        let kind = self.mobs.iter().find(|m| m.id == id)?.kind.id.clone();
+        if self.mods.mods.entity_type(&kind).is_none() {
+            return None;
+        }
+        self.sync_mod_entities();
+        self.mods.mods.save_entity(handle)
+    }
+
+    pub(super) fn remove_mod_entity(&mut self, id: u32) {
+        self.mods.mob_nav_targets.remove(&id);
+        if let Some((handle, _)) = self.mods.mob_handles.remove(&id) {
+            self.mods.handle_mobs.remove(&handle);
+            self.mods.mods.remove_entity(handle);
+        }
+    }
+
     pub(super) fn mod_block_placed(&mut self, pos: [i32; 3], face: String) {
         let _ = self.mod_block_event(pos, BlockAction::Place, face);
     }
@@ -967,6 +1574,55 @@ impl Game<'_> {
             String::new(),
             String::new(),
         );
+    }
+
+    /// Runs due mod-requested random ticks after vanilla's scheduled block
+    /// ticks have updated leaf distances for this game tick.
+    pub(super) fn tick_mod_random_actions(&mut self) {
+        let waiting: Vec<_> = self
+            .mods
+            .scheduled_mod_random_ticks
+            .iter()
+            .map(|(key, (_, at))| (key.clone(), *at))
+            .collect();
+        let due: Vec<_> = waiting
+            .into_iter()
+            .filter_map(|(tick, at)| {
+                self.with_mod_dimension(&tick.0, |game| game.world.game_time >= at)
+                    .is_some_and(|due| due)
+                    .then_some(tick)
+            })
+            .collect();
+        for tick in due {
+            let Some((block, _)) = self.mods.scheduled_mod_random_ticks.remove(&tick) else {
+                continue;
+            };
+            let (dimension, x, y, z) = tick;
+            if self
+                .with_mod_dimension(&dimension, |game| {
+                    if game
+                        .res
+                        .facts()
+                        .get(game.world.block(x, y, z))
+                        .name
+                        .as_ref()
+                        != block
+                    {
+                        return false;
+                    }
+                    game.with_level(|b, level, ticks| {
+                        b.random_tick(level, ticks, horizon_core::position::BlockPos::new(x, y, z));
+                    });
+                    true
+                })
+                .is_none()
+            {
+                log::warn!(
+                    "Horizon: mod random tick requested unavailable dimension {dimension:?}"
+                );
+            }
+        }
+        self.release_mod_action_tickets();
     }
 
     /// Releases only tickets with no pending action or scheduled tick left in
@@ -1011,7 +1667,14 @@ impl Game<'_> {
                         dimension == &key.0 && (*x >> 4, *z >> 4) == (key.1, key.2)
                     },
                 );
-                !pending_action && !pending_tick
+                let pending_random_tick =
+                    self.mods
+                        .scheduled_mod_random_ticks
+                        .keys()
+                        .any(|(dimension, x, _, z)| {
+                            dimension == &key.0 && (*x >> 4, *z >> 4) == (key.1, key.2)
+                        });
+                !pending_action && !pending_tick && !pending_random_tick
             })
             .cloned()
             .collect();
@@ -1223,8 +1886,28 @@ impl Game<'_> {
             .get(self.world.block(pos[0], pos[1], pos[2]))
             .name
             .to_string();
-        self.mod_has_block_hook(&state)
-            && self.mod_block_event(pos, BlockAction::Broken, String::new()) != EventOutcome::Pass
+        if !self.mod_has_block_hook(&state) {
+            return false;
+        }
+        // `server.get_block` reads a snapshot around the player. A block hook
+        // can inspect a larger area around its event position (for example,
+        // the canopy above a broken log), so prime that area before dispatch.
+        for dx in -4..=4 {
+            for dy in -6..=6 {
+                for dz in -4..=4 {
+                    let x = pos[0] + dx;
+                    let y = pos[1] + dy;
+                    let z = pos[2] + dz;
+                    if self.world.loaded(x, z) {
+                        let block = self.mod_block_state_at([x, y, z]);
+                        self.mods
+                            .mods
+                            .set_world_block(self.dim.id(), x, y, z, &block);
+                    }
+                }
+            }
+        }
+        self.mod_block_event(pos, BlockAction::Broken, String::new()) != EventOutcome::Pass
     }
 
     /// Dispatches a use-in-air callback for a mod-owned item. `true` means
@@ -1233,6 +1916,7 @@ impl Game<'_> {
         if self.remote.is_some() || !self.mods.mods.is_running() {
             return false;
         }
+        self.sync_mod_entities();
         let outcome = self.mods.mods.item_event(ItemEvent {
             action: ItemAction::UseInAir,
             item: item.to_owned(),
@@ -1252,6 +1936,7 @@ impl Game<'_> {
         if self.remote.is_some() || !self.mods.mods.is_running() {
             return false;
         }
+        self.sync_mod_entities();
         let outcome = self.mods.mods.item_event(ItemEvent {
             action: ItemAction::UseOnBlock,
             item: item.to_owned(),
@@ -1271,6 +1956,7 @@ impl Game<'_> {
         if self.remote.is_some() || !self.mods.mods.is_running() {
             return false;
         }
+        self.sync_mod_entities();
         let outcome = self.mods.mods.item_event(ItemEvent {
             action: ItemAction::AttackEntity,
             item: item.to_owned(),
@@ -1315,6 +2001,7 @@ impl Game<'_> {
         if self.remote.is_some() || !self.mods.mods.is_running() {
             return EventOutcome::Pass;
         }
+        self.sync_mod_entities();
         let state = self.mod_block_state_at(pos);
         let name = self
             .res
@@ -1357,6 +2044,7 @@ impl Game<'_> {
         if self.remote.is_some() || !self.mods.mods.is_running() {
             return false;
         }
+        self.sync_mod_entities();
         let outcome = self.mods.mods.item_event(ItemEvent {
             action: ItemAction::FinishUsing,
             item: item.to_owned(),
@@ -1404,9 +2092,13 @@ impl Game<'_> {
         self.mods.resource_recipes_loaded = false;
         self.load_mod_resource_recipes();
         self.mods.block_entities.clear();
+        self.mods.mob_handles.clear();
+        self.mods.handle_mobs.clear();
+        self.mods.mob_nav_targets.clear();
         self.world.block_entities.set_states(Vec::new());
         self.list_mods();
         self.sync_mod_commands();
+        self.sync_mod_entities();
         self.show_mod_output();
     }
     /// The Mods page's rows, from what loaded.
@@ -1456,6 +2148,7 @@ impl Game<'_> {
             .peek()
             .is_some()
             .then(|| vanilla::game_dispatcher().with_mod_commands(names));
+        self.sync_mod_entity_registries();
     }
     /// After the options changed: restart the mods if the list of the ones
     /// turned on did.
@@ -1675,6 +2368,7 @@ impl Game<'_> {
                 .mods
                 .set_inventory(main_hand, off_hand, inv, open_container);
         }
+        self.sync_mod_entities();
         self.mods.mods.tick(self.ticks);
         self.show_mod_output();
     }
@@ -1783,6 +2477,7 @@ impl Game<'_> {
         // The command may follow a teleport in the same tick.
         let snapshot = self.mod_snapshot();
         self.mods.mods.set_snapshot(snapshot);
+        self.sync_mod_entities();
         if !self.mods.mods.command(command) {
             return false;
         }
@@ -1874,13 +2569,29 @@ impl Game<'_> {
             horizon_client::mobs::DamageKind::SonicBoom => "minecraft:sonic_boom",
             horizon_client::mobs::DamageKind::OutOfWorld => "minecraft:out_of_world",
         };
+        #[cfg(feature = "mods")]
+        if self.mods.mods.is_running() && self.mods.mods.entity_type(&subject).is_some() {
+            self.sync_mod_entities();
+            if let Some(&(handle, _)) = self.mods.mob_handles.get(&id) {
+                let allowed = self.mods.mods.entity_hurt(handle, amount, context);
+                self.reconcile_mod_entities();
+                self.show_mod_output();
+                if !allowed {
+                    return false;
+                }
+            }
+        }
         let Some(amount) = self.mod_entity_damage(&subject, position, amount, context) else {
             return false;
         };
-        self.mobs
+        let hurt = self
+            .mobs
             .iter_mut()
             .find(|m| m.id == id)
-            .is_some_and(|m| m.damage(amount, source))
+            .is_some_and(|m| m.damage(amount, source));
+        self.reconcile_mod_entities();
+        self.sync_mod_entities();
+        hurt
     }
     pub(super) fn mod_xp_gain(&mut self, amount: u32, context: &str) -> u32 {
         #[cfg(feature = "mods")]
@@ -3915,6 +4626,7 @@ impl Game<'_> {
 
     /// Chat lines, command feedback and stopped mods, into the chat.
     pub(super) fn show_mod_output(&mut self) {
+        self.reconcile_mod_entities();
         let mut outputs: Vec<_> = self
             .mods
             .mods
@@ -3942,7 +4654,10 @@ impl Game<'_> {
                     Text::literal(format!("Mod {name} stopped: {reason}")).with_color(text::RED)
                 }
                 Output::Server(action) => {
-                    let needs_tick_ticket = matches!(&action, ServerAction::ScheduleTick { .. });
+                    let needs_tick_ticket = matches!(
+                        &action,
+                        ServerAction::ScheduleTick { .. } | ServerAction::ScheduleRandomTick { .. }
+                    );
                     if let Some((dimension, x, z)) = mod_action_chunk(&action) {
                         let dimension = dimension.to_owned();
                         let key = (dimension.clone(), x >> 4, z >> 4);
@@ -4178,6 +4893,60 @@ impl Game<'_> {
                                 ),
                             }
                         }
+                        ServerAction::ScheduleRandomTick {
+                            dimension,
+                            x,
+                            y,
+                            z,
+                            block,
+                            delay,
+                        } => {
+                            match self.with_mod_dimension(&dimension, |game| {
+                                if game
+                                    .res
+                                    .facts()
+                                    .get(game.world.block(x, y, z))
+                                    .name
+                                    .as_ref()
+                                    != block
+                                {
+                                    return None;
+                                }
+                                let chunk = (x >> 4, z >> 4);
+                                if game
+                                    .block_ticks
+                                    .blocks
+                                    .chunk(horizon_core::position::ChunkPos::new(chunk.0, chunk.1))
+                                    .is_none()
+                                {
+                                    game.register_chunk_ticks(chunk);
+                                }
+                                Some(game.world.game_time)
+                            }) {
+                                Some(Some(now)) => {
+                                    let tick = (dimension.clone(), x, y, z);
+                                    let due = now.saturating_add(i64::from(delay));
+                                    self.mods
+                                        .scheduled_mod_random_ticks
+                                        .entry(tick)
+                                        .and_modify(|scheduled| {
+                                            if due > scheduled.1 {
+                                                scheduled.1 = due;
+                                            }
+                                        })
+                                        .or_insert((block.clone(), due));
+                                    log::info!(
+                                        "Horizon: mod scheduled random tick for {block} in {dimension:?} at ({x}, {y}, {z}) after {delay} ticks"
+                                    );
+                                }
+                                Some(None) => log::warn!(
+                                    "Horizon: mod random-tick block mismatch in {dimension:?} at ({x}, {y}, {z}); expected {block}"
+                                ),
+                                None => log::warn!(
+                                    "Horizon: mod random-tick requested unavailable dimension {dimension:?}"
+                                ),
+                            }
+                        }
                         ServerAction::SetRule { name, value } => {
                             self.mods.mods.set_rule(&name, &value);
                         }
@@ -4234,6 +5003,7 @@ impl Game<'_> {
                 .chat
                 .add(&self.gui.atlas, line, None, self.ticks, focused);
         }
+        self.reconcile_mod_entities();
         self.release_mod_action_tickets();
     }
     /// Delivers packets the integrated server queued for the window.
@@ -4293,6 +5063,9 @@ fn mod_action_chunk(action: &ServerAction) -> Option<(&str, i32, i32)> {
             dimension, x, z, ..
         }
         | ServerAction::ScheduleTick {
+            dimension, x, z, ..
+        }
+        | ServerAction::ScheduleRandomTick {
             dimension, x, z, ..
         }
         | ServerAction::SpawnDrop {

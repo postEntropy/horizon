@@ -66,8 +66,17 @@ impl Game<'_> {
             }
             Target::Mob(id) => {
                 let uuid = self.uuid_for(id);
+                let mod_saved = self.save_mod_entity(id);
                 let m = self.mobs.iter().find(|m| m.id == id)?;
-                entity_nbt::mob_to_nbt(m, uuid, self.persist.raw.get(&id))
+                let mut tag = entity_nbt::mob_to_nbt(m, uuid, self.persist.raw.get(&id));
+                if let Tag::Compound(c) = &mut tag {
+                    if let Some(bytes) = mod_saved.filter(|b| !b.is_empty()) {
+                        c.insert("horizon_mod_data".into(), Tag::ByteArray(bytes));
+                    } else {
+                        c.remove(&"horizon_mod_data".into());
+                    }
+                }
+                tag
             }
             Target::Item(id) => {
                 let uuid = self.uuid_for(id);
@@ -146,8 +155,7 @@ impl Game<'_> {
                 if let Some(k) = kind {
                     set_key(&mut tag, "id", Tag::String(k.as_str().into()));
                 }
-                let new =
-                    entity_nbt::mob_from_nbt(&tag, self.res.mob_types(), id).ok_or_else(stale)?;
+                let new = self.mob_from_nbt(&tag, id).ok_or_else(stale)?;
                 if let Some(slot) = self.mobs.iter_mut().find(|m| m.id == id) {
                     // Runtime-only state (AI, animation) carries over.
                     let old = std::mem::replace(slot, new);

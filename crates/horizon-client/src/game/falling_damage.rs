@@ -9,7 +9,21 @@ impl Game<'_> {
         let anvil = self.res.facts().get(block.state).name.ends_with("anvil");
         if let Some(impact) = block.damage.impact(block.fall_distance) {
             if impact.amount > 0.0 {
-                falling_block::hurt_mobs(&mut self.mobs, block.position, impact.amount);
+                let bounds = falling_block::bounds(block.position);
+                let source = horizon_client::mobs::Damage {
+                    kind: horizon_client::mobs::DamageKind::FallingBlock,
+                    attacker: None,
+                    from: Some([block.position.x, block.position.y, block.position.z]),
+                };
+                let hit_ids: Vec<u32> = self
+                    .mobs
+                    .iter()
+                    .filter(|m| m.alive() && bounds.intersects(m.bounds()))
+                    .map(|m| m.id)
+                    .collect();
+                for id in hit_ids {
+                    self.mod_mob_damage(id, impact.amount, source);
+                }
                 let kind = if anvil {
                     "minecraft:falling_anvil"
                 } else {
@@ -98,15 +112,19 @@ impl Game<'_> {
         if self.creative || self.spectator() {
             return;
         }
-        if self.player.as_ref().is_none_or(|p| {
-            p.health.dead_or_dying() || !falling_block::bounds(position).intersects(p.bounds())
-        }) {
+        let Some(pos) = self.player.as_ref().and_then(|p| {
+            (!p.health.dead_or_dying() && falling_block::bounds(position).intersects(p.bounds()))
+                .then(|| [p.position.x, p.position.y, p.position.z].map(|v| v.floor() as i32))
+        }) else {
             return;
-        }
+        };
         let amount = if self.armor[0].is_some() {
             amount * 0.75
         } else {
             amount
+        };
+        let Some(amount) = self.mod_entity_damage("minecraft:player", pos, amount, kind) else {
+            return;
         };
         let hurt = if let Some(p) = self.player.as_mut()
             && let Some(id) = self.motion.health.damage.id(kind)

@@ -504,11 +504,15 @@ impl Game<'_> {
             .level
             .recipe_book
             .add_recipes(&self.res.stations().recipe_index, &rewards);
+        let player_pos = self.player.as_ref().map_or([0, 0, 0], |p| {
+            [p.position.x, p.position.y, p.position.z].map(|c| c.floor() as i32)
+        });
         for table in &a.rewards.loot {
             let items = self
                 .res
                 .items()
                 .loot_table(table, false, None, &mut self.world.random);
+            let items = self.mod_loot_table_drops("minecraft:player", player_pos, table, items);
             for s in items {
                 if let Some(rest) = self.give(s)
                     && let Some(eye) = self.eye_position()

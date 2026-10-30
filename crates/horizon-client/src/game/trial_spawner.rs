@@ -155,7 +155,7 @@ impl Game<'_> {
         let mut events = Vec::new();
         let mut planned: Vec<Planned> = Vec::new();
         let mut uuids: Vec<(u32, Uuid)> = Vec::new();
-        let mut ejected: Vec<(ItemStack, [f64; 3])> = Vec::new();
+        let mut ejected: Vec<(String, Vec<(ItemStack, [f64; 3])>)> = Vec::new();
         let next = {
             let level = self.natural_level();
             let loot = horizon_client::structure_blocks::loot_data(&self.options.resources);
@@ -187,6 +187,7 @@ impl Game<'_> {
                     Some(s) => loot.roll_split(table, sequences.get(s, seed)),
                     None => loot.roll_split(table, random),
                 };
+                let mut table_ejected = Vec::with_capacity(drops.len());
                 for stack in &drops {
                     // The power, which only scales the direction's x and z (0 going up).
                     random.next_double();
@@ -196,11 +197,12 @@ impl Game<'_> {
                         random.triangle(0.2, spread),
                         random.triangle(0.0, spread),
                     ];
-                    ejected.push((
+                    table_ejected.push((
                         horizon_client::structure_blocks::loot_item_with_components(stack),
                         v,
                     ));
                 }
+                ejected.push((table.to_string(), table_ejected));
                 !drops.is_empty()
             };
             spawner.server_tick(
@@ -227,8 +229,14 @@ impl Game<'_> {
         let center = pos.map(|v| f64::from(v) + 0.5);
         // Vec3.atBottomCenterOf(pos).relative(UP, 1.2), lowered by spawnItem.
         let above = [center[0], center[1] + 0.7 - 0.125, center[2]];
-        for (stack, v) in ejected {
-            self.spawn_item(stack, above, v, 0);
+        for (table, table_ejected) in ejected {
+            let (vanilla_stacks, velocities): (Vec<_>, Vec<_>) = table_ejected.into_iter().unzip();
+            let stacks =
+                self.mod_loot_table_drops("minecraft:trial_spawner", pos, &table, vanilla_stacks);
+            for (i, stack) in stacks.into_iter().enumerate() {
+                let v = velocities.get(i).copied().unwrap_or([0.0, 0.2, 0.0]);
+                self.spawn_item(stack, above, v, 0);
+            }
         }
         if next != current || ominous != spawner.is_ominous {
             self.set_trial_spawner_state(key, next, spawner.is_ominous)?;

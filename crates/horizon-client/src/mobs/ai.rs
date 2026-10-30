@@ -286,6 +286,44 @@ pub fn custom_move_control(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>
         _ => {}
     }
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CustomGoal {
+    FloatInWater,
+    MeleeAttack,
+    RandomStroll,
+    LookAtPlayer,
+    HurtByTarget,
+    NearestAttackablePlayer,
+    FollowOwner,
+    Tempt,
+    FlyWander,
+}
+pub fn set_custom_goals(m: &mut Mob, goals: &[CustomGoal]) {
+    use super::goals::*;
+    m.ai.goals.clear();
+    m.ai.targets.clear();
+    m.ai.nav.can_float = false;
+    for (idx, goal) in goals.iter().enumerate() {
+        let priority = (idx + 1) as i32;
+        match goal {
+            CustomGoal::FloatInWater => {
+                m.ai.goals.add(0, Float);
+                m.ai.nav.can_float = true;
+            }
+            CustomGoal::MeleeAttack => m.ai.goals.add(priority, MeleeAttack::new(1.0, false)),
+            CustomGoal::RandomStroll | CustomGoal::FlyWander => {
+                m.ai.goals.add(priority, Stroll::avoiding_water(1.0))
+            }
+            CustomGoal::LookAtPlayer | CustomGoal::FollowOwner | CustomGoal::Tempt => {
+                m.ai.goals.add(priority, LookAtPlayer::new(8.0))
+            }
+            CustomGoal::HurtByTarget => m.ai.targets.add(priority, HurtByTarget::new()),
+            CustomGoal::NearestAttackablePlayer => {
+                m.ai.targets.add(priority, NearestTarget::player(true))
+            }
+        }
+    }
+}
 /// A fallback for species without bespoke goals yet: animals stroll and
 /// panic, monsters hunt the player in melee.
 fn generic(m: &mut Mob) {

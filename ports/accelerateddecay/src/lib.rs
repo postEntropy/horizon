@@ -27,7 +27,7 @@ impl Mod for AcceleratedDecay {
 
     fn on_block(&mut self, event: BlockEvent) -> EventOutcome {
         if event.action == BlockAction::Broken {
-            // Schedule fast random ticks on neighboring leaf blocks
+            // Run vanilla leaf decay as soon as the scheduled distance update has run.
             for dx in -4..=4 {
                 for dy in -2..=6 {
                     for dz in -4..=4 {
@@ -38,7 +38,9 @@ impl Mod for AcceleratedDecay {
                         };
                         if let Some(state) = server::get_block(&event.dimension, pos) {
                             if state.contains("leaves") && !state.contains("persistent=true") {
-                                server::schedule_tick(&event.dimension, pos, &state, 2);
+                                // Let vanilla's scheduled distance updates propagate across
+                                // the canopy, then run its decay/drop logic directly.
+                                server::schedule_random_tick(&event.dimension, pos, &state, 10);
                             }
                         }
                     }

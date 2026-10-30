@@ -130,20 +130,27 @@ impl Game<'_> {
             _ => by.and_then(|t| self.target_position(t)),
         };
         let hurt = match target {
-            Target::Player => {
-                if self.creative || self.spectator() {
-                    false
-                } else if let Some(player) = self.player.as_mut() {
-                    match self.motion.health.damage.id(&ty) {
-                        Some(id) => player
-                            .hurt(&self.motion.health, self.world.health_rules, id, amount)
-                            .unwrap_or(false),
-                        None => false,
+            Target::Player | Target::Guest(_) => self
+                .for_player(target, |g| {
+                    if g.creative || g.spectator() {
+                        false
+                    } else if let Some(pos) = g.player.as_ref().map(|p| {
+                        [p.position.x, p.position.y, p.position.z].map(|v| v.floor() as i32)
+                    }) && let Some(amount) =
+                        g.mod_entity_damage("minecraft:player", pos, amount, &ty)
+                        && let Some(player) = g.player.as_mut()
+                    {
+                        match g.motion.health.damage.id(&ty) {
+                            Some(id) => player
+                                .hurt(&g.motion.health, g.world.health_rules, id, amount)
+                                .unwrap_or(false),
+                            None => false,
+                        }
+                    } else {
+                        false
                     }
-                } else {
-                    false
-                }
-            }
+                })
+                .unwrap_or(false),
             Target::Mob(id) => {
                 let attacker = by.and_then(|t| match t {
                     Target::Player => Some(Who::Player),

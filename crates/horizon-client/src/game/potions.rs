@@ -335,16 +335,30 @@ impl Game<'_> {
                 if creative {
                     return;
                 }
-                if let Some(id) = self.motion.health.damage.id(source) {
+                let pos = [p.position.x, p.position.y, p.position.z].map(|v| v.floor() as i32);
+                let Some(amount) = self.mod_entity_damage("minecraft:player", pos, amount, source)
+                else {
+                    return;
+                };
+                if let Some(p) = self.player.as_mut()
+                    && let Some(id) = self.motion.health.damage.id(source)
+                {
                     let _ = p.hurt(&self.motion.health, rules, id, amount);
                 }
             }
             EffectAction::Poison => {
-                if !creative
-                    && p.health.health() > 1.0
-                    && let Some(id) = self.motion.health.damage.id("minecraft:magic")
-                {
-                    let _ = p.hurt(&self.motion.health, rules, id, 1.0);
+                if !creative && p.health.health() > 1.0 {
+                    let pos = [p.position.x, p.position.y, p.position.z].map(|v| v.floor() as i32);
+                    let Some(amount) =
+                        self.mod_entity_damage("minecraft:player", pos, 1.0, "minecraft:magic")
+                    else {
+                        return;
+                    };
+                    if let Some(p) = self.player.as_mut()
+                        && let Some(id) = self.motion.health.damage.id("minecraft:magic")
+                    {
+                        let _ = p.hurt(&self.motion.health, rules, id, amount);
+                    }
                 }
             }
             EffectAction::Exhaust(amount) => {

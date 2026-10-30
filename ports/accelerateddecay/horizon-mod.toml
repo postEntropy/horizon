@@ -1,0 +1,7 @@
+id = "accelerateddecay"
+name = "Accelerated Decay"
+version = "1.0.0"
+description = "Removes unsupported leaves shortly after their supporting logs are broken."
+api = "0.3"
+side = "both"
+capabilities = ["server"]

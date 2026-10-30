@@ -1238,6 +1238,7 @@ fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
         .collect();
     assert_eq!(entity_types, [("test_machine:automaton", 40.0)]);
     let h = mods.create_entity("test_machine:automaton", &[]).unwrap();
+    assert_eq!(mods.entity_state(h).map(|s| s.health), Some(40.0));
     mods.tick_entities(&[h]);
     assert_eq!(
         mods.model_animation(&format!("entity:{h}")),
@@ -1246,8 +1247,13 @@ fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
     let saved = mods.save_entity(h).unwrap();
     assert_eq!(saved, 1u32.to_le_bytes());
     assert!(mods.entity_interact(h, "Player", "test_machine:wrench"));
+    assert_eq!(mods.entity_state(h).map(|s| s.health), Some(20.0));
+    let changes = mods.take_entity_changes();
+    assert_eq!(changes.health, [(h, 20.0)]);
+    assert_eq!(changes.navigation, [(h, 10.0, 64.0, 10.0, 0.5)]);
     assert!(mods.entity_hurt(h, 5.0, "player"));
     mods.remove_entity(h);
+    assert!(mods.entity_state(h).is_none());
 
     // 2. Entities host API, animated models, draw lists, dimensions & portals
     assert_eq!(mods.dimensions().len(), 1);
@@ -1267,7 +1273,7 @@ fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
                 z: 0.5,
             },
             Output::Feedback {
-                text: "spawned=1 near=1 dims=4".into(),
+                text: "spawned=2 near=1 dims=4".into(),
                 error: false,
             },
         ]

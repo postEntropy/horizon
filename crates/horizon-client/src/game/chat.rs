@@ -392,6 +392,7 @@ impl Game<'_> {
             .filter(|(_, m)| m.show)
             .map(|(k, _)| k.clone())
             .collect();
+        self.sync_mod_entity_registries();
     }
     /// The block the player is looking at, for coordinate suggestions.
     fn refresh_dynamic_registries(&mut self) {

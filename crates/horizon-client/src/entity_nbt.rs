@@ -760,6 +760,9 @@ pub(crate) fn spawn_bonus(tag: &Tag) -> Option<f64> {
 }
 pub fn mob_from_nbt(tag: &Tag, types: &HashMap<String, Arc<MobType>>, id: u32) -> Option<Mob> {
     let kind = types.get(&self::kind(tag)?)?.clone();
+    mob_from_nbt_with_type(tag, kind, id)
+}
+pub fn mob_from_nbt_with_type(tag: &Tag, kind: Arc<MobType>, id: u32) -> Option<Mob> {
     let position = position(tag)?;
     let [yaw, pitch] = rotation(tag);
     let mut m = Mob::new(id, kind, position, yaw);

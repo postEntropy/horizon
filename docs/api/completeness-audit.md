@@ -10,7 +10,7 @@ test, does not by itself mean a pack feature works in a playable world.
 |---|---|---|---|---|
 | 0.3 logic | Present | Present | Present for the client and local game hooks inspected | Implemented in parts; full multiplayer and per-capability gameplay coverage is not established |
 | 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist; mod packets bridge the integrated single-player client and server | Usable foundation; directional transfer, broad recipe behavior, LAN/dedicated networking and some persistence cases remain incomplete |
-| 0.5 deep | Present | Present, including runtime tests | Crop growth, explosion filtering, enchantment reads, damage, XP and loot hooks have partial gameplay integration; custom entity lifecycle, models and dimensions remain unwired | Partial live bridge; not a complete player-facing API |
+| 0.5 deep | Present | Present, including runtime tests | Custom entity lifecycle (`mod-entities` + `entities`), crop growth, explosion filtering, enchantment reads, damage, XP and loot hooks have live single-player integration; custom models and dimensions remain unwired | Partial live bridge; not a complete player-facing API |
 
 ## Scope for the current ATM10 core milestone
 
@@ -42,12 +42,12 @@ this audit records concrete evidence and its limits.
   light in a four-block neighborhood around the player. Queries are scoped to
   the active dimension; runtime sandbox coverage checks two dimensions sharing
   the same coordinates.
-- The `server` capability can spawn vanilla mobs at a position. Registered
-  custom entities are not handled by this action. In integrated single-player,
-  server actions enter their requested registered level; in-frame mode has only
-  the current dimension. Unknown ids and unavailable dimensions are logged by
-  the game bridge. A live single-player check set a block in an already-loaded
-  Nether chunk from the Overworld and read it back through `horizon-ctl`.
+- The `server` capability can spawn vanilla mobs and mod-declared custom
+  entities at a position. In integrated single-player, server actions enter
+  their requested registered level; in-frame mode has only the current
+  dimension. Unknown ids and unavailable dimensions are logged by the game
+  bridge. A live single-player check set a block in an already-loaded Nether
+  chunk from the Overworld and read it back through `horizon-ctl`.
 - World mutations to unloaded chunks now request a temporary chunk ticket and
   remain queued until the chunk loads. The queue is capped at 256 actions and
   each action has a deadline 1,200 world ticks after it was queued; overflow
@@ -170,41 +170,65 @@ this audit records concrete evidence and its limits.
   dimension registration/teleport, and named vanilla hooks.
 - A runtime sandbox test exercises these host-side operations.
 - `Game::attack_mob` dispatches `entity-damage` before player melee damage is
-  applied. A subscribed mod can multiply the hit or cancel it. This covers the
-  local player's melee hit path; projectile, mob, environmental and other
-  incoming damage paths do not dispatch it yet.
+  applied, and incoming player damage (`mob_hits_player`, `hurt_player_by`,
+  `PlayerMotion::hurt_blocking` environmental hazards/fall/cactus/drowning/fire/lava/void,
+  starvation, poison/instant-damage effects, explosions, falling blocks/anvils,
+  and `/damage @s`) also dispatches `entity-damage` with cancellation and
+  scaling in both in-frame and integrated-server single-player. `tools/mod_api_e2e.py
+  --mode both` verifies cancelled cactus damage and halved generic damage on both
+  the local player and custom entities.
 - Orb experience, advancement rewards and positive `/experience add ... points`
   awards dispatch `xp-gain`. A live fixture scales a 50-point command award to
   100 points (7 levels) in both integrated-server and in-frame single-player.
   Negative point adjustments and direct `set` operations keep their vanilla
   semantics; other direct XP sources still need an audit against this event.
-- Player-mined block loot, vanilla container contents on break, mob-death item
-  drops, fishing catches, Piglin bartering and villager gifts dispatch
-  `loot-drop` before item entities spawn. Vanilla chest contents now dispatch
-  through both live and saved block entity removal paths; a dedicated gameplay
-  fixture for pass/consume/cancel is still pending.
+- Player-mined block loot, non-player block breaks (`drop_resources_now`,
+  explosion block drops, mob block breaks), vanilla container contents on break
+  (chests, barrels, hoppers, dispensers, droppers, furnaces, decorated pots, etc.
+  through both live and saved block entity removal paths), mob-death item drops,
+  shearing/brushing/carving/harvesting interact loot (player and dispenser),
+  fishing catches, Piglin bartering, villager gifts, advancement reward loot,
+  vault and trial-spawner reward ejections, and `/loot` commands dispatch
+  `loot-drop` before item entities spawn or items are granted. `tools/mod_api_e2e.py
+  --mode both` verifies `cancel`, `consume`, and `pass` on broken container
+  contents as well as `/loot` interception in both single-player modes.
   Fishing keeps vanilla XP rolls in their prior order. Table-generated vanilla
   loot rolls before hook dispatch. Container breaks draw all vanilla per-slot
-  drop positions before filtering them. Opening/populating container loot tables
-  and structure generation are still unwired. `pass` preserves vanilla drops
-  and adds mod drops;
-  `consume` uses the mod drops instead; `cancel` suppresses item drops. XP orbs
-  remain separate from item loot.
-- No game-side dispatch was found for `tick_entities`, custom entity
-  lifecycle/interactions, registered dimensions or model animation. `crop-grow`
+  drop positions before filtering them. Opening/populating structure container
+  loot tables at chunk generation remains unwired. `pass` preserves vanilla drops
+  and adds mod drops; `consume` uses the mod drops instead; `cancel` suppresses
+  item drops. XP orbs remain separate from item loot.
+- Custom entity declarations (`mod-entities.types`) and host entity mutations
+  (`entities`: `spawn`, `despawn`, `get-state`, `set-position`, `set-velocity`,
+  `set-health`, `navigate-to`, `nearby`) are now connected to live world
+  simulation (`Game::mobs`) in both integrated-server and in-frame single-player.
+  Mod entities can be spawned via `/summon`, `entities::spawn`, and
+  `server::spawn_mob`, targeted by selectors (`@e[type=...]`), ticked in batch
+  via `mod-entities.tick`, interacted with via right-click (`on-interact`),
+  damaged or damage-cancelled via `on-hurt` (including environmental damage like
+  cactus and `/damage`), driven by custom AI goal weights (`AiGoal`), and
+  persisted across world save/reopen and `/data get entity` via the
+  `horizon_mod_data` NBT byte array. Visual fallback uses the iron golem mesh
+  and network type until custom entity model rendering is wired. No game-side
+  dispatch was found for registered dimensions or model animation. `crop-grow`
   now dispatches for crop age stages, hanging mangrove propagule ages,
   bamboo/cactus/sugar-cane heights, sapling-tree attempts, mushroom/vine/chorus
   spreading and growing-plant-head segments after vanilla random-tick conditions
-  succeed. `explosion-detonate` now filters individual non-air blast targets
-  before block damage, drops and fire; `tools/mod_api_e2e.py --mode both`
-  verifies a protected stone and destroyed neighboring glass in both
-  single-player paths. `enchantment-level` now affects live gameplay reads for
-  respiration, player/armor-stand vanishing-curse filters, binding curse on equip,
-  silk touch, crossbow Quick Charge/Multishot, trident Riptide/Loyalty/Impaling,
-  fishing Lure/Luck, Thorns, Mending and Fire Aspect on minecarts, with an
-  unsubscribed fast path. Loot-table enchantment predicates/bonuses and
-  remaining equipment/entity effects are not yet connected. Container, fishing
-  and structure loot paths still need review.
+  succeed, as well as bone meal growth on crops, stems, cocoa and sweet berries
+  (verified in `tools/mod_api_e2e.py --mode both`). `explosion-detonate` now
+  filters individual non-air blast targets before block damage, drops and fire;
+  `tools/mod_api_e2e.py --mode both` verifies a protected stone and destroyed
+  neighboring glass in both single-player paths. `enchantment-level` now affects
+  live gameplay reads for respiration, player/armor-stand vanishing-curse filters,
+  binding curse on equip, silk touch, crossbow Quick Charge/Multishot, trident
+  Riptide/Loyalty/Impaling, fishing Lure/Luck, Thorns, Mending, Fire Aspect on
+  minecarts, EnchantmentHelper effects (`effective_stack` for Efficiency, Aqua
+  Affinity, Unbreaking, Sharpness/Smite/Bane of Arthropods/Impaling/Density/Breach,
+  Knockback, Fire Aspect/Wind Burst, Mending, Power/Infinity/Flame, and equipment
+  attribute modifiers), and loot-table tool evaluation (`effective_loot_tool` for
+  Fortune, Looting, Silk Touch, Fire Aspect, and Flame across block mining, mob
+  deaths, dispensers, and `/loot`), with an unsubscribed fast path and support
+  for virtual enchantments on unenchanted items.
 - Status: **partial live integration; API coverage remains incomplete**.
 
 ## Verification run
@@ -229,5 +253,5 @@ arbitrary machine mods, chunk unload/reload, or every network topology.
 3. Keep the generated API reference synchronized with WIT and this audit
    synchronized with actual end-to-end evidence.
 
-Custom entity lifecycle, custom rendering and custom dimensions remain major
-0.5 gaps; LAN and dedicated-server parity remain deferred.
+Custom rendering and custom dimensions remain major 0.5 gaps; LAN and
+dedicated-server parity remain deferred.

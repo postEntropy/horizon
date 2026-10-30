@@ -258,7 +258,7 @@ impl Game<'_> {
         } else {
             format!("minecraft:{kind}")
         };
-        let t = self.res.mob_types().get(&kind).cloned()?;
+        let t = self.mob_type(&kind)?;
         self.next_entity += 1;
         let yaw = self.world.random.next_float() * 360.0;
         let mut mob = Mob::new(self.next_entity, t, Vec3::new(at[0], at[1], at[2]), yaw);
@@ -280,6 +280,7 @@ impl Game<'_> {
         }
         let id = mob.id;
         self.mobs.push(mob);
+        self.register_mod_mob(id, &[]);
         self.mod_server_event(
             "entity-spawn",
             id.to_string(),
@@ -294,6 +295,46 @@ impl Game<'_> {
         if !persistent && !scripted {
             self.spawn_jockeys(id, true);
         }
+        Some(id)
+    }
+    #[cfg(feature = "mods")]
+    pub(super) fn spawn_mob_for_mod_handle(
+        &mut self,
+        handle: u32,
+        kind: &str,
+        at: [f64; 3],
+    ) -> Option<u32> {
+        let kind = if kind.contains(':') {
+            kind.to_owned()
+        } else {
+            format!("minecraft:{kind}")
+        };
+        let t = self.mob_type(&kind)?;
+        self.next_entity += 1;
+        let yaw = self.world.random.next_float() * 360.0;
+        let mut mob = Mob::new(self.next_entity, t, Vec3::new(at[0], at[1], at[2]), yaw);
+        mob.persistent = true;
+        let facts = self.biome_facts(
+            at[0].floor() as i32,
+            at[1].floor() as i32,
+            at[2].floor() as i32,
+        );
+        let difficulty = self.local_difficulty(at);
+        spawning::finalize(&mut mob, &facts, &difficulty);
+        let id = mob.id;
+        self.mobs.push(mob);
+        self.register_mod_mob_with_handle(id, handle, &[]);
+        self.mod_server_event(
+            "entity-spawn",
+            id.to_string(),
+            [
+                at[0].floor() as i32,
+                at[1].floor() as i32,
+                at[2].floor() as i32,
+            ],
+            kind,
+        );
+        self.enchant_spawn_equipment(id);
         Some(id)
     }
     /// The `summon` command: spawn a mob in front of the player or at a position.
@@ -506,6 +547,7 @@ impl Game<'_> {
             self.died.insert(m.id);
             self.mob_died(&m);
         }
+        self.tick_mod_entities();
         let uuid = self.level.player_uuid;
         let mut snapshot: Vec<Seen> = self.mobs.iter().map(|m| seen(m, uuid)).collect();
         let mut events = Vec::new();
@@ -637,7 +679,6 @@ impl Game<'_> {
             level_random = scratch;
             self.mods = mod_state;
         }
-        self.show_mod_output();
         self.world.random = level_random;
         if let Some(host) = self.lan.as_mut()
             && !guests.is_empty()
@@ -651,6 +692,8 @@ impl Game<'_> {
         }
         self.mobs.append(&mut mobs);
         self.died = died;
+        self.show_mod_output();
+        self.sync_mod_entities();
         self.sync_riders();
         self.tick_skeleton_traps();
         self.tick_apparition();
@@ -774,9 +817,10 @@ impl Game<'_> {
         else {
             return;
         };
+        let held_tool = self.held().cloned().map(|h| self.effective_loot_tool(&h));
         let player = || {
             let mut e = LootEntity::new("minecraft:player");
-            if let Some(held) = self.held() {
+            if let Some(held) = held_tool.as_ref() {
                 e.equipment.push(("mainhand".into(), to_loot(held)));
             }
             e
@@ -1103,6 +1147,13 @@ impl Game<'_> {
                             None,
                             &mut self.world.random,
                             Some((&mut self.rand_sequences, self.level.seed)),
+                        );
+                        let subject = self.res.facts().get(old).name.clone();
+                        let drops = self.mod_loot_table_drops(
+                            &subject,
+                            pos,
+                            "minecraft:mob_break_block",
+                            drops,
                         );
                         for d in drops {
                             self.pop_resource(pos, d);
@@ -2485,6 +2536,10 @@ impl Game<'_> {
             .as_ref()
             .map(|h| h.item.to_string())
             .unwrap_or_default();
+        if self.mod_entity_interact(index, &item) {
+            self.swing_arm();
+            return Ok(true);
+        }
         if item == "minecraft:water_bucket"
             && self.mobs[index].species() == Species::Axolotl
             && self.mobs[index].alive()
@@ -2581,12 +2636,14 @@ impl Game<'_> {
             }
             Species::Mooshroom if item == "minecraft:shears" && !m.is_baby() => {
                 // MushroomCow.shear: becomes a cow and drops five mushrooms.
-                let mushroom = if m.extra.variant == 1 {
-                    "minecraft:brown_mushroom"
+                let (mushroom, table) = if m.extra.variant == 1 {
+                    (
+                        "minecraft:brown_mushroom",
+                        "minecraft:shearing/mooshroom/brown",
+                    )
                 } else {
-                    "minecraft:red_mushroom"
+                    ("minecraft:red_mushroom", "minecraft:shearing/mooshroom/red")
                 };
-                drops.push((mushroom.into(), 5));
                 m.removed = true;
                 let setup = SpawnSetup {
                     yaw: m.yaw,
@@ -2594,6 +2651,14 @@ impl Game<'_> {
                     ..Default::default()
                 };
                 let pos = [m.position.x, m.position.y, m.position.z];
+                let block_pos = pos.map(|v| v.floor() as i32);
+                let stacks = self.mod_loot_table_drops(
+                    "minecraft:mooshroom",
+                    block_pos,
+                    table,
+                    vec![ItemStack::new(mushroom, 5)],
+                );
+                drops.extend(stacks.into_iter().map(|s| (s.item.to_string(), s.count)));
                 sound = Some("entity.mooshroom.shear");
                 self.handle_mob_events(vec![MobEvent::SpawnKind {
                     kind: "minecraft:cow".into(),
@@ -2604,12 +2669,18 @@ impl Game<'_> {
             Species::Sheep if item == "minecraft:shears" && !m.extra.sheared && !m.is_baby() => {
                 m.extra.sheared = true;
                 let color = horizon_client::mobs::render::DYE_NAMES[m.extra.color as usize & 15];
-                let stacks = self.res.items().loot_table(
-                    &format!("minecraft:shearing/sheep/{color}"),
-                    false,
-                    None,
-                    &mut self.world.random,
-                );
+                let block_pos = [
+                    m.position.x.floor() as i32,
+                    m.position.y.floor() as i32,
+                    m.position.z.floor() as i32,
+                ];
+                let table = format!("minecraft:shearing/sheep/{color}");
+                let stacks =
+                    self.res
+                        .items()
+                        .loot_table(&table, false, None, &mut self.world.random);
+                let stacks =
+                    self.mod_loot_table_drops("minecraft:sheep", block_pos, &table, stacks);
                 drops.extend(stacks.into_iter().map(|s| (s.item.to_string(), s.count)));
                 sound = Some("entity.sheep.shear");
                 self.damage_held_tool();

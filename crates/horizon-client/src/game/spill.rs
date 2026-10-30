@@ -281,6 +281,25 @@ impl GameLevel<'_> {
             self.rand_sequences,
             self.seed,
         );
+        let drops = if self.mods.has_loot_drop_hook() {
+            let dimension = match self.dimension {
+                super::LevelDimension::Overworld => "minecraft:overworld",
+                super::LevelDimension::Nether => "minecraft:the_nether",
+                super::LevelDimension::End => "minecraft:the_end",
+            };
+            let subject = self.facts.get(state).name.as_ref();
+            let (outcome, extra) = self.mods.loot_drop_hook(
+                self.items,
+                dimension,
+                subject,
+                [pos.x, pos.y, pos.z],
+                drops.len() as f32,
+                table,
+            );
+            super::mods::apply_loot_drop_result(outcome, drops, extra)
+        } else {
+            drops
+        };
         for stack in drops {
             if &*stack.item != "minecraft:air" && stack.count > 0 {
                 self.pop_resource([pos.x, pos.y, pos.z], stack);
@@ -315,6 +334,25 @@ impl GameLevel<'_> {
                 &dynamic,
                 &mut self.world.random,
             ),
+        };
+        let drops = if self.mods.has_loot_drop_hook() {
+            let dimension = match self.dimension {
+                super::LevelDimension::Overworld => "minecraft:overworld",
+                super::LevelDimension::Nether => "minecraft:the_nether",
+                super::LevelDimension::End => "minecraft:the_end",
+            };
+            let subject = self.facts.get(state).name.as_ref();
+            let (outcome, extra) = self.mods.loot_drop_hook(
+                self.items,
+                dimension,
+                subject,
+                at,
+                drops.len() as f32,
+                "minecraft:block_drops",
+            );
+            super::mods::apply_loot_drop_result(outcome, drops, extra)
+        } else {
+            drops
         };
         for stack in drops {
             if &*stack.item != "minecraft:air" && stack.count > 0 {
@@ -375,15 +413,7 @@ impl GameLevel<'_> {
             match kind {
                 PreRemove::Contents { slots, .. } => {
                     let items = entity.as_ref().map_or(&[][..], BlockEntity::slots);
-                    self.spill_container_contents(
-                        pos,
-                        old,
-                        slots,
-                        items,
-                        entity
-                            .as_ref()
-                            .is_some_and(|entity| matches!(entity, BlockEntity::Chest(_))),
-                    );
+                    self.spill_container_contents(pos, old, slots, items, entity.is_some());
                 }
                 PreRemove::Campfire => {
                     for _ in 0..4 {
@@ -530,13 +560,7 @@ impl GameLevel<'_> {
             PreRemove::Campfire => (4, horizon_client::save::decode_items(tag.get("Items"), 4)),
             _ => return true,
         };
-        self.spill_container_contents(
-            pos,
-            old,
-            slots,
-            &items,
-            name.as_ref() == "minecraft:chest" || name.as_ref() == "minecraft:trapped_chest",
-        );
+        self.spill_container_contents(pos, old, slots, &items, true);
         true
     }
     fn spill_container_contents(

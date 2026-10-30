@@ -2305,6 +2305,7 @@ impl Game<'_> {
         state: BlockStateId,
         held: Option<&ItemStack>,
     ) -> Vec<ItemStack> {
+        let held = held.map(|s| self.effective_loot_tool(s));
         let registry = self.pack.assets.registry;
         let dynamic = self.pending.dynamic(pos);
         match self.res.items().block_loot_sequence(registry, state) {
@@ -2312,12 +2313,12 @@ impl Game<'_> {
                 let random = self.rand_sequences.get(&sequence, self.level.seed);
                 self.res
                     .items()
-                    .block_drops_with(registry, state, held, &dynamic, random)
+                    .block_drops_with(registry, state, held.as_ref(), &dynamic, random)
             }
             None => self.res.items().block_drops_with(
                 registry,
                 state,
-                held,
+                held.as_ref(),
                 &dynamic,
                 &mut self.world.random,
             ),
@@ -2811,6 +2812,8 @@ impl Game<'_> {
             self.mod_entity_inside([pos.x, pos.y, pos.z], actor);
         }
         self.tick_scheduled()?;
+        #[cfg(feature = "mods")]
+        self.tick_mod_random_actions();
         self.with_level(|b, level, ticks| {
             for (x, z) in ticking {
                 // The sections are read again only after a block changed.
@@ -4178,13 +4181,13 @@ impl Game<'_> {
             });
         }
         let state = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
-        let facts = self.res.facts().get(state);
+        let facts = self.res.facts().get(state).clone();
         if facts.hardness < 0.0 {
             return Ok(());
         }
         // Player.getDestroySpeed / BlockBehaviour.getDestroyProgress.
-        let held = self.held();
-        let mut speed = self.res.items().mining_speed(held, &facts.name);
+        let held = self.held().cloned();
+        let mut speed = self.res.items().mining_speed(held.as_ref(), &facts.name);
         speed = self.modify_destroy_speed(speed);
         let player = self.player.as_ref().ok_or("no player")?;
         if !player.ground.on_ground {
@@ -4204,7 +4207,11 @@ impl Game<'_> {
         {
             speed *= self.submerged_mining_speed();
         }
-        let harvest = !facts.requires_tool || self.res.items().correct_for_drops(held, &facts.name);
+        let harvest = !facts.requires_tool
+            || self
+                .res
+                .items()
+                .correct_for_drops(held.as_ref(), &facts.name);
         let progress = if facts.hardness == 0.0 {
             1.0
         } else {
@@ -4507,15 +4514,22 @@ impl Game<'_> {
             [player.position.x, player.position.y, player.position.z],
         );
         if !riding {
-            MotionWorld {
-                entities: &entity_collisions,
-                player,
-                scene: &mut self.world,
-                assets: &self.pack.assets,
-                collision_binding: self.collision,
-                resources: self.motion,
-            }
-            .controlled_simulation_tick(keys)?;
+            let dim = self.dim.id();
+            let scene = &mut self.world;
+            let assets = &self.pack.assets;
+            let collision_binding = self.collision;
+            let resources = self.motion;
+            self.mods.with_player_damage_hook(player, dim, |player| {
+                MotionWorld {
+                    entities: &entity_collisions,
+                    player,
+                    scene,
+                    assets,
+                    collision_binding,
+                    resources,
+                }
+                .controlled_simulation_tick(keys)
+            })?;
             // Player.jumpFromGround: the jump statistic.
             if grounded && keys.jump && !player.flying && player.velocity.y > 0.2 {
                 self.stats.custom("jump", 1);

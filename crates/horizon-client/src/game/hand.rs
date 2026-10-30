@@ -115,14 +115,14 @@ impl Game<'_> {
         Ok(())
     }
     /// `BlockBehaviour.getDestroyProgress` with `Player.getDestroySpeed`.
-    pub(super) fn destroy_progress(&self, pos: [i32; 3]) -> f32 {
+    pub(super) fn destroy_progress(&mut self, pos: [i32; 3]) -> f32 {
         let state = self.world.block(pos[0], pos[1], pos[2]);
-        let facts = self.res.facts().get(state);
+        let facts = self.res.facts().get(state).clone();
         if facts.hardness == -1.0 {
             return 0.0;
         }
-        let held = self.held();
-        let mut speed = self.res.items().mining_speed(held, &facts.name);
+        let held = self.held().cloned();
+        let mut speed = self.res.items().mining_speed(held.as_ref(), &facts.name);
         speed = self.modify_destroy_speed(speed);
         if let Some(eye) = self.eye_position()
             && self
@@ -141,7 +141,11 @@ impl Game<'_> {
         if self.player.as_ref().is_some_and(|p| !p.ground.on_ground) {
             speed /= 5.0;
         }
-        let harvest = !facts.requires_tool || self.res.items().correct_for_drops(held, &facts.name);
+        let harvest = !facts.requires_tool
+            || self
+                .res
+                .items()
+                .correct_for_drops(held.as_ref(), &facts.name);
         speed / facts.hardness / if harvest { 30.0 } else { 100.0 }
     }
     /// Whether an attack would hit an entity rather than the block behind

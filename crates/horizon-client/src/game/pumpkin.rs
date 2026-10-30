@@ -42,11 +42,14 @@ impl Game<'_> {
         // ItemEntity in front of the carved side, moved by the level random
         // (no pickup delay).
         let (dx, dz) = (f64::from(dx), f64::from(dz));
-        for seeds in self.sequence_loot(
+        let drops = self.sequence_loot(
             "minecraft:carve/pumpkin",
             "minecraft:carve/pumpkin",
             Some(shears),
-        ) {
+        );
+        for seeds in
+            self.mod_loot_table_drops("minecraft:pumpkin", pos, "minecraft:carve/pumpkin", drops)
+        {
             let at = [
                 f64::from(pos[0]) + 0.5 + dx * 0.65,
                 f64::from(pos[1]) + 0.1,

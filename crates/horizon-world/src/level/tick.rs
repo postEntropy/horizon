@@ -830,7 +830,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             }
         }
     }
-    fn crop_growth_steps(
+    pub(super) fn crop_growth_steps(
         &mut self,
         state: BlockStateId,
         pos: BlockPos,

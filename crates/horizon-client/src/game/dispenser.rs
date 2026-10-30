@@ -1675,11 +1675,12 @@ impl Game<'_> {
         // BeehiveBlock.dropHoneycomb (harvest/beehive), then
         // releaseBeesAndResetHoneyLevel and the shear event.
         let p = [target.0, target.1, target.2];
-        for stack in self.sequence_loot(
+        let drops = self.sequence_loot(
             "minecraft:harvest/beehive",
             "minecraft:harvest/beehive",
             None,
-        ) {
+        );
+        for stack in self.mod_loot_table_drops(&name, p, "minecraft:harvest/beehive", drops) {
             self.pop_resource(p, stack);
         }
         if let Some(reset) = self.with_props(state, &[("honey_level", "0")]) {
@@ -1698,15 +1699,19 @@ impl Game<'_> {
         table: &str,
         held: Option<&ItemStack>,
     ) -> Vec<ItemStack> {
+        let held = held.map(|s| self.effective_loot_tool(s));
         match self.res.items().loot_sequence(parent) {
             Some(sequence) => {
                 let random = self.rand_sequences.get(&sequence, self.level.seed);
-                self.res.items().loot_table_from(table, false, held, random)
+                self.res
+                    .items()
+                    .loot_table_from(table, false, held.as_ref(), random)
             }
-            None => self
-                .res
-                .items()
-                .loot_table(table, false, held, &mut self.world.random),
+            None => {
+                self.res
+                    .items()
+                    .loot_table(table, false, held.as_ref(), &mut self.world.random)
+            }
         }
     }
     /// `Entity.spawnAtLocation(level, stack, offset)`: an item at the entity's
@@ -1796,11 +1801,16 @@ impl Game<'_> {
                         horizon_client::mobs::render::DYE_NAMES[m.extra.color as usize & 15];
                     self.audio
                         .play("minecraft:entity.sheep.shear", sound_at, 1.0, 1.0);
-                    let drops = self.sequence_loot(
-                        "minecraft:shearing/sheep",
-                        &format!("minecraft:shearing/sheep/{color}"),
-                        Some(&shears),
-                    );
+                    let table = format!("minecraft:shearing/sheep/{color}");
+                    let drops =
+                        self.sequence_loot("minecraft:shearing/sheep", &table, Some(&shears));
+                    let block_pos = [
+                        at.x.floor() as i32,
+                        at.y.floor() as i32,
+                        at.z.floor() as i32,
+                    ];
+                    let drops =
+                        self.mod_loot_table_drops("minecraft:sheep", block_pos, &table, drops);
                     for stack in drops {
                         for _ in 0..stack.count {
                             let one = ItemStack {
@@ -1835,6 +1845,17 @@ impl Game<'_> {
                         "minecraft:shearing/bogged",
                         Some(&shears),
                     );
+                    let block_pos = [
+                        at.x.floor() as i32,
+                        at.y.floor() as i32,
+                        at.z.floor() as i32,
+                    ];
+                    let drops = self.mod_loot_table_drops(
+                        "minecraft:bogged",
+                        block_pos,
+                        "minecraft:shearing/bogged",
+                        drops,
+                    );
                     for stack in drops {
                         self.spawn_at_location(at, height, stack);
                     }
@@ -1849,6 +1870,17 @@ impl Game<'_> {
                         "minecraft:shearing/snow_golem",
                         "minecraft:shearing/snow_golem",
                         Some(&shears),
+                    );
+                    let block_pos = [
+                        at.x.floor() as i32,
+                        at.y.floor() as i32,
+                        at.z.floor() as i32,
+                    ];
+                    let drops = self.mod_loot_table_drops(
+                        "minecraft:snow_golem",
+                        block_pos,
+                        "minecraft:shearing/snow_golem",
+                        drops,
                     );
                     for stack in drops {
                         self.spawn_at_location(at, eye, stack);
@@ -1875,11 +1907,16 @@ impl Game<'_> {
                         .play("minecraft:entity.mooshroom.shear", sound_at, 1.0, 1.0);
                     // convertTo(COW): the cow takes its place, then the mushrooms drop.
                     self.convert_mob(i, "minecraft:cow");
-                    let drops = self.sequence_loot(
-                        "minecraft:shearing/mooshroom",
-                        &format!("minecraft:shearing/mooshroom/{variant}"),
-                        Some(&shears),
-                    );
+                    let table = format!("minecraft:shearing/mooshroom/{variant}");
+                    let drops =
+                        self.sequence_loot("minecraft:shearing/mooshroom", &table, Some(&shears));
+                    let block_pos = [
+                        at.x.floor() as i32,
+                        at.y.floor() as i32,
+                        at.z.floor() as i32,
+                    ];
+                    let drops =
+                        self.mod_loot_table_drops("minecraft:mooshroom", block_pos, &table, drops);
                     for stack in drops {
                         for _ in 0..stack.count {
                             let one = ItemStack {
@@ -1986,6 +2023,17 @@ impl Game<'_> {
                 "minecraft:brush/armadillo",
                 "minecraft:brush/armadillo",
                 Some(&stack),
+            );
+            let block_pos = [
+                at.x.floor() as i32,
+                at.y.floor() as i32,
+                at.z.floor() as i32,
+            ];
+            let drops = self.mod_loot_table_drops(
+                "minecraft:armadillo",
+                block_pos,
+                "minecraft:brush/armadillo",
+                drops,
             );
             for d in drops {
                 self.spawn_at_location(at, 0.0, d);

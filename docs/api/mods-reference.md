@@ -326,6 +326,7 @@ Capability `server` (API 0.3): server-side world queries and mutations during bl
 | `get-block` | `func(dimension: string, pos: block-pos) -> option<string>` | Block state string at `pos` in `dimension`, or none if unloaded. |
 | `set-block` | `func(dimension: string, pos: block-pos, state: string) -> result<_, string>` | Replaces the block at `pos` in `dimension` with `state`. |
 | `schedule-tick` | `func(dimension: string, pos: block-pos, block: string, delay: u32)` | Schedules a block tick for `block` at `pos` after `delay` ticks. |
+| `schedule-random-tick` | `func(dimension: string, pos: block-pos, block: string, delay: u32)` | Schedules a vanilla random tick for `block` at `pos` after `delay` ticks. |
 | `spawn-drop` | `func(dimension: string, pos: block-pos, drop: item-drop)` | Spawns an item stack drop at `pos` in `dimension`. |
 | `spawn-mob` | `func(dimension: string, pos: block-pos, entity: string) -> result<_, string>` | Spawns a vanilla living entity at `pos` in `dimension`. |
 | `play-sound` | `func(dimension: string, pos: block-pos, sound: string, volume: f32, pitch: f32)` | Plays sound `sound` at `pos` in `dimension`. |

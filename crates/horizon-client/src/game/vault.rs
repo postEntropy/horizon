@@ -86,6 +86,9 @@ impl Game<'_> {
         let mut random = std::mem::replace(&mut self.world.random, LegacyRandom::new(0));
         let mut sequences = std::mem::take(&mut self.rand_sequences);
         let loot = horizon_client::structure_blocks::loot_data(&self.options.resources);
+        let items = self.res.items();
+        let dimension = self.dim.id().to_owned();
+        let mut mods = std::mem::take(&mut self.mods);
         let seed = self.level.seed;
         let mut events = Vec::new();
         let out = {
@@ -99,10 +102,23 @@ impl Game<'_> {
                     Some(s) => loot.roll_split(table, sequences.get(s, seed)),
                     None => loot.roll_split(table, random),
                 };
-                drops
+                let vanilla: Vec<ItemStack> = drops
                     .iter()
                     .map(horizon_client::structure_blocks::loot_item_with_components)
-                    .collect()
+                    .collect();
+                if sequence && mods.has_loot_drop_hook() {
+                    let (outcome, extra) = mods.loot_drop_hook(
+                        items,
+                        &dimension,
+                        "minecraft:vault",
+                        [key.0, key.1, key.2],
+                        vanilla.len() as f32,
+                        table,
+                    );
+                    super::mods::apply_loot_drop_result(outcome, vanilla, extra)
+                } else {
+                    vanilla
+                }
             };
             f(
                 &mut vault,
@@ -114,6 +130,7 @@ impl Game<'_> {
                 &mut events,
             )
         };
+        self.mods = mods;
         self.world.random = random;
         self.rand_sequences = sequences;
         self.world

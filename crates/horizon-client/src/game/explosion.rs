@@ -293,13 +293,17 @@ impl Game<'_> {
         let (creative, spectator) = (self.creative, self.spectator());
         let flying = self.player.as_ref().is_some_and(|p| p.flying);
         let mut outcome = horizon_client::health::BlockOutcome::default();
+        let scaled_amount = if !creative && !spectator && hurtable {
+            let pos = [feet[0], feet[1], feet[2]].map(|v| v.floor() as i32);
+            self.mod_entity_damage("minecraft:player", pos, amount, damage_type)
+        } else {
+            None
+        };
         if let Some(p) = self.player.as_mut()
             && let Some(id) = self.motion.health.damage.id(damage_type)
         {
             // Creative players are invulnerable to explosions.
-            if !creative
-                && !spectator
-                && hurtable
+            if let Some(amount) = scaled_amount
                 && let Ok(o) = p.hurt_blocking(
                     &self.motion.health,
                     self.world.health_rules,
@@ -656,6 +660,7 @@ impl Game<'_> {
                 Some((&mut self.rand_sequences, self.level.seed)),
                 decay,
             );
+            let drops = self.mod_loot_table_drops(&name, pos, "minecraft:explosion", drops);
             for mut stack in drops {
                 if &*stack.item == "minecraft:air" || stack.count == 0 {
                     continue;

@@ -301,6 +301,14 @@ pub enum ServerAction {
         block: String,
         delay: u32,
     },
+    ScheduleRandomTick {
+        dimension: String,
+        x: i32,
+        y: i32,
+        z: i32,
+        block: String,
+        delay: u32,
+    },
     SpawnDrop {
         dimension: String,
         x: i32,
@@ -385,6 +393,28 @@ pub enum Status {
     Failed(String),
 }
 
+/// Pending entity mutations requested by mods through the `entities` host API.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EntityChanges {
+    pub spawns: Vec<EntityState>,
+    pub despawns: Vec<u32>,
+    pub positions: Vec<(u32, f64, f64, f64, f32, f32)>,
+    pub velocities: Vec<(u32, f64, f64, f64)>,
+    pub health: Vec<(u32, f32)>,
+    pub navigation: Vec<(u32, f64, f64, f64, f32)>,
+}
+
+impl EntityChanges {
+    pub fn is_empty(&self) -> bool {
+        self.spawns.is_empty()
+            && self.despawns.is_empty()
+            && self.positions.is_empty()
+            && self.velocities.is_empty()
+            && self.health.is_empty()
+            && self.navigation.is_empty()
+    }
+}
+
 /// Shared state across mods for API 0.3/0.4 world, capabilities, and recipes.
 #[derive(Default)]
 struct SharedWorld {
@@ -410,6 +440,13 @@ struct SharedWorld {
     registered_recipe_sizes: HashMap<String, HashMap<String, usize>>,
     entities: HashMap<u32, EntityState>,
     next_entity_handle: u32,
+    entity_max_health: HashMap<String, f32>,
+    pending_entity_spawns: Vec<u32>,
+    pending_entity_despawns: Vec<u32>,
+    dirty_entity_positions: HashMap<u32, (f64, f64, f64, f32, f32)>,
+    dirty_entity_velocities: HashMap<u32, (f64, f64, f64)>,
+    dirty_entity_health: HashMap<u32, f32>,
+    dirty_entity_navigation: HashMap<u32, (f64, f64, f64, f32)>,
     animations: HashMap<String, (String, bool, f32)>,
     bone_poses: HashMap<String, Vec<BonePose>>,
     draw_lists: HashMap<String, Vec<DrawPart>>,
@@ -519,6 +556,8 @@ pub struct Mods {
     /// Each live block entity's handle: the entry of the mod that owns it.
     handles: HashMap<u32, usize>,
     next_handle: u32,
+    /// Each live custom entity's handle: the entry of the mod that owns it.
+    entity_handles: HashMap<u32, usize>,
     /// The block entities a mod held when it stopped mid-call, saved from
     /// its dropped store so the game gets their slots back.
     stranded: Vec<BlockEntityView>,
@@ -810,6 +849,12 @@ impl Mods {
                 ));
             }
             entity_types = check_entity_types(m, declared_entities)?;
+            if let Ok(mut sh) = self.shared.lock() {
+                for t in &entity_types {
+                    sh.entity_max_health
+                        .insert(t.id.clone(), t.max_health.max(1.0));
+                }
+            }
         }
         hooks.commands.retain(|c| {
             let free = !reserved(c) && !taken.contains(c);
@@ -1625,21 +1670,145 @@ impl Mods {
             .flat_map(|(id, r)| r.entity_types.iter().map(move |t| (id, t)))
     }
 
-    /// Creates a custom entity of `kind` (`<mod>:<entity>`) and returns its handle (API 0.5).
-    pub fn create_entity(&mut self, kind: &str, saved: &[u8]) -> Option<u32> {
-        let i = self.entries.iter().position(|e| {
+    /// Looks up a custom entity type declared by a running mod (API 0.5).
+    pub fn entity_type(&self, kind: &str) -> Option<&EntityType> {
+        self.entity_types()
+            .find_map(|(_, t)| (t.id == kind).then_some(t))
+    }
+
+    /// Returns the current host state of an entity handle (API 0.5).
+    pub fn entity_state(&self, handle: u32) -> Option<EntityState> {
+        self.shared.lock().ok()?.entities.get(&handle).cloned()
+    }
+
+    /// Allocates a fresh entity handle from the shared handle sequence.
+    pub fn alloc_entity_handle(&mut self) -> u32 {
+        if let Ok(mut sh) = self.shared.lock() {
+            sh.next_entity_handle = sh.next_entity_handle.wrapping_add(1);
+            sh.next_entity_handle
+        } else {
+            1
+        }
+    }
+
+    /// Synchronizes a live world entity's state into the shared entity store.
+    pub fn sync_entity_state(&mut self, state: EntityState) {
+        if let Ok(mut sh) = self.shared.lock() {
+            sh.next_entity_handle = sh.next_entity_handle.max(state.handle);
+            sh.entities.insert(state.handle, state);
+        }
+    }
+
+    /// Binds an already-allocated entity handle (such as one created via `entities::spawn`)
+    /// to its owning mod's `mod-entities.create` lifecycle hook if not yet bound.
+    pub fn bind_custom_entity(&mut self, handle: u32, kind: &str, saved: &[u8]) -> bool {
+        if self.entity_handles.contains_key(&handle) {
+            return true;
+        }
+        let Some(i) = self.entries.iter().position(|e| {
             e.run
                 .as_ref()
                 .is_some_and(|r| r.entity_types.iter().any(|t| t.id == kind))
+        }) else {
+            return false;
+        };
+        if self
+            .call(i, FUEL_EVENT, |m, s| {
+                machine_of(m)?
+                    .horizon_mods_mod_entities()
+                    .call_create(s, handle, kind, saved)
+            })
+            .is_none()
+        {
+            return false;
+        }
+        self.entity_handles.insert(handle, i);
+        true
+    }
+
+    /// Drains pending entity spawns, despawns, and property mutations requested by mods.
+    pub fn take_entity_changes(&mut self) -> EntityChanges {
+        let Ok(mut sh) = self.shared.lock() else {
+            return EntityChanges::default();
+        };
+        let spawns = std::mem::take(&mut sh.pending_entity_spawns)
+            .into_iter()
+            .filter_map(|h| sh.entities.get(&h).cloned())
+            .collect();
+        let despawns = std::mem::take(&mut sh.pending_entity_despawns);
+        let positions = sh
+            .dirty_entity_positions
+            .drain()
+            .map(|(h, (x, y, z, yaw, pitch))| (h, x, y, z, yaw, pitch))
+            .collect();
+        let velocities = sh
+            .dirty_entity_velocities
+            .drain()
+            .map(|(h, (vx, vy, vz))| (h, vx, vy, vz))
+            .collect();
+        let health = sh.dirty_entity_health.drain().collect();
+        let navigation = sh
+            .dirty_entity_navigation
+            .drain()
+            .map(|(h, (x, y, z, speed))| (h, x, y, z, speed))
+            .collect();
+        EntityChanges {
+            spawns,
+            despawns,
+            positions,
+            velocities,
+            health,
+            navigation,
+        }
+    }
+
+    /// Creates a custom entity of `kind` (`<mod>:<entity>`) and returns its handle (API 0.5).
+    pub fn create_entity(&mut self, kind: &str, saved: &[u8]) -> Option<u32> {
+        let (i, max_health) = self.entries.iter().enumerate().find_map(|(i, e)| {
+            let t = e.run.as_ref()?.entity_types.iter().find(|t| t.id == kind)?;
+            Some((i, t.max_health.max(1.0)))
         })?;
-        self.next_handle += 1;
-        let handle = self.next_handle;
-        self.call(i, FUEL_EVENT, |m, s| {
-            machine_of(m)?
-                .horizon_mods_mod_entities()
-                .call_create(s, handle, kind, saved)
-        })?;
-        self.handles.insert(handle, i);
+        let handle = self.alloc_entity_handle();
+        let dimension = self
+            .snapshot
+            .player
+            .as_ref()
+            .map_or("minecraft:overworld", |p| p.dimension.as_str())
+            .to_owned();
+        if let Ok(mut sh) = self.shared.lock() {
+            sh.entities.insert(
+                handle,
+                EntityState {
+                    handle,
+                    kind: kind.to_owned(),
+                    dimension,
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                    vx: 0.0,
+                    vy: 0.0,
+                    vz: 0.0,
+                    yaw: 0.0,
+                    pitch: 0.0,
+                    health: max_health,
+                    max_health,
+                },
+            );
+        }
+        if self
+            .call(i, FUEL_EVENT, |m, s| {
+                machine_of(m)?
+                    .horizon_mods_mod_entities()
+                    .call_create(s, handle, kind, saved)
+            })
+            .is_none()
+        {
+            if let Ok(mut sh) = self.shared.lock() {
+                sh.entities.remove(&handle);
+            }
+            return None;
+        }
+        self.entity_handles.insert(handle, i);
         Some(handle)
     }
 
@@ -1649,7 +1818,7 @@ impl Mods {
             let mine: Vec<u32> = handles
                 .iter()
                 .copied()
-                .filter(|h| self.handles.get(h) == Some(&i))
+                .filter(|h| self.entity_handles.get(h) == Some(&i))
                 .collect();
             if mine.is_empty() {
                 continue;
@@ -1664,7 +1833,7 @@ impl Mods {
 
     /// Serializes a custom entity's mod state (API 0.5).
     pub fn save_entity(&mut self, handle: u32) -> Option<Vec<u8>> {
-        let i = *self.handles.get(&handle)?;
+        let i = *self.entity_handles.get(&handle)?;
         self.call(i, FUEL_EVENT, |m, s| {
             machine_of(m)?
                 .horizon_mods_mod_entities()
@@ -1674,7 +1843,15 @@ impl Mods {
 
     /// Removes a custom entity (API 0.5).
     pub fn remove_entity(&mut self, handle: u32) {
-        if let Some(i) = self.handles.remove(&handle) {
+        if let Ok(mut sh) = self.shared.lock() {
+            sh.entities.remove(&handle);
+            sh.pending_entity_spawns.retain(|&h| h != handle);
+            sh.dirty_entity_positions.remove(&handle);
+            sh.dirty_entity_velocities.remove(&handle);
+            sh.dirty_entity_health.remove(&handle);
+            sh.dirty_entity_navigation.remove(&handle);
+        }
+        if let Some(i) = self.entity_handles.remove(&handle) {
             self.call(i, FUEL_EVENT, |m, s| {
                 machine_of(m)?
                     .horizon_mods_mod_entities()
@@ -1685,7 +1862,7 @@ impl Mods {
 
     /// Dispatches a player right-click interaction on a custom entity (API 0.5).
     pub fn entity_interact(&mut self, handle: u32, player: &str, held_item: &str) -> bool {
-        let Some(&i) = self.handles.get(&handle) else {
+        let Some(&i) = self.entity_handles.get(&handle) else {
             return false;
         };
         self.call(i, FUEL_EVENT, |m, s| {
@@ -1698,7 +1875,7 @@ impl Mods {
 
     /// Dispatches damage taken by a custom entity; returns true to allow the damage (API 0.5).
     pub fn entity_hurt(&mut self, handle: u32, amount: f32, source: &str) -> bool {
-        let Some(&i) = self.handles.get(&handle) else {
+        let Some(&i) = self.entity_handles.get(&handle) else {
             return true;
         };
         self.call(i, FUEL_EVENT, |m, s| {
@@ -1829,6 +2006,7 @@ impl Mods {
             // The new instance knows none of the old one's block entities:
             // the game creates them again from their saves.
             self.handles.retain(|_, owner| *owner != i);
+            self.entity_handles.retain(|_, owner| *owner != i);
             let path = self.entries[i].path.clone();
             let started = Package::read(&path).and_then(|p| {
                 self.entries[i].manifest = Some(p.manifest.clone());
@@ -2620,6 +2798,23 @@ impl server::Host for State {
             delay,
         }));
     }
+    fn schedule_random_tick(
+        &mut self,
+        dimension: String,
+        pos: BlockPos,
+        block: String,
+        delay: u32,
+    ) {
+        self.out
+            .push(Output::Server(ServerAction::ScheduleRandomTick {
+                dimension,
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+                block,
+                delay,
+            }));
+    }
     fn spawn_drop(&mut self, dimension: String, pos: BlockPos, drop: ItemDrop) {
         if drop.count > 0 {
             self.out.push(Output::Server(ServerAction::SpawnDrop {
@@ -3269,11 +3464,15 @@ impl entities::Host for State {
                 "entity kind {kind:?} is not a vanilla entity or in the mod's namespaces"
             ));
         }
+        if !x.is_finite() || !y.is_finite() || !z.is_finite() {
+            return Err("spawn coordinates must be finite".into());
+        }
         let Ok(mut sh) = self.shared.lock() else {
             return Err("world lock poisoned".into());
         };
         sh.next_entity_handle += 1;
         let handle = sh.next_entity_handle;
+        let max_health = sh.entity_max_health.get(&kind).copied().unwrap_or(20.0);
         sh.entities.insert(
             handle,
             EntityState {
@@ -3288,22 +3487,41 @@ impl entities::Host for State {
                 vz: 0.0,
                 yaw: 0.0,
                 pitch: 0.0,
-                health: 20.0,
-                max_health: 20.0,
+                health: max_health,
+                max_health,
             },
         );
+        sh.pending_entity_spawns.push(handle);
         Ok(handle)
     }
     fn despawn(&mut self, handle: u32) -> bool {
-        self.shared
-            .lock()
-            .ok()
-            .is_some_and(|mut sh| sh.entities.remove(&handle).is_some())
+        let Ok(mut sh) = self.shared.lock() else {
+            return false;
+        };
+        if sh.entities.remove(&handle).is_some() {
+            sh.pending_entity_spawns.retain(|&h| h != handle);
+            sh.dirty_entity_positions.remove(&handle);
+            sh.dirty_entity_velocities.remove(&handle);
+            sh.dirty_entity_health.remove(&handle);
+            sh.dirty_entity_navigation.remove(&handle);
+            sh.pending_entity_despawns.push(handle);
+            true
+        } else {
+            false
+        }
     }
     fn get_state(&mut self, handle: u32) -> Option<EntityState> {
         self.shared.lock().ok()?.entities.get(&handle).cloned()
     }
     fn set_position(&mut self, handle: u32, x: f64, y: f64, z: f64, yaw: f32, pitch: f32) -> bool {
+        if !x.is_finite()
+            || !y.is_finite()
+            || !z.is_finite()
+            || !yaw.is_finite()
+            || !pitch.is_finite()
+        {
+            return false;
+        }
         let Ok(mut sh) = self.shared.lock() else {
             return false;
         };
@@ -3315,9 +3533,14 @@ impl entities::Host for State {
         ent.z = z;
         ent.yaw = yaw;
         ent.pitch = pitch;
+        sh.dirty_entity_positions
+            .insert(handle, (x, y, z, yaw, pitch));
         true
     }
     fn set_velocity(&mut self, handle: u32, vx: f64, vy: f64, vz: f64) -> bool {
+        if !vx.is_finite() || !vy.is_finite() || !vz.is_finite() {
+            return false;
+        }
         let Ok(mut sh) = self.shared.lock() else {
             return false;
         };
@@ -3327,19 +3550,29 @@ impl entities::Host for State {
         ent.vx = vx;
         ent.vy = vy;
         ent.vz = vz;
+        sh.dirty_entity_velocities.insert(handle, (vx, vy, vz));
         true
     }
     fn set_health(&mut self, handle: u32, health: f32) -> bool {
+        if !health.is_finite() {
+            return false;
+        }
         let Ok(mut sh) = self.shared.lock() else {
             return false;
         };
         let Some(ent) = sh.entities.get_mut(&handle) else {
             return false;
         };
-        ent.health = health.clamp(0.0, ent.max_health);
+        let clamped = health.clamp(0.0, ent.max_health);
+        ent.health = clamped;
+        sh.dirty_entity_health.insert(handle, clamped);
         true
     }
     fn navigate_to(&mut self, handle: u32, x: f64, y: f64, z: f64, speed: f32) -> bool {
+        if !x.is_finite() || !y.is_finite() || !z.is_finite() || !speed.is_finite() || speed <= 0.0
+        {
+            return false;
+        }
         let Ok(mut sh) = self.shared.lock() else {
             return false;
         };
@@ -3356,6 +3589,7 @@ impl entities::Host for State {
             ent.vy = dy / dist * step;
             ent.vz = dz / dist * step;
         }
+        sh.dirty_entity_navigation.insert(handle, (x, y, z, speed));
         true
     }
     fn nearby(
@@ -3366,6 +3600,10 @@ impl entities::Host for State {
         z: f64,
         radius: f64,
     ) -> Vec<EntityState> {
+        if !x.is_finite() || !y.is_finite() || !z.is_finite() || !radius.is_finite() || radius < 0.0
+        {
+            return Vec::new();
+        }
         let r2 = radius * radius;
         self.shared
             .lock()

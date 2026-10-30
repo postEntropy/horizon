@@ -278,11 +278,20 @@ impl PlayerMotion {
             .damage
             .source::<()>(source, None, None, None)
             .ok_or("unknown resident damage source")?;
+        let source_name = source.definition().name.clone();
+        let amount = if let Some(hook) = self.damage_hook.as_mut() {
+            let pos = [self.position.x, self.position.y, self.position.z].map(|v| v.floor() as i32);
+            let Some(scaled) = hook(&source_name, pos, amount) else {
+                return Ok(BlockOutcome::default());
+            };
+            scaled
+        } else {
+            amount
+        };
         let armor = self.attribute("minecraft:armor").unwrap_or(0.0) as f32;
         let toughness = self.attribute("minecraft:armor_toughness").unwrap_or(0.0) as f32;
         let before = self.health.health() + self.health.absorption();
         let fire_ticks = self.fire_ticks;
-        let source_name = source.definition().name.clone();
         let totem_ready = self.health.totem_ready;
         let invulnerable = self.invulnerable;
         let h = &mut self.health;

@@ -180,10 +180,23 @@ def stop_game(process, log, ctl_bin, socket, cwd, env):
     log.close()
 
 
+def wait_for_block(ctl_bin, socket, cwd, env, pos, expected, *, attempts=10):
+    last = None
+    for _ in range(attempts):
+        last = ctl(ctl_bin, socket, cwd, env, 'block', *pos)
+        if last.get('block') == expected:
+            return
+        ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    raise AssertionError(f'expected block {expected} at {pos}, got {last}')
+
+
 def verify_mod_screen(ctl_bin, socket, cwd, env, *, verify_restored_attachment=False):
-    command(ctl_bin, socket, cwd, env, 'clear @s')
+    command(ctl_bin, socket, cwd, env, 'setblock -31 69 -11 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'kill @e[type=item,distance=..8]')
     command(ctl_bin, socket, cwd, env, 'tp @s -31 70 -11')
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    command(ctl_bin, socket, cwd, env, 'kill @e[type=item,distance=..8]')
+    command(ctl_bin, socket, cwd, env, 'clear @s')
     ctl(ctl_bin, socket, cwd, env, 'look-at-block', -31, 70, -9, 'north')
     target = ctl(ctl_bin, socket, cwd, env, 'looking-at')
     hit = target.get('block') or {}
@@ -212,16 +225,14 @@ def verify_mod_screen(ctl_bin, socket, cwd, env, *, verify_restored_attachment=F
                 'setblock -26 70 -9 minecraft:stone')
         ctl(ctl_bin, socket, cwd, env, 'click-at', restore_x, restore_y)
         ctl(ctl_bin, socket, cwd, env, 'wait', 3)
-        restored = ctl(ctl_bin, socket, cwd, env, 'block', -26, 70, -9)
-        assert restored.get('block') == 'minecraft:diamond_block', restored
+        wait_for_block(ctl_bin, socket, cwd, env, (-26, 70, -9), 'minecraft:diamond_block')
     slot_x, slot_y = origin[0] + 16, origin[1] + 26
     ctl(ctl_bin, socket, cwd, env, 'click-at', slot_x, slot_y)
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
     picked = ctl(ctl_bin, socket, cwd, env, 'screen')
     assert picked.get('carried') == {'item': 'minecraft:diamond', 'count': 4}, picked
     assert next(slot for slot in picked.get('slots', []) if slot.get('slot') == 300).get('item') is None, picked
-    marker = ctl(ctl_bin, socket, cwd, env, 'block', -28, 70, -9)
-    assert marker.get('block') == 'minecraft:emerald_block', marker
+    wait_for_block(ctl_bin, socket, cwd, env, (-28, 70, -9), 'minecraft:emerald_block')
 
     ctl(ctl_bin, socket, cwd, env, 'click-at', slot_x, slot_y, 'right')
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
@@ -252,8 +263,7 @@ def verify_mod_screen(ctl_bin, socket, cwd, env, *, verify_restored_attachment=F
     assert inventory_diamonds == 1, quick_moved
     assert 'diamond' not in command(
         ctl_bin, socket, cwd, env, 'data get block -31 70 -9 Items')
-    marker = ctl(ctl_bin, socket, cwd, env, 'block', -28, 70, -9)
-    assert marker.get('block') == 'minecraft:emerald_block', marker
+    wait_for_block(ctl_bin, socket, cwd, env, (-28, 70, -9), 'minecraft:emerald_block')
 
     button = next(widget for widget in mod_screen['widgets'] if widget.get('id') == 3)
     button_x = origin[0] + button['x'] + button['width'] / 2
@@ -261,11 +271,14 @@ def verify_mod_screen(ctl_bin, socket, cwd, env, *, verify_restored_attachment=F
     command(ctl_bin, socket, cwd, env,
             'setblock -27 70 -9 minecraft:stone')
     ctl(ctl_bin, socket, cwd, env, 'click-at', button_x, button_y)
-    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
-    closed = ctl(ctl_bin, socket, cwd, env, 'screen')
-    assert closed.get('screen') == 'playing' and 'mod_screen' not in closed, closed
-    marker = ctl(ctl_bin, socket, cwd, env, 'block', -27, 70, -9)
-    assert marker.get('block') == 'minecraft:gold_block', marker
+    closed = None
+    for _ in range(10):
+        ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+        closed = ctl(ctl_bin, socket, cwd, env, 'screen')
+        if closed.get('screen') == 'playing' and 'mod_screen' not in closed:
+            break
+    assert closed and closed.get('screen') == 'playing' and 'mod_screen' not in closed, closed
+    wait_for_block(ctl_bin, socket, cwd, env, (-27, 70, -9), 'minecraft:gold_block')
 
 
 def verify_explosion_hook(ctl_bin, socket, cwd, env):
@@ -284,6 +297,75 @@ def verify_explosion_hook(ctl_bin, socket, cwd, env):
     assert destroyed.get('block') == 'minecraft:air', destroyed
 
 
+def verify_vanilla_hooks(ctl_bin, socket, cwd, env):
+    command(ctl_bin, socket, cwd, env, 'setblock -33 69 -12 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'tp @s -33 70 -12')
+    command(ctl_bin, socket, cwd, env, 'kill @e[type=item,distance=..6]')
+
+    # 1. Container break loot-drop: Cancel (-33), Consume (-32), Pass (-34)
+    command(ctl_bin, socket, cwd, env, 'setblock -33 70 -14 minecraft:chest')
+    command(ctl_bin, socket, cwd, env,
+            'item replace block -33 70 -14 container.0 with minecraft:gold_ingot 3')
+    command(ctl_bin, socket, cwd, env, 'setblock -33 70 -14 minecraft:air destroy')
+    cancelled_items = command(ctl_bin, socket, cwd, env, 'kill @e[type=item,distance=..6]')
+    assert 'No entity was found' in cancelled_items, cancelled_items
+
+    command(ctl_bin, socket, cwd, env, 'setblock -32 70 -14 minecraft:chest')
+    command(ctl_bin, socket, cwd, env,
+            'item replace block -32 70 -14 container.0 with minecraft:gold_ingot 3')
+    command(ctl_bin, socket, cwd, env, 'setblock -32 70 -14 minecraft:air destroy')
+    consumed_nbt = command(ctl_bin, socket, cwd, env, 'data get entity @e[type=item,distance=..6,limit=1] Item')
+    assert 'id: "minecraft:diamond"' in consumed_nbt and 'count: 1' in consumed_nbt, consumed_nbt
+    command(ctl_bin, socket, cwd, env, 'kill @e[type=item,distance=..6]')
+
+    command(ctl_bin, socket, cwd, env, 'setblock -34 70 -14 minecraft:chest')
+    command(ctl_bin, socket, cwd, env,
+            'item replace block -34 70 -14 container.0 with minecraft:gold_ingot 3')
+    command(ctl_bin, socket, cwd, env, 'setblock -34 70 -14 minecraft:air destroy')
+    passed_kill = command(ctl_bin, socket, cwd, env, 'kill @e[type=item,distance=..6]')
+    assert 'Killed 2 entities' in passed_kill, passed_kill
+
+    # 2. /loot table drop intercepted by loot-drop hook (Consume -> 1x diamond)
+    command(ctl_bin, socket, cwd, env, 'clear @s')
+    command(ctl_bin, socket, cwd, env, 'loot give @s loot minecraft:blocks/gravel')
+    inv_nbt = command(ctl_bin, socket, cwd, env, 'data get entity @s Inventory')
+    assert 'id: "minecraft:diamond"' in inv_nbt, inv_nbt
+    command(ctl_bin, socket, cwd, env, 'clear @s')
+
+    # 3. Incoming player entity-damage: Cancel on cactus, 0.5x on generic
+    command(ctl_bin, socket, cwd, env, 'setblock -31 69 -11 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'tp @s -31 70 -11')
+    command(ctl_bin, socket, cwd, env, 'gamemode survival')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    cactus_dmg = command(ctl_bin, socket, cwd, env, 'damage @s 8 minecraft:cactus')
+    assert 'invulnerable' in cactus_dmg, cactus_dmg
+    hp_after_cactus = command(ctl_bin, socket, cwd, env, 'data get entity @s Health')
+    assert '20.0f' in hp_after_cactus, hp_after_cactus
+    generic_dmg = command(ctl_bin, socket, cwd, env, 'damage @s 8 minecraft:generic')
+    assert 'Applied 8.0 damage' in generic_dmg, generic_dmg
+    hp_after_generic = command(ctl_bin, socket, cwd, env, 'data get entity @s Health')
+    assert '16.0f' in hp_after_generic, hp_after_generic
+    command(ctl_bin, socket, cwd, env, 'gamemode creative')
+    command(ctl_bin, socket, cwd, env, 'effect give @s minecraft:instant_health 1 10')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+
+    # 4. Bone meal crop-grow multiplier (3.0x advances wheat[age=0] to age >= 6 in one use)
+    command(ctl_bin, socket, cwd, env, 'setblock -31 69 -12 minecraft:farmland')
+    command(ctl_bin, socket, cwd, env, 'setblock -31 70 -12 minecraft:wheat[age=0]')
+    command(ctl_bin, socket, cwd, env,
+            'item replace entity @s weapon.mainhand with minecraft:bone_meal 1')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    ctl(ctl_bin, socket, cwd, env, 'look-at', -30.5, 70.06, -11.5)
+    ctl(ctl_bin, socket, cwd, env, 'mouse', 'right', 'click')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    wheat = ctl(ctl_bin, socket, cwd, env, 'getblock', -31, 70, -12).get('block', '')
+    assert wheat in ('minecraft:wheat[age=6]', 'minecraft:wheat[age=7]'), wheat
+    command(ctl_bin, socket, cwd, env, 'clear @s')
+    command(ctl_bin, socket, cwd, env, 'setblock -31 70 -12 minecraft:air')
+    command(ctl_bin, socket, cwd, env, 'setblock -31 69 -12 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'kill @e[type=item]')
+
+
 def verify_recipe_api(ctl_bin, socket, cwd, env):
     feedback = command(ctl_bin, socket, cwd, env, 'machine_api caps_and_recipes')
     recipes = re.search(r'\brecipes=([^ ]+)', feedback)
@@ -296,6 +378,87 @@ def verify_recipe_api(ctl_bin, socket, cwd, env):
     assert int(custom[3]) > 0, f'output item query returned no recipes: {feedback}'
     assert custom[4] == 'true', f'registered recipe replacement was not visible: {feedback}'
     assert int(custom[6]) > 0, f'replaced recipe output query returned no recipes: {feedback}'
+
+
+def parse_entity_status(feedback):
+    m = re.search(
+        r'count=(\d+) handle=(\d+) age=(\d+) hp=([0-9.]+) pos=([-0-9.]+),([-0-9.]+),([-0-9.]+)',
+        feedback,
+    )
+    if not m:
+        raise CheckFailed(f'unexpected entity_status output: {feedback}')
+    return {
+        'count': int(m.group(1)),
+        'handle': int(m.group(2)),
+        'age': int(m.group(3)),
+        'hp': float(m.group(4)),
+        'pos': (float(m.group(5)), float(m.group(6)), float(m.group(7))),
+    }
+
+
+def verify_custom_entity(ctl_bin, socket, cwd, env):
+    command(ctl_bin, socket, cwd, env, 'fill -38 69 -12 -35 69 -8 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'fill -38 70 -12 -35 72 -8 minecraft:air')
+    command(ctl_bin, socket, cwd, env, 'fill -38 70 -12 -38 71 -8 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'fill -35 70 -12 -35 71 -8 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'fill -38 70 -12 -35 71 -12 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'fill -38 70 -8 -35 71 -8 minecraft:stone')
+
+    spawn_out = command(ctl_bin, socket, cwd, env, 'machine_api spawn_automaton')
+    assert 'near=1' in spawn_out and 'despawned=true' in spawn_out, spawn_out
+
+    ctl(ctl_bin, socket, cwd, env, 'wait', 8)
+    status = parse_entity_status(command(ctl_bin, socket, cwd, env, 'machine_api entity_status'))
+    assert status['count'] == 1, status
+    assert status['age'] >= 2, status
+    assert status['hp'] == 40.0, status
+
+    ctrl_out = command(ctl_bin, socket, cwd, env, 'machine_api control_automaton')
+    assert 'controlled=' in ctrl_out, ctrl_out
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    controlled = parse_entity_status(command(ctl_bin, socket, cwd, env, 'machine_api entity_status'))
+    assert abs(controlled['pos'][0] - (-36.5)) < 0.25 and abs(controlled['pos'][2] - (-10.5)) < 0.25, controlled
+
+    # Custom entity on_entity_hurt cancels cactus damage, while generic damage
+    # passes on_entity_hurt and is halved by the EntityDamage vanilla hook.
+    command(ctl_bin, socket, cwd, env,
+            'damage @e[type=test_machine:automaton,limit=1] 10 minecraft:cactus')
+    after_cactus = parse_entity_status(command(ctl_bin, socket, cwd, env, 'machine_api entity_status'))
+    assert after_cactus['hp'] == 40.0, after_cactus
+
+    command(ctl_bin, socket, cwd, env,
+            'damage @e[type=test_machine:automaton,limit=1] 10 minecraft:generic')
+    after_generic = parse_entity_status(command(ctl_bin, socket, cwd, env, 'machine_api entity_status'))
+    assert after_generic['hp'] == 35.0, after_generic
+
+    # Player right-click interaction with iron_ingot dispatches on_entity_interact
+    # and sets the custom entity's health to 20.0.
+    command(ctl_bin, socket, cwd, env, 'clear @s')
+    command(ctl_bin, socket, cwd, env, 'item replace entity @s weapon.mainhand with minecraft:iron_ingot')
+    command(ctl_bin, socket, cwd, env, 'fill -37 69 -11 -36 69 -9 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'tp @s -36.5 70 -9.2')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    ex, ey, ez = after_generic['pos']
+    ctl(ctl_bin, socket, cwd, env, 'look-at', ex, ey + 0.9, ez)
+    ctl(ctl_bin, socket, cwd, env, 'mouse', 'right', 'click')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    after_interact = parse_entity_status(command(ctl_bin, socket, cwd, env, 'machine_api entity_status'))
+    assert after_interact['hp'] == 20.0, after_interact
+    command(ctl_bin, socket, cwd, env, 'clear @s')
+
+    nbt = command(ctl_bin, socket, cwd, env, 'data get entity @e[type=test_machine:automaton,limit=1]')
+    assert 'entity.test_machine.automaton' in nbt and 'horizon_mod_data:' in nbt, nbt
+    return after_interact['age']
+
+
+def verify_custom_entity_after_reopen(ctl_bin, socket, cwd, env, age_before_save):
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    restored = parse_entity_status(command(ctl_bin, socket, cwd, env, 'machine_api entity_status'))
+    assert restored['count'] == 1, restored
+    assert restored['age'] >= age_before_save, (restored, age_before_save)
+    assert restored['hp'] == 20.0, restored
+    nbt = command(ctl_bin, socket, cwd, env, 'data get entity @e[type=test_machine:automaton,limit=1]')
+    assert 'entity.test_machine.automaton' in nbt and 'horizon_mod_data:' in nbt, nbt
 
 
 def check_mode(client, ctl_bin, mods, *, in_frame):
@@ -472,6 +635,8 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
         assert peer_energy_saved < 1_000, f'per-tick receive limit was exceeded: {peer_before_save}'
         peer_water_saved, peer_water_capacity = fluid_state(peer_before_save, 'minecraft:water')
         assert peer_water_saved == peer_water_capacity and peer_water_saved >= peer_water_initial, peer_before_save
+        verify_vanilla_hooks(ctl_bin, socket, game_dir, env)
+        entity_age_before_save = verify_custom_entity(ctl_bin, socket, game_dir, env)
 
         stop_game(process, log, ctl_bin, socket, game_dir, env)
         process = log = socket = None
@@ -492,7 +657,9 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
             ctl_bin, socket, game_dir, env, verify_restored_attachment=True)
         command(ctl_bin, socket, game_dir, env,
                 f'setblock {ix} {iy} {iz} minecraft:hopper[facing=south]')
-        print(f'PASS {mode}: per-block explosion filter, XP command hook, recipe API queries and replacement, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
+        verify_custom_entity_after_reopen(
+            ctl_bin, socket, game_dir, env, entity_age_before_save)
+        print(f'PASS {mode}: per-block explosion filter, XP command hook, recipe API queries and replacement, custom entity lifecycle/persistence, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
     except (CheckFailed, AssertionError, subprocess.TimeoutExpired) as error:
         raise CheckFailed(f'{mode}: {error}\n{tail(work / "game.log")}') from error
     finally:

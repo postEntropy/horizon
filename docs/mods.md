@@ -116,7 +116,7 @@ and minimum API versions are listed in [the API reference](api/mods-reference.md
 | `world-read` | loaded block states, biomes and packed light within four blocks of the player | local overlays and machine logic |
 | `render` | world-space lines, boxes and ghost blocks in a per-frame budget | Litematica-style placement, waypoints |
 | `registries` | new blocks, items, entities and recipes, mostly data: JSON models, textures, loot and recipes in the `.hmod`'s `assets/` and `data/` | server side; see [Multiplayer](#multiplayer) |
-| `server` | world events (block break/place, entity spawn/death, player join), game rules, block scheduling, item drops, vanilla mob spawning and sounds; world actions target a dimension | integrated single-player routes actions to registered dimensions; in-frame mode has one active dimension |
+| `server` | world events (block break/place, entity spawn/death, player join), game rules, scheduled block and random ticks, item drops, vanilla mob spawning and sounds; world actions target a dimension | integrated single-player routes actions to registered dimensions; in-frame mode has one active dimension |
 | `net` | a mod's own client↔server channel (custom payloads) | only between the two halves of the same mod |
 
 There is no file, socket, process or raw-input interface, on purpose.

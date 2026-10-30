@@ -285,6 +285,7 @@ pub enum Brain {
     Creeper,
 }
 /// Model animation family (vanilla `EntityModel.setupAnim` implementations).
+pub use ai::CustomGoal;
 pub use anim::Anim;
 pub use species::Species;
 
@@ -1698,6 +1699,9 @@ impl Mob {
         mob.ai.nav.max_visited_nodes = (mob.kind.follow_range * 16.0).floor() as i32;
         ai::register(&mut mob);
         mob
+    }
+    pub fn set_custom_goals(&mut self, goals: &[CustomGoal]) {
+        ai::set_custom_goals(self, goals);
     }
     /// `Mob.canPickUpLoot`, with the overrides: an allay that holds
     /// something off its pickup cooldown, a sulfur cube with no block.

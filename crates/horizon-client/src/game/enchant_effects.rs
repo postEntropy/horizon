@@ -20,22 +20,27 @@ enum MendSlot {
 impl Game<'_> {
     /// `Player.getDestroySpeed` after the tool speed: mining efficiency, haste
     /// and mining fatigue.
-    pub(super) fn modify_destroy_speed(&self, mut speed: f32) -> f32 {
+    pub(super) fn modify_destroy_speed(&mut self, mut speed: f32) -> f32 {
         if speed > 1.0 {
-            let held = self.inventory[self.selected].as_ref();
+            let held = self.inventory[self.selected]
+                .clone()
+                .map(|s| self.effective_stack(&s, &["minecraft:efficiency"]));
             speed += self
                 .res
                 .stations()
                 .enchantments
-                .attribute_add(held, "minecraft:mining_efficiency") as f32;
+                .attribute_add(held.as_ref(), "minecraft:mining_efficiency")
+                as f32;
         }
         speed * self.potions.effects.mining_speed_factor()
     }
     /// `Attributes.SUBMERGED_MINING_SPEED` (0.2, raised by aqua affinity).
-    pub(super) fn submerged_mining_speed(&self) -> f32 {
+    pub(super) fn submerged_mining_speed(&mut self) -> f32 {
         let mut total = 0.0;
-        for stack in self.armor.iter().flatten() {
-            for (attr, _, amount, op) in self.res.stations().enchantments.attributes(stack) {
+        let armor = self.armor.clone();
+        for stack in armor.iter().flatten() {
+            let stack = self.effective_stack(stack, &["minecraft:aqua_affinity"]);
+            for (attr, _, amount, op) in self.res.stations().enchantments.attributes(&stack) {
                 if attr == "minecraft:submerged_mining_speed" && op == "add_multiplied_total" {
                     total += amount;
                 }
@@ -45,8 +50,9 @@ impl Game<'_> {
     }
     /// `EnchantmentHelper.processDurabilityChange` (unbreaking) for `amount` points.
     pub(super) fn durability_loss(&mut self, stack: &ItemStack, amount: u32) -> u32 {
+        let stack = self.effective_stack(stack, &["minecraft:unbreaking"]);
         let e = &self.res.stations().enchantments;
-        if !e.has_component(stack, "minecraft:item_damage") {
+        if !e.has_component(&stack, "minecraft:item_damage") {
             return amount;
         }
         let ctx = EffectContext {
@@ -55,7 +61,7 @@ impl Game<'_> {
             ..Default::default()
         };
         e.modify_value(
-            Some(stack),
+            Some(&stack),
             "minecraft:item_damage",
             &ctx,
             &mut self.world.random,
@@ -68,6 +74,17 @@ impl Game<'_> {
         let Some(held) = self.inventory[self.selected].clone() else {
             return 0.0;
         };
+        let held = self.effective_stack(
+            &held,
+            &[
+                "minecraft:sharpness",
+                "minecraft:smite",
+                "minecraft:bane_of_arthropods",
+                "minecraft:impaling",
+                "minecraft:density",
+                "minecraft:breach",
+            ],
+        );
         let ctx = EffectContext {
             this: Some(target),
             attacker: Some("minecraft:player"),
@@ -100,6 +117,7 @@ impl Game<'_> {
         let knockback_attack = scale > 0.9 && self.player.as_ref().is_some_and(|p| p.sprinting);
         let enchanted = match self.inventory[self.selected].clone() {
             Some(held) => {
+                let held = self.effective_stack(&held, &["minecraft:knockback"]);
                 let ctx = EffectContext {
                     this: Some(target_kind),
                     attacker: Some("minecraft:player"),
@@ -143,6 +161,7 @@ impl Game<'_> {
         let Some(held) = self.inventory[self.selected].clone() else {
             return;
         };
+        let held = self.effective_stack(&held, &["minecraft:fire_aspect", "minecraft:wind_burst"]);
         let Some(m) = self.mobs.get(mob) else { return };
         let kind = m.kind.id.clone();
         let ctx = EffectContext {
@@ -372,12 +391,13 @@ impl Game<'_> {
             let Some(stack) = self.mend_slot(slot).clone() else {
                 return amount;
             };
+            let effective_stack = self.effective_stack(&stack, &["minecraft:mending"]);
             let ctx = EffectContext {
                 items: Some(self.res.items()),
                 ..Default::default()
             };
             let to_repair_xp = self.res.stations().enchantments.modify_value(
-                Some(&stack),
+                Some(&effective_stack),
                 "minecraft:repair_with_xp",
                 &ctx,
                 &mut self.world.random,
@@ -416,6 +436,7 @@ impl Game<'_> {
         let Some(bow) = self.inventory[self.selected].clone() else {
             return (0.0, false);
         };
+        let bow = self.effective_stack(&bow, &["minecraft:power", "minecraft:infinity"]);
         let e = &self.res.stations().enchantments;
         let ctx = EffectContext {
             direct_attacker: Some("minecraft:arrow"),
@@ -449,6 +470,7 @@ impl Game<'_> {
     /// (flame): the seconds the new arrow burns for.
     pub(super) fn bow_projectile_ignite(&mut self) -> Option<f32> {
         let bow = self.inventory[self.selected].clone()?;
+        let bow = self.effective_stack(&bow, &["minecraft:flame"]);
         let ctx = EffectContext {
             this: Some("minecraft:arrow"),
             items: Some(self.res.items()),
@@ -489,9 +511,20 @@ impl Game<'_> {
     /// so the same enchantment on two pieces stacks instead of replacing itself.
     pub(super) fn apply_enchantment_attributes(&mut self) {
         let mut wanted: Vec<(String, String, f64, String)> = Vec::new();
-        for (stack, slot) in self.armor.iter().zip(["head", "chest", "legs", "feet"]) {
+        let armor = self.armor.clone();
+        for (stack, slot) in armor.iter().zip(["head", "chest", "legs", "feet"]) {
             let Some(stack) = stack else { continue };
-            for (attr, id, amount, op) in self.res.stations().enchantments.attributes(stack) {
+            let stack = self.effective_stack(
+                stack,
+                &[
+                    "minecraft:aqua_affinity",
+                    "minecraft:respiration",
+                    "minecraft:depth_strider",
+                    "minecraft:swift_sneak",
+                    "minecraft:efficiency",
+                ],
+            );
+            for (attr, id, amount, op) in self.res.stations().enchantments.attributes(&stack) {
                 wanted.push((attr, format!("{id}/{slot}"), amount, op));
             }
         }
