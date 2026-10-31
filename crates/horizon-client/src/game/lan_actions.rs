@@ -1387,6 +1387,39 @@ impl Game<'_> {
             return;
         }
         if let Some(victim) = Self::pvp_victim(host, conn, id) {
+            let target_pos = match victim {
+                super::lan_pvp::Victim::Host => self.player.as_ref().map_or([0, 0, 0], |p| {
+                    [
+                        p.position.x.floor() as i32,
+                        p.position.y.floor() as i32,
+                        p.position.z.floor() as i32,
+                    ]
+                }),
+                super::lan_pvp::Victim::Guest(vconn) => host
+                    .hub
+                    .guests
+                    .iter()
+                    .find(|g| g.conn == vconn)
+                    .map_or([0, 0, 0], |g| {
+                        [
+                            g.position[0].floor() as i32,
+                            g.position[1].floor() as i32,
+                            g.position[2].floor() as i32,
+                        ]
+                    }),
+            };
+            let cancelled = self
+                .as_guest(host, conn, |g| {
+                    g.held()
+                        .map(|stack| stack.item.to_string())
+                        .is_some_and(|item| {
+                            g.mod_attack_entity(&item, "minecraft:player", target_pos)
+                        })
+                })
+                .unwrap_or(false);
+            if cancelled {
+                return;
+            }
             if let Some(Some(strike)) = self.as_guest(host, conn, |g| g.pvp_strike())
                 && self.pvp_land(host, victim, &strike)
                 && strike.stops_sprint()
@@ -1406,6 +1439,22 @@ impl Game<'_> {
         {
             self.as_guest(host, conn, |g| {
                 if g.within_interaction_range(i) {
+                    let (target, target_pos) = {
+                        let p = &g.creatures.projectiles[i];
+                        (
+                            super::mods::projectile_entity_kind(&p.kind),
+                            [
+                                p.position.x.floor() as i32,
+                                p.position.y.floor() as i32,
+                                p.position.z.floor() as i32,
+                            ],
+                        )
+                    };
+                    if let Some(item) = g.held().map(|stack| stack.item.to_string())
+                        && g.mod_attack_entity(&item, target, target_pos)
+                    {
+                        return;
+                    }
                     g.deflect(i);
                 }
             });
@@ -2386,6 +2435,11 @@ impl Game<'_> {
             match rest {
                 None => {
                     let item = self.dropped.remove(i);
+                    self.mod_entity_death(
+                        item.id,
+                        "minecraft:item",
+                        [item.position.x, item.position.y, item.position.z],
+                    );
                     self.guest_pickup(host, id, item);
                     taken.push((item_id, before));
                 }
@@ -2449,6 +2503,11 @@ impl Game<'_> {
             .next_int_bound(touching.len() as i32)
             .unwrap_or(0) as usize;
         let orb = self.orbs.remove(touching[pick]);
+        self.mod_entity_death(
+            orb.id,
+            "minecraft:experience_orb",
+            [orb.position.x, orb.position.y, orb.position.z],
+        );
         play.xp_delay = 2;
         host.hub.take_item(orb.id as i32, id, 1, at);
         // ClientPacketListener.handleTakeItemEntity's sound, at the orb.

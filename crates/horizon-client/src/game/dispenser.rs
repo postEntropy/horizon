@@ -1034,7 +1034,10 @@ impl Game<'_> {
                     a.pickup = horizon_client::arrows::Pickup::Allowed;
                 }
                 shot.shoot(&mut own, dir, power, uncertainty);
+                let shot_kind = super::mods::projectile_entity_kind(&shot.kind);
+                let shot_at = [shot.position.x, shot.position.y, shot.position.z];
                 self.creatures.projectiles.push(shot);
+                self.mod_entity_spawned(0, shot_kind, shot_at);
             }
         }
     }
@@ -1760,8 +1763,14 @@ impl Game<'_> {
             *slot = None;
         }
         let id = mob.id;
+        let kind = mob.kind.id.clone();
+        let pos = [mob.position.x, mob.position.y, mob.position.z];
+        let old_id = self.mobs[index].id;
+        let old_kind = self.mobs[index].kind.id.clone();
         self.mobs[index].removed = true;
         self.mobs.push(mob);
+        self.mod_entity_death(old_id, &old_kind, pos);
+        self.mod_entity_spawned(id, &kind, pos);
         Some(id)
     }
     /// `ShearsDispenseItemBehavior.tryShearEntity`: the first live, ready

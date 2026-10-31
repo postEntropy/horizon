@@ -18,6 +18,53 @@ use horizon_client::{
 };
 use std::{path::PathBuf, time::Duration};
 
+pub(super) fn projectile_entity_kind(
+    kind: &horizon_client::projectiles::ProjectileKind,
+) -> &'static str {
+    use horizon_client::projectiles::ProjectileKind;
+    match kind {
+        ProjectileKind::Arrow { .. } => "minecraft:arrow",
+        ProjectileKind::Snowball => "minecraft:snowball",
+        ProjectileKind::Egg => "minecraft:egg",
+        ProjectileKind::EnderPearl => "minecraft:ender_pearl",
+        ProjectileKind::SmallFireball => "minecraft:small_fireball",
+        ProjectileKind::LargeFireball { .. } => "minecraft:fireball",
+        ProjectileKind::LlamaSpit => "minecraft:llama_spit",
+        ProjectileKind::WindCharge => "minecraft:wind_charge",
+        ProjectileKind::BreezeWindCharge => "minecraft:breeze_wind_charge",
+        ProjectileKind::ShulkerBullet { .. } => "minecraft:shulker_bullet",
+        ProjectileKind::WitherSkull { .. } => "minecraft:wither_skull",
+        ProjectileKind::Potion { .. } => "minecraft:splash_potion",
+    }
+}
+
+#[cfg(feature = "mods")]
+fn projectile_bounds(
+    p: &horizon_client::projectiles::Projectile,
+) -> ([f64; 3], [f64; 3], &'static str) {
+    use horizon_client::projectiles::ProjectileKind;
+    let (half, height) = match p.kind {
+        ProjectileKind::Arrow { .. } => (0.25, 0.5),
+        ProjectileKind::LargeFireball { .. } => (0.5, 1.0),
+        ProjectileKind::SmallFireball
+        | ProjectileKind::WindCharge
+        | ProjectileKind::BreezeWindCharge
+        | ProjectileKind::ShulkerBullet { .. }
+        | ProjectileKind::WitherSkull { .. } => (0.15625, 0.3125),
+        ProjectileKind::Snowball
+        | ProjectileKind::Egg
+        | ProjectileKind::EnderPearl
+        | ProjectileKind::LlamaSpit
+        | ProjectileKind::Potion { .. } => (0.125, 0.25),
+    };
+    let pos = p.position;
+    (
+        [pos.x - half, pos.y, pos.z - half],
+        [pos.x + half, pos.y + height, pos.z + half],
+        projectile_entity_kind(&p.kind),
+    )
+}
+
 #[derive(Clone, Debug)]
 #[cfg_attr(not(feature = "mods"), allow(dead_code))]
 pub(super) struct ModScreenView {
@@ -995,7 +1042,11 @@ impl Game<'_> {
 
     pub(super) fn mod_scheduled_block_tick(&mut self, _pos: [i32; 3]) {}
 
-    pub(super) fn mod_entity_inside(&mut self, _pos: [i32; 3], _actor: String) {}
+    pub(super) fn dispatch_mod_entity_inside(
+        &mut self,
+        _inside: &[(horizon_core::position::BlockPos, String)],
+    ) {
+    }
 
     pub(super) fn mod_server_event(
         &mut self,
@@ -1113,6 +1164,7 @@ impl Game<'_> {
     ) -> Option<f32> {
         Some(amount)
     }
+    pub(super) fn mod_entity_spawned(&mut self, _id: u32, _kind: &str, _pos: [f64; 3]) {}
     pub(super) fn mod_entity_death(&mut self, _id: u32, _kind: &str, _pos: [f64; 3]) {}
     pub(super) fn mod_mob_damage(
         &mut self,
@@ -1969,7 +2021,150 @@ impl Game<'_> {
     }
 
     pub(super) fn mod_entity_inside(&mut self, pos: [i32; 3], actor: String) {
+        let block = self
+            .res
+            .facts()
+            .get(self.world.block(pos[0], pos[1], pos[2]))
+            .name
+            .to_string();
+        if !self.mod_has_block_hook(&block) {
+            return;
+        }
         let _ = self.mod_block_event_actor(pos, BlockAction::EntityInside, String::new(), actor);
+    }
+
+    pub(super) fn dispatch_mod_entity_inside(
+        &mut self,
+        inside: &[(horizon_core::position::BlockPos, String)],
+    ) {
+        if self.remote.is_some() || !self.mods.mods.has_any_block_hooks() {
+            return;
+        }
+        let mut events: Vec<([i32; 3], String)> = inside
+            .iter()
+            .map(|(pos, actor)| ([pos.x, pos.y, pos.z], actor.clone()))
+            .collect();
+        let mut push_box = |lo: [f64; 3], hi: [f64; 3], actor: String| {
+            for x in (lo[0] + 1e-7).floor() as i32..=(hi[0] - 1e-7).floor() as i32 {
+                for y in (lo[1] + 1e-7).floor() as i32..=(hi[1] - 1e-7).floor() as i32 {
+                    for z in (lo[2] + 1e-7).floor() as i32..=(hi[2] - 1e-7).floor() as i32 {
+                        events.push(([x, y, z], actor.clone()));
+                    }
+                }
+            }
+        };
+        for m in &self.mobs {
+            if m.removed || m.death_time > 0 {
+                continue;
+            }
+            let w = m.kind.width * 0.5;
+            let h = m.kind.height;
+            let p = m.position;
+            let kind = if m.kind.id.contains(':') {
+                m.kind.id.clone()
+            } else {
+                format!("minecraft:{}", m.kind.id)
+            };
+            push_box(
+                [p.x - w, p.y, p.z - w],
+                [p.x + w, p.y + h, p.z + w],
+                format!("{kind}/{}", m.id),
+            );
+        }
+        for item in &self.dropped {
+            let b = item.bounds();
+            let lo = b.min_position();
+            let hi = b.max_position();
+            push_box(
+                [lo.x, lo.y, lo.z],
+                [hi.x, hi.y, hi.z],
+                format!("minecraft:item/{}", item.id),
+            );
+        }
+        for o in &self.orbs {
+            let p = o.position;
+            push_box(
+                [p.x - 0.25, p.y, p.z - 0.25],
+                [p.x + 0.25, p.y + 0.5, p.z + 0.25],
+                format!("minecraft:experience_orb/{}", o.id),
+            );
+        }
+        for b in &self.boats {
+            let aabb = b.bounds();
+            let lo = aabb.min_position();
+            let hi = aabb.max_position();
+            push_box(
+                [lo.x, lo.y, lo.z],
+                [hi.x, hi.y, hi.z],
+                format!("{}/{}", b.entity_type(), b.id),
+            );
+        }
+        for a in &self.armor_stands {
+            let aabb = a.bounds();
+            let lo = aabb.min_position();
+            let hi = aabb.max_position();
+            push_box(
+                [lo.x, lo.y, lo.z],
+                [hi.x, hi.y, hi.z],
+                format!("minecraft:armor_stand/{}", a.id),
+            );
+        }
+        for t in &self.tnts {
+            let aabb = t.bounds();
+            let lo = aabb.min_position();
+            let hi = aabb.max_position();
+            push_box(
+                [lo.x, lo.y, lo.z],
+                [hi.x, hi.y, hi.z],
+                format!("minecraft:tnt/{}", t.id),
+            );
+        }
+        for f in &self.falling {
+            let p = f.position;
+            push_box(
+                [p.x - 0.49, p.y, p.z - 0.49],
+                [p.x + 0.49, p.y + 0.98, p.z + 0.49],
+                format!("minecraft:falling_block/{}", f.id),
+            );
+        }
+        for c in &self.crystals {
+            let p = c.position;
+            push_box(
+                [p.x - 1.0, p.y, p.z - 1.0],
+                [p.x + 1.0, p.y + 2.0, p.z + 1.0],
+                format!("minecraft:end_crystal/{}", c.id),
+            );
+        }
+        for p in &self.creatures.projectiles {
+            let (lo, hi, kind) = projectile_bounds(p);
+            push_box(lo, hi, format!("{kind}/{}", p.id));
+        }
+        for t in &self.tridents {
+            let p = t.position;
+            push_box(
+                [p.x - 0.25, p.y, p.z - 0.25],
+                [p.x + 0.25, p.y + 0.5, p.z + 0.25],
+                format!("minecraft:trident/{}", t.id),
+            );
+        }
+        for r in &self.rockets {
+            let p = r.position;
+            push_box(
+                [p.x - 0.125, p.y, p.z - 0.125],
+                [p.x + 0.125, p.y + 0.25, p.z + 0.125],
+                format!("minecraft:firework_rocket/{}", r.id),
+            );
+        }
+        for (id, kind, p) in self.potions.thrown_all() {
+            push_box(
+                [p.x - 0.125, p.y, p.z - 0.125],
+                [p.x + 0.125, p.y + 0.25, p.z + 0.125],
+                format!("{kind}/{id}"),
+            );
+        }
+        for (pos, actor) in events {
+            self.mod_entity_inside(pos, actor);
+        }
     }
 
     pub(super) fn mod_server_event(
@@ -2026,14 +2221,34 @@ impl Game<'_> {
         self.show_mod_output();
     }
 
+    /// Dispatches a spawn event for a game entity added to the world.
+    pub(super) fn mod_entity_spawned(&mut self, id: u32, kind: &str, pos: [f64; 3]) {
+        let detail = if kind.contains(':') {
+            kind.to_owned()
+        } else {
+            format!("minecraft:{kind}")
+        };
+        self.mod_server_event(
+            "entity-spawn",
+            id.to_string(),
+            pos.map(|v| v.floor() as i32),
+            detail,
+        );
+    }
+
     /// Dispatches a death event for a game entity removed from the world.
     /// Entity positions use block coordinates, matching the other server hooks.
     pub(super) fn mod_entity_death(&mut self, id: u32, kind: &str, pos: [f64; 3]) {
+        let detail = if kind.contains(':') {
+            kind.to_owned()
+        } else {
+            format!("minecraft:{kind}")
+        };
         self.mod_server_event(
             "entity-death",
             id.to_string(),
             pos.map(|v| v.floor() as i32),
-            kind.to_owned(),
+            detail,
         );
     }
 

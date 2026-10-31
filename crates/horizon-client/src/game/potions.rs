@@ -48,6 +48,7 @@ impl Game<'_> {
     /// A splash potion, lingering potion or experience bottle in flight (the
     /// player's throws and dispensers both end up here).
     pub(super) fn launch_thrown(&mut self, stack: ItemStack, position: Vec3, velocity: Vec3) {
+        let kind = thrown_kind(&stack);
         self.potions.thrown.push(ThrownPotion {
             id: 0,
             stack,
@@ -56,6 +57,7 @@ impl Game<'_> {
             velocity,
             age: 0,
         });
+        self.mod_entity_spawned(0, kind, [position.x, position.y, position.z]);
     }
 }
 /// What a player's body was last given for its effects and enchantments:
@@ -102,6 +104,13 @@ impl PotionState {
     /// Their entity ids, for a server to number them.
     pub(super) fn thrown_ids(&mut self) -> impl Iterator<Item = &mut u32> {
         self.thrown.iter_mut().map(|t| &mut t.id)
+    }
+    /// All thrown potions in flight as `(id, entity_type, position)`.
+    #[cfg(feature = "mods")]
+    pub(super) fn thrown_all(&self) -> impl Iterator<Item = (u32, &'static str, Vec3)> + '_ {
+        self.thrown
+            .iter()
+            .map(|t| (t.id, thrown_kind(&t.stack), t.position))
     }
     /// The numbered ones as a server's clients track them: (id, entity
     /// type, item, position, motion).
@@ -289,6 +298,9 @@ impl Game<'_> {
             return true;
         }
         self.using = None;
+        if self.mod_finish_using(&stack.item) {
+            return true;
+        }
         self.post_entity_event("minecraft:drink", horizon_client::mobs::Who::Player);
         if ominous {
             self.drink_ominous_bottle(slot, stack);
@@ -495,6 +507,7 @@ impl Game<'_> {
     fn tick_thrown_potions(&mut self) {
         let mut thrown = std::mem::take(&mut self.potions.thrown);
         let mut landed = Vec::new();
+        let mut expired = Vec::new();
         thrown.retain_mut(|t| {
             t.age += 1;
             t.previous = t.position;
@@ -530,7 +543,7 @@ impl Game<'_> {
                 }
             }
             if let Some(p) = hit {
-                landed.push((t.stack.clone(), p));
+                landed.push((t.id, t.stack.clone(), p));
                 return false;
             }
             t.position = next;
@@ -546,10 +559,18 @@ impl Game<'_> {
                 t.velocity.y * 0.99 - gravity,
                 t.velocity.z * 0.99,
             );
-            t.age < 1200 && t.position.y > -128.0
+            let keep = t.age < 1200 && t.position.y > -128.0;
+            if !keep {
+                expired.push((t.id, thrown_kind(&t.stack), t.position));
+            }
+            keep
         });
         self.potions.thrown = thrown;
-        for (stack, at) in landed {
+        for (id, kind, at) in expired {
+            self.mod_entity_death(id, kind, [at.x, at.y, at.z]);
+        }
+        for (id, stack, at) in landed {
+            self.mod_entity_death(id, thrown_kind(&stack), [at.x, at.y, at.z]);
             self.splash(&stack, at);
         }
     }

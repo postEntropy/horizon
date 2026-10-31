@@ -1059,7 +1059,10 @@ impl Game<'_> {
             if !self.warden_fits(&mob) {
                 continue;
             }
+            let id = mob.id;
+            let mob_kind = mob.kind.id.clone();
             self.mobs.push(mob);
+            self.mod_entity_spawned(id, &mob_kind, spot);
             return true;
         }
         false

@@ -86,12 +86,23 @@ impl Game<'_> {
                 super::pickups::Collector::Mob(id),
             );
             let taken = if &*item == "minecraft:gold_nugget" {
-                self.dropped.remove(j).stack.count
+                let item = self.dropped.remove(j);
+                self.mod_entity_death(
+                    item.id,
+                    "minecraft:item",
+                    [item.position.x, item.position.y, item.position.z],
+                );
+                item.stack.count
             } else {
                 let e = &mut self.dropped[j];
                 e.stack.count -= 1;
                 if e.stack.count == 0 {
-                    self.dropped.remove(j);
+                    let item = self.dropped.remove(j);
+                    self.mod_entity_death(
+                        item.id,
+                        "minecraft:item",
+                        [item.position.x, item.position.y, item.position.z],
+                    );
                 }
                 1
             };

@@ -72,7 +72,9 @@ impl Game<'_> {
             velocity,
             on_ground,
         );
+        let proj_at = [proj.position.x, proj.position.y, proj.position.z];
         self.creatures.projectiles.push(proj);
+        self.mod_entity_spawned(0, "minecraft:wind_charge", proj_at);
         let pitch = 0.4 / (self.world.random.next_float() * 0.4 + 0.8);
         self.audio
             .play("minecraft:entity.wind_charge.throw", Some(eye), 0.5, pitch);

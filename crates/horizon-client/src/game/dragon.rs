@@ -794,8 +794,11 @@ impl Game<'_> {
         if let Some(d) = self.dragon.as_mut()
             && d.id == 0
         {
-            d.id = self.next_entity + 1;
+            let id = self.next_entity + 1;
+            let pos = [d.position.x, d.position.y, d.position.z];
+            d.id = id;
             self.next_entity += 9;
+            self.mod_entity_spawned(id, "minecraft:ender_dragon", pos);
         }
         // The spikes' crystals too (EndCrystal's constructor): an id whether
         // or not a client has tracked them yet, to be aimed at by it.
@@ -829,6 +832,7 @@ impl Game<'_> {
                 beam: None,
                 invulnerable: false,
             });
+            self.mod_entity_spawned(0, "minecraft:end_crystal", [at.x, at.y, at.z]);
             self.world
                 .modified
                 .insert((at.x.floor() as i32 >> 4, at.z.floor() as i32 >> 4));
@@ -874,6 +878,11 @@ impl Game<'_> {
             return;
         }
         let c = self.crystals.remove(index);
+        self.mod_entity_death(
+            c.id,
+            "minecraft:end_crystal",
+            [c.position.x, c.position.y, c.position.z],
+        );
         if self.fight.respawn.is_some()
             && self
                 .fight
@@ -1022,7 +1031,23 @@ impl Game<'_> {
         if !self.before_block(d) || self.mob_hit().is_some_and(|m| m.1 < d) {
             return false;
         }
-        if let Some(dragon) = self.dragon.as_ref().filter(|dragon| dragon.id == id) {
+        if id >= CRYSTAL_IDS {
+            if let Some(c) = self.crystals.get((id - CRYSTAL_IDS) as usize) {
+                let pos = [
+                    c.position.x.floor() as i32,
+                    c.position.y.floor() as i32,
+                    c.position.z.floor() as i32,
+                ];
+                if let Some(item) = self.held().map(|stack| stack.item.to_string())
+                    && self.mod_attack_entity(&item, "minecraft:end_crystal", pos)
+                {
+                    self.swing_arm();
+                    return true;
+                }
+            }
+        } else if id >= SPECIAL
+            && let Some(dragon) = self.dragon.as_ref()
+        {
             let at = dragon.position;
             let pos = [
                 at.x.floor() as i32,
@@ -2807,6 +2832,7 @@ impl Game<'_> {
             beam: None,
             invulnerable: false,
         });
+        self.mod_entity_spawned(0, "minecraft:end_crystal", [x + 0.5, y, z + 0.5]);
         self.world.modified.insert((above[0] >> 4, above[2] >> 4));
         if self.dim == Dim::End {
             self.try_respawn();
@@ -3120,6 +3146,11 @@ impl Game<'_> {
                 .position(|c| c.position.distance_squared(p) < 0.01)
             {
                 let c = self.crystals.remove(i);
+                self.mod_entity_death(
+                    c.id,
+                    "minecraft:end_crystal",
+                    [c.position.x, c.position.y, c.position.z],
+                );
                 self.world.modified.insert((
                     c.position.x.floor() as i32 >> 4,
                     c.position.z.floor() as i32 >> 4,

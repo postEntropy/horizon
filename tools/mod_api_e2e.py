@@ -448,12 +448,86 @@ def verify_custom_entity(ctl_bin, socket, cwd, env):
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
     after_interact = parse_entity_status(command(ctl_bin, socket, cwd, env, 'machine_api entity_status'))
     assert after_interact['hp'] == 20.0, after_interact
+
+    # Left-click attack with test_machine:wrench dispatches on_item(AttackEntity)
+    # with the custom entity's full namespace (`test_machine:automaton`) and
+    # cancels the attack before damage is dealt.
+    command(ctl_bin, socket, cwd, env, 'machine_api clear_logic_events')
+    command(ctl_bin, socket, cwd, env, 'item replace entity @s weapon.mainhand with test_machine:wrench')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    ex, ey, ez = after_interact['pos']
+    ctl(ctl_bin, socket, cwd, env, 'look-at', ex, ey + 0.9, ez)
+    ctl(ctl_bin, socket, cwd, env, 'mouse', 'left', 'click')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    after_wrench_attack = parse_entity_status(command(ctl_bin, socket, cwd, env, 'machine_api entity_status'))
+    assert after_wrench_attack['hp'] == 20.0, after_wrench_attack
+    logic_out = command(ctl_bin, socket, cwd, env, 'machine_api logic_events')
+    assert 'item=attack-entity:test_machine:wrench:minecraft:overworld:' in logic_out, logic_out
+    assert ':test_machine:automaton' in logic_out, logic_out
     command(ctl_bin, socket, cwd, env, 'clear @s')
 
     nbt = command(ctl_bin, socket, cwd, env, 'data get entity @e[type=test_machine:automaton,limit=1]')
     assert 'entity.test_machine.automaton' in nbt and 'horizon_mod_data:' in nbt, nbt
     verify_mod_models(ctl_bin, socket, cwd, env, after_interact['handle'])
     return after_interact['age']
+
+
+def verify_logic_hooks(ctl_bin, socket, cwd, env):
+    command(ctl_bin, socket, cwd, env, 'setblock -31 69 -11 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'tp @s -31 70 -11')
+    command(ctl_bin, socket, cwd, env, 'clear @s')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    command(ctl_bin, socket, cwd, env, 'machine_api clear_logic_events')
+
+    # 1. Non-player EntityInside on test_machine:smelter (-31, 70, -9) +
+    #    ServerEventKind::EntitySpawn and EntityDeath for non-mob entities
+    #    with normalized `minecraft:` detail.
+    command(
+        ctl_bin,
+        socket,
+        cwd,
+        env,
+        'summon minecraft:item -30.5 70.5 -8.5 {Item:{id:"minecraft:coal",Count:1b},PickupDelay:32767s,NoGravity:1b}',
+    )
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    inside_out = command(ctl_bin, socket, cwd, env, 'machine_api logic_events')
+    assert 'block=entity-inside:test_machine:smelter' in inside_out, inside_out
+    assert ':-31,70,-9:minecraft:item/' in inside_out, inside_out
+    assert 'entity-spawn:' in inside_out and ':minecraft:item' in inside_out, inside_out
+    command(ctl_bin, socket, cwd, env, 'kill @e[type=item,distance=..8]')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    after_item_kill = command(ctl_bin, socket, cwd, env, 'machine_api logic_events')
+    assert 'entity-death:' in after_item_kill and ':minecraft:item' in after_item_kill, after_item_kill
+
+    command(ctl_bin, socket, cwd, env, 'machine_api clear_logic_events')
+    command(ctl_bin, socket, cwd, env, 'summon minecraft:arrow -30.5 71.5 -10.5 {NoGravity:1b}')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    command(ctl_bin, socket, cwd, env, 'kill @e[type=arrow,distance=..8]')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    arrow_events = command(ctl_bin, socket, cwd, env, 'machine_api logic_events')
+    assert 'entity-spawn:' in arrow_events and ':minecraft:arrow' in arrow_events, arrow_events
+    assert 'entity-death:' in arrow_events and ':minecraft:arrow' in arrow_events, arrow_events
+
+    # 2. ItemAction::UseOnBlock returning Pass falls through to UseInAir when
+    #    right-clicking while looking at a block, and releasing the item
+    #    dispatches ItemAction::FinishUsing.
+    command(ctl_bin, socket, cwd, env, 'machine_api clear_logic_events')
+    command(ctl_bin, socket, cwd, env, 'item replace entity @s weapon.mainhand with minecraft:spyglass')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    ctl(ctl_bin, socket, cwd, env, 'look-at-block', -31, 69, -11, 'up')
+    target = ctl(ctl_bin, socket, cwd, env, 'looking-at')
+    assert target.get('kind') == 'block', target
+    ctl(ctl_bin, socket, cwd, env, 'mouse', 'right', 'down')
+    try:
+        ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    finally:
+        ctl(ctl_bin, socket, cwd, env, 'mouse', 'right', 'up')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    spyglass_out = command(ctl_bin, socket, cwd, env, 'machine_api logic_events')
+    assert 'air_fallback=true' in spyglass_out, spyglass_out
+    assert 'finished=true' in spyglass_out, spyglass_out
+    assert 'item=finish-using:minecraft:spyglass:minecraft:overworld:' in spyglass_out, spyglass_out
+    command(ctl_bin, socket, cwd, env, 'clear @s')
 
 
 def verify_mod_models(ctl_bin, socket, cwd, env, entity_handle):
@@ -756,6 +830,7 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
         peer_water_saved, peer_water_capacity = fluid_state(peer_before_save, 'minecraft:water')
         assert peer_water_saved == peer_water_capacity and peer_water_saved >= peer_water_initial, peer_before_save
         verify_vanilla_hooks(ctl_bin, socket, game_dir, env)
+        verify_logic_hooks(ctl_bin, socket, game_dir, env)
         entity_age_before_save = verify_custom_entity(ctl_bin, socket, game_dir, env)
         verify_custom_dimension(ctl_bin, socket, game_dir, env)
 
@@ -792,7 +867,7 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
                 f'setblock {ix} {iy} {iz} minecraft:hopper[facing=south]')
         verify_custom_entity_after_reopen(
             ctl_bin, socket, game_dir, env, entity_age_before_save)
-        print(f'PASS {mode}: per-block explosion filter, XP command hook, recipe API queries and replacement, config/accessory persistence, item-slot capability bridging and ownership, custom entity lifecycle/persistence, model animations/bones/draw-lists, custom dimension worldgen/portals/travel, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
+        print(f'PASS {mode}: per-block explosion filter, XP command hook, recipe API queries and replacement, config/accessory persistence, item-slot capability bridging and ownership, block/item/server event hooks, custom entity lifecycle/persistence, model animations/bones/draw-lists, custom dimension worldgen/portals/travel, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
     except (CheckFailed, AssertionError, subprocess.TimeoutExpired) as error:
         raise CheckFailed(f'{mode}: {error}\n{tail(work / "game.log")}') from error
     finally:

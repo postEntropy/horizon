@@ -36,6 +36,11 @@ struct Machines {
     entity_ticks: HashMap<u32, u32>,
     last_packet: String,
     last_server_event: String,
+    last_block_event: String,
+    last_item_event: String,
+    spyglass_air_fallback: bool,
+    spyglass_finished: bool,
+    server_events: Vec<String>,
     clicked_slot: Option<(u32, u8)>,
     clicked_button: Option<u8>,
 }
@@ -81,6 +86,11 @@ impl Mod for Machines {
                 entity_ticks: HashMap::new(),
                 last_packet: String::new(),
                 last_server_event: String::new(),
+                last_block_event: String::new(),
+                last_item_event: String::new(),
+                spyglass_air_fallback: false,
+                spyglass_finished: false,
+                server_events: Vec::new(),
                 clicked_slot: None,
                 clicked_button: None,
             },
@@ -106,6 +116,7 @@ impl Mod for Machines {
             .block("test_machine:smelter")
             .block("minecraft:composter")
             .item("test_machine:wrench")
+            .item("minecraft:spyglass")
             .server_event(ServerEventKind::PlayerJoin)
             .server_event(ServerEventKind::PlayerLeave)
             .server_event(ServerEventKind::BlockBreak)
@@ -115,6 +126,13 @@ impl Mod for Machines {
             .channel("test_machine:sync")
     }
     fn on_block(&mut self, event: BlockEvent) -> EventOutcome {
+        if event.action == BlockAction::EntityInside {
+            self.last_block_event = format!(
+                "entity-inside:{}:{},{},{}:{}",
+                event.state, event.x, event.y, event.z, event.actor
+            );
+            return EventOutcome::Pass;
+        }
         if event.action == BlockAction::ScheduledTick
             && event.state.starts_with("minecraft:composter")
         {
@@ -202,6 +220,30 @@ impl Mod for Machines {
         EventOutcome::Pass
     }
     fn on_item(&mut self, event: ItemEvent) -> EventOutcome {
+        let action_name = match event.action {
+            ItemAction::UseInAir => "use-in-air",
+            ItemAction::UseOnBlock => "use-on-block",
+            ItemAction::FinishUsing => "finish-using",
+            ItemAction::AttackEntity => "attack-entity",
+        };
+        self.last_item_event = format!(
+            "{action_name}:{}:{}:{},{},{}:{}",
+            event.item, event.dimension, event.x, event.y, event.z, event.target
+        );
+        if event.item == "minecraft:spyglass" {
+            if event.action == ItemAction::UseInAir {
+                self.spyglass_air_fallback = true;
+            } else if event.action == ItemAction::FinishUsing {
+                self.spyglass_finished = true;
+            }
+            return EventOutcome::Pass;
+        }
+        if event.action == ItemAction::AttackEntity
+            && event.item == "test_machine:wrench"
+            && event.target == "test_machine:automaton"
+        {
+            return EventOutcome::Cancel;
+        }
         if event.action == ItemAction::UseOnBlock && event.item != "minecraft:bone_meal" {
             let pos = BlockPos {
                 x: event.x,
@@ -235,6 +277,11 @@ impl Mod for Machines {
             "{kind}:{}:{}:{},{},{}:{}",
             event.subject, event.dimension, event.x, event.y, event.z, event.detail
         );
+        if self.server_events.len() >= 64 {
+            self.server_events.remove(0);
+        }
+        self.server_events
+            .push(format!("{kind}:{}:{}", event.subject, event.detail));
         if event.kind == ServerEventKind::PlayerJoin {
             let _ = server::set_rule("keepInventory", "true");
             if event.subject == "ModQueueProbe" {
@@ -874,6 +921,22 @@ impl Mod for Machines {
                 models::set_draw_list(block_target, &[]);
                 Ok(Some("models_cleared=true".into()))
             }
+            "clear_logic_events" => {
+                self.last_block_event.clear();
+                self.last_item_event.clear();
+                self.spyglass_air_fallback = false;
+                self.spyglass_finished = false;
+                self.server_events.clear();
+                Ok(Some("logic_events_cleared=true".into()))
+            }
+            "logic_events" => Ok(Some(format!(
+                "block={} item={} air_fallback={} finished={} server=[{}]",
+                self.last_block_event,
+                self.last_item_event,
+                self.spyglass_air_fallback,
+                self.spyglass_finished,
+                self.server_events.join(";")
+            ))),
             _ => Err("unknown subcommand".into()),
         }
     }

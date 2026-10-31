@@ -93,7 +93,10 @@ impl Game<'_> {
             self.audio
                 .play(&format!("minecraft:{sound}"), Some(at), 1.0, 1.0);
         }
+        let golem_kind = golem.kind.id.clone();
+        let golem_pos = [golem.position.x, golem.position.y, golem.position.z];
         self.mobs.push(golem);
+        self.mod_entity_spawned(id, &golem_kind, golem_pos);
         true
     }
 
@@ -241,7 +244,12 @@ impl Game<'_> {
                 }
                 match rest {
                     None => {
-                        self.dropped.remove(j);
+                        let item = self.dropped.remove(j);
+                        self.mod_entity_death(
+                            item.id,
+                            "minecraft:item",
+                            [item.position.x, item.position.y, item.position.z],
+                        );
                     }
                     Some(rest) => {
                         self.dropped[j].stack.count = rest.count;

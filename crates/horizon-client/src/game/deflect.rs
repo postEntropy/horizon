@@ -84,6 +84,23 @@ impl Game<'_> {
                 return false;
             }
         }
+        let (target, target_pos) = {
+            let p = &self.creatures.projectiles[i];
+            (
+                super::mods::projectile_entity_kind(&p.kind),
+                [
+                    p.position.x.floor() as i32,
+                    p.position.y.floor() as i32,
+                    p.position.z.floor() as i32,
+                ],
+            )
+        };
+        if let Some(item) = self.held().map(|stack| stack.item.to_string())
+            && self.mod_attack_entity(&item, target, target_pos)
+        {
+            self.swing_arm();
+            return true;
+        }
         self.deflect(i);
         true
     }

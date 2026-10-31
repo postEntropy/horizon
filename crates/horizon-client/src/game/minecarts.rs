@@ -679,7 +679,12 @@ impl Game<'_> {
                 }
             }
             if stack.count == 0 {
-                self.dropped.remove(i);
+                let item = self.dropped.remove(i);
+                self.mod_entity_death(
+                    item.id,
+                    "minecraft:item",
+                    [item.position.x, item.position.y, item.position.z],
+                );
             } else {
                 self.dropped[i].stack = stack;
                 i += 1;

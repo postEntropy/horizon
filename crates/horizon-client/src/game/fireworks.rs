@@ -105,6 +105,7 @@ impl Game<'_> {
         );
         let rocket = self.new_rocket(at, stack, false);
         self.rockets.push(rocket);
+        self.mod_entity_spawned(0, "minecraft:firework_rocket", [at.x, at.y, at.z]);
         if !self.creative {
             self.consume_held();
         }
@@ -118,6 +119,7 @@ impl Game<'_> {
         rocket.velocity = velocity;
         rocket.angled = true;
         self.rockets.push(rocket);
+        self.mod_entity_spawned(0, "minecraft:firework_rocket", [at.x, at.y, at.z]);
     }
     /// `FireworkRocketItem.use` while gliding: a rocket attached to the player.
     pub(super) fn boost_firework(&mut self, stack: &ItemStack) -> bool {
@@ -129,6 +131,7 @@ impl Game<'_> {
         let at = self.player.as_ref().map_or(Vec3::ZERO, |p| p.position);
         let rocket = self.new_rocket(at, stack, true);
         self.rockets.push(rocket);
+        self.mod_entity_spawned(0, "minecraft:firework_rocket", [at.x, at.y, at.z]);
         if !self.creative {
             self.consume_held();
         }
@@ -217,6 +220,11 @@ impl Game<'_> {
             self.particles
                 .add(&ParticleOptions::simple(ParticleType::Firework), at, v);
             if r.life > r.lifetime {
+                self.mod_entity_death(
+                    r.id,
+                    "minecraft:firework_rocket",
+                    [r.position.x, r.position.y, r.position.z],
+                );
                 self.explode_rocket(&r);
                 continue;
             }

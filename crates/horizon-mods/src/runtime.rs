@@ -933,7 +933,7 @@ impl Mods {
             let callback = logic_index
                 .as_ref()
                 .and_then(|index| instance.get_export_index(&mut store, Some(index), "on-block"))
-                .and_then(|index| instance.get_func(&mut store, &index))
+                .and_then(|index| instance.get_func(&mut store, index))
                 .map(|func| block_callback(func, &store))
                 .transpose()
                 .map_err(|e| reason(&e))?;
@@ -1359,6 +1359,16 @@ impl Mods {
         );
     }
 
+    /// Whether any running mod registered at least one block callback (API 0.3).
+    pub fn has_any_block_hooks(&self) -> bool {
+        self.entries.iter().any(|entry| {
+            entry
+                .run
+                .as_ref()
+                .is_some_and(|run| !run.logic.blocks.is_empty())
+        })
+    }
+
     /// Dispatches a block callback (API 0.3) to the mod that registered the block.
     pub fn has_block_hook(&self, block_id: &str) -> bool {
         let block_id = block_id.split_once('[').map_or(block_id, |(id, _)| id);
@@ -1667,7 +1677,8 @@ impl Mods {
         let fluids: BTreeMap<u32, FluidView> = shared
             .fluids
             .iter()
-            .filter_map(|((at, tank), view)| (at == &pos).then(|| (*tank, view.clone())))
+            .filter(|((at, _), _)| at == &pos)
+            .map(|((_, tank), view)| (*tank, view.clone()))
             .collect();
         let item_slots = shared
             .dirty_item_slots

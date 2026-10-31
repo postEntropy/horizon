@@ -120,7 +120,9 @@ impl Game<'_> {
         mob.previous_body_yaw = yaw;
         mob.previous_head_yaw = yaw;
         let id = mob.id;
+        let kind = mob.kind.id.clone();
         self.mobs.push(mob);
+        self.mod_entity_spawned(id, &kind, at);
         Some(id)
     }
     /// `CarvedPumpkinBlock.clearPatternBlocks`: every cell of the match

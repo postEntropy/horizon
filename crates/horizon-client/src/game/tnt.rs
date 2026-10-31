@@ -149,6 +149,7 @@ impl Game<'_> {
             fuse,
             on_ground: false,
         });
+        self.mod_entity_spawned(0, "minecraft:tnt", [position.x, position.y, position.z]);
     }
     /// `PrimedTnt.tick` for every primed TNT, in order; an expired fuse
     /// explodes immediately (later TNT in the list feel its knockback this
@@ -171,6 +172,8 @@ impl Game<'_> {
                 self.res.facts(),
             )?;
             if t.fuse <= 0 {
+                let id = t.id;
+                let pos = [t.position.x, t.position.y, t.position.z];
                 let center = [
                     t.position.x,
                     t.position.y + PrimedTnt::SIZE * 0.0625,
@@ -178,6 +181,7 @@ impl Game<'_> {
                 ];
                 self.tnts.remove(i);
                 count -= 1;
+                self.mod_entity_death(id, "minecraft:tnt", pos);
                 self.server_explode(center, 4.0, BlockInteraction::Destroy, false)?;
             } else {
                 i += 1;

@@ -242,6 +242,7 @@ impl Game<'_> {
             returning: 0,
             creative_only: self.creative,
         });
+        self.mod_entity_spawned(0, "minecraft:trident", [start.x, start.y, start.z]);
         self.player_projectile_shot();
         self.audio
             .play("minecraft:item.trident.throw", at, 1.0, 1.0);
@@ -395,6 +396,11 @@ impl Game<'_> {
                     Some([feet.x, feet.y, feet.z]),
                     0.2,
                     pitch,
+                );
+                self.mod_entity_death(
+                    t.id,
+                    "minecraft:trident",
+                    [t.position.x, t.position.y, t.position.z],
                 );
                 continue;
             }

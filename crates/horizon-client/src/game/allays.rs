@@ -77,7 +77,12 @@ impl Game<'_> {
                 let e = &mut self.dropped[j];
                 e.stack.count -= take as u32;
                 if e.stack.count == 0 {
-                    self.dropped.remove(j);
+                    let item = self.dropped.remove(j);
+                    self.mod_entity_death(
+                        item.id,
+                        "minecraft:item",
+                        [item.position.x, item.position.y, item.position.z],
+                    );
                 }
                 let at = [pos.x, pos.y, pos.z];
                 let pitch =

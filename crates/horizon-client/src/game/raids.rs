@@ -730,7 +730,9 @@ impl Game<'_> {
         spawning::finalize(&mut mob, &facts, &difficulty);
         raider::finalize(&mut mob, reason);
         let id = mob.id;
+        let kind = mob.kind.id.clone();
         self.mobs.push(mob);
+        self.mod_entity_spawned(id, &kind, at);
         self.enchant_spawn_equipment(id);
         Some(id)
     }
@@ -894,7 +896,12 @@ impl Game<'_> {
         }
         taken.sort_unstable();
         for i in taken.into_iter().rev() {
-            self.dropped.remove(i);
+            let item = self.dropped.remove(i);
+            self.mod_entity_death(
+                item.id,
+                "minecraft:item",
+                [item.position.x, item.position.y, item.position.z],
+            );
         }
         for (id, wave, mob) in new_leaders {
             if let Some(r) = self.raiding.raids.get_mut(id) {

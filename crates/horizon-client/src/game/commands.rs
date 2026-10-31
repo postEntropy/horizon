@@ -1536,28 +1536,96 @@ impl Game<'_> {
                     }
                 }
             }
-            Target::Item(id) => self.dropped.retain(|i| i.id != id),
+            Target::Item(id) => {
+                if let Some(pos) = self.dropped.iter().find(|i| i.id == id).map(|i| i.position) {
+                    self.mod_entity_death(id, "minecraft:item", [pos.x, pos.y, pos.z]);
+                }
+                self.dropped.retain(|i| i.id != id);
+            }
             Target::Orb(i) => {
                 if i < self.orbs.len() {
+                    let (id, pos) = (self.orbs[i].id, self.orbs[i].position);
+                    self.mod_entity_death(id, "minecraft:experience_orb", [pos.x, pos.y, pos.z]);
                     self.orbs[i].age = u32::MAX / 2;
                 }
             }
             Target::Arrow(i) => {
-                if let Some(a) = self
-                    .creatures
-                    .projectiles
-                    .get_mut(i)
-                    .and_then(|p| p.arrow.as_mut())
-                {
-                    a.removed = true;
+                if let Some(p) = self.creatures.projectiles.get_mut(i) {
+                    let id = p.id;
+                    let kind = super::mods::projectile_entity_kind(&p.kind);
+                    let pos = p.position;
+                    if let Some(a) = p.arrow.as_mut() {
+                        a.removed = true;
+                        self.mod_entity_death(id, kind, [pos.x, pos.y, pos.z]);
+                    }
                 }
             }
-            Target::Stand(id) => self.armor_stands.retain(|a| a.id != id),
-            Target::Frame(id) => self.item_frames.retain(|f| f.id != id),
-            Target::Painting(id) => self.paintings.retain(|p| p.id != id),
-            Target::Boat(id) => self.boats.retain(|b| b.id != id),
-            Target::Cart(id) => self.carts.retain(|c| c.id != id),
-            Target::Other(id) => self.others.retain(|o| o.id != id),
+            Target::Stand(id) => {
+                if let Some(pos) = self
+                    .armor_stands
+                    .iter()
+                    .find(|a| a.id == id)
+                    .map(|a| a.position)
+                {
+                    self.mod_entity_death(id, "minecraft:armor_stand", [pos.x, pos.y, pos.z]);
+                }
+                self.armor_stands.retain(|a| a.id != id);
+            }
+            Target::Frame(id) => {
+                if let Some((kind, pos)) = self.item_frames.iter().find(|f| f.id == id).map(|f| {
+                    (
+                        f.kind(),
+                        [f.pos[0] as f64, f.pos[1] as f64, f.pos[2] as f64],
+                    )
+                }) {
+                    self.mod_entity_death(id, kind, pos);
+                }
+                self.item_frames.retain(|f| f.id != id);
+            }
+            Target::Painting(id) => {
+                if let Some(pos) = self
+                    .paintings
+                    .iter()
+                    .find(|p| p.id == id)
+                    .map(|p| [p.pos[0] as f64, p.pos[1] as f64, p.pos[2] as f64])
+                {
+                    self.mod_entity_death(id, "minecraft:painting", pos);
+                }
+                self.paintings.retain(|p| p.id != id);
+            }
+            Target::Boat(id) => {
+                if let Some((kind, pos)) = self
+                    .boats
+                    .iter()
+                    .find(|b| b.id == id)
+                    .map(|b| (b.entity_type(), [b.position.x, b.position.y, b.position.z]))
+                {
+                    self.mod_entity_death(id, &kind, pos);
+                }
+                self.boats.retain(|b| b.id != id);
+            }
+            Target::Cart(id) => {
+                if let Some((kind, pos)) = self
+                    .carts
+                    .iter()
+                    .find(|c| c.id == id)
+                    .map(|c| (c.kind.id(), [c.position.x, c.position.y, c.position.z]))
+                {
+                    self.mod_entity_death(id, kind, pos);
+                }
+                self.carts.retain(|c| c.id != id);
+            }
+            Target::Other(id) => {
+                if let Some((kind, pos)) = self
+                    .others
+                    .iter()
+                    .find(|o| o.id == id)
+                    .map(|o| (o.kind.clone(), [o.position.x, o.position.y, o.position.z]))
+                {
+                    self.mod_entity_death(id, &kind, pos);
+                }
+                self.others.retain(|o| o.id != id);
+            }
         }
     }
     fn cmd_kill(&mut self, ctx: &Context) -> R<i32> {
@@ -1660,8 +1728,9 @@ impl Game<'_> {
                 }
                 "experience_orb" => {
                     self.next_entity += 1;
+                    let id = self.next_entity;
                     self.orbs.push(horizon_client::entities::ExperienceOrb {
-                        id: self.next_entity,
+                        id,
                         position: Vec3::new(pos[0], pos[1], pos[2]),
                         previous: Vec3::new(pos[0], pos[1], pos[2]),
                         velocity: Vec3::new(0.0, 0.0, 0.0),
@@ -1669,6 +1738,7 @@ impl Game<'_> {
                         age: 0,
                         on_ground: false,
                     });
+                    self.mod_entity_spawned(id, "minecraft:experience_orb", pos);
                     name = Text::translate("entity.minecraft.experience_orb", &[]);
                 }
                 "lightning_bolt" => {
@@ -1679,12 +1749,14 @@ impl Game<'_> {
                     let cart_kind = super::minecarts::CartKind::from_id(&kind)
                         .unwrap_or(super::minecarts::CartKind::Rideable);
                     self.next_entity += 1;
+                    let id = self.next_entity;
                     let cart = super::minecarts::Minecart::new(
-                        self.next_entity,
+                        id,
                         cart_kind,
                         Vec3::new(pos[0], pos[1], pos[2]),
                     );
                     self.carts.push(cart);
+                    self.mod_entity_spawned(id, cart_kind.id(), pos);
                     name = Text::translate(&format!("entity.minecraft.{k}"), &[]);
                 }
                 // SummonCommand.createEntity: any other type from an empty compound.

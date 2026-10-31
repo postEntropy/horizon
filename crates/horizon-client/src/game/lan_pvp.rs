@@ -77,6 +77,25 @@ impl Game<'_> {
         if self.mob_hit().is_some_and(|(_, m)| m < d) || !self.before_block(d) {
             return false;
         }
+        let target_pos = self
+            .lan
+            .as_ref()
+            .and_then(|h| {
+                h.hub.guests.iter().find(|g| g.conn == conn).map(|g| {
+                    [
+                        g.position[0].floor() as i32,
+                        g.position[1].floor() as i32,
+                        g.position[2].floor() as i32,
+                    ]
+                })
+            })
+            .unwrap_or([0, 0, 0]);
+        if let Some(item) = self.held().map(|stack| stack.item.to_string())
+            && self.mod_attack_entity(&item, "minecraft:player", target_pos)
+        {
+            self.swing_arm();
+            return true;
+        }
         let Some(mut host) = self.lan.take() else {
             return false;
         };

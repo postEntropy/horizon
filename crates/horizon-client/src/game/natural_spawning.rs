@@ -403,7 +403,10 @@ impl<'a> Game<'a> {
             mob.id = self.next_entity;
             mob.persistent = persistent;
             let id = mob.id;
+            let kind = mob.kind.id.clone();
+            let pos = [mob.position.x, mob.position.y, mob.position.z];
             self.mobs.push(mob);
+            self.mod_entity_spawned(id, &kind, pos);
             self.enchant_spawn_equipment(id);
             if !persistent {
                 self.spawn_jockeys(id, true);

@@ -436,6 +436,7 @@ impl Game<'_> {
         self.mobs = mobs;
         // Dropped items: 5 health, destroyed by the explosion damage (nether stars resist).
         let mut items = std::mem::take(&mut self.dropped);
+        let mut destroyed_items = Vec::new();
         items.retain_mut(|item| {
             let feet = [item.position.x, item.position.y, item.position.z];
             let dist = distance(feet) / diameter;
@@ -449,6 +450,7 @@ impl Game<'_> {
                 [feet[0] + half, feet[1] + 0.25, feet[2] + half],
             );
             if &*item.stack.item != "minecraft:nether_star" && damage(dist, exposure) >= 5.0 {
+                destroyed_items.push((item.id, feet));
                 return false;
             }
             let dir = direction([feet[0], feet[1] + 0.2125, feet[2]]);
@@ -461,6 +463,9 @@ impl Game<'_> {
             true
         });
         self.dropped = items;
+        for (id, pos) in destroyed_items {
+            self.mod_entity_death(id, "minecraft:item", pos);
+        }
         // Primed TNT: knockback only, from its position (not its eyes).
         let mut tnts = std::mem::take(&mut self.tnts);
         for t in &mut tnts {

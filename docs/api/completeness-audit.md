@@ -8,7 +8,7 @@ test, does not by itself mean a pack feature works in a playable world.
 
 | Line | Contract / SDK | Runtime | Game integration | Status |
 |---|---|---|---|---|
-| 0.3 logic | Present | Present | Present for the client and local game hooks inspected | Implemented in parts; full multiplayer and per-capability gameplay coverage is not established |
+| 0.3 logic | Present | Present | Present across client, in-frame and integrated-server single-player hooks (`on-block`, `on-item`, `on-server`, `config`, `server`, `world-read`) | Single-player logic and callback coverage verified in `tools/mod_api_e2e.py --mode both`; LAN/dedicated parity remains deferred |
 | 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist; mod packets bridge the integrated single-player client and server | Usable foundation; directional transfer, broad recipe behavior, LAN/dedicated networking and some persistence cases remain incomplete |
 | 0.5 deep | Present | Present, including runtime tests | Custom entity lifecycle (`mod-entities` + `entities`), model animations/bones/draw-lists (`models`), custom dimensions/portals/travel/worldgen (`dimensions`), crop growth, explosion filtering, enchantment reads, damage, XP and loot hooks have live single-player integration | Substantial single-player live bridge; LAN/dedicated parity remains deferred |
 
@@ -36,10 +36,24 @@ this audit records concrete evidence and its limits.
   logic hooks, manifest capability checks, storage and validated config
   persistence (`.horizon-mod-data/<mod_id>.config.json`) across mod reload and
   game restart (`tools/mod_api_e2e.py --mode both`).
-- `horizon-client/src/game/mods.rs` dispatches block interactions, commands,
-  chat, ticks, frames, target and inventory snapshots. This is evidence of an
-  in-game path, but does not verify every action in both in-frame and integrated
-  server modes, LAN, and dedicated-server mode.
+- `horizon-client/src/game/mods.rs` dispatches block interactions (`use-without-item`,
+  `use-item-on`, `placed`, `attack`, `broken`, `block-tick`, `random-tick`,
+  `neighbor-changed`, and `entity-inside` across all entity families: players,
+  minecarts, LAN guests, mobs, dropped items, XP orbs, boats, armor stands,
+  primed TNT, falling blocks, arrows, tridents, projectiles, thrown potions, and
+  fireworks), item callbacks (`use-in-air` including fallback after non-consuming
+  `use-on-block`, `use-on-block`, `attack-entity` across mobs, custom entities,
+  LAN guests and non-mob entities, and `finish-using` across consumables,
+  potions, shield, spyglass, bow, crossbow and trident), and server events
+  (`player-join`/`player-leave`, `block-break`/`block-place`, `entity-spawn` and
+  `entity-death` across mobs, custom entities, dropped items, XP orbs, boats,
+  minecarts, paintings, item frames, armor stands, ender dragon, primed TNT,
+  falling blocks, arrows, tridents, projectiles, thrown potions, fireworks and
+  lightning), plus commands, chat, ticks, frames, target and inventory snapshots.
+  `tools/mod_api_e2e.py --mode both` verifies block `entity-inside`, item
+  `use-on-block`/`use-in-air`/`finish-using`/`attack-entity`, and server
+  `entity-spawn`/`entity-death` end-to-end in both `--in-frame` and integrated
+  server single-player modes.
 - The game refreshes `world-read` with loaded block states, biomes and packed
   light in a four-block neighborhood around the player. Queries are scoped to
   the active dimension; runtime sandbox coverage checks two dimensions sharing

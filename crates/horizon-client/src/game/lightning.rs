@@ -143,6 +143,7 @@ impl Game<'_> {
             visual_only,
             converted: Vec::new(),
         });
+        self.mod_entity_spawned(0, "minecraft:lightning_bolt", at);
     }
     /// `ClientLevel.addEntity` for a server's lightning bolt: on a client it
     /// only flashes, sounds and draws (`LightningBolt.tick` off the server).
@@ -226,6 +227,9 @@ impl Game<'_> {
             b.life -= 1;
             if b.life < 0 {
                 if b.flashes == 0 {
+                    if !b.visual_only {
+                        self.mod_entity_death(b.id, "minecraft:lightning_bolt", b.at);
+                    }
                     return false;
                 }
                 if b.life < -self.world.random.next_int_bound(10).unwrap_or(0) {
@@ -394,10 +398,18 @@ impl Game<'_> {
         strike(self);
         self.each_guest_hit(strike);
         // Dropped items burn up (ItemEntity health 5), save fire-resistant ones.
+        let mut burned_items = Vec::new();
         self.dropped.retain(|e| {
-            !inside([e.position.x, e.position.y, e.position.z])
-                || e.stack.item.contains("netherite")
+            let keep = !inside([e.position.x, e.position.y, e.position.z])
+                || e.stack.item.contains("netherite");
+            if !keep {
+                burned_items.push((e.id, [e.position.x, e.position.y, e.position.z]));
+            }
+            keep
         });
+        for (id, pos) in burned_items {
+            self.mod_entity_death(id, "minecraft:item", pos);
+        }
     }
     /// Simulation-order render inputs; seeded geometry lives in the renderer.
     pub(super) fn bolt_instances(&self) -> Vec<horizon_client::gfx::lightning::Bolt> {

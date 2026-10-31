@@ -553,6 +553,7 @@ impl Game<'_> {
         let mut events = Vec::new();
         let mut mobs = std::mem::take(&mut self.mobs);
         let mut dead = Vec::new();
+        let mut despawned = Vec::new();
         let mut died = std::mem::take(&mut self.died);
         let ticking = self.entity_ticking_area();
         // With guests on, each mob sees its nearest player (game/lan_mobs.rs).
@@ -618,7 +619,15 @@ impl Game<'_> {
                     .world
                     .loaded(m.position.x.floor() as i32, m.position.z.floor() as i32)
                 {
-                    keep.push(!m.hostile() || m.persistent);
+                    let kept = !m.hostile() || m.persistent;
+                    if !kept && !died.remove(&m.id) {
+                        despawned.push((
+                            m.id,
+                            m.kind.id.clone(),
+                            [m.position.x, m.position.y, m.position.z],
+                        ));
+                    }
+                    keep.push(kept);
                     continue;
                 }
                 // ServerLevel.tick: every loaded entity checks despawning, but
@@ -627,7 +636,13 @@ impl Game<'_> {
                 if !ticking(m.position.x.floor() as i32, m.position.z.floor() as i32) {
                     let kept = horizon_client::mobs::ai::despawn_check(m, &w);
                     if !kept {
-                        died.remove(&m.id);
+                        if !died.remove(&m.id) {
+                            despawned.push((
+                                m.id,
+                                m.kind.id.clone(),
+                                [m.position.x, m.position.y, m.position.z],
+                            ));
+                        }
                         snapshot[i].alive = false;
                     }
                     keep.push(kept);
@@ -660,8 +675,12 @@ impl Game<'_> {
                 if !m.alive() && !m.removed && died.insert(m.id) {
                     dead.push(m.clone());
                 }
-                if !kept {
-                    died.remove(&m.id);
+                if !kept && !died.remove(&m.id) {
+                    despawned.push((
+                        m.id,
+                        m.kind.id.clone(),
+                        [m.position.x, m.position.y, m.position.z],
+                    ));
                 }
                 keep.push(kept);
                 // ServerLevel ticks entities one after another: the ones
@@ -702,6 +721,9 @@ impl Game<'_> {
         self.villager_pickups();
         for m in dead {
             self.mob_died(&m);
+        }
+        for (id, kind, pos) in despawned {
+            self.mod_entity_death(id, &kind, pos);
         }
         self.handle_mob_events(events)?;
         self.lan_guest_mob_events(guest_events);
@@ -787,16 +809,7 @@ impl Game<'_> {
                 }
             }
         }
-        self.mod_server_event(
-            "entity-death",
-            m.id.to_string(),
-            [
-                m.position.x.floor() as i32,
-                m.position.y.floor() as i32,
-                m.position.z.floor() as i32,
-            ],
-            m.kind.id.clone(),
-        );
+        self.mod_entity_death(m.id, &m.kind.id, [m.position.x, m.position.y, m.position.z]);
     }
     /// The killer's side of a mob's death: `ServerPlayer.awardKillScore`'s
     /// statistics and scores, and the `player_killed_entity` trigger.
@@ -1084,14 +1097,24 @@ impl Game<'_> {
                     }
                 }
                 MobEvent::Projectile(p) => {
-                    let (owner, at) = (p.owner, [p.position.x, p.position.y, p.position.z]);
+                    let (id, kind, owner, at) = (
+                        p.id,
+                        super::mods::projectile_entity_kind(&p.kind),
+                        p.owner,
+                        [p.position.x, p.position.y, p.position.z],
+                    );
                     self.creatures.projectiles.push(p);
+                    self.mod_entity_spawned(id, kind, at);
                     self.projectile_event("minecraft:projectile_shoot", owner, at);
                 }
                 MobEvent::Spawn(mut m) => {
                     self.next_entity += 1;
-                    m.id = self.next_entity;
+                    let id = self.next_entity;
+                    m.id = id;
+                    let kind = m.kind.id.clone();
+                    let at = [m.position.x, m.position.y, m.position.z];
                     self.mobs.push(*m);
+                    self.mod_entity_spawned(id, &kind, at);
                 }
                 MobEvent::SpawnKind { kind, at, setup } => {
                     if let Some(id) = self.spawn_mob(&kind, at, setup.persistent) {
@@ -1766,6 +1789,11 @@ impl Game<'_> {
         });
         self.creatures.projectiles = projectiles;
         for shot in picked {
+            self.mod_entity_death(
+                shot.id,
+                super::mods::projectile_entity_kind(&shot.kind),
+                [shot.position.x, shot.position.y, shot.position.z],
+            );
             self.add_pickup(
                 super::pickups::Taken::Arrow(Box::new(shot)),
                 super::pickups::Collector::Player,
@@ -1776,6 +1804,7 @@ impl Game<'_> {
     fn tick_projectiles(&mut self) -> Result<()> {
         let mut projectiles = std::mem::take(&mut self.creatures.projectiles);
         let mut hits = Vec::new();
+        let mut expired_projectiles = Vec::new();
         let mut deflections: Vec<[f64; 3]> = Vec::new();
         let mut arrow_events = Vec::new();
         {
@@ -1883,11 +1912,18 @@ impl Game<'_> {
                             at: p.position,
                             face: [0; 3],
                         },
+                        false,
                     ));
                     return false;
                 }
                 if hit != Hit::None {
-                    hits.push((p.clone(), hit));
+                    hits.push((p.clone(), hit, keep));
+                } else if !keep {
+                    expired_projectiles.push((
+                        p.id,
+                        super::mods::projectile_entity_kind(&p.kind),
+                        [p.position.x, p.position.y, p.position.z],
+                    ));
                 }
                 keep
             });
@@ -1900,10 +1936,21 @@ impl Game<'_> {
             self.arrow_event(at, event);
         }
         self.creatures.projectiles.append(&mut projectiles);
-        for (p, hit) in hits {
+        for (id, kind, pos) in expired_projectiles {
+            self.mod_entity_death(id, kind, pos);
+        }
+        for (p, hit, kept) in hits {
+            let before_len = self.creatures.projectiles.len();
             // A player's arrow on another player lands as the victim's hurt.
             if let Some(victim) = self.projectile_pvp_victim(&p, hit) {
                 self.projectile_hits_player(&p, hit, victim)?;
+                if !kept && self.creatures.projectiles.len() == before_len {
+                    self.mod_entity_death(
+                        p.id,
+                        super::mods::projectile_entity_kind(&p.kind),
+                        [p.position.x, p.position.y, p.position.z],
+                    );
+                }
                 continue;
             }
             // A guest's projectile lands as theirs: a pearl takes them, what
@@ -1922,6 +1969,13 @@ impl Game<'_> {
                     self.guest_projectile_hit(conn, &p, hit)?;
                 }
                 _ => self.projectile_hit(&p, hit)?,
+            }
+            if !kept && self.creatures.projectiles.len() == before_len {
+                self.mod_entity_death(
+                    p.id,
+                    super::mods::projectile_entity_kind(&p.kind),
+                    [p.position.x, p.position.y, p.position.z],
+                );
             }
         }
         self.flush_wind_bursts()
@@ -3027,7 +3081,10 @@ impl Game<'_> {
             velocity,
             on_ground,
         );
+        let proj_kind = super::mods::projectile_entity_kind(&proj.kind);
+        let proj_at = [proj.position.x, proj.position.y, proj.position.z];
         self.creatures.projectiles.push(proj);
+        self.mod_entity_spawned(0, proj_kind, proj_at);
         self.player_projectile_shot();
         let sound = match kind {
             ProjectileKind::Snowball => "minecraft:entity.snowball.throw",

@@ -205,7 +205,12 @@ impl Game<'_> {
             let e = &mut self.dropped[j];
             e.stack.count -= 1;
             if e.stack.count == 0 {
-                self.dropped.remove(j);
+                let item = self.dropped.remove(j);
+                self.mod_entity_death(
+                    item.id,
+                    "minecraft:item",
+                    [item.position.x, item.position.y, item.position.z],
+                );
             }
             let m = &mut self.mobs[i];
             m.extra.head = Some(item);

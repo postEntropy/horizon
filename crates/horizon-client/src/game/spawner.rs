@@ -124,7 +124,10 @@ impl Game<'_> {
                     self.next_entity += 1;
                     mob.id = self.next_entity;
                     let id = mob.id;
+                    let kind = mob.kind.id.clone();
+                    let pos = [mob.position.x, mob.position.y, mob.position.z];
                     self.mobs.push(mob);
+                    self.mod_entity_spawned(id, &kind, pos);
                     self.enchant_spawn_equipment(id);
                     self.spawn_jockeys(id, true);
                     Some(id)

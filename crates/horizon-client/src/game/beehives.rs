@@ -51,7 +51,11 @@ impl HiveHost for GameHive<'_, '_> {
         Some(self.game.mobs.remove(i))
     }
     fn add(&mut self, m: Mob) -> bool {
+        let id = m.id;
+        let kind = m.kind.id.clone();
+        let pos = [m.position.x, m.position.y, m.position.z];
         self.game.mobs.push(m);
+        self.game.mod_entity_spawned(id, &kind, pos);
         true
     }
     fn sound(&mut self, name: &'static str, at: [f64; 3]) {

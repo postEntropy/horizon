@@ -113,6 +113,10 @@ impl Game<'_> {
         }
         let charged = stack.data().is_some_and(|d| !d.charged.is_empty());
         if now >= 1.0 && !charged {
+            if self.mod_finish_using(&stack.item) {
+                self.using = None;
+                return;
+            }
             // tryLoadProjectiles / ProjectileWeaponItem.draw.
             let shots = if self.effective_enchantment_level(stack, "minecraft:multishot") > 0 {
                 3
@@ -208,7 +212,9 @@ impl Game<'_> {
                     a.set_owner(Some(Who::Player));
                 }
                 arrow.shoot(&mut self.world.random, dir.to_array(), power, 1.0);
+                let arrow_at = [arrow.position.x, arrow.position.y, arrow.position.z];
                 self.creatures.projectiles.push(arrow);
+                self.mod_entity_spawned(0, "minecraft:arrow", arrow_at);
             }
             self.player_projectile_shot();
             let pitch = if index == 0 {

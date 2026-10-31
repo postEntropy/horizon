@@ -684,12 +684,104 @@ impl Game<'_> {
         // take the ids counted as this stack's.
         let mut waiting = std::mem::take(&mut self.world.loaded_entities);
         let before = self.next_entity;
+        let tnt_before = self.tnts.len();
+        let fall_before = self.falling.len();
+        let proj_before = self.creatures.projectiles.len();
         self.world.loaded_entities.push((key, vec![tag]));
         self.spawn_loaded_entities();
         waiting.append(&mut self.world.loaded_entities);
         self.world.loaded_entities = waiting;
+        let new_tnts: Vec<(u32, [f64; 3])> = self.tnts[tnt_before..]
+            .iter()
+            .map(|t| (t.id, [t.position.x, t.position.y, t.position.z]))
+            .collect();
+        for (id, pos) in new_tnts {
+            self.mod_entity_spawned(id, "minecraft:tnt", pos);
+        }
+        let new_falling: Vec<(u32, [f64; 3])> = self.falling[fall_before..]
+            .iter()
+            .map(|f| (f.id, [f.position.x, f.position.y, f.position.z]))
+            .collect();
+        for (id, pos) in new_falling {
+            self.mod_entity_spawned(id, "minecraft:falling_block", pos);
+        }
+        let new_proj: Vec<(u32, &'static str, [f64; 3])> = self.creatures.projectiles
+            [proj_before..]
+            .iter()
+            .map(|p| {
+                (
+                    p.id,
+                    super::super::mods::projectile_entity_kind(&p.kind),
+                    [p.position.x, p.position.y, p.position.z],
+                )
+            })
+            .collect();
+        for (id, kind, pos) in new_proj {
+            self.mod_entity_spawned(id, kind, pos);
+        }
         if self.next_entity == before {
             return None;
+        }
+        for id in (before + 1)..=self.next_entity {
+            if let Some((kind, pos)) = self.mobs.iter().find(|m| m.id == id).map(|m| {
+                (
+                    m.kind.id.clone(),
+                    [m.position.x, m.position.y, m.position.z],
+                )
+            }) {
+                self.mod_entity_spawned(id, &kind, pos);
+            } else if let Some(pos) = self
+                .dropped
+                .iter()
+                .find(|e| e.id == id)
+                .map(|e| [e.position.x, e.position.y, e.position.z])
+            {
+                self.mod_entity_spawned(id, "minecraft:item", pos);
+            } else if let Some(pos) = self
+                .armor_stands
+                .iter()
+                .find(|a| a.id == id)
+                .map(|a| [a.position.x, a.position.y, a.position.z])
+            {
+                self.mod_entity_spawned(id, "minecraft:armor_stand", pos);
+            } else if let Some((kind, pos)) =
+                self.item_frames.iter().find(|f| f.id == id).map(|f| {
+                    (
+                        f.kind(),
+                        [f.pos[0] as f64, f.pos[1] as f64, f.pos[2] as f64],
+                    )
+                })
+            {
+                self.mod_entity_spawned(id, kind, pos);
+            } else if let Some(pos) = self
+                .paintings
+                .iter()
+                .find(|p| p.id == id)
+                .map(|p| [p.pos[0] as f64, p.pos[1] as f64, p.pos[2] as f64])
+            {
+                self.mod_entity_spawned(id, "minecraft:painting", pos);
+            } else if let Some((kind, pos)) = self
+                .boats
+                .iter()
+                .find(|b| b.id == id)
+                .map(|b| (b.entity_type(), [b.position.x, b.position.y, b.position.z]))
+            {
+                self.mod_entity_spawned(id, &kind, pos);
+            } else if let Some((kind, pos)) = self
+                .carts
+                .iter()
+                .find(|c| c.id == id)
+                .map(|c| (c.kind.id(), [c.position.x, c.position.y, c.position.z]))
+            {
+                self.mod_entity_spawned(id, kind, pos);
+            } else if let Some((kind, pos)) = self
+                .others
+                .iter()
+                .find(|o| o.id == id)
+                .map(|o| (o.kind.clone(), [o.position.x, o.position.y, o.position.z]))
+            {
+                self.mod_entity_spawned(id, &kind, pos);
+            }
         }
         // The root of the stack is the first entity spawned.
         let id = before + 1;

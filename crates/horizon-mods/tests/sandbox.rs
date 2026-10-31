@@ -103,24 +103,28 @@ fn mods_dir() -> &'static Path {
         for (name, manifest) in mods {
             let core = std::fs::read(built.join(format!("{name}.wasm"))).unwrap();
             let component = componentize(&core).unwrap();
-            let content_path = match name {
-                "horizon_mods_test_machine" => Some("data/test_machine/horizon/block/smelter.json"),
-                "horizon_mods_test_machine_peer" => Some("data/test_peer/horizon/block/cell.json"),
-                _ => None,
-            };
-            let hmod = if let Some(content_path) = content_path {
-                // The game-level machine fixture must carry its block as a
-                // real API 0.2 content definition, so its API 0.4 block entity
-                // can be placed and exercised by vanilla containers.
-                Package::write_files(
-                    &manifest,
-                    Some(&component),
-                    &[(
-                        content_path,
+            let content_files: &[(&str, &[u8])] = match name {
+                "horizon_mods_test_machine" => &[
+                    (
+                        "data/test_machine/horizon/block/smelter.json",
                         br#"{"template":"minecraft:furnace","properties":{"hardness":3.5}}"#,
-                    )],
-                )
-                .unwrap()
+                    ),
+                    (
+                        "data/test_machine/horizon/item/wrench.json",
+                        br#"{"template":"minecraft:stick"}"#,
+                    ),
+                ],
+                "horizon_mods_test_machine_peer" => &[(
+                    "data/test_peer/horizon/block/cell.json",
+                    br#"{"template":"minecraft:furnace","properties":{"hardness":3.5}}"#,
+                )],
+                _ => &[],
+            };
+            let hmod = if !content_files.is_empty() {
+                // The game-level machine fixture must carry its block and item
+                // as real API 0.2 content definitions, so its API 0.4 block
+                // entity and API 0.3 item hooks can be exercised in-game.
+                Package::write_files(&manifest, Some(&component), content_files).unwrap()
             } else {
                 Package::write(&manifest, &component).unwrap()
             };
@@ -1104,6 +1108,93 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
             }),
         ]
     );
+    assert!(mods.has_any_block_hooks());
+    assert!(!Mods::default().has_any_block_hooks());
+    assert_eq!(
+        mods.block_event(
+            BlockEvent {
+                action: BlockAction::EntityInside,
+                state: "test_machine:smelter[lit=false]".into(),
+                dimension: "minecraft:overworld".into(),
+                x: -31,
+                y: 70,
+                z: -9,
+                actor: "minecraft:item/42".into(),
+                held_item: String::new(),
+            },
+            String::new(),
+        ),
+        EventOutcome::Pass
+    );
+    assert_eq!(
+        mods.item_event(ItemEvent {
+            action: ItemAction::UseOnBlock,
+            item: "minecraft:spyglass".into(),
+            player: "Player".into(),
+            dimension: "minecraft:overworld".into(),
+            x: -31,
+            y: 70,
+            z: -9,
+            target: "minecraft:stone".into(),
+        }),
+        EventOutcome::Pass
+    );
+    assert_eq!(
+        mods.item_event(ItemEvent {
+            action: ItemAction::UseInAir,
+            item: "minecraft:spyglass".into(),
+            player: "Player".into(),
+            dimension: "minecraft:overworld".into(),
+            x: -31,
+            y: 70,
+            z: -9,
+            target: String::new(),
+        }),
+        EventOutcome::Pass
+    );
+    assert_eq!(
+        mods.item_event(ItemEvent {
+            action: ItemAction::FinishUsing,
+            item: "minecraft:spyglass".into(),
+            player: "Player".into(),
+            dimension: "minecraft:overworld".into(),
+            x: -31,
+            y: 70,
+            z: -9,
+            target: String::new(),
+        }),
+        EventOutcome::Pass
+    );
+    assert_eq!(
+        mods.item_event(ItemEvent {
+            action: ItemAction::AttackEntity,
+            item: "test_machine:wrench".into(),
+            player: "Player".into(),
+            dimension: "minecraft:overworld".into(),
+            x: -36,
+            y: 70,
+            z: -10,
+            target: "test_machine:automaton".into(),
+        }),
+        EventOutcome::Cancel
+    );
+    assert!(mods.command("machine_api logic_events"));
+    let logic_feedback = mods.drain();
+    assert_eq!(logic_feedback.len(), 1);
+    let Output::Feedback { text, error: false } = &logic_feedback[0] else {
+        panic!("expected logic_events feedback, got {logic_feedback:?}");
+    };
+    assert!(
+        text.contains(
+            "block=entity-inside:test_machine:smelter[lit=false]:-31,70,-9:minecraft:item/42"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains("item=attack-entity:test_machine:wrench:minecraft:overworld:-36,70,-10:test_machine:automaton"),
+        "{text}"
+    );
+    assert!(text.contains("air_fallback=true finished=true"), "{text}");
 
     let srv_out = mods.server_event(ServerEvent {
         kind: ServerEventKind::PlayerJoin,

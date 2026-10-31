@@ -2523,6 +2523,15 @@ impl Game<'_> {
                 cells.remove(i, item.position);
             }
         }
+        for (item, &gone) in items.iter().zip(&removed) {
+            if gone {
+                self.mod_entity_death(
+                    item.id,
+                    "minecraft:item",
+                    [item.position.x, item.position.y, item.position.z],
+                );
+            }
+        }
         let mut removed = removed.into_iter();
         items.retain(|_| !removed.next().unwrap_or(false));
         let Some(p) = self.player.as_ref() else {
@@ -2561,6 +2570,11 @@ impl Game<'_> {
                 let kind = item.stack.item.clone();
                 match self.give(item.stack.clone()) {
                     None => {
+                        self.mod_entity_death(
+                            item.id,
+                            "minecraft:item",
+                            [item.position.x, item.position.y, item.position.z],
+                        );
                         self.stats.add("picked_up", &kind, before as i32);
                         self.add_pickup(
                             pickups::Taken::Item(Box::new(item)),
@@ -2870,9 +2884,7 @@ impl Game<'_> {
             }
         });
         self.process_level_events()?;
-        for (pos, actor) in inside {
-            self.mod_entity_inside([pos.x, pos.y, pos.z], actor);
-        }
+        self.dispatch_mod_entity_inside(&inside);
         self.tick_scheduled()?;
         #[cfg(feature = "mods")]
         self.tick_mod_random_actions();
@@ -3105,6 +3117,7 @@ impl Game<'_> {
                         },
                         saved: None,
                     });
+                    self.mod_entity_spawned(0, "minecraft:falling_block", [p.x, p.y, p.z]);
                 }
                 LevelEvent::Player { pos, effect, .. } => match effect {
                     PlayerEffect::OpenMenu => self.open_menu([pos.x, pos.y, pos.z]),
@@ -3335,9 +3348,29 @@ impl Game<'_> {
             let original = f.clone();
             match self.fall_step(&mut f, entity_drops) {
                 Ok(FallStep::Falling) => kept.push(f),
-                Ok(FallStep::Gone) => {}
-                Ok(FallStep::Dropped(at)) => self.drop_falling_block(f.state, at),
-                Ok(FallStep::Landed(pos)) => self.finish_falling_block(f, pos),
+                Ok(FallStep::Gone) => {
+                    self.mod_entity_death(
+                        f.id,
+                        "minecraft:falling_block",
+                        [f.position.x, f.position.y, f.position.z],
+                    );
+                }
+                Ok(FallStep::Dropped(at)) => {
+                    self.mod_entity_death(
+                        f.id,
+                        "minecraft:falling_block",
+                        [f.position.x, f.position.y, f.position.z],
+                    );
+                    self.drop_falling_block(f.state, at);
+                }
+                Ok(FallStep::Landed(pos)) => {
+                    self.mod_entity_death(
+                        f.id,
+                        "minecraft:falling_block",
+                        [f.position.x, f.position.y, f.position.z],
+                    );
+                    self.finish_falling_block(f, pos);
+                }
                 Err(error) => {
                     kept.push(original);
                     collision_error.get_or_insert(error);
@@ -3835,6 +3868,9 @@ impl Game<'_> {
                 self.swing_arm();
                 return Ok(true);
             }
+            if !on_block && self.mod_use_item_in_air(&stack.item) {
+                return Ok(true);
+            }
         } else if !on_block && self.mod_use_item_in_air(&stack.item) {
             return Ok(true);
         }
@@ -4162,6 +4198,7 @@ impl Game<'_> {
             if ticks + 1 >= 1200 {
                 self.stop_spyglass();
                 self.using = None;
+                let _ = self.mod_finish_using(&stack.item);
             } else {
                 self.using = Some((slot, ticks + 1));
             }
@@ -4193,6 +4230,12 @@ impl Game<'_> {
     /// used for `ticks`, its hand acting: a bow or a trident lets go (not
     /// when its hand changed), a spyglass stops scoping.
     pub(super) fn release_used_item(&mut self, stack: &ItemStack, ticks: u32, hand_changed: bool) {
+        if !hand_changed && self.mod_finish_using(&stack.item) {
+            if &*stack.item == "minecraft:spyglass" {
+                self.stop_spyglass();
+            }
+            return;
+        }
         match &*stack.item {
             "minecraft:bow" if !hand_changed => self.release_bow(ticks),
             "minecraft:trident" if !hand_changed => self.release_trident(ticks),
@@ -7846,10 +7889,11 @@ impl Game<'_> {
                 return false;
             }
         }
-        let target = format!(
-            "minecraft:{}",
-            self.mobs[index].kind.id.trim_start_matches("minecraft:")
-        );
+        let target = if self.mobs[index].kind.id.contains(':') {
+            self.mobs[index].kind.id.clone()
+        } else {
+            format!("minecraft:{}", self.mobs[index].kind.id)
+        };
         let target_pos = [
             self.mobs[index].position.x.floor() as i32,
             self.mobs[index].position.y.floor() as i32,
@@ -7870,7 +7914,11 @@ impl Game<'_> {
     /// sounds.
     pub(super) fn attack_mob(&mut self, index: usize) {
         let target_kind = self.mobs[index].kind.id.clone();
-        let target_kind = format!("minecraft:{}", target_kind.trim_start_matches("minecraft:"));
+        let target_kind = if target_kind.contains(':') {
+            target_kind
+        } else {
+            format!("minecraft:{target_kind}")
+        };
         let (amount, scale, crit) = self.melee_damage(&target_kind);
         let target_position = [
             self.mobs[index].position.x.floor() as i32,
@@ -9318,6 +9366,7 @@ impl Game<'_> {
             )
         });
         let mut orbs = std::mem::take(&mut self.orbs);
+        let mut expired_orbs = Vec::new();
         orbs.retain_mut(|o| {
             let distance = |feet: &[f64; 3]| -> f64 {
                 (feet[0] - o.position.x).powi(2)
@@ -9329,7 +9378,11 @@ impl Game<'_> {
                 .filter(|(feet, _)| distance(feet) < 64.0)
                 .min_by(|a, b| distance(&a.0).total_cmp(&distance(&b.0)))
                 .map(|(_, target)| *target);
-            o.tick(&self.world, self.res.facts(), self.collision, target)
+            let keep = o.tick(&self.world, self.res.facts(), self.collision, target);
+            if !keep {
+                expired_orbs.push((o.id, o.position));
+            }
+            keep
         });
         let mut gained = 0;
         let mut taken = Vec::new();
@@ -9352,7 +9405,15 @@ impl Game<'_> {
             });
         }
         self.orbs = orbs;
+        for (id, pos) in expired_orbs {
+            self.mod_entity_death(id, "minecraft:experience_orb", [pos.x, pos.y, pos.z]);
+        }
         for o in taken {
+            self.mod_entity_death(
+                o.id,
+                "minecraft:experience_orb",
+                [o.position.x, o.position.y, o.position.z],
+            );
             self.add_pickup(pickups::Taken::Orb(Box::new(o)), pickups::Collector::Player);
         }
         if gained > 0 {
@@ -9449,7 +9510,9 @@ impl Game<'_> {
             velocity,
             on_ground,
         );
+        let arrow_at = [arrow.position.x, arrow.position.y, arrow.position.z];
         self.creatures.projectiles.push(arrow);
+        self.mod_entity_spawned(0, "minecraft:arrow", arrow_at);
         self.player_projectile_shot();
         let pitch = 1.0 / (self.world.random.next_float() * 0.4 + 1.2) + power * 0.5;
         self.audio
