@@ -1754,3 +1754,197 @@ fn models_sanitize_clear_and_cleanup_on_entity_and_block_removal() {
     assert!(mods.model_bones(block_target).is_empty());
     assert!(mods.model_draw_list(block_target).is_empty());
 }
+
+#[test]
+fn api_0_3_target_entity_inventory_world_view_and_server_actions() {
+    let mut mods = machines();
+    mods.set_snapshot(Snapshot {
+        player: Some(Player {
+            x: 0.5,
+            y: 70.0,
+            z: 0.5,
+            yaw: 0.0,
+            pitch: 0.0,
+            health: 20.0,
+            food: 20,
+            dimension: "minecraft:overworld".into(),
+        }),
+        clock: None,
+    });
+    mods.set_target(
+        Some(BlockHit {
+            x: 0,
+            y: 70,
+            z: 2,
+            state: "minecraft:chest[facing=north,type=single,waterlogged=false]".into(),
+            face: "north".into(),
+            owner: "minecraft".into(),
+        }),
+        Some(horizon_mods::EntityHit {
+            kind: "test_machine:automaton".into(),
+            health: 36.5,
+            max_health: 40.0,
+            name: "Automaton".into(),
+        }),
+    );
+    mods.set_inventory(
+        Some(StackView {
+            slot: 0,
+            id: "test_machine:wrench".into(),
+            count: 1,
+            damage: 3,
+            max_damage: 250,
+        }),
+        Some(StackView {
+            slot: 40,
+            id: "minecraft:shield".into(),
+            count: 1,
+            damage: 12,
+            max_damage: 336,
+        }),
+        vec![
+            StackView {
+                slot: 0,
+                id: "test_machine:wrench".into(),
+                count: 1,
+                damage: 3,
+                max_damage: 250,
+            },
+            StackView {
+                slot: 36,
+                id: "minecraft:diamond_boots".into(),
+                count: 1,
+                damage: 0,
+                max_damage: 429,
+            },
+            StackView {
+                slot: 39,
+                id: "minecraft:diamond_helmet".into(),
+                count: 1,
+                damage: 0,
+                max_damage: 363,
+            },
+            StackView {
+                slot: 40,
+                id: "minecraft:shield".into(),
+                count: 1,
+                damage: 12,
+                max_damage: 336,
+            },
+        ],
+        vec![
+            StackView {
+                slot: 0,
+                id: "minecraft:raw_iron".into(),
+                count: 8,
+                damage: 0,
+                max_damage: 0,
+            },
+            StackView {
+                slot: 1,
+                id: "minecraft:iron_ingot".into(),
+                count: 4,
+                damage: 0,
+                max_damage: 0,
+            },
+        ],
+    );
+
+    assert!(mods.command("machine_api api_0_3_reads"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "block=minecraft:chest[facing=north,type=single,waterlogged=false]@0,70,2:north:minecraft entity=test_machine:automaton:36.5/40.0:Automaton main=0:test_machine:wrench*1(3/250) off=40:minecraft:shield*1(12/336) inv_len=4 armor=[36:minecraft:diamond_boots*1,39:minecraft:diamond_helmet*1] open=[0:minecraft:raw_iron*8,1:minecraft:iron_ingot*4]".into(),
+            error: false,
+        }]
+    );
+
+    // Populate world-read neighborhood and verify bounds + stale-cell eviction on move/dimension change.
+    mods.set_world_view(
+        "minecraft:overworld",
+        vec![
+            horizon_mods::WorldCell {
+                x: 0,
+                y: 69,
+                z: 0,
+                block: "minecraft:stone".into(),
+                biome: "minecraft:plains".into(),
+                light: 15,
+            },
+            horizon_mods::WorldCell {
+                x: 0,
+                y: 70,
+                z: 0,
+                block: "minecraft:air".into(),
+                biome: "minecraft:plains".into(),
+                light: 15,
+            },
+        ],
+    );
+    assert!(mods.command("machine_api api_0_3_world"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "at=0,70,0 below=minecraft:stone biome=minecraft:plains light=15 far_block=none far_biome=none low=none high=none".into(),
+            error: false,
+        }]
+    );
+
+    // Replacing the world view after player movement evicts the previous cell at (0, 69, 0).
+    mods.set_world_view(
+        "minecraft:overworld",
+        vec![horizon_mods::WorldCell {
+            x: 20,
+            y: 69,
+            z: 20,
+            block: "minecraft:grass_block[snowy=false]".into(),
+            biome: "minecraft:forest".into(),
+            light: 14,
+        }],
+    );
+    assert!(mods.command("machine_api api_0_3_world probe 0 69 0"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "probe=0,69,0 block=none biome=none light=none".into(),
+            error: false,
+        }]
+    );
+
+    // Server play-sound and invalid entity/dimension actions.
+    assert!(
+        mods.command("machine_api api_0_3_server sound_and_invalid minecraft:overworld 0 70 0")
+    );
+    assert_eq!(
+        mods.drain(),
+        [
+            Output::Server(ServerAction::PlaySound {
+                dimension: "minecraft:overworld".into(),
+                x: 0,
+                y: 70,
+                z: 0,
+                sound: "minecraft:block.note_block.pling".into(),
+                volume: 1.0,
+                pitch: 1.0,
+            }),
+            Output::Server(ServerAction::SpawnMob {
+                dimension: "minecraft:overworld".into(),
+                x: 0,
+                y: 70,
+                z: 0,
+                entity: "minecraft:not_a_mob".into(),
+            }),
+            Output::Server(ServerAction::SetBlock {
+                dimension: "test_machine:unknown_dim".into(),
+                x: 0,
+                y: 70,
+                z: 0,
+                state: "minecraft:stone".into(),
+            }),
+            Output::Feedback {
+                text: "sound=true bad_mob_rejected=true unknown_mob_queued=true unknown_dim_queued=true".into(),
+                error: false,
+            },
+        ]
+    );
+}

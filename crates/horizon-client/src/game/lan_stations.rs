@@ -24,7 +24,7 @@ pub(super) struct GuestStation {
     state: i32,
     kind: StationKind,
     pos: [i32; 3],
-    menu: Box<Menu>,
+    pub(super) menu: Box<Menu>,
     /// The data slots the client was last sent.
     sent_data: Vec<i32>,
     /// The game time of the menu's last sound (`lastSoundTime`).
@@ -36,7 +36,7 @@ pub(super) struct GuestStation {
 pub(super) struct GuestLectern {
     window: i32,
     state: i32,
-    key: (i32, i32, i32),
+    pub(super) key: (i32, i32, i32),
     /// The book and page the client was last sent (`broadcastChanges`).
     sent: Option<(Option<ItemStack>, i32)>,
 }

@@ -644,6 +644,93 @@ def verify_custom_dimension(ctl_bin, socket, cwd, env):
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
 
 
+def verify_api_0_3_gaps(ctl_bin, socket, cwd, env):
+    command(ctl_bin, socket, cwd, env, 'fill -32 69 -13 -29 69 -10 minecraft:stone')
+    command(ctl_bin, socket, cwd, env, 'tp @s -30.5 70.0 -10.5')
+    command(ctl_bin, socket, cwd, env, 'clear @s')
+    command(ctl_bin, socket, cwd, env, 'item replace entity @s weapon.mainhand with test_machine:wrench')
+    command(ctl_bin, socket, cwd, env, 'item replace entity @s weapon.offhand with minecraft:shield')
+    command(ctl_bin, socket, cwd, env, 'item replace entity @s armor.head with minecraft:diamond_helmet')
+    command(ctl_bin, socket, cwd, env, 'item replace entity @s armor.feet with minecraft:diamond_boots')
+    command(ctl_bin, socket, cwd, env, 'setblock -30 70 -12 minecraft:chest[facing=south]')
+    command(ctl_bin, socket, cwd, env, 'item replace block -30 70 -12 container.0 with minecraft:emerald 5')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    ctl(ctl_bin, socket, cwd, env, 'look-at-block', -30, 70, -12, 'south')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    ctl(ctl_bin, socket, cwd, env, 'mouse', 'right', 'click')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 4)
+    reads = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_reads')
+    assert 'block=minecraft:chest[facing=south' in reads and ':south:minecraft' in reads, reads
+    assert 'main=0:test_machine:wrench*1' in reads, reads
+    assert 'off=40:minecraft:shield*1' in reads, reads
+    assert 'armor=[36:minecraft:diamond_helmet*1,39:minecraft:diamond_boots*1]' in reads, reads
+    assert 'open=[0:minecraft:emerald*5]' in reads, reads
+
+    ctl(ctl_bin, socket, cwd, env, 'key', 'Escape', 'tap')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    closed_reads = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_reads')
+    assert 'open=[]' in closed_reads, closed_reads
+    command(ctl_bin, socket, cwd, env, 'setblock -30 70 -12 minecraft:air')
+
+    # Crosshair entity targeting (`target::get_entity`).
+    command(ctl_bin, socket, cwd, env, 'summon minecraft:cow -30.5 70.0 -12.0 {NoAI:1b,NoGravity:1b}')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    ctl(ctl_bin, socket, cwd, env, 'look-at', -30.5, 70.6, -12.0)
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    entity_reads = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_reads')
+    assert 'entity=minecraft:cow:10.0/10.0:' in entity_reads, entity_reads
+    command(ctl_bin, socket, cwd, env, 'kill @e[type=cow,distance=..6]')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+
+    # World-read neighborhood, bounds, and cross-dimension refresh without stale cells.
+    world_out = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_world -31 70 -11')
+    assert 'at=-31,70,-11 below=minecraft:stone' in world_out, world_out
+    assert 'far_block=none far_biome=none low=none high=none' in world_out, world_out
+
+    tp_out = command(ctl_bin, socket, cwd, env, 'machine_api tp_twilight')
+    assert 'tp_twilight=ok' in tp_out, tp_out
+    wait_for_dimension(ctl_bin, socket, cwd, env, 'test_machine:twilight')
+    wait_for_block(ctl_bin, socket, cwd, env, (8, 63, 8), 'minecraft:moss_block', attempts=30)
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    twilight_world = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_world 8 64 8')
+    assert 'at=8,64,8 below=minecraft:moss_block' in twilight_world, twilight_world
+    assert 'far_block=none far_biome=none low=none high=none' in twilight_world, twilight_world
+    stale_probe = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_world probe -31 69 -11')
+    assert 'probe=-31,69,-11 block=none biome=none light=none' in stale_probe, stale_probe
+
+    back_out = command(ctl_bin, socket, cwd, env, 'machine_api tp_overworld')
+    assert 'tp_overworld=ok' in back_out, back_out
+    wait_for_dimension(ctl_bin, socket, cwd, env, 'minecraft:overworld')
+    command(ctl_bin, socket, cwd, env, 'tp @s -30.5 70.0 -10.5')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+
+    # Server game rules bridged with live `/gamerule`, invalid block state revert, and sound/invalid actions.
+    command(ctl_bin, socket, cwd, env, 'gamerule keep_inventory false')
+    rules_false = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_server rules')
+    assert 'keep_inventory=false keepInventory=false' in rules_false, rules_false
+
+    command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_server set_rule keepInventory true')
+    gamerule_query = command(ctl_bin, socket, cwd, env, 'gamerule keep_inventory')
+    assert 'true' in gamerule_query, gamerule_query
+    rules_true = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_server rules')
+    assert 'keep_inventory=true keepInventory=true' in rules_true, rules_true
+
+    command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_server set_rule keep_inventory not_a_bool')
+    rules_after_bad = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_server rules')
+    assert 'keep_inventory=true keepInventory=true' in rules_after_bad, rules_after_bad
+
+    command(ctl_bin, socket, cwd, env, 'setblock -30 69 -10 minecraft:stone')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+    command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_server invalid_block minecraft:overworld -30 69 -10')
+    block_after_invalid = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_server get_block minecraft:overworld -30 69 -10')
+    assert 'server_block=minecraft:stone' in block_after_invalid, block_after_invalid
+
+    sound_out = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_server sound_and_invalid minecraft:overworld -30 70 -10')
+    assert 'sound=true bad_mob_rejected=true unknown_mob_queued=true unknown_dim_queued=true' in sound_out, sound_out
+    command(ctl_bin, socket, cwd, env, 'clear @s')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+
+
 def check_mode(client, ctl_bin, mods, *, in_frame):
     mode = 'in-frame' if in_frame else 'integrated'
     work = Path(tempfile.mkdtemp(prefix=f'horizon-mod-api-{mode}-'))
@@ -833,6 +920,7 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
         verify_logic_hooks(ctl_bin, socket, game_dir, env)
         entity_age_before_save = verify_custom_entity(ctl_bin, socket, game_dir, env)
         verify_custom_dimension(ctl_bin, socket, game_dir, env)
+        verify_api_0_3_gaps(ctl_bin, socket, game_dir, env)
 
         stop_game(process, log, ctl_bin, socket, game_dir, env)
         process = log = socket = None

@@ -1024,9 +1024,10 @@ impl Mods {
     pub fn wants_world_read(&self) -> bool {
         self.entries.iter().any(|e| {
             e.run.is_some()
-                && e.manifest
-                    .as_ref()
-                    .is_some_and(|m| m.capabilities.contains(&Capability::WorldRead))
+                && e.manifest.as_ref().is_some_and(|m| {
+                    m.capabilities.contains(&Capability::WorldRead)
+                        || m.capabilities.contains(&Capability::Server)
+                })
         })
     }
     pub fn entries(&self) -> &[Entry] {

@@ -98,7 +98,6 @@ pub(super) struct GuestCommand {
 pub(super) struct GuestSwap {
     conn: u32,
     i: usize,
-    play: GuestPlay,
     player: Option<PlayerMotion>,
     /// The guest's eye height and the game's.
     eye: (f32, f32),
@@ -369,10 +368,10 @@ impl Game<'_> {
             play.equipped = Some(equipped);
         }
         self.update_totem_ready();
+        host.play.insert(conn, play);
         Some(GuestSwap {
             conn,
             i,
-            play,
             player,
             eye,
             yaw,
@@ -427,7 +426,6 @@ impl Game<'_> {
         let GuestSwap {
             conn,
             i,
-            mut play,
             mut player,
             eye,
             yaw,
@@ -472,6 +470,7 @@ impl Game<'_> {
             projectiles,
             modifiers,
         } = swap;
+        let mut play = host.play.remove(&conn).unwrap_or_default();
         play.modifiers = std::mem::replace(&mut self.applied_modifiers, modifiers);
         // What the guest shot is theirs (Projectile.setOwner).
         for p in self.creatures.projectiles.iter_mut().skip(projectiles) {

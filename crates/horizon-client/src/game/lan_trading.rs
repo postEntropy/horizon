@@ -15,7 +15,7 @@ pub(super) struct GuestMerchant {
     pub(super) window: i32,
     state: i32,
     /// The payment slots and the result.
-    slots: [Option<ItemStack>; 3],
+    pub(super) slots: [Option<ItemStack>; 3],
     pub(super) merchant: Box<MerchantState>,
     /// The offers the client was last sent.
     sent: Vec<merchant::MerchantOffer>,

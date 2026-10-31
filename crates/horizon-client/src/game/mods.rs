@@ -163,10 +163,10 @@ use {
     horizon_core::ticks::ScheduleResult,
     horizon_mods::{
         AiGoal, BlockAction, BlockEntityView, BlockEvent, BlockHit, BonePose, Clock, CookingKind,
-        CookingRecipe, DrawPart, DrawPartKind, EntityState, EventOutcome, ItemAction, ItemDrop,
-        ItemEvent, ItemFacts, Mods, Output, Player, ServerAction, ServerEvent, ServerEventKind,
-        Snapshot, SpawnCategory, Stack, StackView, Status, VanillaHookEvent, VanillaHookKind,
-        WorldCell,
+        CookingRecipe, DrawPart, DrawPartKind, EntityHit, EntityState, EventOutcome, ItemAction,
+        ItemDrop, ItemEvent, ItemFacts, Mods, Output, Player, ServerAction, ServerEvent,
+        ServerEventKind, Snapshot, SpawnCategory, Stack, StackView, Status, VanillaHookEvent,
+        VanillaHookKind, WorldCell,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -2568,6 +2568,7 @@ impl Game<'_> {
         );
         mods.set_item_facts(Arc::new(GameFacts(self.res.clone())));
         self.mods.mods = mods;
+        self.sync_mod_rules();
         self.mods.resource_recipes_loaded = false;
         self.load_mod_resource_recipes();
         self.mods.block_entities.clear();
@@ -2654,6 +2655,37 @@ impl Game<'_> {
             self.start_mods();
         }
     }
+    fn active_mod_guest(&self) -> Option<&horizon_client::lan::guest::Guest> {
+        let host = self.lan.as_ref()?;
+        if let Some(conn) = self.lan_acting
+            && let Some(g) = host.hub.guests.iter().find(|g| g.conn == conn)
+        {
+            return Some(g);
+        }
+        host.hub
+            .guests
+            .iter()
+            .find(|g| g.dimension == self.dim.id())
+            .or_else(|| host.hub.guests.first())
+    }
+    fn sync_mod_rules(&mut self) {
+        for r in horizon_client::gamerules::RULES {
+            let value = match self.ui.rules.get(r.name) {
+                Some(horizon_client::gamerules::Value::Bool(v)) => v.to_string(),
+                Some(horizon_client::gamerules::Value::Int(v)) => v.to_string(),
+                None => continue,
+            };
+            self.mods.mods.set_rule(r.name, &value);
+        }
+        for &(alias, canon) in GAME_RULE_ALIASES {
+            let value = match self.ui.rules.get(canon) {
+                Some(horizon_client::gamerules::Value::Bool(v)) => v.to_string(),
+                Some(horizon_client::gamerules::Value::Int(v)) => v.to_string(),
+                None => continue,
+            };
+            self.mods.mods.set_rule(alias, &value);
+        }
+    }
     /// What mods read this tick.
     fn mod_snapshot(&self) -> Snapshot {
         let player = self
@@ -2670,13 +2702,7 @@ impl Game<'_> {
                 dimension: self.dim.id().to_owned(),
             })
             .or_else(|| {
-                let host = self.lan.as_ref()?;
-                let g = host
-                    .hub
-                    .guests
-                    .iter()
-                    .find(|g| g.dimension == self.dim.id())
-                    .or_else(|| host.hub.guests.first())?;
+                let g = self.active_mod_guest()?;
                 Some(Player {
                     x: g.position[0],
                     y: g.position[1],
@@ -2698,20 +2724,18 @@ impl Game<'_> {
         Snapshot { player, clock }
     }
     #[cfg(feature = "mods")]
-    fn mod_world_view(&self) -> Option<Vec<WorldCell>> {
-        let pos = self
+    fn mod_world_view(&self) -> Vec<WorldCell> {
+        let Some(pos) = self
             .player
             .as_ref()
             .map(|p| [p.position.x, p.position.y, p.position.z])
             .or_else(|| {
-                let host = self.lan.as_ref()?;
-                let g = host
-                    .hub
-                    .guests
-                    .iter()
-                    .find(|g| g.dimension == self.dim.id())?;
-                Some(g.position)
-            })?;
+                let g = self.active_mod_guest()?;
+                (g.dimension == self.dim.id()).then_some(g.position)
+            })
+        else {
+            return Vec::new();
+        };
         let center = [
             pos[0].floor() as i32,
             pos[1].floor() as i32,
@@ -2726,27 +2750,10 @@ impl Game<'_> {
                     if !self.world.loaded(x, z) {
                         continue;
                     }
-                    let state = self.world.block(x, y, z);
-                    let name = self.res.facts().get(state).name.to_string();
-                    let block = self
-                        .pack
-                        .assets
-                        .registry
-                        .state(state)
-                        .map_or(name.clone(), |s| {
-                            if s.properties.is_empty() {
-                                name
-                            } else {
-                                let properties = s
-                                    .properties
-                                    .iter()
-                                    .map(|(key, value)| format!("{key}={value}"))
-                                    .collect::<Vec<_>>()
-                                    .join(",");
-                                format!("{name}[{properties}]")
-                            }
-                        });
-                    let chunk = self.world.chunks.get(&(x >> 4, z >> 4))?;
+                    let Some(chunk) = self.world.chunks.get(&(x >> 4, z >> 4)) else {
+                        continue;
+                    };
+                    let block = self.mod_block_state_at([x, y, z]);
                     let biome = self.res.core.biomes.get(chunk.biome(x, y, z)).name.clone();
                     cells.push(WorldCell {
                         x,
@@ -2759,7 +2766,415 @@ impl Game<'_> {
                 }
             }
         }
-        Some(cells)
+        cells
+    }
+    #[cfg(feature = "mods")]
+    fn mod_entity_display_name(&self, kind: &str) -> String {
+        let (ns, path) = kind.split_once(':').unwrap_or(("minecraft", kind));
+        let key = format!("entity.{ns}.{path}");
+        let fallback = path
+            .split('_')
+            .filter(|part| !part.is_empty())
+            .map(|part| {
+                let mut chars = part.chars();
+                match chars.next() {
+                    Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+                    None => String::new(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        self.translate(&key, &fallback)
+    }
+    #[cfg(feature = "mods")]
+    fn mod_target(&self) -> (Option<BlockHit>, Option<EntityHit>) {
+        let Some((eye, dir, creative)) = self
+            .player
+            .as_ref()
+            .map(|p| {
+                let eye = [
+                    p.position.x,
+                    p.position.y + f64::from(self.eye),
+                    p.position.z,
+                ];
+                (eye, super::view_vector(self.yaw, self.pitch), self.creative)
+            })
+            .or_else(|| {
+                let g = self.active_mod_guest()?;
+                if g.dimension != self.dim.id() {
+                    return None;
+                }
+                let eye = [g.position[0], g.position[1] + g.eye_height(), g.position[2]];
+                Some((eye, super::view_vector(g.yaw, g.pitch), g.creative()))
+            })
+        else {
+            return (None, None);
+        };
+        let block_reach = if creative { 5.0 } else { 4.5 };
+        let raw_block_hit = if self.player.is_some() {
+            self.pick()
+        } else {
+            self.clip_ray(eye, dir, block_reach)
+        };
+        let block_dist = raw_block_hit.as_ref().map(|hit| {
+            let dx = hit.point[0] - eye[0];
+            let dy = hit.point[1] - eye[1];
+            let dz = hit.point[2] - eye[2];
+            (dx * dx + dy * dy + dz * dz).sqrt()
+        });
+        let block_hit = raw_block_hit.map(|hit| {
+            let state = self.mod_block_state_at(hit.pos);
+            let owner = state
+                .split_once(':')
+                .map_or("minecraft", |(ns, _)| ns)
+                .to_owned();
+            let face = match hit.face {
+                [0, -1, 0] => "down",
+                [0, 1, 0] => "up",
+                [0, 0, -1] => "north",
+                [0, 0, 1] => "south",
+                [-1, 0, 0] => "west",
+                [1, 0, 0] => "east",
+                _ => "up",
+            }
+            .to_owned();
+            BlockHit {
+                x: hit.pos[0],
+                y: hit.pos[1],
+                z: hit.pos[2],
+                state,
+                face,
+                owner,
+            }
+        });
+        let entity_reach = if creative { 5.0 } else { 3.0 };
+        let max_entity_dist = block_dist.map_or(entity_reach, |bd| bd.min(entity_reach));
+        let mut best_entity: Option<(f64, EntityHit)> = None;
+        for m in self.mobs.iter().filter(|m| m.alive()) {
+            if let Some(t) = super::ray_box(eye, dir, max_entity_dist, m.bounds())
+                && best_entity.as_ref().is_none_or(|(best, _)| t < *best)
+            {
+                let kind = if m.kind.id.contains(':') {
+                    m.kind.id.clone()
+                } else {
+                    format!("minecraft:{}", m.kind.id)
+                };
+                let name = m
+                    .custom_name
+                    .clone()
+                    .unwrap_or_else(|| self.mod_entity_display_name(&kind));
+                best_entity = Some((
+                    t,
+                    EntityHit {
+                        kind,
+                        health: m.health,
+                        max_health: m.kind.max_health,
+                        name,
+                    },
+                ));
+            }
+        }
+        for s in self
+            .armor_stands
+            .iter()
+            .filter(|s| !s.marker && s.health > 0.5)
+        {
+            if let Some(t) = super::ray_box(eye, dir, max_entity_dist, s.bounds())
+                && best_entity.as_ref().is_none_or(|(best, _)| t < *best)
+            {
+                let kind = "minecraft:armor_stand".to_owned();
+                let name = self.mod_entity_display_name(&kind);
+                best_entity = Some((
+                    t,
+                    EntityHit {
+                        kind,
+                        health: s.health,
+                        max_health: 20.0,
+                        name,
+                    },
+                ));
+            }
+        }
+        (block_hit, best_entity.map(|(_, hit)| hit))
+    }
+    #[cfg(feature = "mods")]
+    fn mod_open_container_stacks(&mut self) -> Vec<(usize, ItemStack)> {
+        let mut out = Vec::new();
+        if self.lan_acting.is_none() && self.player.is_some() {
+            if self.container_kind().is_some() {
+                for slot in 0..self.container_size() {
+                    if let Some(stack) = self.slot_view(300 + slot) {
+                        out.push((slot, stack));
+                    }
+                }
+            } else if self.screen == Screen::Inventory
+                && let Some(st) = &self.station
+            {
+                for (slot, stack) in st.inputs.iter().enumerate() {
+                    if let Some(s) = stack.clone() {
+                        out.push((slot, s));
+                    }
+                }
+                if let Some(s) = st.result.clone() {
+                    out.push((st.inputs.len(), s));
+                }
+            } else if self.screen == Screen::Inventory && self.mount_active() {
+                if let Some(stack) = self.slot_view(super::mount_menu::SADDLE) {
+                    out.push((0, stack));
+                }
+                if let Some(stack) = self.slot_view(super::mount_menu::ARMOR) {
+                    out.push((1, stack));
+                }
+                let chest_slots = self.mount_menu_columns().unwrap_or(0) * 3;
+                for i in 0..chest_slots {
+                    if let Some(stack) = self.slot_view(super::mount_menu::CHEST + i) {
+                        out.push((2 + i, stack));
+                    }
+                }
+            } else if self.screen == Screen::Inventory {
+                let n = self.craft_size;
+                let res = self.craft_result();
+                if n == 3
+                    || self.craft_grid.iter().take(n * n).any(Option::is_some)
+                    || res.is_some()
+                {
+                    for (slot, stack) in self.craft_grid.iter().take(n * n).enumerate() {
+                        if let Some(s) = stack.clone() {
+                            out.push((slot, s));
+                        }
+                    }
+                    if let Some(s) = res {
+                        out.push((n * n, s));
+                    }
+                }
+            } else if let Some(super::books::BookScreen::View {
+                lectern: Some(key), ..
+            }) = &self.book
+                && let Some(horizon_client::containers::BlockEntity::Lectern(lectern)) =
+                    self.world.block_entities.get(key)
+                && let Some(book) = &lectern.book
+            {
+                out.push((0, book.clone()));
+            }
+            return out;
+        }
+        let Some(host) = self.lan.as_ref() else {
+            return out;
+        };
+        let Some(g) = self.active_mod_guest() else {
+            return out;
+        };
+        if let Some(menu) = &g.menu {
+            if matches!(menu.slots, horizon_client::lan::menu::Slots::Ender)
+                && self.lan_acting == Some(g.conn)
+            {
+                for (slot, stack) in self.ender_items.iter().enumerate() {
+                    if let Some(s) = stack.clone() {
+                        out.push((slot, s));
+                    }
+                }
+            } else if let Some(stacks) = menu.slots.read(&self.world, g) {
+                for (slot, stack) in stacks.into_iter().enumerate() {
+                    if let Some(s) = stack {
+                        out.push((slot, s));
+                    }
+                }
+            }
+        } else if let Some(play) = host.play.get(&g.conn) {
+            if let Some(gs) = &play.station {
+                let count = gs.menu.slot_count().saturating_sub(36);
+                for slot in 0..count {
+                    if let Some(s) = gs.menu.slot(slot).cloned() {
+                        out.push((slot, s));
+                    }
+                }
+            } else if let Some(gm) = &play.merchant {
+                for (slot, stack) in gm.slots.iter().enumerate() {
+                    if let Some(s) = stack.clone() {
+                        out.push((slot, s));
+                    }
+                }
+            } else if let Some(gm) = &play.mount_window {
+                if let Some(index) = self.mobs.iter().position(|m| m.id == gm.mob) {
+                    let (saddle, body, chest) = self.mount_contents(index);
+                    if let Some(s) = saddle {
+                        out.push((0, s));
+                    }
+                    if let Some(s) = body.flatten() {
+                        out.push((1, s));
+                    }
+                    for (i, slot) in chest.into_iter().take(gm.columns * 3).enumerate() {
+                        if let Some(s) = slot {
+                            out.push((2 + i, s));
+                        }
+                    }
+                }
+            } else if let Some(gl) = &play.lectern {
+                if let Some(horizon_client::containers::BlockEntity::Lectern(lectern)) =
+                    self.world.block_entities.get(&gl.key)
+                    && let Some(book) = &lectern.book
+                {
+                    out.push((0, book.clone()));
+                }
+            } else if let Some((_, _, menu)) = &play.crafting.table {
+                for i in 0..9 {
+                    if let Some(s) = menu.slot(1 + i).cloned() {
+                        out.push((i, s));
+                    }
+                }
+                if let Some(s) = menu.slot(0).cloned() {
+                    out.push((9, s));
+                }
+            } else if let Some((_, menu)) = &play.crafting.machine {
+                let count = menu.slot_count().saturating_sub(36);
+                for slot in 0..count {
+                    if let Some(s) = menu.slot(slot).cloned() {
+                        out.push((slot, s));
+                    }
+                }
+            }
+        }
+        if out.is_empty() && (g.craft_grid.iter().any(Option::is_some) || g.craft_result.is_some())
+        {
+            for (slot, stack) in g.craft_grid.iter().enumerate() {
+                if let Some(s) = stack.clone() {
+                    out.push((slot, s));
+                }
+            }
+            if let Some(s) = g.craft_result.clone() {
+                out.push((4, s));
+            }
+        }
+        out
+    }
+    #[cfg(feature = "mods")]
+    fn mod_inventory_views(
+        &mut self,
+    ) -> (
+        Option<StackView>,
+        Option<StackView>,
+        Vec<StackView>,
+        Vec<StackView>,
+    ) {
+        let open_stacks = self.mod_open_container_stacks();
+        let to_view = |slot: usize, s: &ItemStack| {
+            let max_damage = self
+                .res
+                .rest
+                .get()
+                .and_then(|r| r.items.get(&s.item))
+                .map_or(0, |i| i.max_damage);
+            StackView {
+                slot: slot as u32,
+                id: s.item.to_string(),
+                count: s.count,
+                damage: s.damage,
+                max_damage,
+            }
+        };
+        let (main_hand, off_hand, inv) = if self.player.is_some() {
+            let main_hand = self
+                .inventory
+                .get(self.selected)
+                .and_then(|s| s.as_ref())
+                .map(|s| to_view(self.selected, s));
+            let off_hand = self.offhand.as_ref().map(|s| to_view(40, s));
+            let mut inv = Vec::new();
+            for (i, slot) in self.inventory.iter().enumerate() {
+                if let Some(s) = slot {
+                    inv.push(to_view(i, s));
+                }
+            }
+            for (i, slot) in self.armor.iter().enumerate() {
+                if let Some(s) = slot {
+                    inv.push(to_view(36 + i, s));
+                }
+            }
+            if let Some(ref s) = off_hand {
+                inv.push(s.clone());
+            }
+            (main_hand, off_hand, inv)
+        } else if let Some(g) = self.active_mod_guest() {
+            let main_hand = g
+                .inventory
+                .get(g.selected)
+                .and_then(|s| s.as_ref())
+                .map(|s| to_view(g.selected, s));
+            let off_hand = g.offhand.as_ref().map(|s| to_view(40, s));
+            let mut inv = Vec::new();
+            for (i, slot) in g.inventory.iter().enumerate() {
+                if let Some(s) = slot {
+                    inv.push(to_view(i, s));
+                }
+            }
+            for (i, slot) in g.armor.iter().enumerate() {
+                if let Some(s) = slot {
+                    inv.push(to_view(36 + i, s));
+                }
+            }
+            if let Some(ref s) = off_hand {
+                inv.push(s.clone());
+            }
+            (main_hand, off_hand, inv)
+        } else {
+            (None, None, Vec::new())
+        };
+        let open_container = open_stacks
+            .into_iter()
+            .map(|(slot, stack)| to_view(slot, &stack))
+            .collect();
+        (main_hand, off_hand, inv, open_container)
+    }
+    #[cfg(feature = "mods")]
+    fn refresh_mod_context(&mut self) {
+        self.sync_mod_rules();
+        let snapshot = self.mod_snapshot();
+        let player_dim = snapshot
+            .player
+            .as_ref()
+            .map(|p| p.dimension.clone())
+            .unwrap_or_else(|| self.dim.id().to_owned());
+        self.mods.mods.set_snapshot(snapshot);
+        if self.dim.id() == player_dim {
+            if self.mods.mods.wants_world_read() {
+                let cells = self.mod_world_view();
+                self.mods.mods.set_world_view(&player_dim, cells);
+            }
+            let (block_hit, entity_hit) = self.mod_target();
+            self.mods.mods.set_target(block_hit, entity_hit);
+            let (main_hand, off_hand, inv, open_container) = self.mod_inventory_views();
+            self.mods
+                .mods
+                .set_inventory(main_hand, off_hand, inv, open_container);
+            self.sync_mod_entities();
+            return;
+        }
+        let refreshed = self.with_mod_dimension(&player_dim, |game| {
+            if game.mods.mods.wants_world_read() {
+                let cells = game.mod_world_view();
+                game.mods.mods.set_world_view(&player_dim, cells);
+            }
+            let (block_hit, entity_hit) = game.mod_target();
+            game.mods.mods.set_target(block_hit, entity_hit);
+            let (main_hand, off_hand, inv, open_container) = game.mod_inventory_views();
+            game.mods
+                .mods
+                .set_inventory(main_hand, off_hand, inv, open_container);
+            game.sync_mod_entities();
+        });
+        if refreshed.is_none() {
+            if self.mods.mods.wants_world_read() {
+                let cells = self.mod_world_view();
+                self.mods.mods.set_world_view(self.dim.id(), cells);
+            }
+            let (block_hit, entity_hit) = self.mod_target();
+            self.mods.mods.set_target(block_hit, entity_hit);
+            let (main_hand, off_hand, inv, open_container) = self.mod_inventory_views();
+            self.mods
+                .mods
+                .set_inventory(main_hand, off_hand, inv, open_container);
+            self.sync_mod_entities();
+        }
     }
     /// A game tick.
     pub(super) fn tick_mods(&mut self) {
@@ -2794,100 +3209,7 @@ impl Game<'_> {
                 self.mod_clear_block_attachments(&dim, pos);
             }
         }
-        let snapshot = self.mod_snapshot();
-        self.mods.mods.set_snapshot(snapshot);
-        if self.mods.mods.wants_world_read()
-            && let Some(cells) = self.mod_world_view()
-        {
-            self.mods.mods.set_world_view(self.dim.id(), cells);
-        }
-        let block_hit = self.pick().map(|hit| {
-            let state_id = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
-            let name = self.res.facts().get(state_id).name.to_string();
-            let owner = name
-                .split_once(':')
-                .map_or("minecraft", |(ns, _)| ns)
-                .to_owned();
-            let face = match hit.face {
-                [0, -1, 0] => "down",
-                [0, 1, 0] => "up",
-                [0, 0, -1] => "north",
-                [0, 0, 1] => "south",
-                [-1, 0, 0] => "west",
-                [1, 0, 0] => "east",
-                _ => "up",
-            }
-            .to_owned();
-            BlockHit {
-                x: hit.pos[0],
-                y: hit.pos[1],
-                z: hit.pos[2],
-                state: name,
-                face,
-                owner,
-            }
-        });
-        self.mods.mods.set_target(block_hit, None);
-        if self.res.rest.get().is_some() {
-            let to_view = |slot: usize, s: &ItemStack| {
-                let max_damage = self.res.items().get(&s.item).map_or(0, |i| i.max_damage);
-                StackView {
-                    slot: slot as u32,
-                    id: s.item.to_string(),
-                    count: s.count,
-                    damage: s.damage,
-                    max_damage,
-                }
-            };
-            let main_hand = self
-                .inventory
-                .get(self.selected)
-                .and_then(|s| s.as_ref())
-                .map(|s| to_view(self.selected, s));
-            let off_hand = self.offhand.as_ref().map(|s| to_view(40, s));
-            let mut inv = Vec::new();
-            for (i, slot) in self.inventory.iter().enumerate() {
-                if let Some(s) = slot {
-                    inv.push(to_view(i, s));
-                }
-            }
-            for (i, slot) in self.armor.iter().enumerate() {
-                if let Some(s) = slot {
-                    inv.push(to_view(36 + i, s));
-                }
-            }
-            if let Some(ref s) = off_hand {
-                inv.push(s.clone());
-            }
-            let container_slots = self.container_kind().map_or(0, |_| self.container_size());
-            let mut container_stacks = Vec::new();
-            for slot in 0..container_slots {
-                if let Some(stack) = self.slot_view(300 + slot) {
-                    container_stacks.push((slot, stack));
-                }
-            }
-            let open_container = container_stacks
-                .into_iter()
-                .map(|(slot, stack)| {
-                    let max_damage = self
-                        .res
-                        .items()
-                        .get(&stack.item)
-                        .map_or(0, |item| item.max_damage);
-                    StackView {
-                        slot: slot as u32,
-                        id: stack.item.to_string(),
-                        count: stack.count,
-                        damage: stack.damage,
-                        max_damage,
-                    }
-                })
-                .collect();
-            self.mods
-                .mods
-                .set_inventory(main_hand, off_hand, inv, open_container);
-        }
-        self.sync_mod_entities();
+        self.refresh_mod_context();
         self.mods.mods.tick(self.ticks);
         self.show_mod_output();
     }
@@ -2993,10 +3315,8 @@ impl Game<'_> {
         if !self.mods.mods.is_running() {
             return false;
         }
-        // The command may follow a teleport in the same tick.
-        let snapshot = self.mod_snapshot();
-        self.mods.mods.set_snapshot(snapshot);
-        self.sync_mod_entities();
+        // The command may follow a teleport, inventory edit or block change in the same tick.
+        self.refresh_mod_context();
         if !self.mods.mods.command(command) {
             return false;
         }
@@ -5456,6 +5776,18 @@ impl Game<'_> {
                                         if let Err(error) = game.level_set([x, y, z], id) {
                                             log::warn!("Horizon: mod set-block failed: {error}");
                                         }
+                                        let actual = game.mod_block_state_at([x, y, z]);
+                                        game.mods
+                                            .mods
+                                            .set_world_block(&dimension, x, y, z, &actual);
+                                    } else {
+                                        log::warn!(
+                                            "Horizon: mod set-block rejected unknown block state {state:?}"
+                                        );
+                                        let actual = game.mod_block_state_at([x, y, z]);
+                                        game.mods
+                                            .mods
+                                            .set_world_block(&dimension, x, y, z, &actual);
                                     }
                                 })
                                 .is_none()
@@ -5678,7 +6010,20 @@ impl Game<'_> {
                             }
                         }
                         ServerAction::SetRule { name, value } => {
-                            self.mods.mods.set_rule(&name, &value);
+                            if let Some(canon) = canonical_game_rule_name(&name) {
+                                if self.ui.rules.set_string(canon, &value) {
+                                    self.sync_rules();
+                                    self.sync_mod_rules();
+                                    self.mods.mods.set_rule(&name, &value);
+                                } else {
+                                    log::warn!(
+                                        "Horizon: mod set-rule rejected invalid value {value:?} for game rule {name:?}"
+                                    );
+                                    self.sync_mod_rules();
+                                }
+                            } else {
+                                self.mods.mods.set_rule(&name, &value);
+                            }
                         }
                     }
                     continue;
@@ -6284,6 +6629,52 @@ fn emit_mod_cuboid(
             });
         }
     }
+}
+
+#[cfg(feature = "mods")]
+const GAME_RULE_ALIASES: &[(&str, &str)] = &[
+    ("keepInventory", "keep_inventory"),
+    ("doDaylightCycle", "advance_time"),
+    ("doWeatherCycle", "advance_weather"),
+    ("mobGriefing", "mob_griefing"),
+    ("doMobSpawning", "spawn_mobs"),
+    ("randomTickSpeed", "random_tick_speed"),
+    ("doTileDrops", "block_drops"),
+    ("doEntityDrops", "entity_drops"),
+    ("doMobLoot", "mob_drops"),
+    ("doImmediateRespawn", "immediate_respawn"),
+    ("naturalRegeneration", "natural_health_regeneration"),
+    ("showDeathMessages", "show_death_messages"),
+    ("sendCommandFeedback", "send_command_feedback"),
+    ("commandBlockOutput", "command_block_output"),
+    ("drowningDamage", "drowning_damage"),
+    ("fallDamage", "fall_damage"),
+    ("fireDamage", "fire_damage"),
+    ("freezeDamage", "freeze_damage"),
+    ("forgiveDeadPlayers", "forgive_dead_players"),
+    ("universalAnger", "universal_anger"),
+    ("doInsomnia", "spawn_phantoms"),
+    ("doPatrolSpawning", "spawn_patrols"),
+    ("doTraderSpawning", "spawn_wandering_traders"),
+    ("doWardenSpawning", "spawn_wardens"),
+    ("playersSleepingPercentage", "players_sleeping_percentage"),
+    ("maxEntityCramming", "max_entity_cramming"),
+    ("spawnRadius", "respawn_radius"),
+    ("spectatorsGenerateChunks", "spectators_generate_chunks"),
+    ("doLimitedCrafting", "limited_crafting"),
+    ("announceAdvancements", "show_advancement_messages"),
+    ("logAdminCommands", "log_admin_commands"),
+];
+
+#[cfg(feature = "mods")]
+fn canonical_game_rule_name(name: &str) -> Option<&'static str> {
+    if let Some(r) = horizon_client::gamerules::rule(name) {
+        return Some(r.name);
+    }
+    let canon = GAME_RULE_ALIASES
+        .iter()
+        .find_map(|&(alias, canon)| (alias == name).then_some(canon))?;
+    horizon_client::gamerules::rule(canon).map(|r| r.name)
 }
 
 #[cfg(feature = "mods")]

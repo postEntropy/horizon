@@ -15,7 +15,7 @@ use horizon_mod_sdk::{
     capabilities::{self, EnergyView, FluidView},
     config,
     dimensions::{self, DimensionSpec, GeneratorKind, PortalSpec},
-    entities, item_data, item_transfer,
+    entities, inventory, item_data, item_transfer,
     keys::{self, KeyBinding},
     machine::{self, CookingKind, ItemStack},
     models::{self, BonePose, DrawPart, DrawPartKind},
@@ -937,6 +937,145 @@ impl Mod for Machines {
                 self.spyglass_finished,
                 self.server_events.join(";")
             ))),
+            "api_0_3_reads" => {
+                let block = target::get_block().map_or_else(
+                    || "none".into(),
+                    |b| format!("{}@{},{},{}:{}:{}", b.state, b.x, b.y, b.z, b.face, b.owner),
+                );
+                let entity = target::get_entity().map_or_else(
+                    || "none".into(),
+                    |e| format!("{}:{:.1}/{:.1}:{}", e.kind, e.health, e.max_health, e.name),
+                );
+                let main = inventory::get_main_hand().map_or_else(
+                    || "none".into(),
+                    |s| {
+                        format!(
+                            "{}:{}*{}({}/{})",
+                            s.slot, s.id, s.count, s.damage, s.max_damage
+                        )
+                    },
+                );
+                let off = inventory::get_off_hand().map_or_else(
+                    || "none".into(),
+                    |s| {
+                        format!(
+                            "{}:{}*{}({}/{})",
+                            s.slot, s.id, s.count, s.damage, s.max_damage
+                        )
+                    },
+                );
+                let inv = inventory::get_player_inventory();
+                let armor = inv
+                    .iter()
+                    .filter(|s| (36..40).contains(&s.slot))
+                    .map(|s| format!("{}:{}*{}", s.slot, s.id, s.count))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let open = inventory::get_open_container()
+                    .iter()
+                    .map(|s| format!("{}:{}*{}", s.slot, s.id, s.count))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                Ok(Some(format!(
+                    "block={block} entity={entity} main={main} off={off} inv_len={} armor=[{armor}] open=[{open}]",
+                    inv.len()
+                )))
+            }
+            sub if sub.starts_with("api_0_3_world") => {
+                let parts: Vec<&str> = sub.split_whitespace().collect();
+                if parts.get(1).copied() == Some("probe") && parts.len() == 5 {
+                    let x = parts[2].parse::<i32>().unwrap_or(0);
+                    let y = parts[3].parse::<i32>().unwrap_or(0);
+                    let z = parts[4].parse::<i32>().unwrap_or(0);
+                    let b = world::get_block(x, y, z).unwrap_or_else(|| "none".into());
+                    let bio = world::get_biome(x, y, z).unwrap_or_else(|| "none".into());
+                    let l =
+                        world::get_light(x, y, z).map_or_else(|| "none".into(), |v| v.to_string());
+                    return Ok(Some(format!(
+                        "probe={x},{y},{z} block={b} biome={bio} light={l}"
+                    )));
+                }
+                let (px, py, pz) = if parts.len() == 4 {
+                    (
+                        parts[1].parse::<i32>().unwrap_or(0),
+                        parts[2].parse::<i32>().unwrap_or(70),
+                        parts[3].parse::<i32>().unwrap_or(0),
+                    )
+                } else {
+                    (0, 70, 0)
+                };
+                let below = world::get_block(px, py - 1, pz).unwrap_or_else(|| "none".into());
+                let biome = world::get_biome(px, py, pz).unwrap_or_else(|| "none".into());
+                let light =
+                    world::get_light(px, py, pz).map_or_else(|| "none".into(), |v| v.to_string());
+                let far_block = world::get_block(px + 10, py, pz).unwrap_or_else(|| "none".into());
+                let far_biome = world::get_biome(px + 10, py, pz).unwrap_or_else(|| "none".into());
+                let low_block = world::get_block(px, -65, pz).unwrap_or_else(|| "none".into());
+                let high_block = world::get_block(px, 320, pz).unwrap_or_else(|| "none".into());
+                Ok(Some(format!(
+                    "at={px},{py},{pz} below={below} biome={biome} light={light} far_block={far_block} far_biome={far_biome} low={low_block} high={high_block}"
+                )))
+            }
+            sub if sub.starts_with("api_0_3_server") => {
+                let parts: Vec<&str> = sub.split_whitespace().collect();
+                match parts.get(1).copied().unwrap_or("rules") {
+                    "rules" => {
+                        let keep_snake =
+                            server::get_rule("keep_inventory").unwrap_or_else(|| "none".into());
+                        let keep_camel =
+                            server::get_rule("keepInventory").unwrap_or_else(|| "none".into());
+                        let tick_speed =
+                            server::get_rule("random_tick_speed").unwrap_or_else(|| "none".into());
+                        Ok(Some(format!(
+                            "keep_inventory={keep_snake} keepInventory={keep_camel} random_tick_speed={tick_speed}"
+                        )))
+                    }
+                    "set_rule" if parts.len() >= 4 => {
+                        let res = server::set_rule(parts[2], parts[3]).is_ok();
+                        Ok(Some(format!("set_rule={res}")))
+                    }
+                    "invalid_block" if parts.len() == 6 => {
+                        let dim = parts[2];
+                        let pos = BlockPos {
+                            x: parts[3].parse().unwrap_or(0),
+                            y: parts[4].parse().unwrap_or(70),
+                            z: parts[5].parse().unwrap_or(0),
+                        };
+                        let res = server::set_block(dim, pos, "minecraft:not_a_real_block[bad=1]")
+                            .is_ok();
+                        Ok(Some(format!("invalid_block_queued={res}")))
+                    }
+                    "get_block" if parts.len() == 6 => {
+                        let dim = parts[2];
+                        let pos = BlockPos {
+                            x: parts[3].parse().unwrap_or(0),
+                            y: parts[4].parse().unwrap_or(70),
+                            z: parts[5].parse().unwrap_or(0),
+                        };
+                        let b = server::get_block(dim, pos).unwrap_or_else(|| "none".into());
+                        Ok(Some(format!("server_block={b}")))
+                    }
+                    "sound_and_invalid" if parts.len() == 6 => {
+                        let dim = parts[2];
+                        let pos = BlockPos {
+                            x: parts[3].parse().unwrap_or(0),
+                            y: parts[4].parse().unwrap_or(70),
+                            z: parts[5].parse().unwrap_or(0),
+                        };
+                        server::play_sound(dim, pos, "minecraft:block.note_block.pling", 1.0, 1.0);
+                        let bad_syntax = server::spawn_mob(dim, pos, "bad_id").is_err();
+                        let unknown_mob =
+                            server::spawn_mob(dim, pos, "minecraft:not_a_mob").is_ok();
+                        let unknown_dim =
+                            server::set_block("test_machine:unknown_dim", pos, "minecraft:stone")
+                                .is_ok();
+                        Ok(Some(format!(
+                            "sound=true bad_mob_rejected={bad_syntax} unknown_mob_queued={unknown_mob} unknown_dim_queued={unknown_dim}"
+                        )))
+                    }
+                    _ => Err("unknown api_0_3_server subcommand".into()),
+                }
+            }
             _ => Err("unknown subcommand".into()),
         }
     }
@@ -1202,13 +1341,14 @@ impl Mod for Machines {
             if *progress < recipe.cooking_time {
                 continue;
             }
-            *progress = 0;
             // A full or incompatible output slot must not consume the input.
             // `insert_slot` is all-or-nothing, so retries cannot duplicate a
             // partial result on the next tick.
             if !machine::insert_slot(h, 1, &recipe.output) {
+                *progress = recipe.cooking_time;
                 continue;
             }
+            *progress = 0;
             let input = machine::get_slot(h, 0).filter(|i| i.count > 1);
             let rest = input.map(|i| ItemStack {
                 count: i.count - 1,

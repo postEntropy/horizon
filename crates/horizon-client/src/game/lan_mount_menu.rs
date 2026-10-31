@@ -16,8 +16,8 @@ use horizon_protocol::packets::play::{self, Clientbound as C};
 /// A guest's open mount menu.
 pub(super) struct GuestMount {
     window: i32,
-    mob: u32,
-    columns: usize,
+    pub(super) mob: u32,
+    pub(super) columns: usize,
     state: i32,
     /// The menu's slots and the carried stack the client was last sent.
     sent: Option<(Vec<Option<ItemStack>>, Option<ItemStack>)>,

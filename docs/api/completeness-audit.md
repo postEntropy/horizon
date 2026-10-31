@@ -55,15 +55,39 @@ this audit records concrete evidence and its limits.
   `entity-spawn`/`entity-death` end-to-end in both `--in-frame` and integrated
   server single-player modes.
 - The game refreshes `world-read` with loaded block states, biomes and packed
-  light in a four-block neighborhood around the player. Queries are scoped to
-  the active dimension; runtime sandbox coverage checks two dimensions sharing
-  the same coordinates.
+  light in a four-block neighborhood around the player, clamped to the active
+  dimension's `min_y..=max_y` and skipping individual unloaded chunks without
+  aborting the snapshot. In integrated single-player, `refresh_mod_context`
+  switches into the active player's dimension before sampling `world-read`,
+  `target`, `inventory-read` and entities, and evicts stale cells when the
+  player moves or changes dimensions. Runtime sandbox and `tools/mod_api_e2e.py
+  --mode both` verify in-bounds reads, out-of-radius `None`, out-of-height
+  `None`, and cross-dimension refresh without stale cells.
+- `target` exposes both `get-block` (with full block state properties such as
+  `minecraft:chest[facing=south,...]`, face and namespace owner) and
+  `get-entity` (`EntityHit` with kind, health, max health and custom/translated
+  display name, occluded by closer blocks) in both `--in-frame` and integrated
+  server single-player. `inventory-read` exposes `get-main-hand`,
+  `get-off-hand`, `get-player-inventory` (hotbar/main 0–35, armor 36–39, offhand
+  40) and `get-open-container` across block-entity containers, ender chests,
+  workstations (anvil, grindstone, smithing, stonecutter, loom, cartography,
+  enchanting, beacon, merchant), crafting grids/tables, mount inventories and
+  lecterns in both `--in-frame` and integrated-server modes (`tools/mod_api_e2e.py
+  --mode both`).
 - The `server` capability can spawn vanilla mobs and mod-declared custom
-  entities at a position. In integrated single-player, server actions enter
+  entities at a position, play sounds, set and query game rules (`get-rule` /
+  `set-rule` bridged bidirectionally with live `GameRules` in both canonical
+  snake_case and legacy camelCase aliases such as `keep_inventory` /
+  `keepInventory`, rejecting invalid typed values), and validate `set-block`
+  states (reverting the optimistic block cache when a block state string is
+  unknown or invalid). In integrated single-player, server actions enter
   their requested registered level; in-frame mode has only the current
   dimension. Unknown ids and unavailable dimensions are logged by the game
   bridge. A live single-player check set a block in an already-loaded Nether
-  chunk from the Overworld and read it back through `horizon-ctl`.
+  chunk from the Overworld and read it back through `horizon-ctl`, and
+  `tools/mod_api_e2e.py --mode both` verifies game-rule synchronization,
+  invalid rule/block rejection, sound playback, and invalid entity/dimension
+  handling in both single-player modes.
 - World mutations to unloaded chunks now request a temporary chunk ticket and
   remain queued until the chunk loads. The queue is capped at 256 actions and
   each action has a deadline 1,200 world ticks after it was queued; overflow
@@ -276,17 +300,20 @@ this audit records concrete evidence and its limits.
 ## Verification run
 
 `cargo test -p horizon-mods --features runtime,pack` passes: 18 unit tests,
-3 API-reference tests, and 24 sandbox tests (one ignored). The live
+3 API-reference tests, and 25 sandbox tests (one ignored). The live
 `python3 tools/mod_api_e2e.py --mode both` run also passes in integrated-server
 and in-frame single-player. It covers positive XP command scaling, cross-mod
 FE/fluid transfer, rejected cross-owner capability redefinitions (energy, fluid,
 and item slots), config and accessory persistence across restart, item-slot
 capability bridging to `BlockEntity::Mod`, custom entity lifecycle/persistence,
 model animations/bone-poses/draw-lists, custom dimension worldgen/portals/travel,
-simulation, per-tick limits, sided item movement, hopper input/output and
-remainders, and save/reopen of machine inventory and capability state. These
-checks validate the listed paths only; they do not establish complete
-compatibility with arbitrary machine mods or every network topology.
+`inventory-read` (main hand, offhand, armor, open container), `target`
+(`BlockHit` with state properties and `EntityHit`), `world-read` bounds and
+cross-dimension stale-cell eviction, `server` game-rule bridging and invalid
+state/entity handling, simulation, per-tick limits, sided item movement, hopper
+input/output and remainders, and save/reopen of machine inventory and capability
+state. These checks validate the listed paths only; they do not establish
+complete compatibility with arbitrary machine mods or every network topology.
 
 ## Completion gates
 
