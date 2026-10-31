@@ -115,10 +115,11 @@ use {
     },
     horizon_core::ticks::ScheduleResult,
     horizon_mods::{
-        AiGoal, BlockAction, BlockEntityView, BlockEvent, BlockHit, Clock, CookingKind,
-        CookingRecipe, EntityState, EventOutcome, ItemAction, ItemDrop, ItemEvent, ItemFacts, Mods,
-        Output, Player, ServerAction, ServerEvent, ServerEventKind, Snapshot, SpawnCategory, Stack,
-        StackView, Status, VanillaHookEvent, VanillaHookKind, WorldCell,
+        AiGoal, BlockAction, BlockEntityView, BlockEvent, BlockHit, BonePose, Clock, CookingKind,
+        CookingRecipe, DrawPart, DrawPartKind, EntityState, EventOutcome, ItemAction, ItemDrop,
+        ItemEvent, ItemFacts, Mods, Output, Player, ServerAction, ServerEvent, ServerEventKind,
+        Snapshot, SpawnCategory, Stack, StackView, Status, VanillaHookEvent, VanillaHookKind,
+        WorldCell,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -374,6 +375,16 @@ fn restore_item_components(stack: &mut ItemStack, encoded: &[u8]) {
     stack.extra = extra;
 }
 
+#[cfg(feature = "mods")]
+#[derive(Clone, Default, Debug)]
+pub(super) struct SyncedModModels {
+    /// Live mob id -> `(mod handle, entity kind id)`.
+    pub(super) entities: HashMap<u32, (u32, String)>,
+    pub(super) animations: HashMap<String, (String, bool, f32)>,
+    pub(super) bone_poses: HashMap<String, Vec<BonePose>>,
+    pub(super) draw_lists: HashMap<String, Vec<DrawPart>>,
+}
+
 #[derive(Default)]
 pub(super) struct ModsState {
     pub(super) local_player_session_active: bool,
@@ -381,6 +392,8 @@ pub(super) struct ModsState {
     pub(super) dispatching_neighbor_hooks: bool,
     #[cfg(feature = "mods")]
     mods: Mods,
+    #[cfg(feature = "mods")]
+    synced_models: SyncedModModels,
     /// Server mutations waiting for destination chunks to finish loading.
     #[cfg(feature = "mods")]
     pub(super) pending_server_actions: Vec<(ServerAction, i64)>,
@@ -1168,6 +1181,36 @@ impl Game<'_> {
     ) -> bool {
         false
     }
+    pub(super) fn refresh_synced_mod_models(&mut self) {}
+    pub(super) fn apply_mod_mob_poses(
+        &self,
+        _mob: &horizon_client::mobs::Mob,
+        _partial: f32,
+        _poses: &mut horizon_client::mobs::anim::Poses,
+    ) {
+    }
+    pub(super) fn append_mod_floating_text_tags(
+        &self,
+        _camera: glam::DVec3,
+        _alpha: f64,
+        _tags: &mut Vec<super::names::NameTag>,
+    ) {
+    }
+    pub(super) fn mod_draw_list_geometry(
+        &self,
+        _camera: glam::DVec3,
+        _alpha: f32,
+        _out: &mut Vec<horizon_client::mesher::Vertex>,
+    ) {
+    }
+    pub(super) fn mod_models_status(&self) -> serde_json::Value {
+        serde_json::json!({
+            "animations": {},
+            "bone_poses": {},
+            "draw_lists": {},
+            "custom_entities": [],
+        })
+    }
 }
 
 #[cfg(feature = "mods")]
@@ -1567,6 +1610,7 @@ impl Game<'_> {
                 self.mods.handle_mobs.insert(*handle, *id);
             }
         }
+        self.publish_mod_models();
     }
 
     pub(super) fn reconcile_mod_entities(&mut self) {
@@ -1755,6 +1799,7 @@ impl Game<'_> {
             self.mods.handle_mobs.remove(&handle);
             self.mods.mods.remove_entity(handle);
         }
+        self.publish_mod_models();
     }
 
     pub(super) fn mod_block_placed(&mut self, pos: [i32; 3], face: String) {
@@ -3653,6 +3698,7 @@ impl Game<'_> {
         self.mods
             .mods
             .remove_target_attachments(&format!("block:{},{},{}", pos[0], pos[1], pos[2]));
+        self.publish_mod_models();
     }
     pub(super) fn mod_remove_block_at(&mut self, pos: [i32; 3]) {
         let dim = self.dim.id().to_owned();
@@ -5473,11 +5519,13 @@ impl Game<'_> {
         }
         self.reconcile_mod_entities();
         self.release_mod_action_tickets();
+        self.publish_mod_models();
     }
     /// Delivers packets the integrated server queued for the window.
     pub(super) fn poll_mod_packets(&mut self) {
         #[cfg(feature = "mods")]
         {
+            self.refresh_synced_mod_models();
             let packets = self
                 .integrated
                 .as_ref()
@@ -5520,6 +5568,505 @@ impl Game<'_> {
                 .map(|l| (l.text.as_str(), l.color))
                 .collect();
             extras_hud::draw_lines(batch, &self.gui.atlas, corners, corner, &lines);
+        }
+    }
+
+    fn build_local_mod_models(&self) -> SyncedModModels {
+        let mut entities = HashMap::new();
+        for (&handle, &mob_id) in &self.mods.handle_mobs {
+            if let Some(mob) = self.mobs.iter().find(|m| m.id == mob_id && !m.removed) {
+                entities.insert(mob_id, (handle, mob.kind.id.clone()));
+            }
+        }
+        SyncedModModels {
+            animations: self.mods.mods.model_animations(),
+            bone_poses: self.mods.mods.model_all_bones(),
+            draw_lists: self.mods.mods.model_all_draw_lists(),
+            entities,
+        }
+    }
+
+    fn active_mod_models(&self) -> SyncedModModels {
+        let mut models = self.build_local_mod_models();
+        let synced = self
+            .integrated
+            .as_ref()
+            .map(|i| i.synced_mod_models())
+            .unwrap_or_else(|| self.mods.synced_models.clone());
+        for (target, anim) in &synced.animations {
+            models
+                .animations
+                .entry(target.clone())
+                .or_insert_with(|| anim.clone());
+        }
+        for (target, bones) in &synced.bone_poses {
+            models
+                .bone_poses
+                .entry(target.clone())
+                .or_insert_with(|| bones.clone());
+        }
+        for (target, parts) in &synced.draw_lists {
+            models
+                .draw_lists
+                .entry(target.clone())
+                .or_insert_with(|| parts.clone());
+        }
+        for (&mob_id, entry) in &synced.entities {
+            models
+                .entities
+                .entry(mob_id)
+                .or_insert_with(|| entry.clone());
+        }
+        models
+    }
+
+    pub(super) fn publish_mod_models(&self) {
+        if let Some(serving) = &self.serving {
+            serving.set_synced_mod_models(self.build_local_mod_models());
+        }
+    }
+
+    pub(super) fn refresh_synced_mod_models(&mut self) {
+        if let Some(integrated) = &self.integrated {
+            self.mods.synced_models = integrated.synced_mod_models();
+        } else if self.remote.is_none() {
+            self.mods.synced_models = self.build_local_mod_models();
+        }
+        if self.mods.synced_models.entities.is_empty() {
+            return;
+        }
+        let upgrades: Vec<(usize, String)> = self
+            .mobs
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, mob)| {
+                let (_, kind) = self.mods.synced_models.entities.get(&mob.id)?;
+                (mob.kind.id != *kind).then(|| (idx, kind.clone()))
+            })
+            .collect();
+        for (idx, kind) in upgrades {
+            if let Some(mob_type) = self.mob_type(&kind)
+                && let Some(mob) = self.mobs.get_mut(idx)
+            {
+                mob.kind = mob_type;
+            }
+        }
+    }
+
+    fn mod_mob_target_keys(&self, mob: &horizon_client::mobs::Mob) -> Vec<String> {
+        let mut keys = Vec::new();
+        if let Some((handle, _)) = self.mods.mob_handles.get(&mob.id) {
+            keys.push(format!("entity:{handle}"));
+        }
+        if let Some((handle, _)) = self.mods.synced_models.entities.get(&mob.id) {
+            let key = format!("entity:{handle}");
+            if !keys.contains(&key) {
+                keys.push(key);
+            }
+        }
+        let raw_key = format!("entity:{}", mob.id);
+        if !keys.contains(&raw_key) {
+            keys.push(raw_key);
+        }
+        keys
+    }
+
+    fn resolve_mod_target_anchor(
+        &self,
+        models: &SyncedModModels,
+        target: &str,
+        alpha: f64,
+    ) -> Option<glam::DVec3> {
+        if let Some(rest) = target.strip_prefix("entity:") {
+            let id = rest.parse::<u32>().ok()?;
+            let mob_id = self
+                .mods
+                .handle_mobs
+                .get(&id)
+                .copied()
+                .or_else(|| {
+                    models
+                        .entities
+                        .iter()
+                        .find_map(|(&mob_id, &(handle, _))| (handle == id).then_some(mob_id))
+                })
+                .unwrap_or(id);
+            let mob = self.mobs.iter().find(|m| m.id == mob_id && !m.removed)?;
+            let at = mob.previous.lerp(mob.position, alpha);
+            return Some(glam::DVec3::new(at.x, at.y, at.z));
+        }
+        let rest = target.strip_prefix("block:")?;
+        let (dim, coords) = match rest.rsplit_once(':') {
+            Some((dim, coords)) => (Some(dim), coords),
+            None => (None, rest),
+        };
+        if let Some(dim) = dim
+            && dim != self.dim.id()
+        {
+            return None;
+        }
+        let mut parts = coords.split(',');
+        let x = parts.next()?.parse::<i32>().ok()?;
+        let y = parts.next()?.parse::<i32>().ok()?;
+        let z = parts.next()?.parse::<i32>().ok()?;
+        Some(glam::DVec3::new(
+            f64::from(x) + 0.5,
+            f64::from(y) + 0.5,
+            f64::from(z) + 0.5,
+        ))
+    }
+
+    pub(super) fn apply_mod_mob_poses(
+        &self,
+        mob: &horizon_client::mobs::Mob,
+        partial: f32,
+        poses: &mut horizon_client::mobs::anim::Poses,
+    ) {
+        let keys = self.mod_mob_target_keys(mob);
+        let age_ticks = horizon_client::mobs::anim::state(mob, partial.clamp(0.0, 1.0)).age;
+        for key in &keys {
+            if let Some((animation, looping, speed)) = self
+                .mods
+                .mods
+                .model_animation(key)
+                .or_else(|| self.mods.synced_models.animations.get(key).cloned())
+            {
+                poses.apply_named_animation(
+                    &animation,
+                    speed,
+                    looping,
+                    age_ticks,
+                    &self.res.mob_data().animations,
+                );
+                break;
+            }
+        }
+        for key in &keys {
+            let bones = self.mods.mods.model_bones(key);
+            let bones = if bones.is_empty() {
+                self.mods
+                    .synced_models
+                    .bone_poses
+                    .get(key)
+                    .cloned()
+                    .unwrap_or_default()
+            } else {
+                bones
+            };
+            if !bones.is_empty() {
+                for bone in &bones {
+                    poses.apply_bone_pose(
+                        &bone.bone,
+                        [bone.pos_x, bone.pos_y, bone.pos_z],
+                        [bone.rot_x, bone.rot_y, bone.rot_z],
+                        [bone.scale_x, bone.scale_y, bone.scale_z],
+                    );
+                }
+                break;
+            }
+        }
+    }
+
+    pub(super) fn append_mod_floating_text_tags(
+        &self,
+        camera: glam::DVec3,
+        alpha: f64,
+        tags: &mut Vec<super::names::NameTag>,
+    ) {
+        let models = self.active_mod_models();
+        for (target, parts) in &models.draw_lists {
+            let Some(anchor) = self.resolve_mod_target_anchor(&models, target, alpha) else {
+                continue;
+            };
+            for part in parts {
+                if part.kind != DrawPartKind::FloatingText || part.asset.is_empty() {
+                    continue;
+                }
+                let world = anchor
+                    + glam::DVec3::new(f64::from(part.x), f64::from(part.y), f64::from(part.z));
+                let dist_sq = world.distance_squared(camera);
+                if dist_sq > 64.0 * 64.0 {
+                    continue;
+                }
+                let light = self.world.light(
+                    world.x.floor() as i32,
+                    world.y.floor() as i32,
+                    world.z.floor() as i32,
+                );
+                tags.push(super::names::NameTag {
+                    at: world,
+                    lines: vec![(horizon_client::text::Text::from(part.asset.as_str()), 0.0)],
+                    light,
+                    discrete: false,
+                });
+            }
+        }
+    }
+
+    pub(super) fn mod_draw_list_geometry(
+        &self,
+        camera: glam::DVec3,
+        alpha: f32,
+        out: &mut Vec<horizon_client::mesher::Vertex>,
+    ) {
+        let models = self.active_mod_models();
+        if models.draw_lists.is_empty() {
+            return;
+        }
+        let lights =
+            horizon_client::block_entity_render::diffuse_lights(self.dim == super::Dim::Nether);
+        for (target, parts) in &models.draw_lists {
+            let Some(anchor) = self.resolve_mod_target_anchor(&models, target, f64::from(alpha))
+            else {
+                continue;
+            };
+            let rel = (anchor - camera).as_vec3();
+            if rel.length_squared() > 64.0 * 64.0 {
+                continue;
+            }
+            let packed = self.world.light(
+                anchor.x.floor() as i32,
+                anchor.y.floor() as i32,
+                anchor.z.floor() as i32,
+            );
+            let light = horizon_client::block_entity_render::vertex_light(packed);
+            for part in parts {
+                let pose =
+                    glam::Mat4::from_translation(rel + glam::Vec3::new(part.x, part.y, part.z))
+                        * glam::Mat4::from_quat(glam::Quat::from_euler(
+                            glam::EulerRot::ZYX,
+                            part.rot_z.to_radians(),
+                            part.rot_y.to_radians(),
+                            part.rot_x.to_radians(),
+                        ))
+                        * glam::Mat4::from_scale(glam::Vec3::new(
+                            part.scale_x,
+                            part.scale_y,
+                            part.scale_z,
+                        ));
+                match part.kind {
+                    DrawPartKind::ItemDisplay => {
+                        let stack = ItemStack::new(&part.asset, 1);
+                        let owner = super::item_draw::owner_at(
+                            [anchor.x, anchor.y, anchor.z],
+                            0.0,
+                            "minecraft:item_display",
+                        );
+                        let state = self.resolve_item(
+                            &stack,
+                            horizon_assets::item_model::DisplayContext::Fixed,
+                            Some(&owner),
+                            0,
+                        );
+                        if !state.is_empty() {
+                            self.submit_item_world(&state, pose, light, out);
+                        }
+                    }
+                    DrawPartKind::FluidCuboid => {
+                        let sprite_name = if part.asset.contains("lava") {
+                            "block/lava_still"
+                        } else {
+                            "block/water_still"
+                        };
+                        if let Some(rect) = self
+                            .gui
+                            .atlas
+                            .sprites
+                            .get(sprite_name)
+                            .or_else(|| self.gui.atlas.sprites.get("block/stone"))
+                            .copied()
+                        {
+                            emit_mod_cuboid(pose, rect, part.color, light, lights, out);
+                        }
+                    }
+                    DrawPartKind::ModelPart => {
+                        let clean = part
+                            .asset
+                            .strip_prefix("minecraft:")
+                            .unwrap_or(part.asset.as_str());
+                        let block_key = format!("block/{clean}");
+                        let item_key = format!("item/{clean}");
+                        if let Some(rect) = self
+                            .gui
+                            .atlas
+                            .sprites
+                            .get(clean)
+                            .or_else(|| self.gui.atlas.sprites.get(&block_key))
+                            .or_else(|| self.gui.atlas.sprites.get(&item_key))
+                            .or_else(|| self.gui.atlas.sprites.get("block/iron_block"))
+                            .or_else(|| self.gui.atlas.sprites.get("block/stone"))
+                            .copied()
+                        {
+                            emit_mod_cuboid(pose, rect, part.color, light, lights, out);
+                        }
+                    }
+                    DrawPartKind::FloatingText => {}
+                }
+            }
+        }
+    }
+
+    pub(super) fn mod_models_status(&self) -> serde_json::Value {
+        let models = self.active_mod_models();
+        let animations: serde_json::Map<String, serde_json::Value> = models
+            .animations
+            .iter()
+            .map(|(target, (animation, looping, speed))| {
+                (
+                    target.clone(),
+                    serde_json::json!({
+                        "animation": animation,
+                        "speed": speed,
+                        "looping": looping,
+                    }),
+                )
+            })
+            .collect();
+        let bone_poses: serde_json::Map<String, serde_json::Value> = models
+            .bone_poses
+            .iter()
+            .map(|(target, bones)| {
+                let items: Vec<serde_json::Value> = bones
+                    .iter()
+                    .map(|b| {
+                        serde_json::json!({
+                            "bone": b.bone,
+                            "offset": [b.pos_x, b.pos_y, b.pos_z],
+                            "rotation": [b.rot_x, b.rot_y, b.rot_z],
+                            "scale": [b.scale_x, b.scale_y, b.scale_z],
+                        })
+                    })
+                    .collect();
+                (target.clone(), serde_json::Value::Array(items))
+            })
+            .collect();
+        let draw_lists: serde_json::Map<String, serde_json::Value> = models
+            .draw_lists
+            .iter()
+            .map(|(target, parts)| {
+                let items: Vec<serde_json::Value> = parts
+                    .iter()
+                    .map(|p| {
+                        let kind = match p.kind {
+                            DrawPartKind::ItemDisplay => "item_display",
+                            DrawPartKind::FluidCuboid => "fluid_cuboid",
+                            DrawPartKind::ModelPart => "model_part",
+                            DrawPartKind::FloatingText => "floating_text",
+                        };
+                        serde_json::json!({
+                            "kind": kind,
+                            "value": p.asset,
+                            "offset": [p.x, p.y, p.z],
+                            "rotation": [p.rot_x, p.rot_y, p.rot_z],
+                            "scale": [p.scale_x, p.scale_y, p.scale_z],
+                            "tint": p.color,
+                        })
+                    })
+                    .collect();
+                (target.clone(), serde_json::Value::Array(items))
+            })
+            .collect();
+        serde_json::json!({
+            "animations": animations,
+            "bone_poses": bone_poses,
+            "draw_lists": draw_lists,
+        })
+    }
+}
+
+#[cfg(feature = "mods")]
+fn emit_mod_cuboid(
+    pose: glam::Mat4,
+    rect: horizon_client::hud::Rect,
+    tint: u32,
+    light: u32,
+    lights: (glam::Vec3, glam::Vec3),
+    out: &mut Vec<horizon_client::mesher::Vertex>,
+) {
+    const FACES: [([[f32; 3]; 4], [f32; 3]); 6] = [
+        (
+            [
+                [-0.5, -0.5, 0.5],
+                [0.5, -0.5, 0.5],
+                [0.5, 0.5, 0.5],
+                [-0.5, 0.5, 0.5],
+            ],
+            [0.0, 0.0, 1.0],
+        ),
+        (
+            [
+                [0.5, -0.5, -0.5],
+                [-0.5, -0.5, -0.5],
+                [-0.5, 0.5, -0.5],
+                [0.5, 0.5, -0.5],
+            ],
+            [0.0, 0.0, -1.0],
+        ),
+        (
+            [
+                [-0.5, 0.5, 0.5],
+                [0.5, 0.5, 0.5],
+                [0.5, 0.5, -0.5],
+                [-0.5, 0.5, -0.5],
+            ],
+            [0.0, 1.0, 0.0],
+        ),
+        (
+            [
+                [-0.5, -0.5, -0.5],
+                [0.5, -0.5, -0.5],
+                [0.5, -0.5, 0.5],
+                [-0.5, -0.5, 0.5],
+            ],
+            [0.0, -1.0, 0.0],
+        ),
+        (
+            [
+                [0.5, -0.5, 0.5],
+                [0.5, -0.5, -0.5],
+                [0.5, 0.5, -0.5],
+                [0.5, 0.5, 0.5],
+            ],
+            [1.0, 0.0, 0.0],
+        ),
+        (
+            [
+                [-0.5, -0.5, -0.5],
+                [-0.5, -0.5, 0.5],
+                [-0.5, 0.5, 0.5],
+                [-0.5, 0.5, -0.5],
+            ],
+            [-1.0, 0.0, 0.0],
+        ),
+    ];
+    const UVS: [[f32; 2]; 4] = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
+    let a = ((tint >> 24) & 0xFF) as u32;
+    let alpha_byte = if a == 0 { 255 } else { a };
+    let r_tint = ((tint >> 16) & 0xFF) as f32;
+    let g_tint = ((tint >> 8) & 0xFF) as f32;
+    let b_tint = (tint & 0xFF) as f32;
+    for (corners, n) in FACES {
+        let normal = pose
+            .transform_vector3(glam::Vec3::from_array(n))
+            .normalize_or_zero();
+        let shade = horizon_client::block_entity_render::diffuse(normal, lights);
+        let r = (r_tint * shade).round().clamp(0.0, 255.0) as u32;
+        let g = (g_tint * shade).round().clamp(0.0, 255.0) as u32;
+        let b = (b_tint * shade).round().clamp(0.0, 255.0) as u32;
+        let color = (alpha_byte << 24) | (b << 16) | (g << 8) | r;
+        for (corner, uv) in corners.into_iter().zip(UVS) {
+            let p = pose.transform_point3(glam::Vec3::from_array(corner));
+            out.push(horizon_client::mesher::Vertex {
+                pos: p.to_array(),
+                uv: [
+                    rect.u0 + (rect.u1 - rect.u0) * uv[0],
+                    rect.v0 + (rect.v1 - rect.v0) * uv[1],
+                ],
+                layer: 0,
+                color,
+                light,
+                normal: [0; 4],
+            });
         }
     }
 }

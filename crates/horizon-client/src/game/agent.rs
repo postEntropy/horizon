@@ -507,6 +507,7 @@ impl Game<'_> {
             "selected": self.selected + 1,
             "held": self.held().map(|s| self.stack_value(s)),
             "looking_at": self.looking_at(),
+            "mod_models": self.mod_models_status(),
             "busy": self.agent.task.as_ref().map(|t| t.name),
             "ticks": self.ticks,
         })

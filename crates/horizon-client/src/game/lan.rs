@@ -803,7 +803,12 @@ impl Game<'_> {
                 Holder::Mob(id) => Some(id as i32),
                 Holder::Knot(_) => None,
             });
-            let e = out.add(m.id as i32, entity_uuid(m.id), m.kind.id.as_str());
+            let net_kind = if m.kind.id.starts_with("minecraft:") {
+                m.kind.id.as_str()
+            } else {
+                "minecraft:iron_golem"
+            };
+            let e = out.add(m.id as i32, entity_uuid(m.id), net_kind);
             e.position = [m.position.x, m.position.y, m.position.z];
             (e.yaw, e.pitch, e.head_yaw) = (m.yaw, m.head_pitch, m.head_yaw);
             e.on_ground = m.on_ground;

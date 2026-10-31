@@ -204,9 +204,13 @@ def verify_mod_screen(ctl_bin, socket, cwd, env, *, verify_restored_attachment=F
     command(ctl_bin, socket, cwd, env,
             'item replace block -31 70 -9 container.0 with minecraft:diamond 4')
     ctl(ctl_bin, socket, cwd, env, 'mouse', 'right', 'click')
-    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
-    screen = ctl(ctl_bin, socket, cwd, env, 'screen')
-    assert screen.get('screen') == 'container', f'mod machine screen did not open: {screen}'
+    screen = None
+    for _ in range(10):
+        ctl(ctl_bin, socket, cwd, env, 'wait', 2)
+        screen = ctl(ctl_bin, socket, cwd, env, 'screen')
+        if screen.get('screen') == 'container' and screen.get('mod_screen'):
+            break
+    assert screen and screen.get('screen') == 'container', f'mod machine screen did not open: {screen}'
     mod_screen = screen.get('mod_screen')
     assert mod_screen, f'mod machine screen contents are missing: {screen}'
     assert mod_screen.get('title') == 'Smelter', mod_screen
@@ -448,7 +452,57 @@ def verify_custom_entity(ctl_bin, socket, cwd, env):
 
     nbt = command(ctl_bin, socket, cwd, env, 'data get entity @e[type=test_machine:automaton,limit=1]')
     assert 'entity.test_machine.automaton' in nbt and 'horizon_mod_data:' in nbt, nbt
+    verify_mod_models(ctl_bin, socket, cwd, env, after_interact['handle'])
     return after_interact['age']
+
+
+def verify_mod_models(ctl_bin, socket, cwd, env, entity_handle):
+    out = command(ctl_bin, socket, cwd, env, 'machine_api set_models')
+    assert f'models_set entity=Some({entity_handle})' in out, out
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    state = ctl(ctl_bin, socket, cwd, env, 'state')
+    mod_models = state.get('mod_models') or {}
+    anims = mod_models.get('animations') or {}
+    bones = mod_models.get('bone_poses') or {}
+    draws = mod_models.get('draw_lists') or {}
+    block_key = 'block:minecraft:overworld:-31,70,-9'
+    ent_key = f'entity:{entity_handle}'
+
+    assert anims.get(block_key) == {
+        'animation': 'smelt_spin',
+        'speed': 1.0,
+        'looping': True,
+    }, mod_models
+    assert anims.get(ent_key) == {
+        'animation': 'spin',
+        'speed': 2.0,
+        'looping': True,
+    }, mod_models
+    assert bones.get(block_key) == [{
+        'bone': 'rotor',
+        'offset': [0.0, 1.0, 0.0],
+        'rotation': [0.0, 45.0, 0.0],
+        'scale': [1.0, 1.5, 1.0],
+    }], mod_models
+    assert len(bones.get(ent_key) or []) == 1 and bones[ent_key][0].get('bone') == 'head', mod_models
+    block_draws = draws.get(block_key) or []
+    assert [p.get('kind') for p in block_draws] == [
+        'item_display', 'fluid_cuboid', 'model_part', 'floating_text'
+    ], mod_models
+    ent_draws = draws.get(ent_key) or []
+    assert len(ent_draws) == 1 and ent_draws[0].get('kind') == 'floating_text' and ent_draws[0].get('value') == 'Automaton Active', mod_models
+
+    clear_out = command(ctl_bin, socket, cwd, env, 'machine_api clear_models')
+    assert 'models_cleared=true' in clear_out, clear_out
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    cleared_models = (ctl(ctl_bin, socket, cwd, env, 'state').get('mod_models') or {})
+    assert block_key not in (cleared_models.get('animations') or {}), cleared_models
+    assert block_key not in (cleared_models.get('bone_poses') or {}), cleared_models
+    assert block_key not in (cleared_models.get('draw_lists') or {}), cleared_models
+    assert ent_key in (cleared_models.get('animations') or {}), cleared_models
+
+    command(ctl_bin, socket, cwd, env, 'machine_api set_models')
+    ctl(ctl_bin, socket, cwd, env, 'wait', 2)
 
 
 def verify_custom_entity_after_reopen(ctl_bin, socket, cwd, env, age_before_save):
@@ -738,7 +792,7 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
                 f'setblock {ix} {iy} {iz} minecraft:hopper[facing=south]')
         verify_custom_entity_after_reopen(
             ctl_bin, socket, game_dir, env, entity_age_before_save)
-        print(f'PASS {mode}: per-block explosion filter, XP command hook, recipe API queries and replacement, config/accessory persistence, item-slot capability bridging and ownership, custom entity lifecycle/persistence, custom dimension worldgen/portals/travel, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
+        print(f'PASS {mode}: per-block explosion filter, XP command hook, recipe API queries and replacement, config/accessory persistence, item-slot capability bridging and ownership, custom entity lifecycle/persistence, model animations/bones/draw-lists, custom dimension worldgen/portals/travel, cross-mod energy/fluid transfer, simulation-safe tanks, persistent machine capabilities, sided item transfer, remainder, full-slot backpressure, hopper input/output, save/reopen')
     except (CheckFailed, AssertionError, subprocess.TimeoutExpired) as error:
         raise CheckFailed(f'{mode}: {error}\n{tail(work / "game.log")}') from error
     finally:

@@ -717,6 +717,163 @@ impl Mod for Machines {
                 dimensions::teleport("@s", "minecraft:overworld", -31.5, 70.0, -11.5)?;
                 Ok(Some("tp_overworld=ok".into()))
             }
+            "set_models" => {
+                let entity_target = self
+                    .entity_ticks
+                    .keys()
+                    .find(|&&h| entities::get_state(h).is_some())
+                    .copied();
+                if let Some(h) = entity_target {
+                    let target = format!("entity:{h}");
+                    models::set_animation(&target, "spin", true, 2.0);
+                    models::set_bone_poses(
+                        &target,
+                        &[BonePose {
+                            bone: "head".into(),
+                            rot_x: 0.25,
+                            rot_y: 0.5,
+                            rot_z: 0.0,
+                            pos_x: 0.0,
+                            pos_y: 2.0,
+                            pos_z: 0.0,
+                            scale_x: 1.2,
+                            scale_y: 1.2,
+                            scale_z: 1.2,
+                        }],
+                    );
+                    models::set_draw_list(
+                        &target,
+                        &[DrawPart {
+                            kind: DrawPartKind::FloatingText,
+                            asset: "Automaton Active".into(),
+                            x: 0.0,
+                            y: 2.4,
+                            z: 0.0,
+                            rot_x: 0.0,
+                            rot_y: 0.0,
+                            rot_z: 0.0,
+                            scale_x: 1.0,
+                            scale_y: 1.0,
+                            scale_z: 1.0,
+                            color: 0xFFFF_FFFF,
+                        }],
+                    );
+                }
+                let block_target = "block:minecraft:overworld:-31,70,-9";
+                models::set_animation(block_target, "smelt_spin", true, f32::NAN);
+                models::set_bone_poses(
+                    block_target,
+                    &[
+                        BonePose {
+                            bone: "rotor".into(),
+                            rot_x: 0.0,
+                            rot_y: 45.0,
+                            rot_z: 0.0,
+                            pos_x: f32::NAN,
+                            pos_y: 1.0,
+                            pos_z: 0.0,
+                            scale_x: 0.0,
+                            scale_y: 1.5,
+                            scale_z: f32::INFINITY,
+                        },
+                        BonePose {
+                            bone: String::new(),
+                            rot_x: 0.0,
+                            rot_y: 0.0,
+                            rot_z: 0.0,
+                            pos_x: 0.0,
+                            pos_y: 0.0,
+                            pos_z: 0.0,
+                            scale_x: 1.0,
+                            scale_y: 1.0,
+                            scale_z: 1.0,
+                        },
+                    ],
+                );
+                models::set_draw_list(
+                    block_target,
+                    &[
+                        DrawPart {
+                            kind: DrawPartKind::ItemDisplay,
+                            asset: "minecraft:diamond".into(),
+                            x: 0.0,
+                            y: 1.1,
+                            z: 0.0,
+                            rot_x: 0.0,
+                            rot_y: 45.0,
+                            rot_z: 0.0,
+                            scale_x: 0.5,
+                            scale_y: 0.5,
+                            scale_z: 0.5,
+                            color: 0xFFFF_FFFF,
+                        },
+                        DrawPart {
+                            kind: DrawPartKind::FluidCuboid,
+                            asset: "minecraft:water".into(),
+                            x: 0.0,
+                            y: 0.5,
+                            z: 0.0,
+                            rot_x: 0.0,
+                            rot_y: 0.0,
+                            rot_z: 0.0,
+                            scale_x: 0.8,
+                            scale_y: 0.6,
+                            scale_z: 0.8,
+                            color: 0x8033_99FF,
+                        },
+                        DrawPart {
+                            kind: DrawPartKind::ModelPart,
+                            asset: "minecraft:iron_block".into(),
+                            x: 0.0,
+                            y: 0.8,
+                            z: 0.0,
+                            rot_x: 0.0,
+                            rot_y: 30.0,
+                            rot_z: 0.0,
+                            scale_x: 0.4,
+                            scale_y: 0.4,
+                            scale_z: 0.4,
+                            color: 0xFFFF_FFFF,
+                        },
+                        DrawPart {
+                            kind: DrawPartKind::FloatingText,
+                            asset: "Smelter Ready".into(),
+                            x: 0.0,
+                            y: 1.6,
+                            z: 0.0,
+                            rot_x: 0.0,
+                            rot_y: 0.0,
+                            rot_z: 0.0,
+                            scale_x: 1.0,
+                            scale_y: 1.0,
+                            scale_z: 1.0,
+                            color: 0xFFFF_FFFF,
+                        },
+                        DrawPart {
+                            kind: DrawPartKind::ItemDisplay,
+                            asset: String::new(),
+                            x: 0.0,
+                            y: 0.0,
+                            z: 0.0,
+                            rot_x: 0.0,
+                            rot_y: 0.0,
+                            rot_z: 0.0,
+                            scale_x: 1.0,
+                            scale_y: 1.0,
+                            scale_z: 1.0,
+                            color: 0xFFFF_FFFF,
+                        },
+                    ],
+                );
+                Ok(Some(format!("models_set entity={entity_target:?}")))
+            }
+            "clear_models" => {
+                let block_target = "block:minecraft:overworld:-31,70,-9";
+                models::set_animation(block_target, "", false, 1.0);
+                models::set_bone_poses(block_target, &[]);
+                models::set_draw_list(block_target, &[]);
+                Ok(Some("models_cleared=true".into()))
+            }
             _ => Err("unknown subcommand".into()),
         }
     }
@@ -814,7 +971,9 @@ impl Mod for Machines {
             if entities::get_state(h).is_none_or(|s| s.x.abs() < 1.0 && s.z.abs() < 1.0) {
                 let _ = entities::navigate_to(h, 10.0, 64.0, 10.0, 0.5);
             }
-            models::set_animation(&format!("entity:{h}"), "walk", true, 1.0);
+            if *age == 1 {
+                models::set_animation(&format!("entity:{h}"), "walk", true, 1.0);
+            }
         }
     }
     fn save_entity(&mut self, handle: u32) -> Vec<u8> {

@@ -53,6 +53,8 @@ struct Flags {
     /// server follows while it runs (IntegratedServer.tickServer).
     render_distance: AtomicI32,
     simulation_distance: AtomicI32,
+    #[cfg(feature = "mods")]
+    mod_models: Mutex<super::mods::SyncedModModels>,
 }
 
 /// Work the window hands its server thread (`MinecraftServer.execute`).
@@ -113,6 +115,15 @@ impl Integrated {
             }
         }
         packets
+    }
+    /// Latest custom entity, animation, bone-pose, and draw-list state published by the server thread.
+    #[cfg(feature = "mods")]
+    pub fn synced_mod_models(&self) -> super::mods::SyncedModModels {
+        self.flags
+            .mod_models
+            .lock()
+            .map(|models| models.clone())
+            .unwrap_or_default()
     }
     /// `executeBlocking`: run `f` on the server thread between two ticks and
     /// wait for its answer; `None` once the server has stopped.
@@ -194,6 +205,13 @@ impl Serving {
         match self.mod_packets.try_send(packet) {
             Ok(()) => true,
             Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => false,
+        }
+    }
+    /// Publishes the server runtime's custom entity and model state for the local window.
+    #[cfg(feature = "mods")]
+    pub fn set_synced_mod_models(&self, models: super::mods::SyncedModModels) {
+        if let Ok(mut slot) = self.flags.mod_models.lock() {
+            *slot = models;
         }
     }
 }

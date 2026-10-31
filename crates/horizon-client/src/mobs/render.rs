@@ -992,6 +992,31 @@ pub fn render_with(
     extra: &[(&Part, [f32; 4], u32)],
     out: &mut Vec<Vertex>,
 ) {
+    render_with_poses(
+        m,
+        alpha,
+        camera,
+        atlas,
+        light,
+        data,
+        extra,
+        &|_, _, _| {},
+        out,
+    );
+}
+/// `render_with` plus a callback that can apply custom animations or bone pose overrides.
+#[allow(clippy::too_many_arguments)]
+pub fn render_with_poses(
+    m: &Mob,
+    alpha: f32,
+    camera: glam::DVec3,
+    atlas: Atlas,
+    light: u32,
+    data: &MobData,
+    extra: &[(&Part, [f32; 4], u32)],
+    pose_override: &dyn Fn(&Mob, f32, &mut Poses),
+    out: &mut Vec<Vertex>,
+) {
     // The invisibility effect hides the model (a drinking wandering trader);
     // an illusioner shows its four mirror images instead.
     if super::trader::is_invisible(m) {
@@ -1002,7 +1027,17 @@ pub fn render_with(
                 let shifted =
                     camera - glam::DVec3::new(off[0] + w[0], off[1] + w[1], off[2] + w[2]);
                 let base = base_transform(m, alpha, shifted);
-                render_visible(m, alpha, base, atlas, light, data, extra, out);
+                render_visible(
+                    m,
+                    alpha,
+                    base,
+                    atlas,
+                    light,
+                    data,
+                    extra,
+                    pose_override,
+                    out,
+                );
             }
         }
         return;
@@ -1015,6 +1050,7 @@ pub fn render_with(
         light,
         data,
         extra,
+        pose_override,
         out,
     );
 }
@@ -1030,7 +1066,7 @@ pub fn render_posed(
     out: &mut Vec<Vertex>,
 ) {
     let base = base_transform_at(m, alpha, origin);
-    render_visible(m, alpha, base, atlas, light, data, &[], out);
+    render_visible(m, alpha, base, atlas, light, data, &[], &|_, _, _| {}, out);
 }
 #[allow(clippy::too_many_arguments)]
 fn render_visible(
@@ -1041,6 +1077,7 @@ fn render_visible(
     light: u32,
     data: &MobData,
     extra: &[(&Part, [f32; 4], u32)],
+    pose_override: &dyn Fn(&Mob, f32, &mut Poses),
     out: &mut Vec<Vertex>,
 ) {
     let overlay = u32::from(red_overlay(m));
@@ -1053,6 +1090,7 @@ fn render_visible(
         .unwrap_or_else(|| m.kind.model.clone());
     let mut poses = Poses::new(&model);
     anim::setup(m, &s, &mut poses, &data.animations);
+    pose_override(m, alpha, &mut poses);
     let draw_body = |out: &mut Vec<Vertex>| {
         if let Some(uv) = atlas(&texture) {
             draw(

@@ -1572,3 +1572,94 @@ fn entity_despawn_cleans_attachments_and_accessories_snapshot_restores() {
         }]
     );
 }
+
+#[test]
+fn models_sanitize_clear_and_cleanup_on_entity_and_block_removal() {
+    let mut mods = machines();
+    let entity_handle = mods.create_entity("test_machine:automaton", &[]).unwrap();
+    let (be_handle, _) = mods
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), -31, 70, -9)),
+        )
+        .unwrap();
+
+    assert!(mods.command("machine_api set_models"));
+    let _ = mods.drain();
+
+    let entity_target = format!("entity:{entity_handle}");
+    let block_target = "block:minecraft:overworld:-31,70,-9";
+
+    assert_eq!(
+        mods.model_animation(&entity_target),
+        Some(("spin".into(), true, 2.0))
+    );
+    assert_eq!(mods.model_bones(&entity_target).len(), 1);
+    assert_eq!(mods.model_bones(&entity_target)[0].bone, "head");
+    assert_eq!(mods.model_draw_list(&entity_target).len(), 1);
+
+    // NaN animation speed is sanitized to 1.0; empty bone/asset entries are filtered;
+    // NaN/zero/infinite bone pose floats are sanitized to identity defaults.
+    assert_eq!(
+        mods.model_animation(block_target),
+        Some(("smelt_spin".into(), true, 1.0))
+    );
+    let block_bones = mods.model_bones(block_target);
+    assert_eq!(block_bones.len(), 1);
+    assert_eq!(block_bones[0].bone, "rotor");
+    assert_eq!(
+        [
+            block_bones[0].pos_x,
+            block_bones[0].pos_y,
+            block_bones[0].pos_z
+        ],
+        [0.0, 1.0, 0.0]
+    );
+    assert_eq!(
+        [
+            block_bones[0].rot_x,
+            block_bones[0].rot_y,
+            block_bones[0].rot_z
+        ],
+        [0.0, 45.0, 0.0]
+    );
+    assert_eq!(
+        [
+            block_bones[0].scale_x,
+            block_bones[0].scale_y,
+            block_bones[0].scale_z
+        ],
+        [1.0, 1.5, 1.0]
+    );
+    let block_draws = mods.model_draw_list(block_target);
+    assert_eq!(block_draws.len(), 4);
+
+    assert!(mods.model_animations().contains_key(&entity_target));
+    assert!(mods.model_all_bones().contains_key(block_target));
+    assert!(mods.model_all_draw_lists().contains_key(block_target));
+
+    // Removing the entity clears its animations, bone poses, and draw lists.
+    mods.remove_entity(entity_handle);
+    assert!(mods.model_animation(&entity_target).is_none());
+    assert!(mods.model_bones(&entity_target).is_empty());
+    assert!(mods.model_draw_list(&entity_target).is_empty());
+
+    // Explicit empty values clear the target's model entries.
+    assert!(mods.command("machine_api clear_models"));
+    let _ = mods.drain();
+    assert!(mods.model_animation(block_target).is_none());
+    assert!(mods.model_bones(block_target).is_empty());
+    assert!(mods.model_draw_list(block_target).is_empty());
+
+    // Re-populate block models and verify block-entity removal cleans them up.
+    assert!(mods.command("machine_api set_models"));
+    let _ = mods.drain();
+    assert!(mods.model_animation(block_target).is_some());
+    assert!(!mods.model_bones(block_target).is_empty());
+    assert!(!mods.model_draw_list(block_target).is_empty());
+    mods.remove_block_entity(be_handle);
+    assert!(mods.model_animation(block_target).is_none());
+    assert!(mods.model_bones(block_target).is_empty());
+    assert!(mods.model_draw_list(block_target).is_empty());
+}

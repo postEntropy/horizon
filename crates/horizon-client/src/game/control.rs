@@ -994,6 +994,7 @@ impl Game<'_> {
         status["border"] = json!({ "center": self.border.center(), "size": self.border.size() });
         // The scoreboard sidebar the HUD shows.
         status["sidebar"] = self.sidebar_status();
+        status["mod_models"] = self.mod_models_status();
         status
     }
 }

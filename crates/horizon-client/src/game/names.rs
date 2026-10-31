@@ -236,6 +236,7 @@ impl Game<'_> {
                 discrete: false,
             });
         }
+        self.append_mod_floating_text_tags(camera, alpha, &mut tags);
         tags
     }
     /// `SubmitNodeCollection.submitNameTag`: a discrete name is drawn once,
@@ -364,9 +365,9 @@ impl Game<'_> {
 
 /// A name tag: where it hangs, its lines (text, lift), the packed light at
 /// the entity and whether it is discrete.
-struct NameTag {
-    at: glam::DVec3,
-    lines: Vec<(Text, f64)>,
-    light: u8,
-    discrete: bool,
+pub(super) struct NameTag {
+    pub(super) at: glam::DVec3,
+    pub(super) lines: Vec<(Text, f64)>,
+    pub(super) light: u8,
+    pub(super) discrete: bool,
 }

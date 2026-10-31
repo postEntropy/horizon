@@ -3175,7 +3175,7 @@ impl Game<'_> {
             } else {
                 Vec::new()
             };
-            horizon_client::mobs::render::render_with(
+            horizon_client::mobs::render::render_with_poses(
                 mob,
                 alpha as f32,
                 camera,
@@ -3183,6 +3183,7 @@ impl Game<'_> {
                 packed,
                 self.res.mob_data(),
                 &armor,
+                &|mob, partial, poses| self.apply_mod_mob_poses(mob, partial, poses),
                 out,
             );
             self.mob_block_geometry(mob, camera, alpha, packed, out);

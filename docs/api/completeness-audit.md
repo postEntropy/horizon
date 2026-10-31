@@ -10,7 +10,7 @@ test, does not by itself mean a pack feature works in a playable world.
 |---|---|---|---|---|
 | 0.3 logic | Present | Present | Present for the client and local game hooks inspected | Implemented in parts; full multiplayer and per-capability gameplay coverage is not established |
 | 0.4 machines | Present | Present | Machine lifecycle, saves, menus, recipes and capability plumbing exist; mod packets bridge the integrated single-player client and server | Usable foundation; directional transfer, broad recipe behavior, LAN/dedicated networking and some persistence cases remain incomplete |
-| 0.5 deep | Present | Present, including runtime tests | Custom entity lifecycle (`mod-entities` + `entities`), custom dimensions/portals/travel/worldgen (`dimensions`), crop growth, explosion filtering, enchantment reads, damage, XP and loot hooks have live single-player integration; custom models remain unwired | Partial live bridge; not a complete player-facing API |
+| 0.5 deep | Present | Present, including runtime tests | Custom entity lifecycle (`mod-entities` + `entities`), model animations/bones/draw-lists (`models`), custom dimensions/portals/travel/worldgen (`dimensions`), crop growth, explosion filtering, enchantment reads, damage, XP and loot hooks have live single-player integration | Substantial single-player live bridge; LAN/dedicated parity remains deferred |
 
 ## Scope for the current ATM10 core milestone
 
@@ -218,8 +218,17 @@ this audit records concrete evidence and its limits.
   damaged or damage-cancelled via `on-hurt` (including environmental damage like
   cactus and `/damage`), driven by custom AI goal weights (`AiGoal`), and
   persisted across world save/reopen and `/data get entity` via the
-  `horizon_mod_data` NBT byte array. Visual fallback uses the iron golem mesh
-  and network type until custom entity model rendering is wired. Custom
+  `horizon_mod_data` NBT byte array. Custom model animations (`set-animation`),
+  bone poses (`set-bone-pose` / `set-bones`), and declarative draw lists
+  (`set-draw-list`: `ItemDisplay`, `FluidCuboid`, `ModelPart`, `FloatingText`)
+  for `entity:<handle>` and `block:<dimension>:<x>,<y>,<z>` / `block:<x>,<y>,<z>`
+  targets are sanitized in the runtime, cleaned up when entities or block
+  entities are removed or cleared with empty strings/lists, synchronized across
+  the integrated single-player server thread (`SyncedModModels`), and connected
+  to mob pose overrides (`Poses::apply_named_animation` / `apply_bone_pose`),
+  world-space draw-list geometry (`mod_draw_list_geometry`), and floating-text
+  name tags (`append_mod_floating_text_tags`) in both `--in-frame` and
+  integrated-server single-player (`tools/mod_api_e2e.py --mode both`). Custom
   dimensions and portals (`dimensions`: `register-dimension`, `register-portal`,
   `list-dimensions`, `teleport`) are now connected to live world registration,
   chunk generation (`flat`/`custom` with mod-specified `surface_block`,
@@ -229,8 +238,7 @@ this audit records concrete evidence and its limits.
   `ultrawarm`, `fixed_time`), portal frame activation with `activation_item` and
   return travel to Overworld, `/execute in <custom_dim>` coordinate scaling and
   tab completion, and direct `dimensions::teleport` in both `--in-frame` and
-  integrated-server single-player (`tools/mod_api_e2e.py --mode both`). No
-  game-side dispatch was found for model animation. `crop-grow`
+  integrated-server single-player (`tools/mod_api_e2e.py --mode both`). `crop-grow`
   now dispatches for crop age stages, hanging mangrove propagule ages,
   bamboo/cactus/sugar-cane heights, sapling-tree attempts, mushroom/vine/chorus
   spreading and growing-plant-head segments after vanilla random-tick conditions
@@ -254,16 +262,17 @@ this audit records concrete evidence and its limits.
 ## Verification run
 
 `cargo test -p horizon-mods --features runtime,pack` passes: 18 unit tests,
-3 API-reference tests, and 23 sandbox tests (one ignored). The live
+3 API-reference tests, and 24 sandbox tests (one ignored). The live
 `python3 tools/mod_api_e2e.py --mode both` run also passes in integrated-server
 and in-frame single-player. It covers positive XP command scaling, cross-mod
 FE/fluid transfer, rejected cross-owner capability redefinitions (energy, fluid,
 and item slots), config and accessory persistence across restart, item-slot
-capability bridging to `BlockEntity::Mod`, simulation,
-per-tick limits, sided item movement, hopper input/output and remainders, and
-save/reopen of machine inventory and capability state. These checks validate
-the listed paths only; they do not establish complete compatibility with
-arbitrary machine mods or every network topology.
+capability bridging to `BlockEntity::Mod`, custom entity lifecycle/persistence,
+model animations/bone-poses/draw-lists, custom dimension worldgen/portals/travel,
+simulation, per-tick limits, sided item movement, hopper input/output and
+remainders, and save/reopen of machine inventory and capability state. These
+checks validate the listed paths only; they do not establish complete
+compatibility with arbitrary machine mods or every network topology.
 
 ## Completion gates
 
@@ -274,5 +283,4 @@ arbitrary machine mods or every network topology.
 3. Keep the generated API reference synchronized with WIT and this audit
    synchronized with actual end-to-end evidence.
 
-Custom rendering remains a major 0.5 gap; LAN and
-dedicated-server parity remain deferred.
+LAN and dedicated-server parity remain deferred.

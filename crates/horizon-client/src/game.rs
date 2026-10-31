@@ -7222,6 +7222,7 @@ impl Game<'_> {
         alpha: f64,
         mut out: Vec<Vertex>,
     ) -> Vec<Vertex> {
+        self.refresh_synced_mod_models();
         self.prepare_entity_culling(camera);
         self.prepare_trims();
         let fire_yaw = if self.camera_type == perspective::CameraType::ThirdPersonFront {
@@ -7324,6 +7325,7 @@ impl Game<'_> {
         self.player_model_geometry(camera, self.clock.camera_fraction(), &mut out);
         self.guest_model_geometry(camera, alpha, &mut out);
         self.fangs_geometry(camera, alpha, &mut out);
+        self.mod_draw_list_geometry(camera, alpha as f32, &mut out);
         let mut see_through = std::mem::take(&mut self.see_through_vertices);
         see_through.clear();
         self.name_tag_geometry(camera, alpha, &mut out, &mut see_through);

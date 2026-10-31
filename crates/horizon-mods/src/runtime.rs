@@ -1805,12 +1805,20 @@ impl Mods {
                 state.slot_access.retain(|(h, _, _), _| *h != handle);
                 if let Some((dimension, x, y, z)) = state.positions.remove(&handle) {
                     let pos = format!("{dimension}:{x},{y},{z}");
+                    let block_target = format!("block:{pos}");
+                    let short_block_target = format!("block:{x},{y},{z}");
                     self.reloaded_saves.remove(&(dimension, x, y, z));
                     if let Ok(mut shared) = self.shared.lock() {
                         shared.energy.remove(&pos);
                         shared.fluids.retain(|(at, _), _| at != &pos);
                         shared.item_slots.remove(&pos);
                         shared.dirty_item_slots.remove(&pos);
+                        shared.animations.remove(&block_target);
+                        shared.animations.remove(&short_block_target);
+                        shared.bone_poses.remove(&block_target);
+                        shared.bone_poses.remove(&short_block_target);
+                        shared.draw_lists.remove(&block_target);
+                        shared.draw_lists.remove(&short_block_target);
                     }
                 }
             }
@@ -2166,6 +2174,30 @@ impl Mods {
             .lock()
             .ok()
             .and_then(|sh| sh.draw_lists.get(target).cloned())
+            .unwrap_or_default()
+    }
+
+    /// Snapshot of all active model animations keyed by target (API 0.5).
+    pub fn model_animations(&self) -> HashMap<String, (String, bool, f32)> {
+        self.shared
+            .lock()
+            .map(|sh| sh.animations.clone())
+            .unwrap_or_default()
+    }
+
+    /// Snapshot of all active bone pose overrides keyed by target (API 0.5).
+    pub fn model_all_bones(&self) -> HashMap<String, Vec<BonePose>> {
+        self.shared
+            .lock()
+            .map(|sh| sh.bone_poses.clone())
+            .unwrap_or_default()
+    }
+
+    /// Snapshot of all active declarative draw lists keyed by target (API 0.5).
+    pub fn model_all_draw_lists(&self) -> HashMap<String, Vec<DrawPart>> {
+        self.shared
+            .lock()
+            .map(|sh| sh.draw_lists.clone())
             .unwrap_or_default()
     }
 
@@ -4038,21 +4070,101 @@ impl entities::Host for State {
 
 impl models::Host for State {
     fn set_animation(&mut self, target: String, animation: String, looping: bool, speed: f32) {
+        if target.is_empty() || target.len() > MAX_ATTACHMENT_TARGET_BYTES {
+            return;
+        }
+        let animation = clip(animation);
+        let speed = if speed.is_finite() {
+            speed.clamp(0.0, 16.0)
+        } else {
+            1.0
+        };
         if let Ok(mut sh) = self.shared.lock() {
-            sh.animations
-                .insert(target, (clip(animation), looping, speed));
+            if animation.trim().is_empty() {
+                sh.animations.remove(&target);
+            } else {
+                sh.animations.insert(target, (animation, looping, speed));
+            }
         }
     }
     fn set_bone_poses(&mut self, target: String, poses: Vec<BonePose>) {
+        if target.is_empty() || target.len() > MAX_ATTACHMENT_TARGET_BYTES {
+            return;
+        }
+        let clean: Vec<BonePose> = poses
+            .into_iter()
+            .filter_map(|mut p| {
+                p.bone = clip(p.bone);
+                if p.bone.trim().is_empty() {
+                    return None;
+                }
+                for v in [
+                    &mut p.rot_x,
+                    &mut p.rot_y,
+                    &mut p.rot_z,
+                    &mut p.pos_x,
+                    &mut p.pos_y,
+                    &mut p.pos_z,
+                ] {
+                    if !v.is_finite() {
+                        *v = 0.0;
+                    }
+                }
+                for s in [&mut p.scale_x, &mut p.scale_y, &mut p.scale_z] {
+                    if !s.is_finite() || *s <= 0.0 {
+                        *s = 1.0;
+                    }
+                }
+                Some(p)
+            })
+            .take(64)
+            .collect();
         if let Ok(mut sh) = self.shared.lock() {
-            sh.bone_poses
-                .insert(target, poses.into_iter().take(64).collect());
+            if clean.is_empty() {
+                sh.bone_poses.remove(&target);
+            } else {
+                sh.bone_poses.insert(target, clean);
+            }
         }
     }
     fn set_draw_list(&mut self, target: String, parts: Vec<DrawPart>) {
+        if target.is_empty() || target.len() > MAX_ATTACHMENT_TARGET_BYTES {
+            return;
+        }
+        let clean: Vec<DrawPart> = parts
+            .into_iter()
+            .filter_map(|mut p| {
+                p.asset = clip(p.asset);
+                if p.asset.trim().is_empty() {
+                    return None;
+                }
+                for v in [
+                    &mut p.x,
+                    &mut p.y,
+                    &mut p.z,
+                    &mut p.rot_x,
+                    &mut p.rot_y,
+                    &mut p.rot_z,
+                ] {
+                    if !v.is_finite() {
+                        *v = 0.0;
+                    }
+                }
+                for s in [&mut p.scale_x, &mut p.scale_y, &mut p.scale_z] {
+                    if !s.is_finite() || *s <= 0.0 {
+                        *s = 1.0;
+                    }
+                }
+                Some(p)
+            })
+            .take(32)
+            .collect();
         if let Ok(mut sh) = self.shared.lock() {
-            sh.draw_lists
-                .insert(target, parts.into_iter().take(32).collect());
+            if clean.is_empty() {
+                sh.draw_lists.remove(&target);
+            } else {
+                sh.draw_lists.insert(target, clean);
+            }
         }
     }
 }

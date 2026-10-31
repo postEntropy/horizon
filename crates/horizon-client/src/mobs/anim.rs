@@ -166,6 +166,67 @@ impl Poses {
     pub fn is_hidden(&self, part: &Part) -> bool {
         self.hidden.contains(&part.name)
     }
+    /// Applies an additive translation/rotation and multiplicative scale override to `bone`.
+    pub fn apply_bone_pose(&mut self, bone: &str, pos: [f32; 3], rot: [f32; 3], scale: [f32; 3]) {
+        let p = self
+            .map
+            .entry(bone.to_owned())
+            .or_insert([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+        p[0] += pos[0];
+        p[1] += pos[1];
+        p[2] += pos[2];
+        p[3] += rot[0];
+        p[4] += rot[1];
+        p[5] += rot[2];
+        p[6] *= scale[0];
+        p[7] *= scale[1];
+        p[8] *= scale[2];
+    }
+    /// Applies a named keyframe or procedural animation (`models.set-animation`).
+    pub fn apply_named_animation(
+        &mut self,
+        name: &str,
+        speed: f32,
+        looping: bool,
+        age_ticks: f32,
+        animations: &HashMap<String, super::keyframes::Animation>,
+    ) {
+        let speed = if speed.is_finite() {
+            speed.max(0.0)
+        } else {
+            1.0
+        };
+        if let Some(anim) = animations.get(name) {
+            let mut anim = anim.clone();
+            anim.looping = looping;
+            let millis = (age_ticks.max(0.0) * speed * 50.0) as i64;
+            anim.apply(millis, 1.0, self);
+            return;
+        }
+        let t = if looping {
+            age_ticks.max(0.0) * speed
+        } else {
+            (age_ticks.max(0.0) * speed).min(20.0)
+        };
+        let target = ["root", "body", "head"]
+            .into_iter()
+            .find(|b| self.has(b))
+            .unwrap_or("root");
+        if name.contains("spin") {
+            let p = self.get(target);
+            p[4] += t * 0.25;
+        } else if name.contains("wave") || name.contains("attack") {
+            let limb = ["right_arm", "head", "body", "root"]
+                .into_iter()
+                .find(|b| self.has(b))
+                .unwrap_or(target);
+            let p = self.get(limb);
+            p[3] += (t * 0.4).sin() * 0.6;
+        } else {
+            let p = self.get(target);
+            p[3] += (t * 0.2).sin() * 0.15;
+        }
+    }
 }
 /// The LivingEntityRenderState values setupAnim reads.
 #[derive(Clone, Copy, Debug)]
