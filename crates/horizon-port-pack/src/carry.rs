@@ -1351,13 +1351,31 @@ fn unreadable(name: &str, bytes: &mut Vec<u8>) -> Option<String> {
         Ok(v) => v,
         // Minecraft reads data files with Gson's lenient reader, which skips
         // comments: YUNG's pools have them. The carry is plain JSON.
-        Err(e) => match serde_json::from_slice::<Value>(&without_comments(bytes)) {
-            Ok(v) => {
-                *bytes = serde_json::to_vec_pretty(&v).expect("a parsed value serializes");
-                v
+        Err(e) => {
+            let cleaned = without_comments(bytes);
+            match serde_json::from_slice::<Value>(&cleaned).or_else(|err| {
+                if !name.starts_with("assets/") {
+                    return Err(err);
+                }
+                let mut stream =
+                    serde_json::Deserializer::from_slice(&cleaned).into_iter::<Value>();
+                let Some(Ok(v)) = stream.next() else {
+                    return Err(err);
+                };
+                let rest = &cleaned[stream.byte_offset()..];
+                if (v.is_object() || v.is_array()) && !rest.contains(&b':') {
+                    Ok(v)
+                } else {
+                    Err(err)
+                }
+            }) {
+                Ok(v) => {
+                    *bytes = serde_json::to_vec_pretty(&v).expect("a parsed value serializes");
+                    v
+                }
+                Err(_) => return Some(format!("does not parse as JSON: {e}")),
             }
-            Err(_) => return Some(format!("does not parse as JSON: {e}")),
-        },
+        }
     };
     // A vanilla or convention tag that replaces is kept: the game honours it
     // as a data pack's, with a warning (docs/mods.md). A tag of the mod's own
@@ -1373,7 +1391,8 @@ fn unreadable(name: &str, bytes: &mut Vec<u8>) -> Option<String> {
 }
 
 /// JSON text without the comments Gson's lenient reader skips: `//` and
-/// `#` to the end of the line, and `/* ... */`, outside strings.
+/// `#` to the end of the line, and `/* ... */`, outside strings, plus
+/// trailing commas before `]` or `}` and raw control whitespace in strings.
 fn without_comments(bytes: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -1381,12 +1400,20 @@ fn without_comments(bytes: &[u8]) -> Vec<u8> {
     while i < bytes.len() {
         let b = bytes[i];
         if string {
-            out.push(b);
-            if b == b'\\' {
-                out.extend(bytes.get(i + 1));
-                i += 1;
-            } else if b == b'"' {
-                string = false;
+            match b {
+                b'\\' => {
+                    out.push(b);
+                    out.extend(bytes.get(i + 1));
+                    i += 1;
+                }
+                b'"' => {
+                    out.push(b);
+                    string = false;
+                }
+                b'\t' => out.extend_from_slice(b"\\t"),
+                b'\r' => out.extend_from_slice(b"\\r"),
+                b'\n' => out.extend_from_slice(b"\\n"),
+                _ => out.push(b),
             }
             i += 1;
             continue;
@@ -1409,6 +1436,17 @@ fn without_comments(bytes: &[u8]) -> Vec<u8> {
                 }
                 i += 2;
                 out.push(b' ');
+            }
+            (b']' | b'}', _) => {
+                let mut j = out.len();
+                while j > 0 && out[j - 1].is_ascii_whitespace() {
+                    j -= 1;
+                }
+                if j > 0 && out[j - 1] == b',' {
+                    out.remove(j - 1);
+                }
+                out.push(b);
+                i += 1;
             }
             _ => {
                 out.push(b);
@@ -2124,7 +2162,6 @@ fn carry_kind(
     }
     let model_namespaces: BTreeSet<String> = owned
         .iter()
-        .chain(&contributes)
         .map(|namespace| (*namespace).to_owned())
         .collect();
     let (model_aliases, models_unresolved) =
@@ -2334,7 +2371,7 @@ fn repair_missing_model_paths(
         files.sort();
         files
     }
-    fn collect_refs(value: &Value, field: &str, namespace: &str, out: &mut BTreeSet<String>) {
+    fn collect_refs(value: &Value, field: &str, out: &mut BTreeSet<String>) {
         match value {
             Value::Object(object) => {
                 for (key, value) in object {
@@ -2343,19 +2380,15 @@ fn repair_missing_model_paths(
                     {
                         let reference = reference.trim_start_matches('#');
                         if !reference.is_empty() {
-                            out.insert(if reference.contains(':') {
-                                reference.to_owned()
-                            } else {
-                                format!("{namespace}:{reference}")
-                            });
+                            out.insert(reference.to_owned());
                         }
                     }
-                    collect_refs(value, field, namespace, out);
+                    collect_refs(value, field, out);
                 }
             }
             Value::Array(values) => {
                 for value in values {
-                    collect_refs(value, field, namespace, out);
+                    collect_refs(value, field, out);
                 }
             }
             _ => {}
@@ -2389,10 +2422,11 @@ fn repair_missing_model_paths(
                 .or_default()
                 .push(file.clone());
         } else if rest.starts_with("blockstates")
+            && namespaces.contains(namespace)
             && let Ok(bytes) = fs::read(file)
             && let Ok(value) = serde_json::from_slice::<Value>(&bytes)
         {
-            collect_refs(&value, "model", namespace, &mut references);
+            collect_refs(&value, "model", &mut references);
         }
     }
 
@@ -2406,7 +2440,7 @@ fn repair_missing_model_paths(
         let (namespace, path) = reference
             .split_once(':')
             .unwrap_or(("minecraft", reference.as_str()));
-        if !namespaces.contains(namespace) {
+        if !namespaces.contains(namespace) || !assets.join(namespace).join("models").is_dir() {
             continue;
         }
         if namespace.is_empty()
@@ -2475,7 +2509,7 @@ fn repair_missing_model_paths(
         if let Ok(bytes) = fs::read(source)
             && let Ok(value) = serde_json::from_slice::<Value>(&bytes)
         {
-            collect_refs(&value, "parent", &namespace, &mut references);
+            collect_refs(&value, "parent", &mut references);
         }
     }
     Ok((aliases, unresolved))
@@ -2504,7 +2538,7 @@ mod tests {
         .unwrap();
         write(
             &assets.join("gem/models/block/templates/base.json"),
-            br#"{"parent":"minecraft:block/cube_all"}"#,
+            br#"{"parent":"block/cube_all"}"#,
         )
         .unwrap();
         write(&assets.join("gem/models/item/lamp.json"), br#"{}"#).unwrap();
@@ -2552,6 +2586,11 @@ mod tests {
         let mut plain = br#"{"a": "b\"//"}"#.to_vec();
         assert_eq!(unreadable(name, &mut plain), None);
         assert_eq!(plain, br#"{"a": "b\"//"}"#.to_vec());
+        let mut trailing_comma = b"{\"frames\": [0, 1,], \"label\": \"a\tb\",}".to_vec();
+        assert_eq!(
+            unreadable("assets/m/textures/block/a.png.mcmeta", &mut trailing_comma),
+            None
+        );
         let mut broken = b"{\"a\": 1} trailing".to_vec();
         assert!(
             unreadable(name, &mut broken)

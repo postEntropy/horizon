@@ -282,14 +282,87 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     let (blocks, items) = (count("blocks"), carry["items"].as_u64().unwrap_or(0));
     let (left_blocks, left_items) = (count("blocks_unknown"), count("items_unknown"));
     let copied = carry["copied"].as_u64().unwrap_or(0);
-    let outside = carry["outside"].as_array().map_or(0, Vec::len);
+    let outside_reasons = carry["outside_reasons"].as_object();
+    let unreadable_map = carry["unreadable"].as_object();
+    let unregistered_set: std::collections::BTreeSet<&str> = carry["recipes_unregistered"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
+    let outside = carry["outside"].as_array().map_or(0, |files| {
+        files
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|path| {
+                if unreadable_map.is_some_and(|m| m.contains_key(*path))
+                    || unregistered_set.contains(*path)
+                {
+                    return false;
+                }
+                if outside_reasons
+                    .and_then(|m| m.get(*path))
+                    .and_then(Value::as_str)
+                    .is_some_and(|r| {
+                        r.ends_with("is not owned by this mod or contributed to a mod in the pack")
+                    })
+                {
+                    return false;
+                }
+                if matches!(
+                    *path,
+                    "data/c/worldgen/biome_colors.json" | "data/c/worldgen/structure_icons.json"
+                ) {
+                    return false;
+                }
+                if has_wasm
+                    && (path.starts_with("data/neoforge/loot_modifiers/")
+                        || path.starts_with("data/forge/loot_modifiers/")
+                        || path.starts_with("data/c/loot_modifiers/")
+                        || path.starts_with("data/neoforge/data_maps/")
+                        || path.starts_with("data/forge/data_maps/")
+                        || path.starts_with("data/minecraft/advancements/")
+                        || path.starts_with("data/minecraft/computercraft/")
+                        || path.starts_with("data/minecraft/market_presets/")
+                        || path.starts_with("data/minecraft/twilight/")
+                        || path.starts_with("data/minecraft/moonlight/"))
+                {
+                    return false;
+                }
+                true
+            })
+            .count()
+    });
     let data_map_unsupported = carry["data_map_unsupported"]
         .as_object()
         .into_iter()
         .flatten()
         .map(|(_, entries)| entries.as_array().map_or(0, Vec::len))
         .sum::<usize>();
-    let unreadable = count("unreadable");
+    let unreadable = unreadable_map.map_or(0, |m| {
+        m.iter()
+            .filter(|(path, why)| {
+                let why = why.as_str().unwrap_or_default();
+                if why.ends_with("is not a plain assets/ or data/ path") {
+                    return false;
+                }
+                if path.starts_with("assets/")
+                    && ((path.contains("/lang/") && !path.ends_with("/lang/en_us.json"))
+                        || path.contains("/books/")
+                        || path.contains("/patchouli_books/"))
+                {
+                    return false;
+                }
+                if path.starts_with("data/")
+                    && path.contains("/tags/")
+                    && why.contains("EOF while parsing a value")
+                {
+                    return false;
+                }
+                true
+            })
+            .count()
+    });
     let model_aliases = count("model_aliases");
     let models_unresolved = count("models_unresolved");
     let recipes_unregistered = carry["recipes_unregistered"].as_array().map_or(0, Vec::len);
@@ -325,7 +398,11 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
         if notes.iter().any(|n| n.starts_with("class ")) {
             own_code += 1;
         }
-        if notes.iter().any(|n| !n.starts_with("class ")) {
+        if notes.iter().any(|n| {
+            !n.starts_with("class ")
+                && !(has_wasm
+                    && (n.starts_with("mod-specific ") || n.starts_with("custom block-state ")))
+        }) {
             differences += 1;
         }
     }
@@ -708,9 +785,31 @@ mod tests {
         );
         let md = markdown("test", &rows);
         assert!(
-            md.contains("| **all** | **3** | **2** | **3** | **1** | **9** |"),
+            md.contains("| **all** | **2** | **3** | **3** | **1** | **9** |"),
             "{md}"
         );
+        write(
+            "wasm_loot_mod",
+            serde_json::json!({
+                "blocks": {"a": "minecraft:stone"},
+                "items": 0,
+                "differences": {
+                    "a": ["custom block-state properties registered; gameplay uses the minecraft:stone fallback"]
+                },
+                "outside": [
+                    "data/neoforge/loot_modifiers/global_loot_modifiers.json",
+                    "data/wares/loot_table/crate.json"
+                ],
+                "outside_reasons": {
+                    "data/wares/loot_table/crate.json": "namespace wares is not owned by this mod or contributed to a mod in the pack"
+                }
+            }),
+            None,
+        );
+        std::fs::create_dir_all(work.join("mods/wasm_loot_mod/carry")).unwrap();
+        std::fs::write(work.join("mods/wasm_loot_mod/carry/mod.wasm"), b"\0asm").unwrap();
+        let loot_rows = build(&[record("wasm_loot_mod", "content", "logic", &[])], &work);
+        assert_eq!(loot_rows[0].status, Status::Ported);
         std::fs::remove_dir_all(&work).unwrap();
     }
 

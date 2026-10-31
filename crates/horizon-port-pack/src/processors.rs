@@ -617,7 +617,8 @@ fn as_data(kind: &str, p: &Value, data: &ProcessorData) -> Option<Vec<Value>> {
             if let Some(output) = p.get("output_block") {
                 output.as_str()?;
                 replacement["output_block"] = output.clone();
-            } else if let Some(outputs) = p.get("output_blocks") {
+            } else {
+                let outputs = p.get("output_blocks")?;
                 if !outputs
                     .as_array()
                     .is_some_and(|items| !items.is_empty() && items.iter().all(Value::is_string))
@@ -625,8 +626,6 @@ fn as_data(kind: &str, p: &Value, data: &ProcessorData) -> Option<Vec<Value>> {
                     return None;
                 }
                 replacement["output_blocks"] = outputs.clone();
-            } else {
-                return None;
             }
             vec![replacement]
         }
