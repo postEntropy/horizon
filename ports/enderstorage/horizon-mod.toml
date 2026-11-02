@@ -1,0 +1,6 @@
+id = "enderstorage"
+name = "EnderStorage"
+version = "0.1.0"
+api = "0.4"
+side = "both"
+capabilities = ["registries", "block-entities", "ui", "chat"]
