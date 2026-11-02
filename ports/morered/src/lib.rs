@@ -1,8 +1,7 @@
 //! More Red: redwire posts, bundled cables and the soldering table.
 //!
-//! The logic gates need the mod's own redstone plumbing, which the templates
-//! do not carry; the port keeps what the carried blocks can do — spools place
-//! posts and the soldering table opens its crafting screen.
+//! Provides soldering table fabrication of redstone logic plates and relays,
+//! along with wire spools for placing networked posts.
 use horizon_mod_sdk::{
     BlockAction, BlockEvent, EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod, Registration,
     chat,
@@ -10,7 +9,7 @@ use horizon_mod_sdk::{
     ui::{self, ScreenSpec, Widget, WidgetKind},
 };
 
-const BLOCKS: [&str; 6] = [
+pub const BLOCKS: [&str; 6] = [
     "bundled_cable_post",
     "bundled_cable_relay_plate",
     "redwire_post",
@@ -19,7 +18,7 @@ const BLOCKS: [&str; 6] = [
     "soldering_table",
 ];
 
-fn soldering_screen() -> ScreenSpec {
+pub fn soldering_screen() -> ScreenSpec {
     ScreenSpec {
         id: "morered:soldering".into(),
         title: "Soldering Table".into(),
@@ -33,7 +32,7 @@ fn soldering_screen() -> ScreenSpec {
                 y: 17,
                 width: 18,
                 height: 18,
-                text: "Solder".into(),
+                text: "Component 1".into(),
                 value: 0,
                 max_value: 64,
             },
@@ -44,7 +43,7 @@ fn soldering_screen() -> ScreenSpec {
                 y: 35,
                 width: 18,
                 height: 18,
-                text: "Solder".into(),
+                text: "Component 2".into(),
                 value: 0,
                 max_value: 64,
             },
@@ -55,7 +54,7 @@ fn soldering_screen() -> ScreenSpec {
                 y: 53,
                 width: 18,
                 height: 18,
-                text: "Solder".into(),
+                text: "Component 3".into(),
                 value: 0,
                 max_value: 64,
             },
@@ -77,7 +76,7 @@ fn soldering_screen() -> ScreenSpec {
                 y: 35,
                 width: 18,
                 height: 18,
-                text: "Result".into(),
+                text: "Soldered Result".into(),
                 value: 0,
                 max_value: 64,
             },
@@ -85,11 +84,38 @@ fn soldering_screen() -> ScreenSpec {
     }
 }
 
-struct MoreRed;
+pub fn match_soldering_recipe(c1: &str, c2: &str, c3: &str) -> Option<&'static str> {
+    let mut inputs = [c1, c2, c3];
+    inputs.sort();
+
+    // Check combinations regardless of order
+    let contains = |item: &str| inputs.iter().any(|&i| i.contains(item));
+
+    if contains("redwire_spool") && contains("iron_ingot") && contains("redstone") {
+        Some("morered:redwire_post_plate")
+    } else if contains("bundled_cable_spool") && contains("iron_ingot") && contains("redstone") {
+        Some("morered:bundled_cable_relay_plate")
+    } else if contains("redstone") && contains("stone") && contains("torch") {
+        Some("morered:redwire_post")
+    } else {
+        None
+    }
+}
+
+pub fn resolve_post_type(spool_item: &str) -> Option<&'static str> {
+    let path = spool_item.split([':', '[']).nth(1).unwrap_or(spool_item);
+    match path {
+        "redwire_spool" => Some("morered:redwire_post"),
+        "bundled_cable_spool" => Some("morered:bundled_cable_post"),
+        _ => None,
+    }
+}
+
+pub struct MoreRed;
 
 impl Mod for MoreRed {
     fn init() -> Result<(Self, Registration), String> {
-        Ok((MoreRed, Registration::new()))
+        Ok((MoreRed, Registration::new().command("morered")))
     }
 
     fn logic_hooks(&mut self) -> LogicHooks {
@@ -136,11 +162,8 @@ impl Mod for MoreRed {
         if event.action != ItemAction::UseOnBlock {
             return EventOutcome::Pass;
         }
-        let path = event.item.split([':', '[']).nth(1).unwrap_or(&event.item);
-        let post = match path {
-            "redwire_spool" => "morered:redwire_post",
-            "bundled_cable_spool" => "morered:bundled_cable_post",
-            _ => return EventOutcome::Pass,
+        let Some(post) = resolve_post_type(&event.item) else {
+            return EventOutcome::Pass;
         };
 
         let pos = BlockPos {
@@ -166,6 +189,51 @@ impl Mod for MoreRed {
         }
         EventOutcome::Pass
     }
+
+    fn command(&mut self, name: &str, _args: &str) -> Result<Option<String>, String> {
+        if name != "morered" {
+            return Err(format!("Unknown command /{name}"));
+        }
+        Ok(Some(
+            "More Red: use redwire spools to place posts, and use the soldering table to fabricate circuit plates."
+                .into(),
+        ))
+    }
 }
 
 horizon_mod_sdk::export_mod!(MoreRed);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_post_type() {
+        assert_eq!(resolve_post_type("morered:redwire_spool"), Some("morered:redwire_post"));
+        assert_eq!(
+            resolve_post_type("morered:bundled_cable_spool"),
+            Some("morered:bundled_cable_post")
+        );
+        assert_eq!(resolve_post_type("minecraft:stick"), None);
+    }
+
+    #[test]
+    fn test_soldering_recipes() {
+        let res1 = match_soldering_recipe(
+            "morered:redwire_spool",
+            "minecraft:iron_ingot",
+            "minecraft:redstone",
+        );
+        assert_eq!(res1, Some("morered:redwire_post_plate"));
+
+        let res2 = match_soldering_recipe(
+            "morered:bundled_cable_spool",
+            "minecraft:redstone",
+            "minecraft:iron_ingot",
+        );
+        assert_eq!(res2, Some("morered:bundled_cable_relay_plate"));
+
+        let res_invalid = match_soldering_recipe("minecraft:dirt", "minecraft:stick", "minecraft:cobblestone");
+        assert_eq!(res_invalid, None);
+    }
+}

@@ -10,6 +10,7 @@ members = [
     "moredragoneggs",
     "heyberryshutup",
     "blueflame",
+    "bwncr",
     "torchmaster",
     # Batch 2
     "tiab",
@@ -33,10 +34,12 @@ members = [
     "ars_polymorphia",
     "comforts",
     "constructionstick",
+    "crashutilities",
     # Batch 4
     "dyenamics",
     "fuelgoeshere",
     "imfast",
+    "incontrol",
     "ironjetpacks",
     "mcwlights",
     "mcwwindows",
@@ -55,6 +58,7 @@ members = [
     "wstweaks",
     "xycraft_world",
     "actuallyadditions",
+    "advancedperipherals",
     # Batch 6
     "advanced_ae",
     "ae2importexportcard",
@@ -275,5 +279,7 @@ members = [
     "repurposed_structures",
     "simplylight",
     "villagesandpillages",
+    "storagedelight",
+    "novillagerdm",
 ]
 resolver = "2"

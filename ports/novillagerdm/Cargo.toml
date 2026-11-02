@@ -1,0 +1,10 @@
+[package]
+name = "novillagerdm-port"
+version = "6.0.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+horizon-mod-sdk = { path = "../../crates/horizon-mod-sdk" }
