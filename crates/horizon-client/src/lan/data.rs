@@ -101,7 +101,7 @@ fn read_namespaced_registry(resources: &Path, registry: &str) -> BTreeMap<String
         return out;
     };
     for namespace in namespaces.flatten() {
-        if !namespace.file_type().is_ok_and(|kind| kind.is_dir()) {
+        if !namespace.path().is_dir() {
             continue;
         }
         let namespace = namespace.file_name().to_string_lossy().into_owned();
@@ -167,7 +167,10 @@ impl SyncData {
             if *key == "minecraft:dimension_type" {
                 dynamic.registries.insert(
                     (*key).to_owned(),
-                    found.keys().map(|name| (name.clone(), None)).collect(),
+                    found
+                        .iter()
+                        .map(|(name, json)| (name.clone(), Some(json_to_nbt(json))))
+                        .collect(),
                 );
                 registries.push((
                     (*key).to_owned(),
@@ -239,7 +242,7 @@ impl SyncData {
                     .zip(&e.json)
                     .map(|(name, json)| RegistryEntry {
                         id: name.clone(),
-                        data: if known_pack {
+                        data: if known_pack && name.starts_with("minecraft:") {
                             None
                         } else {
                             Some(json_to_nbt(json))
@@ -347,6 +350,28 @@ impl SyncData {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn namespaced_registry_follows_overlay_directory_links() {
+        let root =
+            std::env::temp_dir().join(format!("horizon-sync-registry-{}", std::process::id()));
+        let base = root.join("base/minecraft/dimension_type");
+        let data = root.join("overlay/data");
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(data.join("example/dimension_type")).unwrap();
+        std::fs::write(base.join("overworld.json"), r#"{"min_y":-64,"height":384}"#).unwrap();
+        std::fs::write(
+            data.join("example/dimension_type/room.json"),
+            r#"{"min_y":0,"height":256}"#,
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(root.join("base/minecraft"), data.join("minecraft")).unwrap();
+        let entries = read_namespaced_registry(&root.join("overlay"), "dimension_type");
+        assert_eq!(entries["minecraft:overworld"]["min_y"], -64);
+        assert_eq!(entries["example:room"]["min_y"], 0);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn json_becomes_nbt() {

@@ -44,6 +44,9 @@ pub struct ConsumeEffectSpec {
     pub id: String,
     pub duration: i32,
     pub amplifier: i32,
+    pub ambient: bool,
+    pub visible: bool,
+    pub show_icon: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -484,6 +487,9 @@ impl Items {
                                             id: id.to_string(),
                                             duration,
                                             amplifier,
+                                            ambient: e["ambient"].as_bool().unwrap_or(false),
+                                            visible: e["show_particles"].as_bool().unwrap_or(true),
+                                            show_icon: e["show_icon"].as_bool().unwrap_or(true),
                                         });
                                     }
                                 }
@@ -596,10 +602,16 @@ impl Items {
                     dye: c["minecraft:dye"].as_str().map(str::to_owned),
                     block_transformer: c["minecraft:block_transformer"].as_str().map(str::to_owned),
                     bundle: c.get("minecraft:bundle_contents").is_some(),
-                    crafting_remainder: CRAFT_REMAINDERS
-                        .iter()
-                        .find(|(item, _)| *item == name)
-                        .map(|(_, rest)| (*rest).to_owned()),
+                    crafting_remainder: c["minecraft:crafting_remainder"]
+                        .as_str()
+                        .or(c["minecraft:crafting_remainder"]["id"].as_str())
+                        .map(str::to_owned)
+                        .or_else(|| {
+                            CRAFT_REMAINDERS
+                                .iter()
+                                .find(|(item, _)| *item == name)
+                                .map(|(_, rest)| (*rest).to_owned())
+                        }),
                     use_speed: c["minecraft:use_effects"]["speed_multiplier"]
                         .as_f64()
                         .unwrap_or(0.2) as f32,

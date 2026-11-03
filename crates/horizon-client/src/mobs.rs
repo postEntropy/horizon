@@ -30,6 +30,7 @@ pub mod equine;
 pub mod farm;
 pub mod finalize;
 pub mod gear;
+pub mod geo;
 pub mod goals;
 pub mod golem;
 pub mod guardian;
@@ -272,6 +273,208 @@ impl Part {
             polygons,
             children,
         }
+    }
+}
+
+/// Loads a mod entity's baked, articulated model from its resource namespace.
+/// The model uses the same polygon and pose representation as entity-models.json.
+pub fn load_mod_entity_model(root: &Path, id: &str) -> Result<Option<(Part, String)>, String> {
+    let (namespace, name) = id.split_once(':').ok_or("invalid entity id")?;
+    let valid = |s: &str| {
+        !s.is_empty()
+            && s.bytes()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || b"_.-".contains(&c))
+    };
+    if !valid(namespace)
+        || namespace == "."
+        || namespace == ".."
+        || name
+            .split('/')
+            .any(|part| !valid(part) || part == "." || part == "..")
+    {
+        return Err(format!("invalid entity id {id}"));
+    }
+    let path = root
+        .join("assets")
+        .join(namespace)
+        .join("horizon/entity_models")
+        .join(format!("{name}.json"));
+    let bytes = match fs::read(&path) {
+        Ok(bytes) if bytes.len() <= 4 * 1024 * 1024 => bytes,
+        Ok(_) => return Err(format!("{}: model exceeds 4 MiB", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    let doc: Value =
+        serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    let texture = doc["texture"].as_str().ok_or("model texture is missing")?;
+    let (texture_ns, texture_path) = texture
+        .split_once(':')
+        .ok_or("texture must be namespaced")?;
+    if !valid(texture_ns)
+        || !texture_path.starts_with("entity/")
+        || texture_path
+            .split('/')
+            .any(|part| !valid(part) || part == "." || part == "..")
+    {
+        return Err("invalid entity texture id".into());
+    }
+    fn validate(part: &Value, depth: usize, count: &mut usize) -> bool {
+        if depth > 32 || !part.is_object() {
+            return false;
+        }
+        *count += 1;
+        if *count > 4096 {
+            return false;
+        }
+        if let Some(pose) = part.get("pose")
+            && !pose.as_array().is_some_and(|v| {
+                v.len() <= 9
+                    && v.iter()
+                        .all(|n| n.as_f64().is_some_and(|n| (n as f32).is_finite()))
+            })
+        {
+            return false;
+        }
+        if let Some(polygons) = part.get("polygons") {
+            let Some(polygons) = polygons.as_array() else {
+                return false;
+            };
+            *count += polygons.len();
+            if *count > 4096
+                || !polygons.iter().all(|p| {
+                    p.as_array().is_some_and(|vertices| {
+                        vertices.len() == 4
+                            && vertices.iter().all(|v| {
+                                v.as_array().is_some_and(|coords| {
+                                    coords.len() == 5
+                                        && coords.iter().all(|n| {
+                                            n.as_f64().is_some_and(|n| (n as f32).is_finite())
+                                        })
+                                })
+                            })
+                    })
+                })
+            {
+                return false;
+            }
+        }
+        if let Some(normals) = part.get("normals")
+            && !normals.as_array().is_some_and(|normals| {
+                normals.len() <= 4096
+                    && normals.iter().all(|normal| {
+                        normal.as_array().is_some_and(|coords| {
+                            coords.len() == 3
+                                && coords
+                                    .iter()
+                                    .all(|n| n.as_f64().is_some_and(|n| (n as f32).is_finite()))
+                        })
+                    })
+            })
+        {
+            return false;
+        }
+        if let Some(children) = part.get("children") {
+            let Some(children) = children.as_object() else {
+                return false;
+            };
+            if !children
+                .values()
+                .all(|child| validate(child, depth + 1, count))
+            {
+                return false;
+            }
+        }
+        true
+    }
+    let model = if let Some(geo_id) = doc["geo"].as_str() {
+        let (geo_ns, geo_path) = geo_id.split_once(':').ok_or("Geo id must be namespaced")?;
+        if !valid(geo_ns)
+            || geo_ns == "."
+            || geo_ns == ".."
+            || geo_path
+                .split('/')
+                .any(|part| !valid(part) || part == "." || part == "..")
+        {
+            return Err("invalid Geo id".into());
+        }
+        let path = root
+            .join("assets")
+            .join(geo_ns)
+            .join("geo")
+            .join(format!("{geo_path}.geo.json"));
+        let bytes = fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        if bytes.len() > 4 * 1024 * 1024 {
+            return Err("Geo model exceeds 4 MiB".into());
+        }
+        let geo_doc =
+            serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        geo::parse(&geo_doc)?
+    } else {
+        if !validate(&doc["model"], 0, &mut 0) {
+            return Err("invalid entity model geometry".into());
+        }
+        Part::parse("root", &doc["model"])
+    };
+    let texture = if texture_ns == "minecraft" {
+        texture_path.to_owned()
+    } else {
+        format!("{texture_ns}/{texture_path}")
+    };
+    Ok(Some((model, texture)))
+}
+
+#[cfg(test)]
+mod mod_entity_model_tests {
+    use super::*;
+
+    #[test]
+    fn loads_articulated_mod_model_and_rejects_invalid_geometry() {
+        let root =
+            std::env::temp_dir().join(format!("horizon-entity-model-{}", std::process::id()));
+        let dir = root.join("assets/example/horizon/entity_models");
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("automaton.json");
+        fs::write(&file, r#"{"texture":"example:entity/automaton","model":{"children":{"arm":{"pose":[1,2,3],"polygons":[[[0,0,0,0,0],[1,0,0,1,0],[1,1,0,1,1],[0,1,0,0,1]]]}}}}"#).unwrap();
+        let (model, texture) = load_mod_entity_model(&root, "example:automaton")
+            .unwrap()
+            .unwrap();
+        assert_eq!(texture, "example/entity/automaton");
+        assert_eq!(model.children[0].name, "arm");
+        assert_eq!(model.children[0].polygons.len(), 1);
+        let mut vertices = Vec::new();
+        render_model(
+            &model,
+            glam::Mat4::IDENTITY,
+            &|part| part.pose,
+            [0.0, 0.0, 1.0, 1.0],
+            0,
+            0,
+            &mut vertices,
+        );
+        assert_eq!(vertices.len(), 4);
+        assert_eq!(vertices[0].pos, [1.0 / 16.0, 2.0 / 16.0, 3.0 / 16.0]);
+        let geo_dir = root.join("assets/example/geo/entity");
+        fs::create_dir_all(&geo_dir).unwrap();
+        fs::write(geo_dir.join("automaton.geo.json"), r#"{"format_version":"1.12.0","minecraft:geometry":[{"description":{"identifier":"geometry.automaton","texture_width":16,"texture_height":16},"bones":[{"name":"body","cubes":[{"origin":[0,0,0],"size":[4,4,4],"uv":[0,0]}]}]}]}"#).unwrap();
+        fs::write(
+            &file,
+            r#"{"texture":"example:entity/automaton","geo":"example:entity/automaton"}"#,
+        )
+        .unwrap();
+        let (geo_model, _) = load_mod_entity_model(&root, "example:automaton")
+            .unwrap()
+            .unwrap();
+        assert_eq!(geo_model.children[0].name, "body");
+        assert_eq!(geo_model.children[0].children[0].polygons.len(), 6);
+        fs::write(
+            &file,
+            r#"{"texture":"example:entity/automaton","model":{"polygons":[[[1]]]}}"#,
+        )
+        .unwrap();
+        assert!(load_mod_entity_model(&root, "example:automaton").is_err());
+        assert!(load_mod_entity_model(&root, "example:../automaton").is_err());
+        fs::remove_dir_all(root).unwrap();
     }
 }
 /// Kept for callers of the earlier simple AI; species now select behaviour.

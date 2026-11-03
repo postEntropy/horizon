@@ -227,7 +227,7 @@ impl Game<'_> {
                 block: _, items, ..
             }) => {
                 let rows = items.len().div_ceil(9).clamp(1, 6);
-                (Kind::Chest(rows), items.clone(), true)
+                (Kind::Chest(rows), items.read().to_vec(), true)
             }
             _ => return false,
         };
@@ -248,6 +248,18 @@ impl Game<'_> {
             .take()
             .filter(|(window, _)| *window == p.container)
             .map_or_else(|| Box::new(Menu::new(kind)), |(_, m)| m);
+        if let Some(BlockEntity::Mod { handle, .. }) = self.world.block_entities.get(&pos) {
+            for slot in 0..items.len() {
+                let (insert, extract) = self.mod_player_slot_access(*handle, slot);
+                menu.set_slot_access(slot, insert, extract);
+                menu.set_slot_limit(slot, self.mod_item_slot_limit(*handle, slot).unwrap_or(0));
+            }
+            if let Kind::Chest(rows) = kind {
+                for slot in items.len()..rows * 9 {
+                    menu.set_slot_access(slot, false, false);
+                }
+            }
+        }
         let changed = self.guest_menu_op(host, gi, &mut menu, |menu, env| {
             for (k, s) in items.iter().enumerate() {
                 menu.set_slot(env, k, s.clone());
@@ -289,7 +301,7 @@ impl Game<'_> {
                 }
             }
             Some(BlockEntity::Mod { items, .. }) => {
-                for (k, item) in items.iter_mut().enumerate() {
+                for (k, item) in items.read().iter_mut().enumerate() {
                     *item = menu.slot(k).cloned();
                 }
                 self.world.modified.insert((pos.0 >> 4, pos.2 >> 4));

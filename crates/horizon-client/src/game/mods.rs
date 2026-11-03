@@ -179,6 +179,17 @@ use {
 struct GameFacts(Arc<super::Resources>);
 #[cfg(feature = "mods")]
 impl ItemFacts for GameFacts {
+    fn block_in_tag(&self, id: &str, tag: &str) -> bool {
+        let Some(rest) = self.0.rest.get() else {
+            return false;
+        };
+        let Some(block) = rest.behaviours.table.block_by_name(id) else {
+            return false;
+        };
+        rest.behaviours
+            .tag(tag)
+            .is_some_and(|members| members.contains(block))
+    }
     fn max_stack_size(&self, id: &str) -> u32 {
         self.0
             .rest
@@ -220,6 +231,49 @@ impl ItemFacts for GameFacts {
             .get()
             .and_then(|r| r.items.item_tags.get(tag))
             .is_some_and(|items| items.contains(id))
+    }
+    fn smithing_result(
+        &self,
+        template: &str,
+        base: &str,
+        addition: &str,
+        base_components: &[u8],
+    ) -> Option<(Stack, Vec<u8>)> {
+        let resources = self.0.rest.get()?;
+        let template_stack = ItemStack::new(template, 1);
+        let addition_stack = ItemStack::new(addition, 1);
+        let mut base_stack = ItemStack::new(base, 1);
+        if !base_components.is_empty() {
+            let (tag, used) = horizon_world::nbt::read_network(
+                base_components,
+                horizon_world::nbt::Limits::default(),
+            )
+            .ok()?;
+            if used != base_components.len() {
+                return None;
+            }
+            let (damage, extra) = horizon_client::item_data::decode_components(Some(&tag));
+            base_stack.damage = damage;
+            base_stack.extra = extra;
+        }
+        let result = resources.stations.recipes.smithing_result(
+            &resources.stations.enchantments,
+            Some(&template_stack),
+            Some(&base_stack),
+            Some(&addition_stack),
+        )?;
+        let components = horizon_client::item_data::encode_components(&result)
+            .and_then(|tag| {
+                horizon_world::nbt::write_network(&tag, horizon_world::nbt::Limits::default()).ok()
+            })
+            .unwrap_or_default();
+        Some((
+            Stack {
+                id: result.item.to_string(),
+                count: result.count,
+            },
+            components,
+        ))
     }
 }
 
@@ -464,6 +518,18 @@ pub(super) struct ModsState {
     /// Active mod block entities in the loaded world, keyed by `[x, y, z]`.
     #[cfg(feature = "mods")]
     block_entities: HashMap<[i32; 3], BlockEntityView>,
+    /// Valid values for each mod-block property, derived once from the static
+    /// content registry instead of rescanning every state for every machine.
+    #[cfg(feature = "mods")]
+    property_values: HashMap<(String, String), Vec<String>>,
+    #[cfg(feature = "mods")]
+    shared_inventories: horizon_client::shared_inventory::SharedInventories,
+    #[cfg(feature = "mods")]
+    shared_inventory_load_failed: bool,
+    #[cfg(feature = "mods")]
+    binding_generation: u64,
+    #[cfg(feature = "mods")]
+    bound_generations: HashMap<String, u64>,
     /// Live mob id -> `(mod handle, dimension id)`.
     #[cfg(feature = "mods")]
     mob_handles: HashMap<u32, (u32, String)>,
@@ -1026,6 +1092,17 @@ impl Game<'_> {
         false
     }
 
+    pub(super) fn mod_interact_entity_item(
+        &mut self,
+        _item: &str,
+        _target: &str,
+        _pos: [i32; 3],
+    ) -> Option<horizon_mods::EventOutcome> {
+        None
+    }
+
+    pub(super) fn tick_player_mod_callback(&mut self) {}
+
     pub(super) fn mod_attack_block(&mut self, _pos: [i32; 3]) -> bool {
         false
     }
@@ -1122,6 +1199,12 @@ impl Game<'_> {
     pub(super) fn mod_slot_position(&self, _slot: usize) -> Option<(f32, f32)> {
         None
     }
+    pub(super) fn mod_item_slot_limit(&self, _handle: u32, _slot: usize) -> Option<u32> {
+        None
+    }
+    pub(super) fn mod_player_slot_access(&self, _handle: u32, _slot: usize) -> (bool, bool) {
+        (false, false)
+    }
     pub(super) fn mod_item_slot_access(
         &self,
         _handle: u32,
@@ -1151,6 +1234,9 @@ impl Game<'_> {
     pub(super) fn mod_save_attachments(&mut self) {}
     pub(super) fn mod_load_attachments(&mut self) {}
     pub(super) fn tick_mod_block_entities(&mut self, _positions: &[(i32, i32, i32)]) {}
+    pub(super) fn mod_bind_loaded_block_entities(&mut self) {
+        let _ = self.world.block_entities.take_loaded_mods();
+    }
     pub(super) fn mod_command(&mut self, _command: &str) -> bool {
         false
     }
@@ -1317,6 +1403,15 @@ impl Game<'_> {
             fire_immune: spec.fire_immune,
             ..horizon_client::mobs::Flags::default()
         };
+        match horizon_client::mobs::load_mod_entity_model(&self.options.resources, &spec.id) {
+            Ok(Some((model, texture))) => {
+                base.model = Arc::new(model);
+                base.layers.clear();
+                base.texture = texture;
+            }
+            Ok(None) => {}
+            Err(error) => log::warn!("Horizon: entity {} model: {error}", spec.id),
+        }
         let mut attrs = (*base.attributes).clone();
         attrs.insert(
             "minecraft:max_health".to_owned(),
@@ -1391,6 +1486,10 @@ impl Game<'_> {
         let specs: Vec<_> = self.mods.mods.dimensions().into_iter().collect();
         let reg = &mut self.ui.registries;
         for spec in specs {
+            if !reg.dimensions.contains(&spec.id) {
+                reg.dimensions.push(spec.id.clone());
+                reg.dimensions.sort();
+            }
             let generator = match spec.generator {
                 horizon_mods::GeneratorKind::Noise => super::ModDimensionGenerator::Noise,
                 horizon_mods::GeneratorKind::Flat => super::ModDimensionGenerator::Flat,
@@ -1475,10 +1574,30 @@ impl Game<'_> {
             ]);
         let scale = self.dim.coordinate_scale() / dest_dim.coordinate_scale();
         let spec = super::mod_dimension_spec(dest_dim.id());
-        let (dest_x, dest_y, dest_z) = match spec.map(|s| s.generator) {
+        let (dest_x, dest_y, dest_z) = match spec.as_ref().map(|s| s.generator) {
             Some(super::ModDimensionGenerator::VoidWorld) => (0.5, 64.0, 0.5),
             Some(super::ModDimensionGenerator::Flat | super::ModDimensionGenerator::Custom) => {
-                (from_pos[0] * scale, 64.0, from_pos[2] * scale)
+                let height = spec
+                    .as_ref()
+                    .and_then(|spec| {
+                        horizon_client::flatgen::FlatTerrain::from_dimension_file(
+                            &self.options.resources,
+                            dest_dim.id(),
+                            dest_dim.min_y(),
+                            spec.height,
+                            self.pack.assets.registry,
+                            self.res.biomes(),
+                        )
+                        .ok()
+                        .flatten()
+                        .map(|terrain| terrain.spawn_height())
+                    })
+                    .unwrap_or(64);
+                (
+                    from_pos[0] * scale,
+                    f64::from(height.clamp(dest_dim.min_y() + 1, dest_dim.max_y() - 1)),
+                    from_pos[2] * scale,
+                )
             }
             _ => (
                 from_pos[0] * scale,
@@ -1838,9 +1957,7 @@ impl Game<'_> {
         }
         let &(handle, _) = self.mods.mob_handles.get(&id)?;
         let kind = self.mobs.iter().find(|m| m.id == id)?.kind.id.clone();
-        if self.mods.mods.entity_type(&kind).is_none() {
-            return None;
-        }
+        self.mods.mods.entity_type(&kind)?;
         self.sync_mod_entities();
         self.mods.mods.save_entity(handle)
     }
@@ -1934,7 +2051,8 @@ impl Game<'_> {
             .mods
             .scheduled_mod_action_tickets
             .iter()
-            .filter_map(|(tick, &(_, _, deadline))| (now >= deadline).then(|| tick.clone()))
+            .filter(|(_, value)| now >= value.2)
+            .map(|(tick, _)| tick.clone())
             .collect();
         for tick in expired {
             if self
@@ -2368,9 +2486,12 @@ impl Game<'_> {
         // `server.get_block` reads a snapshot around the player. A block hook
         // can inspect a larger area around its event position (for example,
         // the canopy above a broken log), so prime that area before dispatch.
-        for dx in -4..=4 {
-            for dy in -6..=6 {
-                for dz in -4..=4 {
+        for dx in -6i32..=6 {
+            for dy in -6i32..=6 {
+                for dz in -6i32..=6 {
+                    if dx.abs() + dy.abs() + dz.abs() > 6 {
+                        continue;
+                    }
                     let x = pos[0] + dx;
                     let y = pos[1] + dy;
                     let z = pos[2] + dz;
@@ -2447,6 +2568,33 @@ impl Game<'_> {
         outcome != EventOutcome::Pass
     }
 
+    /// Dispatches a held item's right-click interaction with a living entity.
+    /// `target` carries stable, simulation-relevant identity facts; callers
+    /// must invoke this on the authoritative game only.
+    pub(super) fn mod_interact_entity_item(
+        &mut self,
+        item: &str,
+        target: &str,
+        pos: [i32; 3],
+    ) -> Option<EventOutcome> {
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return None;
+        }
+        self.sync_mod_entities();
+        let outcome = self.mods.mods.item_entity_interaction_event(ItemEvent {
+            action: ItemAction::InteractEntity,
+            item: item.to_owned(),
+            player: self.acting_player_name().to_owned(),
+            dimension: self.dim.id().to_owned(),
+            x: pos[0],
+            y: pos[1],
+            z: pos[2],
+            target: target.to_owned(),
+        });
+        self.show_mod_output();
+        outcome
+    }
+
     /// Dispatches a left-click callback for a mod-owned block.
     pub(super) fn mod_attack_block(&mut self, pos: [i32; 3]) -> bool {
         if self.remote.is_some() || !self.mods.mods.is_running() {
@@ -2477,6 +2625,28 @@ impl Game<'_> {
         if self.remote.is_some() || !self.mods.mods.is_running() {
             return EventOutcome::Pass;
         }
+        // `server.get_block` reads a snapshot, not the live level. Block
+        // callbacks commonly inspect their six adjacent cells (for example,
+        // a budding block choosing a crystal growth face), so prime them for
+        // every callback before entering the sandbox.
+        for [dx, dy, dz] in [
+            [0, 0, 0],
+            [1, 0, 0],
+            [-1, 0, 0],
+            [0, 1, 0],
+            [0, -1, 0],
+            [0, 0, 1],
+            [0, 0, -1],
+        ] {
+            let (x, y, z) = (pos[0] + dx, pos[1] + dy, pos[2] + dz);
+            if !self.world.loaded(x, z) {
+                continue;
+            }
+            let state = self.mod_block_state_at([x, y, z]);
+            self.mods
+                .mods
+                .set_world_block(self.dim.id(), x, y, z, &state);
+        }
         self.sync_mod_entities();
         let state = self.mod_block_state_at(pos);
         let name = self
@@ -2486,7 +2656,9 @@ impl Game<'_> {
             .name
             .to_string();
         self.ensure_mod_block_entity(pos, &name);
-        let outcome = self.mods.mods.block_event(
+        let sneaking = self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft)
+            || self.keys.contains(&winit::keyboard::KeyCode::ShiftRight);
+        let outcome = self.mods.mods.block_event_with_context(
             BlockEvent {
                 action,
                 dimension: self.dim.id().to_owned(),
@@ -2509,6 +2681,7 @@ impl Game<'_> {
                 },
             },
             face,
+            sneaking,
         );
         self.show_mod_output();
         self.mod_save_block_entity(pos);
@@ -2553,7 +2726,11 @@ impl Game<'_> {
             .collect();
         let enabled = &self.settings.mods.enabled;
         let on = |id: &str| enabled.contains(id) || dev_ids.iter().any(|d| d == id);
-        let mut mods = Mods::load(&paths, on, vanilla_command);
+        let dimensions = super::data_dimension_ids()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let mut mods = Mods::load_with_dimensions(&paths, on, vanilla_command, dimensions);
         mods.restore_attachments(attachments);
         mods.restore_accessories(accessories);
         let running = mods
@@ -2568,6 +2745,7 @@ impl Game<'_> {
         );
         mods.set_item_facts(Arc::new(GameFacts(self.res.clone())));
         self.mods.mods = mods;
+        self.mods.binding_generation = self.mods.binding_generation.wrapping_add(1);
         self.sync_mod_rules();
         self.mods.resource_recipes_loaded = false;
         self.load_mod_resource_recipes();
@@ -3188,6 +3366,9 @@ impl Game<'_> {
             .block_entities
             .iter()
             .filter_map(|(&pos, view)| {
+                if view.dimension != self.dim.id() {
+                    return None;
+                }
                 let live = matches!(
                     self.world.block_entities.get(&(pos[0], pos[1], pos[2])),
                     Some(horizon_client::containers::BlockEntity::Mod { handle, .. })
@@ -3211,7 +3392,47 @@ impl Game<'_> {
         }
         self.refresh_mod_context();
         self.mods.mods.tick(self.ticks);
+        self.tick_player_mod_callback();
         self.show_mod_output();
+    }
+    #[cfg(feature = "mods")]
+    pub(super) fn tick_player_mod_callback(&mut self) {
+        if self.player.is_none() {
+            return;
+        }
+        let player_id = self
+            .lan_acting_uuid
+            .map(|id| format!("{id:032x}"))
+            .unwrap_or_else(|| "local".to_owned());
+        let effect_context = self
+            .player
+            .as_ref()
+            .map(|player| {
+                self.potions
+                    .effects
+                    .list
+                    .iter()
+                    .map(|effect| horizon_mods::ActiveEffect {
+                        id: effect.namespaced_id(),
+                        duration: effect.duration,
+                        amplifier: effect.amplifier,
+                        ambient: effect.ambient,
+                        visible: effect.visible,
+                        show_icon: effect.show_icon,
+                        food: player.health.food.food.max(0) as u32,
+                        saturation: player.health.food.saturation,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        self.mods
+            .mods
+            .set_status_effect_context(player_id, effect_context);
+        self.mods.mods.player_tick(self.ticks);
+    }
+    #[cfg(feature = "mods")]
+    pub(super) fn mod_has_status_effect(&self, id: &str) -> bool {
+        self.mods.mods.has_status_effect(id)
     }
     fn load_mod_resource_recipes(&mut self) {
         if self.mods.resource_recipes_loaded {
@@ -3220,73 +3441,112 @@ impl Game<'_> {
         let Some(rest) = self.res.rest.get() else {
             return;
         };
+        let machine_recipes = rest
+            .recipes
+            .machine
+            .iter()
+            .map(|recipe| horizon_mods::RecipeEntry {
+                id: recipe.id.clone(),
+                kind: recipe.kind.clone(),
+                inputs: recipe
+                    .inputs
+                    .iter()
+                    .map(|input| match input {
+                        horizon_client::crafting::MachineInput::Item { ingredient, count } => {
+                            horizon_mods::IngredientSlot {
+                                items: ingredient.1.clone(),
+                                count: *count,
+                            }
+                        }
+                        horizon_client::crafting::MachineInput::Resource {
+                            kind,
+                            tank,
+                            accepted,
+                            amount,
+                        } => {
+                            let kind = match kind {
+                                horizon_client::crafting::MachineResourceKind::Fluid => "fluid",
+                                horizon_client::crafting::MachineResourceKind::Chemical => {
+                                    "chemical"
+                                }
+                            };
+                            let tank = *tank + if kind == "chemical" { 1_000 } else { 0 };
+                            horizon_mods::IngredientSlot {
+                                items: accepted
+                                    .iter()
+                                    .map(|id| format!("@{kind}/{tank}/{id}"))
+                                    .collect(),
+                                count: *amount,
+                            }
+                        }
+                    })
+                    .collect(),
+                outputs: recipe
+                    .outputs
+                    .iter()
+                    .map(|output| match output {
+                        horizon_client::crafting::MachineOutput::Item(stack) => {
+                            format!("{}*{}", stack.item, stack.count)
+                        }
+                        horizon_client::crafting::MachineOutput::ItemWithChance {
+                            stack,
+                            chance,
+                        } => format!("{}*{}@{}", stack.item, stack.count, chance),
+                        horizon_client::crafting::MachineOutput::Resource {
+                            kind,
+                            tank,
+                            id,
+                            amount,
+                        } => {
+                            let kind = match kind {
+                                horizon_client::crafting::MachineResourceKind::Fluid => "fluid",
+                                horizon_client::crafting::MachineResourceKind::Chemical => {
+                                    "chemical"
+                                }
+                            };
+                            let tank = *tank + if kind == "chemical" { 1_000 } else { 0 };
+                            format!("@{kind}/{tank}/{id}*{amount}")
+                        }
+                    })
+                    .collect(),
+                ticks: recipe.ticks,
+                energy: recipe.energy,
+            });
+        // Smithing transforms are also useful inputs to automated machines.
+        // Their ingredients have already been expanded from item tags by the
+        // station loader, so API 0.4 guests can match the same recipes as the
+        // vanilla Smithing Table.
+        let smithing_recipes = rest
+            .stations
+            .recipes
+            .smithing
+            .iter()
+            .enumerate()
+            .filter_map(|(index, recipe)| match recipe {
+                horizon_client::stations::Smithing::Transform {
+                    template,
+                    base,
+                    addition,
+                    result,
+                } => Some(horizon_mods::RecipeEntry {
+                    id: format!("minecraft:smithing_transform/recipe_{index}"),
+                    kind: "minecraft:smithing_transform".into(),
+                    inputs: [template, base, addition]
+                        .into_iter()
+                        .map(|ingredient| horizon_mods::IngredientSlot {
+                            items: ingredient.1.clone(),
+                            count: 1,
+                        })
+                        .collect(),
+                    outputs: vec![format!("{result}*1")],
+                    ticks: 0,
+                    energy: 0,
+                }),
+                horizon_client::stations::Smithing::Trim { .. } => None,
+            });
         self.mods
             .mods
-            .add_resource_recipes(rest.recipes.machine.iter().map(|recipe| {
-                horizon_mods::RecipeEntry {
-                    id: recipe.id.clone(),
-                    kind: recipe.kind.clone(),
-                    inputs: recipe
-                        .inputs
-                        .iter()
-                        .map(|input| match input {
-                            horizon_client::crafting::MachineInput::Item { ingredient, count } => {
-                                horizon_mods::IngredientSlot {
-                                    items: ingredient.1.clone(),
-                                    count: *count,
-                                }
-                            }
-                            horizon_client::crafting::MachineInput::Resource {
-                                kind,
-                                tank,
-                                accepted,
-                                amount,
-                            } => {
-                                let kind = match kind {
-                                    horizon_client::crafting::MachineResourceKind::Fluid => "fluid",
-                                    horizon_client::crafting::MachineResourceKind::Chemical => {
-                                        "chemical"
-                                    }
-                                };
-                                let tank = *tank + if kind == "chemical" { 1_000 } else { 0 };
-                                horizon_mods::IngredientSlot {
-                                    items: accepted
-                                        .iter()
-                                        .map(|id| format!("@{kind}/{tank}/{id}"))
-                                        .collect(),
-                                    count: *amount,
-                                }
-                            }
-                        })
-                        .collect(),
-                    outputs: recipe
-                        .outputs
-                        .iter()
-                        .map(|output| match output {
-                            horizon_client::crafting::MachineOutput::Item(stack) => {
-                                format!("{}*{}", stack.item, stack.count)
-                            }
-                            horizon_client::crafting::MachineOutput::Resource {
-                                kind,
-                                tank,
-                                id,
-                                amount,
-                            } => {
-                                let kind = match kind {
-                                    horizon_client::crafting::MachineResourceKind::Fluid => "fluid",
-                                    horizon_client::crafting::MachineResourceKind::Chemical => {
-                                        "chemical"
-                                    }
-                                };
-                                let tank = *tank + if kind == "chemical" { 1_000 } else { 0 };
-                                format!("@{kind}/{tank}/{id}*{amount}")
-                            }
-                        })
-                        .collect(),
-                    ticks: recipe.ticks,
-                    energy: recipe.energy,
-                }
-            }));
+            .add_resource_recipes(machine_recipes.chain(smithing_recipes));
         self.mods.resource_recipes_loaded = true;
     }
     /// Once per frame: the frame hook, and dev mods' rebuilds.
@@ -3299,6 +3559,7 @@ impl Game<'_> {
         {
             self.mods.checked = Some(Instant::now());
             if self.mods.mods.reload_changed(vanilla_command) {
+                self.mods.binding_generation = self.mods.binding_generation.wrapping_add(1);
                 self.list_mods();
                 self.sync_mod_commands();
                 self.system_message(Text::literal("Mods reloaded").with_color(text::GRAY));
@@ -3502,60 +3763,59 @@ impl Game<'_> {
         self.ensure_mod_block_entity(pos, &name);
         // Vanilla buckets can fill and drain Mekanism's fluid tanks. The mod
         // capability state is shared with machine ticks and persists on save.
-        if (name.starts_with("mekanism:") && name.ends_with("_fluid_tank"))
-            || name == "mekanism:dynamic_valve"
+        if ((name.starts_with("mekanism:") && name.ends_with("_fluid_tank"))
+            || name == "mekanism:dynamic_valve")
+            && let Some(item) = held_item
         {
-            if let Some(item) = held_item {
-                let is_bucket = matches!(
-                    item,
-                    "minecraft:bucket" | "minecraft:water_bucket" | "minecraft:lava_bucket"
-                );
-                let key = format!("{}:{},{},{}", self.dim.id(), pos[0], pos[1], pos[2]);
-                self.mods.mods.declare_fluid_tank(&key, 0, 64_000);
-                let transfer = match item {
-                    "minecraft:water_bucket" => Some(("minecraft:water", "minecraft:bucket")),
-                    "minecraft:lava_bucket" => Some(("minecraft:lava", "minecraft:bucket")),
-                    "minecraft:bucket" => self.mods.mods.fluid_tank(&key, 0).and_then(|tank| {
-                        let bucket = match tank.fluid.as_str() {
-                            "minecraft:water" if tank.amount >= 1_000 => "minecraft:water_bucket",
-                            "minecraft:lava" if tank.amount >= 1_000 => "minecraft:lava_bucket",
-                            _ => return None,
-                        };
-                        Some(("", bucket))
-                    }),
-                    _ => None,
-                };
-                if let Some((fluid, result_item)) = transfer {
-                    let moved = if item == "minecraft:bucket" {
-                        self.creative || self.mods.mods.drain_fluid_tank(&key, 0, 1_000).is_some()
-                    } else {
-                        self.mods.mods.fill_fluid_tank(&key, 0, fluid, 1_000) == 1_000
+            let is_bucket = matches!(
+                item,
+                "minecraft:bucket" | "minecraft:water_bucket" | "minecraft:lava_bucket"
+            );
+            let key = format!("{}:{},{},{}", self.dim.id(), pos[0], pos[1], pos[2]);
+            self.mods.mods.declare_fluid_tank(&key, 0, 64_000);
+            let transfer = match item {
+                "minecraft:water_bucket" => Some(("minecraft:water", "minecraft:bucket")),
+                "minecraft:lava_bucket" => Some(("minecraft:lava", "minecraft:bucket")),
+                "minecraft:bucket" => self.mods.mods.fluid_tank(&key, 0).and_then(|tank| {
+                    let bucket = match tank.fluid.as_str() {
+                        "minecraft:water" if tank.amount >= 1_000 => "minecraft:water_bucket",
+                        "minecraft:lava" if tank.amount >= 1_000 => "minecraft:lava_bucket",
+                        _ => return None,
                     };
-                    if moved {
-                        if item == "minecraft:bucket" {
-                            if self.creative {
-                                *self.held_mut() =
-                                    Some(horizon_client::items::ItemStack::new(result_item, 1));
-                            } else {
-                                self.consume_held();
-                                let result = horizon_client::items::ItemStack::new(result_item, 1);
-                                if let Some(rest) = self.give(result)
-                                    && let Some(eye) = self.eye_position()
-                                {
-                                    self.spawn_item(rest, eye, [0.0, 0.1, 0.0], 40);
-                                }
-                            }
-                        } else if !self.creative {
+                    Some(("", bucket))
+                }),
+                _ => None,
+            };
+            if let Some((fluid, result_item)) = transfer {
+                let moved = if item == "minecraft:bucket" {
+                    self.creative || self.mods.mods.drain_fluid_tank(&key, 0, 1_000).is_some()
+                } else {
+                    self.mods.mods.fill_fluid_tank(&key, 0, fluid, 1_000) == 1_000
+                };
+                if moved {
+                    if item == "minecraft:bucket" {
+                        if self.creative {
                             *self.held_mut() =
                                 Some(horizon_client::items::ItemStack::new(result_item, 1));
+                        } else {
+                            self.consume_held();
+                            let result = horizon_client::items::ItemStack::new(result_item, 1);
+                            if let Some(rest) = self.give(result)
+                                && let Some(eye) = self.eye_position()
+                            {
+                                self.spawn_item(rest, eye, [0.0, 0.1, 0.0], 40);
+                            }
                         }
-                        self.mod_save_block_entity(pos);
-                        return true;
+                    } else if !self.creative {
+                        *self.held_mut() =
+                            Some(horizon_client::items::ItemStack::new(result_item, 1));
                     }
-                }
-                if is_bucket {
+                    self.mod_save_block_entity(pos);
                     return true;
                 }
+            }
+            if is_bucket {
+                return true;
             }
         }
         let face = match face {
@@ -3569,7 +3829,9 @@ impl Game<'_> {
         }
         .to_owned();
         let state = self.mod_block_state_at(pos);
-        let outcome = self.mods.mods.block_event(
+        let sneaking = self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft)
+            || self.keys.contains(&winit::keyboard::KeyCode::ShiftRight);
+        let outcome = self.mods.mods.block_event_with_context(
             BlockEvent {
                 action: if held_item.is_some() {
                     BlockAction::UseItemOn
@@ -3585,11 +3847,12 @@ impl Game<'_> {
                 held_item: held_item.unwrap_or_default().to_owned(),
             },
             face,
+            sneaking,
         );
         let opened_screen = self.mods.mods.open_screens().next().is_some();
         self.show_mod_output();
         self.mod_save_block_entity(pos);
-        if outcome != horizon_mods::EventOutcome::Pass && opened_screen {
+        if outcome == horizon_mods::EventOutcome::Consume && opened_screen {
             self.open_menu(pos);
         }
         outcome != horizon_mods::EventOutcome::Pass
@@ -3731,6 +3994,35 @@ impl Game<'_> {
         u32::try_from(slot).ok().map_or((true, true), |slot| {
             self.mods.mods.slot_access(handle, slot, face)
         })
+    }
+    pub(super) fn mod_player_slot_access(&self, handle: u32, slot: usize) -> (bool, bool) {
+        u32::try_from(slot).ok().map_or((false, false), |slot| {
+            self.mods.mods.player_slot_access(handle, slot)
+        })
+    }
+    pub(super) fn mod_item_slot_limit(&self, handle: u32, slot: usize) -> Option<u32> {
+        self.mods.mods.slot_limit(handle, slot.try_into().ok()?)
+    }
+    pub(super) fn mod_publish_item_inventory(&self, pos: (i32, i32, i32)) {
+        let Some(horizon_client::containers::BlockEntity::Mod { items, .. }) =
+            self.world.block_entities.get(&pos)
+        else {
+            return;
+        };
+        let slots = items
+            .read()
+            .iter()
+            .map(|slot| {
+                slot.as_ref().map(|stack| Stack {
+                    id: stack.item.to_string(),
+                    count: stack.count,
+                })
+            })
+            .collect::<Vec<_>>();
+        self.mods.mods.publish_game_item_slots(
+            &format!("{}:{},{},{}", self.dim.id(), pos.0, pos.1, pos.2),
+            &slots,
+        );
     }
     pub(super) fn mod_button_at(&self, x: f32, y: f32) -> Option<u8> {
         self.mod_screen_view()?
@@ -3934,6 +4226,63 @@ impl Game<'_> {
             }
         }
     }
+    pub(super) fn mod_bind_loaded_block_entities(&mut self) {
+        let mut pending = self.world.block_entities.take_loaded_mods();
+        if self.remote.is_some() || !self.mods.mods.is_running() {
+            return;
+        }
+        let generation = self.mods.binding_generation;
+        if self.mods.bound_generations.get(self.dim.id()) != Some(&generation) {
+            pending.extend(
+                self.world
+                    .block_entities
+                    .iter()
+                    .filter_map(|(&pos, entity)| {
+                        matches!(entity, horizon_client::containers::BlockEntity::Mod { .. })
+                            .then_some(pos)
+                    }),
+            );
+            self.mods
+                .bound_generations
+                .insert(self.dim.id().to_owned(), generation);
+        }
+        pending.sort_unstable();
+        pending.dedup();
+        for (x, y, z) in pending {
+            let Some(horizon_client::containers::BlockEntity::Mod { block, .. }) =
+                self.world.block_entities.get(&(x, y, z))
+            else {
+                continue;
+            };
+            let block = block.clone();
+            self.ensure_mod_block_entity([x, y, z], &block);
+        }
+    }
+
+    fn bind_mod_inventory(
+        &mut self,
+        handle: u32,
+        inventory: horizon_client::shared_inventory::Inventory,
+    ) -> horizon_client::shared_inventory::Inventory {
+        let Some((owner, channel)) = self.mods.mods.shared_inventory_channel(handle) else {
+            return inventory;
+        };
+        if self.mods.shared_inventory_load_failed {
+            return inventory;
+        }
+        match self
+            .mods
+            .shared_inventories
+            .bind(format!("{owner}:{channel}"), &inventory)
+        {
+            Ok(shared) => shared,
+            Err(error) => {
+                log::error!("Horizon: cannot bind shared inventory for {handle}: {error}");
+                inventory
+            }
+        }
+    }
+
     /// Creates the game-owned inventory and mod state on placement or first use.
     pub(super) fn ensure_mod_block_entity(&mut self, pos: [i32; 3], block: &str) -> bool {
         let key = (pos[0], pos[1], pos[2]);
@@ -3950,7 +4299,7 @@ impl Game<'_> {
             let (block, mut items, energy, fluids, saved) = (
                 block.clone(),
                 items.clone(),
-                energy.clone(),
+                *energy,
                 fluids.clone(),
                 saved.clone(),
             );
@@ -3961,7 +4310,8 @@ impl Game<'_> {
             ) else {
                 return false;
             };
-            items.resize(slots as usize, None);
+            items.read().resize(slots as usize, None);
+            items = self.bind_mod_inventory(handle, items);
             if let Some(energy) = &energy {
                 self.mods.mods.set_energy_buffer(
                     &format!("{}:{},{},{}", self.dim.id(), pos[0], pos[1], pos[2]),
@@ -3995,6 +4345,7 @@ impl Game<'_> {
                 *current_items = items.clone();
                 *current_saved = self.mods.mods.save_block_entity(handle).unwrap_or(saved);
             }
+            let inventory = items.read();
             self.mods.block_entities.insert(
                 pos,
                 BlockEntityView {
@@ -4003,7 +4354,7 @@ impl Game<'_> {
                     x: pos[0],
                     y: pos[1],
                     z: pos[2],
-                    slots: items
+                    slots: inventory
                         .iter()
                         .map(|slot| {
                             slot.as_ref().map(|s| Stack {
@@ -4012,7 +4363,7 @@ impl Game<'_> {
                             })
                         })
                         .collect(),
-                    slot_components: items
+                    slot_components: inventory
                         .iter()
                         .map(|slot| slot.as_ref().map_or_else(Vec::new, item_components))
                         .collect(),
@@ -4040,10 +4391,16 @@ impl Game<'_> {
             );
             return true;
         }
-        if matches!(
-            self.world.block_entities.get(&key),
-            Some(horizon_client::containers::BlockEntity::Mod { .. })
-        ) {
+        if let Some(horizon_client::containers::BlockEntity::Mod { handle, items, .. }) =
+            self.world.block_entities.get(&key)
+        {
+            let (handle, items) = (*handle, items.clone());
+            let bound = self.bind_mod_inventory(handle, items);
+            if let Some(horizon_client::containers::BlockEntity::Mod { items, .. }) =
+                self.world.block_entities.get_mut(&key)
+            {
+                *items = bound;
+            }
             return true;
         }
         let Some((handle, slots)) = self.mods.mods.create_block_entity_at(
@@ -4053,13 +4410,14 @@ impl Game<'_> {
         ) else {
             return false;
         };
+        let items = self.bind_mod_inventory(handle, vec![None; slots as usize].into());
         self.world.block_entities.insert(
             key,
             horizon_client::containers::BlockEntity::Mod {
                 block: block.to_owned(),
                 handle,
                 saved: self.mods.mods.save_block_entity(handle).unwrap_or_default(),
-                items: vec![None; slots as usize],
+                items,
                 energy: None,
                 fluids: Default::default(),
             },
@@ -4087,6 +4445,17 @@ impl Game<'_> {
         }) else {
             return;
         };
+        if let Some(horizon_client::containers::BlockEntity::Mod { items, .. }) =
+            self.world.block_entities.get(&key)
+        {
+            let items = items.clone();
+            let bound = self.bind_mod_inventory(handle, items);
+            if let Some(horizon_client::containers::BlockEntity::Mod { items, .. }) =
+                self.world.block_entities.get_mut(&key)
+            {
+                *items = bound;
+            }
+        }
         let saved = self.mods.mods.save_block_entity(handle);
         let (cap_energy, cap_fluids, cap_slots) =
             self.mods
@@ -4131,7 +4500,7 @@ impl Game<'_> {
                 }
             }
             if let Some(slots_map) = &cap_slots {
-                for (index, target) in current_items.iter_mut().enumerate() {
+                for (index, target) in current_items.read().iter_mut().enumerate() {
                     let next = slots_map.get(&(index as u32));
                     let changed = match (&target, next) {
                         (Some(existing), Some((id, count))) => {
@@ -4328,11 +4697,76 @@ impl Game<'_> {
             }
         };
         self.mods.mods.restore_accessories(accessories);
+        let path = self
+            .world_root
+            .join("data/horizon/mod-shared-inventories.nbt");
+        let loaded = (|| -> Result<_, String> {
+            let bytes = match std::fs::read(&path) {
+                Ok(bytes) => bytes,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Ok(Default::default());
+                }
+                Err(error) => return Err(error.to_string()),
+            };
+            if bytes.len() > 64 << 20 {
+                return Err("shared inventory save exceeds 64 MiB".into());
+            }
+            let (tag, consumed) = horizon_world::nbt::read_network(&bytes, Default::default())
+                .map_err(|e| e.to_string())?;
+            if consumed != bytes.len() {
+                return Err("trailing bytes in shared inventory save".into());
+            }
+            horizon_client::shared_inventory::SharedInventories::restore(&tag)
+        })();
+        match loaded {
+            Ok(channels) => {
+                self.mods.shared_inventories = channels;
+                self.mods.shared_inventory_load_failed = false;
+            }
+            Err(error) => {
+                self.mods.shared_inventory_load_failed = true;
+                log::error!(
+                    "Horizon: cannot load shared inventory save {}: {error}",
+                    path.display()
+                );
+            }
+        }
     }
 
     /// Persist world-scoped attachments beside level metadata. Write and sync
     /// a temporary file before replacing the previous snapshot.
     pub(super) fn mod_save_attachments(&mut self) {
+        if !self.mods.shared_inventory_load_failed {
+            let path = self
+                .world_root
+                .join("data/horizon/mod-shared-inventories.nbt");
+            let result = (|| -> std::io::Result<()> {
+                let bytes = horizon_world::nbt::write_network(
+                    &self.mods.shared_inventories.snapshot(),
+                    Default::default(),
+                )
+                .map_err(std::io::Error::other)?;
+                if bytes.len() > 64 << 20 {
+                    return Err(std::io::Error::other(
+                        "shared inventory save exceeds 64 MiB",
+                    ));
+                }
+                let parent = path.parent().expect("shared inventory file has a parent");
+                std::fs::create_dir_all(parent)?;
+                let temporary = path.with_extension("nbt.tmp");
+                let mut file = std::fs::File::create(&temporary)?;
+                use std::io::Write;
+                file.write_all(&bytes)?;
+                file.sync_all()?;
+                std::fs::rename(temporary, &path)
+            })();
+            if let Err(error) = result {
+                log::error!(
+                    "Horizon: cannot save shared inventories {}: {error}",
+                    path.display()
+                );
+            }
+        }
         let path = self.world_root.join("data/horizon/mod-attachments.json");
         let result = (|| -> std::io::Result<()> {
             let bytes = serde_json::to_vec(&self.mods.mods.attachment_snapshot())
@@ -5109,30 +5543,38 @@ impl Game<'_> {
     /// Ticks all loaded mod block entities in block-entity order, in one
     /// fuel-budgeted call per mod, and returns their game-owned state.
     pub(super) fn tick_mod_block_entities(&mut self, positions: &[(i32, i32, i32)]) {
+        let profile = std::env::var_os("HORIZON_MOD_TICK_PROFILE").is_some();
+        let total_started = profile.then(Instant::now);
+        let mut create_ns = 0u128;
+        let mut view_copy_ns = 0u128;
+        let mut capability_ns = 0u128;
+        let mut callback_ns = 0u128;
+        let mut serialize_ns = 0u128;
         let dimension = self.dim.id().to_owned();
         // The server capability is useful during a machine tick only for
-        // positions the game has copied into its read cache. The pump needs
-        // six adjacent cells, so refresh just that small neighborhood.
+        // positions the game has copied into its read cache. Pumps need their
+        // neighbors; cooking pots need heat below and below a heat conductor.
         for &(x, y, z) in positions {
-            if !matches!(
-                self.res
-                    .facts()
-                    .get(self.world.block(x, y, z))
-                    .name
-                    .as_ref(),
-                "mekanism:electric_pump" | "mekanism:fluidic_plenisher"
-            ) {
-                continue;
-            }
-            for [dx, dy, dz] in [
-                [0, 0, 0],
-                [1, 0, 0],
-                [-1, 0, 0],
-                [0, 1, 0],
-                [0, -1, 0],
-                [0, 0, 1],
-                [0, 0, -1],
-            ] {
+            let offsets: &[[i32; 3]] = match self
+                .res
+                .facts()
+                .get(self.world.block(x, y, z))
+                .name
+                .as_ref()
+            {
+                "mekanism:electric_pump" | "mekanism:fluidic_plenisher" => &[
+                    [0, 0, 0],
+                    [1, 0, 0],
+                    [-1, 0, 0],
+                    [0, 1, 0],
+                    [0, -1, 0],
+                    [0, 0, 1],
+                    [0, 0, -1],
+                ],
+                "farmersdelight:cooking_pot" => &[[0, -1, 0], [0, -2, 0]],
+                _ => continue,
+            };
+            for &[dx, dy, dz] in offsets {
                 let (nx, ny, nz) = (x + dx, y + dy, z + dz);
                 let state = self.world.block(nx, ny, nz);
                 let name = self.res.facts().get(state).name.to_string();
@@ -5439,6 +5881,7 @@ impl Game<'_> {
         let mut entries = Vec::new();
         let mut views = Vec::new();
         for &pos in positions {
+            let create_started = profile.then(Instant::now);
             if !matches!(
                 self.world.block_entities.get(&pos),
                 Some(horizon_client::containers::BlockEntity::Mod { .. })
@@ -5478,8 +5921,13 @@ impl Game<'_> {
                     continue;
                 };
                 handle = new_handle;
-                items.resize(slots as usize, None);
+                items.read().resize(slots as usize, None);
             }
+            if let Some(started) = create_started {
+                create_ns += started.elapsed().as_nanos();
+            }
+            let capability_started = profile.then(Instant::now);
+            items = self.bind_mod_inventory(handle, items);
             if let Some(energy) = &energy {
                 self.mods.mods.set_energy_buffer(
                     &format!("{}:{},{},{}", self.dim.id(), pos.0, pos.1, pos.2),
@@ -5502,32 +5950,41 @@ impl Game<'_> {
                     },
                 );
             }
+            if let Some(started) = capability_started {
+                capability_ns += started.elapsed().as_nanos();
+            }
+            let view_started = profile.then(Instant::now);
             let state = self.world.block(pos.0, pos.1, pos.2);
             let mut properties = Vec::new();
             if let Some(current) = self.pack.assets.registry.state(state) {
                 for (name, value) in &current.properties {
-                    let mut values: Vec<String> = (0..self.pack.assets.registry.len())
-                        .map(|i| horizon_world::registry::BlockStateId(i as u32))
-                        .filter(|&id| self.res.facts().get(id).name.as_ref() == block)
-                        .filter_map(|id| self.pack.assets.registry.state(id))
-                        .filter_map(|s| s.properties.get(name).cloned())
-                        .collect();
-                    values.sort();
-                    values.dedup();
+                    let key = (block.clone(), name.clone());
+                    let values = self.mods.property_values.entry(key).or_insert_with(|| {
+                        let mut values: Vec<String> = (0..self.pack.assets.registry.len())
+                            .map(|i| horizon_world::registry::BlockStateId(i as u32))
+                            .filter(|&id| self.res.facts().get(id).name.as_ref() == block)
+                            .filter_map(|id| self.pack.assets.registry.state(id))
+                            .filter_map(|s| s.properties.get(name).cloned())
+                            .collect();
+                        values.sort();
+                        values.dedup();
+                        values
+                    });
                     properties.push(horizon_mods::Property {
                         name: name.clone(),
                         value: value.clone(),
-                        values,
+                        values: values.clone(),
                     });
                 }
             }
+            let inventory = items.read();
             views.push(BlockEntityView {
                 handle,
                 dimension: self.dim.id().to_owned(),
                 x: pos.0,
                 y: pos.1,
                 z: pos.2,
-                slots: items
+                slots: inventory
                     .iter()
                     .map(|slot| {
                         slot.as_ref().map(|s| Stack {
@@ -5536,7 +5993,7 @@ impl Game<'_> {
                         })
                     })
                     .collect(),
-                slot_components: items
+                slot_components: inventory
                     .iter()
                     .map(|slot| slot.as_ref().map_or_else(Vec::new, item_components))
                     .collect(),
@@ -5562,14 +6019,21 @@ impl Game<'_> {
                 properties,
                 changed: false,
             });
+            drop(inventory);
             entries.push((pos, block, handle, saved, items, state));
+            if let Some(started) = view_started {
+                view_copy_ns += started.elapsed().as_nanos();
+            }
         }
+        let callback_started = profile.then(Instant::now);
         self.mods.mods.tick_block_entities(&mut views);
-        for ((pos, block, handle, old_saved, mut items, state), view) in
-            entries.into_iter().zip(views)
+        if let Some(started) = callback_started {
+            callback_ns = started.elapsed().as_nanos();
+        }
+        for ((pos, block, handle, old_saved, items, state), view) in entries.into_iter().zip(views)
         {
             if view.changed {
-                items = view
+                *items.read() = view
                     .slots
                     .iter()
                     .enumerate()
@@ -5618,11 +6082,15 @@ impl Game<'_> {
                     )
                 })
                 .collect();
+            let serialize_started = profile.then(Instant::now);
             let saved = self
                 .mods
                 .mods
                 .save_block_entity(handle)
                 .unwrap_or(old_saved.clone());
+            if let Some(started) = serialize_started {
+                serialize_ns += started.elapsed().as_nanos();
+            }
             if view.changed || saved != old_saved {
                 self.world.modified.insert((pos.0 >> 4, pos.2 >> 4));
             }
@@ -5640,6 +6108,19 @@ impl Game<'_> {
             );
         }
         self.show_mod_output();
+        if let Some(started) = total_started {
+            eprintln!(
+                "mod_tick_profile dimension={} machines={} create_ns={} view_copy_ns={} capability_ns={} callback_ns={} serialize_ns={} total_ns={}",
+                dimension,
+                positions.len(),
+                create_ns,
+                view_copy_ns,
+                capability_ns,
+                callback_ns,
+                serialize_ns,
+                started.elapsed().as_nanos(),
+            );
+        }
     }
     /// Run a server action in its requested level, returning to the level that
     /// emitted it. In-frame mode has only its current dimension loaded.
@@ -5761,6 +6242,15 @@ impl Game<'_> {
                         }
                     }
                     match action {
+                        ServerAction::MoveItem { dimension, x, y, z, handle, request, slot, face, kind, count } => {
+                            if self.mods.mods.item_move_pending(handle, request) {
+                                let moved = self.with_mod_dimension(&dimension, |game| {
+                                    game.mod_move_item_adjacent((x,y,z), handle, slot, &face,
+                                        kind == horizon_mods::ItemMoveKind::Pull, count)
+                                }).unwrap_or(0);
+                                self.mods.mods.complete_item_move(handle, request, moved);
+                            }
+                        }
                         ServerAction::SetBlock {
                             dimension,
                             x,
@@ -6062,6 +6552,13 @@ impl Game<'_> {
                     });
                     if !delivered {
                         log::warn!("Horizon: dropped a mod packet for {player:?}");
+                    }
+                    continue;
+                }
+                Output::SetPlayerFood { food, saturation } => {
+                    if let Some(player) = self.player.as_mut() {
+                        player.health.food.food = food as i32;
+                        player.health.food.saturation = saturation;
                     }
                     continue;
                 }
@@ -6530,6 +7027,12 @@ impl Game<'_> {
             "animations": animations,
             "bone_poses": bone_poses,
             "draw_lists": draw_lists,
+            "entity_models": self.mobs.iter().filter(|mob| !mob.kind.id.starts_with("minecraft:")).map(|mob| serde_json::json!({
+                "id": mob.kind.id.as_str(),
+                "texture": mob.kind.texture,
+                "texture_loaded": self.gui.atlas.sprites.contains_key(&mob.kind.texture),
+                "parts": mob.kind.model.children.iter().map(|part| part.name.as_str()).collect::<Vec<_>>(),
+            })).collect::<Vec<_>>(),
         })
     }
 }
@@ -6600,7 +7103,7 @@ fn emit_mod_cuboid(
         ),
     ];
     const UVS: [[f32; 2]; 4] = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
-    let a = ((tint >> 24) & 0xFF) as u32;
+    let a = (tint >> 24) & 0xFF;
     let alpha_byte = if a == 0 { 255 } else { a };
     let r_tint = ((tint >> 16) & 0xFF) as f32;
     let g_tint = ((tint >> 8) & 0xFF) as f32;
@@ -6695,7 +7198,11 @@ fn mod_action_chunk(action: &ServerAction) -> Option<(&str, i32, i32)> {
         | ServerAction::SpawnMob {
             dimension, x, z, ..
         } => Some((dimension, *x, *z)),
-        ServerAction::PlaySound { .. } | ServerAction::SetRule { .. } => None,
+        // Inventory intents never load chunks or wait: a missing endpoint
+        // completes with zero rather than moving items later into another block.
+        ServerAction::MoveItem { .. }
+        | ServerAction::PlaySound { .. }
+        | ServerAction::SetRule { .. } => None,
     }
 }
 

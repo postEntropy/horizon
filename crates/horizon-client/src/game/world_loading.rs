@@ -241,10 +241,24 @@ pub(super) fn make_streaming(
     )));
     let mut locator = None;
     let mod_spec = super::mod_dimension_spec(dim.id());
-    let mod_flat = mod_spec
+    let mod_flat = if let Some(spec) = mod_spec
         .as_ref()
         .filter(|spec| spec.generator != super::ModDimensionGenerator::Noise)
-        .map(|spec| {
+    {
+        let configured = if spec.generator == super::ModDimensionGenerator::Flat {
+            horizon_client::flatgen::FlatTerrain::from_dimension_file(
+                &options.resources,
+                dim.id(),
+                dim.min_y(),
+                spec.height,
+                pack.assets.registry,
+                res.biomes(),
+            )
+            .map_err(|e| format!("dimension {}: {e}", dim.id()))?
+        } else {
+            None
+        };
+        Some(configured.unwrap_or_else(|| {
             horizon_client::flatgen::FlatTerrain::for_mod_dimension(
                 dim.min_y(),
                 spec.generator == super::ModDimensionGenerator::VoidWorld,
@@ -252,7 +266,10 @@ pub(super) fn make_streaming(
                 pack.assets.registry,
                 res.biomes(),
             )
-        });
+        }))
+    } else {
+        None
+    };
     let flat = mod_flat.or_else(|| {
         (dim == Dim::Overworld)
             .then(|| horizon_client::save::world_gen_settings(world_root))
@@ -314,7 +331,12 @@ pub(super) fn make_streaming(
                     res.threads(),
                 )
             }
-            Err(_) if matches!(dim, Dim::Custom(_)) => {
+            Err(_)
+                if matches!(dim, Dim::Custom(_))
+                    && mod_spec
+                        .as_ref()
+                        .is_none_or(|s| s.generator != super::ModDimensionGenerator::Noise) =>
+            {
                 let inner = horizon_client::flatgen::FlatTerrain::for_mod_dimension(
                     dim.min_y(),
                     false,

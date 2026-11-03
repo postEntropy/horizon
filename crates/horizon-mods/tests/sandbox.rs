@@ -60,6 +60,15 @@ side = "both"
 capabilities = ["server", "capabilities", "block-entities", "registries"]
 "#;
 
+const EFFECTS_MANIFEST: &str = r#"
+id = "test_effects"
+name = "Test Effects"
+version = "0.1.0"
+api = "0.6"
+side = "both"
+capabilities = ["status-effects", "registries"]
+"#;
+
 /// Builds the mods once and writes their `.hmod` files; returns the folder.
 fn mods_dir() -> &'static Path {
     static DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -78,6 +87,8 @@ fn mods_dir() -> &'static Path {
                 "horizon-mods-test-machine",
                 "-p",
                 "horizon-mods-test-machine-peer",
+                "-p",
+                "horizon-mods-test-effects",
                 "--target-dir",
             ])
             .arg(&target)
@@ -95,6 +106,7 @@ fn mods_dir() -> &'static Path {
             ("coords_hud", std::fs::read_to_string(example).unwrap()),
             ("horizon_mods_test_guest", GUEST_MANIFEST.to_string()),
             ("horizon_mods_test_machine", MACHINE_MANIFEST.to_string()),
+            ("horizon_mods_test_effects", EFFECTS_MANIFEST.to_string()),
             (
                 "horizon_mods_test_machine_peer",
                 MACHINE_PEER_MANIFEST.to_string(),
@@ -105,6 +117,38 @@ fn mods_dir() -> &'static Path {
             let component = componentize(&core).unwrap();
             let content_files: &[(&str, &[u8])] = match name {
                 "horizon_mods_test_machine" => &[
+                    (
+                        "data/test_machine/dimension/twilight.json",
+                        br#"{"type":"test_machine:twilight","generator":{"type":"minecraft:flat","settings":{"biome":"test_machine:crystal_grove","layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:gold_block","height":1},{"block":"minecraft:stone","height":125},{"block":"minecraft:moss_block","height":1}]}}}"#,
+                    ),
+                    (
+                        "data/test_machine/dimension/noisy.json",
+                        br#"{"type":"minecraft:overworld","generator":{"type":"minecraft:noise","settings":"minecraft:overworld","biome_source":{"type":"minecraft:fixed","biome":"test_machine:crystal_grove"}}}"#,
+                    ),
+                    (
+                        "data/test_machine/dimension/data_only.json",
+                        br#"{"type":"test_machine:data_only","generator":{"type":"minecraft:flat","settings":{"biome":"test_machine:crystal_grove","layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:gold_block","height":4}]}}}"#,
+                    ),
+                    (
+                        "data/test_machine/dimension_type/data_only.json",
+                        br#"{"min_y":0,"height":256,"logical_height":256,"coordinate_scale":1.0,"has_skylight":true,"has_ceiling":false,"ultrawarm":false,"fixed_time":18000}"#,
+                    ),
+                    (
+                        "data/test_machine/worldgen/biome/crystal_grove.json",
+                        br#"{"has_precipitation":false,"temperature":0.7,"downfall":0.0,"effects":{"water_color":4159204,"grass_color":6737151,"foliage_color":6737151},"attributes":{"minecraft:visual/sky_color":5945561},"carvers":[],"features":[[],[],[],[],[],[],[],[],[],[],[]]}"#,
+                    ),
+                    (
+                        "assets/test_machine/horizon/entity_models/automaton.json",
+                        br#"{"texture":"test_machine:entity/automaton","geo":"test_machine:entity/automaton"}"#,
+                    ),
+                    (
+                        "assets/test_machine/geo/entity/automaton.geo.json",
+                        br#"{"format_version":"1.12.0","minecraft:geometry":[{"description":{"identifier":"geometry.automaton","texture_width":16,"texture_height":16},"bones":[{"name":"head","pivot":[0,16,0],"cubes":[{"origin":[-4,16,-4],"size":[8,8,8],"uv":[0,0]}]}]}]}"#,
+                    ),
+                    (
+                        "assets/test_machine/textures/entity/automaton.png",
+                        include_bytes!("machine/automaton.png"),
+                    ),
                     (
                         "data/test_machine/horizon/block/smelter.json",
                         br#"{"template":"minecraft:furnace","properties":{"hardness":3.5}}"#,
@@ -117,6 +161,10 @@ fn mods_dir() -> &'static Path {
                 "horizon_mods_test_machine_peer" => &[(
                     "data/test_peer/horizon/block/cell.json",
                     br#"{"template":"minecraft:furnace","properties":{"hardness":3.5}}"#,
+                )],
+                "horizon_mods_test_effects" => &[(
+                    "data/test_effects/horizon/item/test_food.json",
+                    br#"{"template":"minecraft:apple","food":{"nutrition":4,"saturation":2.4,"can_always_eat":false,"consume_seconds":0.8,"effects":[{"id":"test_effects:steady","duration":60,"amplifier":0,"probability":1.0,"ambient":false,"visible":false,"show_icon":false}]}}"#,
                 )],
                 _ => &[],
             };
@@ -136,6 +184,46 @@ fn mods_dir() -> &'static Path {
 
 fn load(name: &str) -> Mods {
     Mods::load(&[mods_dir().join(name)], |_| true, |c| c == "give")
+}
+
+#[test]
+fn registered_effects_are_owner_scoped_and_tick_authoritatively() {
+    let mut mods = load("horizon_mods_test_effects.hmod");
+    assert_eq!(mods.entries()[0].status, Status::Running);
+    assert!(mods.has_status_effect("test_effects:steady"));
+    assert!(!mods.has_status_effect("foreign:steady"));
+    mods.set_status_effect_context(
+        "test-player-uuid".into(),
+        vec![horizon_mods::ActiveEffect {
+            id: "test_effects:steady".into(),
+            duration: 10,
+            amplifier: 0,
+            ambient: false,
+            visible: false,
+            show_icon: false,
+            food: 8,
+            saturation: 2.0,
+        }],
+    );
+    mods.tick(1);
+    assert!(
+        mods.drain().is_empty(),
+        "player effects must use the per-player lifecycle"
+    );
+    mods.player_tick(1);
+    assert_eq!(
+        mods.drain(),
+        [Output::SetPlayerFood {
+            food: 9,
+            saturation: 2.25,
+        }]
+    );
+    mods.set_status_effect_context("test-player-uuid".into(), Vec::new());
+    mods.player_tick(2);
+    assert!(
+        mods.drain().is_empty(),
+        "an expired effect must stop ticking"
+    );
 }
 
 fn player() -> Snapshot {
@@ -478,6 +566,9 @@ capabilities = ["registries"]
 /// output no item table knows.
 struct Facts;
 impl ItemFacts for Facts {
+    fn block_in_tag(&self, id: &str, tag: &str) -> bool {
+        id == "minecraft:magma_block" && tag == "farmersdelight:heat_sources"
+    }
     fn max_stack_size(&self, id: &str) -> u32 {
         if id == "test:ghost" { 0 } else { 64 }
     }
@@ -540,6 +631,337 @@ fn machines() -> Mods {
 }
 
 #[test]
+fn player_slot_policies_are_owned_bounded_and_removed_with_handles() {
+    let paths = [
+        mods_dir().join("horizon_mods_test_machine.hmod"),
+        mods_dir().join("horizon_mods_test_machine_peer.hmod"),
+    ];
+    let mut mods = Mods::load(&paths, |_| true, |_| false);
+    mods.set_item_facts(std::sync::Arc::new(Facts));
+    let (peer, _) = mods.create_block_entity("test_peer:cell", &[]).unwrap();
+    let (handle, _) = mods.create_block_entity("test_machine:crate", &[]).unwrap();
+    assert_eq!(mods.player_slot_access(handle, 1), (true, true));
+    assert!(mods.command(&format!("machine_api player_access {handle} 1 false false")));
+    assert_eq!(mods.player_slot_access(handle, 1), (false, false));
+    assert_eq!(mods.player_slot_access(handle, 0), (true, true));
+    assert_eq!(mods.player_slot_access(handle, 4), (false, false));
+    assert_eq!(mods.player_slot_access(u32::MAX, 0), (false, false));
+    assert!(mods.command(&format!("machine_api player_access {handle} 1 false true")));
+    assert_eq!(mods.player_slot_access(handle, 1), (false, true));
+    assert!(mods.command(&format!("machine_api player_access {handle} 1 true true")));
+    assert_eq!(mods.player_slot_access(handle, 1), (true, true));
+    mods.drain();
+    for (target, slot) in [(peer, 0), (u32::MAX, 0), (handle, 4)] {
+        assert!(mods.command(&format!(
+            "machine_api player_access {target} {slot} false false"
+        )));
+        assert!(mods.drain().iter().any(|output| matches!(output,
+            Output::Feedback { text, error: false } if text == "false")));
+    }
+    assert_eq!(mods.player_slot_access(peer, 0), (false, false));
+    mods.remove_block_entity(handle);
+    assert_eq!(mods.player_slot_access(handle, 1), (false, false));
+    let (replacement, _) = mods.create_block_entity("test_machine:crate", &[]).unwrap();
+    assert_ne!(replacement, handle);
+    assert_eq!(mods.player_slot_access(replacement, 1), (true, true));
+    let (crashing, _) = mods
+        .create_block_entity("test_machine:smelter", &[])
+        .unwrap();
+    mods.tick_block_entities(&mut [smelter(crashing, Some(stack("minecraft:tnt", 1)))]);
+    assert_eq!(mods.player_slot_access(replacement, 1), (false, false));
+    assert_eq!(mods.player_slot_access(peer, 0), (false, false));
+    assert_eq!(
+        mods.entries()
+            .iter()
+            .find(|entry| entry
+                .manifest
+                .as_ref()
+                .is_some_and(|manifest| manifest.id == "test_peer"))
+            .unwrap()
+            .status,
+        Status::Running
+    );
+}
+
+#[test]
+fn item_processing_is_atomic_across_all_outputs_and_preserves_remaining_components() {
+    use horizon_world::nbt::{Limits, Tag, write_network};
+    let mut mods = machines();
+    let (handle, _) = mods.create_block_entity("test_machine:crate", &[]).unwrap();
+    assert!(mods.command("machine_api atomic_items"));
+    let component = write_network(
+        &Tag::compound([("minecraft:custom_name", Tag::String("Ore".into()))]),
+        Limits::default(),
+    )
+    .unwrap();
+    for (input_count, output1, output2, success) in [
+        (3, None, Some(stack("minecraft:gold_ingot", 64)), false),
+        (3, Some(stack("minecraft:diamond", 1)), None, false),
+        (1, None, None, false),
+        (3, None, None, true),
+    ] {
+        let mut view = BlockEntityView {
+            handle,
+            dimension: "minecraft:overworld".into(),
+            y: 64,
+            slots: vec![
+                Some(stack("minecraft:raw_iron", input_count)),
+                output1,
+                output2,
+                None,
+            ],
+            slot_components: vec![component.clone(), Vec::new(), Vec::new(), Vec::new()],
+            ..Default::default()
+        };
+        let before = view.clone();
+        mods.tick_block_entities(std::slice::from_mut(&mut view));
+        if success {
+            assert_eq!(view.slots[0], Some(stack("minecraft:raw_iron", 1)));
+            assert_eq!(view.slot_components[0], component);
+            assert_eq!(view.slots[1], Some(stack("minecraft:iron_ingot", 1)));
+            assert_eq!(view.slots[2], Some(stack("minecraft:gold_ingot", 1)));
+        } else {
+            assert_eq!(view, before);
+        }
+    }
+    assert_eq!(mods.entries()[0].status, Status::Running);
+}
+
+#[test]
+fn machine_block_tags_use_the_active_game_facts() {
+    let mut mods = machines();
+    assert!(mods.command("machine_api block_tags"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "heat=true cold=false unknown=false".into(),
+            error: false
+        }]
+    );
+}
+
+#[test]
+fn item_move_intents_are_deferred_confirmed_once_and_invalidated_on_removal_or_trap() {
+    let mut mods = machines();
+    let (a, _) = mods
+        .create_block_entity("test_machine:smelter", &[])
+        .unwrap();
+    let (b, _) = mods
+        .create_block_entity("test_machine:smelter", &[])
+        .unwrap();
+    assert!(mods.command("machine_api move_pull"));
+    let mut views = [
+        smelter(b, None),
+        smelter(a, Some(stack("minecraft:diamond", 7))),
+    ];
+    mods.tick_block_entities(&mut views);
+    assert_eq!(
+        views[1].slots[0],
+        Some(stack("minecraft:diamond", 7)),
+        "request does not modify snapshots"
+    );
+    let requests: Vec<_> = mods
+        .drain()
+        .into_iter()
+        .filter_map(|output| match output {
+            Output::Server(ServerAction::MoveItem {
+                handle,
+                request,
+                slot,
+                count,
+                face,
+                kind,
+                ..
+            }) => {
+                assert_eq!(
+                    (slot, count, face.as_str(), kind),
+                    (0, 1, "east", horizon_mods::ItemMoveKind::Pull)
+                );
+                Some((handle, request))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(requests.len(), 2);
+    for &(handle, request) in &requests {
+        assert!(mods.item_move_pending(handle, request));
+        let wrong = if handle == a { b } else { a };
+        assert!(!mods.item_move_pending(wrong, request));
+        mods.complete_item_move(wrong, request, 50);
+        assert!(mods.item_move_pending(handle, request));
+        mods.complete_item_move(handle, request, 1);
+        mods.complete_item_move(handle, request, 99);
+        assert!(!mods.item_move_pending(handle, request));
+    }
+    mods.tick_block_entities(&mut views);
+    assert_eq!(mods.block_entity_data(a), [1]);
+    assert_eq!(mods.block_entity_data(b), [1]);
+    let pending: Vec<_> = mods
+        .drain()
+        .into_iter()
+        .filter_map(|output| match output {
+            Output::Server(ServerAction::MoveItem {
+                handle, request, ..
+            }) => Some((handle, request)),
+            _ => None,
+        })
+        .collect();
+    mods.remove_block_entity(a);
+    for &(handle, request) in &pending {
+        assert_eq!(mods.item_move_pending(handle, request), handle == b);
+    }
+    assert!(mods.command("machine_api move_trap"));
+    mods.tick_block_entities(&mut views[..1]);
+    assert!(
+        matches!(&mods.entries()[0].status, Status::Failed(reason) if reason.contains("panic"))
+    );
+    for output in mods.drain() {
+        if let Output::Server(ServerAction::MoveItem {
+            handle, request, ..
+        }) = output
+        {
+            assert!(
+                !mods.item_move_pending(handle, request),
+                "trap must revoke queued authority"
+            );
+        }
+    }
+}
+
+#[test]
+fn item_move_request_ids_cannot_cross_a_hot_reload_even_when_reused() {
+    let dir = mods_dir().join("item_move_reload");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("machine.hmod");
+    std::fs::copy(mods_dir().join("horizon_mods_test_machine.hmod"), &path).unwrap();
+    let mut mods = Mods::load(std::slice::from_ref(&path), |_| true, |_| false);
+    let (old, _) = mods
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
+        .unwrap();
+    assert!(mods.command("machine_api move_pull"));
+    let mut views = [smelter(old, None)];
+    mods.tick_block_entities(&mut views);
+    let old_request = mods
+        .drain()
+        .into_iter()
+        .find_map(|output| match output {
+            Output::Server(ServerAction::MoveItem { request, .. }) => Some(request),
+            _ => None,
+        })
+        .unwrap();
+    assert!(mods.item_move_pending(old, old_request));
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(5))
+        .unwrap();
+    assert!(mods.reload_changed(|_| false));
+    let (new, _) = mods
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
+        .unwrap();
+    assert_ne!(old, new);
+    views[0].handle = new;
+    mods.tick_block_entities(&mut views);
+    let new_request = mods
+        .drain()
+        .into_iter()
+        .find_map(|output| match output {
+            Output::Server(ServerAction::MoveItem { request, .. }) => Some(request),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        old_request, new_request,
+        "exercise a reused per-instance request id"
+    );
+    assert!(!mods.item_move_pending(old, old_request));
+    mods.complete_item_move(old, old_request, 7);
+    assert!(mods.item_move_pending(new, new_request));
+    mods.complete_item_move(new, new_request, 0);
+    mods.tick_block_entities(&mut views);
+    assert_eq!(mods.block_entity_data(new), [0]);
+    assert_eq!(mods.entries()[0].status, Status::Running);
+}
+
+#[test]
+fn item_energy_transfers_preserve_components_and_refuse_invalid_slots_and_stacks() {
+    use horizon_world::nbt::{Limits, Tag, read_network, write_network};
+    let mut mods = machines();
+    let (handle, _) = mods
+        .create_block_entity("test_machine:smelter", &[])
+        .unwrap();
+    let mut views = [smelter(handle, Some(stack("test_machine:battery", 1)))];
+    let name = Tag::String("Battery name".into());
+    views[0].slot_components[0] = write_network(
+        &Tag::compound([("minecraft:custom_name", name.clone())]),
+        Limits::default(),
+    )
+    .unwrap();
+    assert!(mods.command("machine_api item_energy_receive"));
+    for expected in [800, 1600, 2400, 2500, 2500] {
+        views[0].changed = false;
+        mods.tick_block_entities(&mut views);
+        let (tag, _) = read_network(&views[0].slot_components[0], Limits::default()).unwrap();
+        assert_eq!(tag.get("horizon:energy"), Some(&Tag::Long(expected)));
+        assert_eq!(tag.get("minecraft:custom_name"), Some(&name));
+    }
+    assert!(!views[0].changed, "full item must not dirty the slot");
+    assert!(mods.command("machine_api item_energy_extract"));
+    mods.tick_block_entities(&mut views);
+    let (tag, _) = read_network(&views[0].slot_components[0], Limits::default()).unwrap();
+    assert_eq!(tag.get("horizon:energy"), Some(&Tag::Long(2200)));
+    for (id, count, component) in [
+        ("minecraft:stick", 1, Tag::Long(0)),
+        ("test_machine:battery", 2, Tag::Long(10)),
+        ("test_machine:battery", 1, Tag::Long(-1)),
+        ("test_machine:battery", 1, Tag::Long(2501)),
+        ("test_machine:battery", 1, Tag::Int(10)),
+    ] {
+        views[0].slots[0] = Some(stack(id, count));
+        let bytes = write_network(
+            &Tag::compound([("horizon:energy", component)]),
+            Limits::default(),
+        )
+        .unwrap();
+        views[0].slot_components[0] = bytes.clone();
+        for operation in ["item_energy_receive", "item_energy_extract"] {
+            assert!(mods.command(&format!("machine_api {operation}")));
+            mods.tick_block_entities(&mut views);
+            assert_eq!(views[0].slot_components[0], bytes);
+        }
+    }
+    // A valid component at the byte limit leaves no room for the energy key.
+    // Both simulation and commit must refuse without dropping the other data.
+    views[0].slots[0] = Some(stack("test_machine:battery", 1));
+    let overhead = write_network(
+        &Tag::compound([("padding", Tag::ByteArray(Vec::new()))]),
+        Limits::default(),
+    )
+    .unwrap()
+    .len();
+    let bytes = write_network(
+        &Tag::compound([("padding", Tag::ByteArray(vec![0; (64 << 10) - overhead]))]),
+        Limits::default(),
+    )
+    .unwrap();
+    assert_eq!(bytes.len(), 64 << 10);
+    views[0].slot_components[0] = bytes.clone();
+    assert!(mods.command("machine_api item_energy_receive"));
+    mods.tick_block_entities(&mut views);
+    assert_eq!(views[0].slot_components[0], bytes);
+    assert_eq!(mods.entries()[0].status, Status::Running);
+}
+
+#[test]
 fn block_entities_tick_save_and_load() {
     let mut mods = machines();
     let types: Vec<(&str, u32, bool)> = mods
@@ -550,7 +972,8 @@ fn block_entities_tick_save_and_load() {
         types,
         [
             ("test_machine:smelter", 2, true),
-            ("test_machine:crate", 4, false)
+            ("test_machine:crate", 4, false),
+            ("test_machine:shared_router", 4, true)
         ]
     );
     assert_eq!(mods.create_block_entity("minecraft:furnace", &[]), None);
@@ -685,6 +1108,135 @@ fn machine_output_insertion_is_atomic_and_respects_stack_capacity() {
 }
 
 #[test]
+fn shared_inventory_machine_calls_and_capabilities_use_one_canonical_slot() {
+    let mut mods = machines();
+    let (a, _) = mods
+        .create_block_entity_at(
+            "test_machine:crate",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
+        .unwrap();
+    let (b, _) = mods
+        .create_block_entity_at(
+            "test_machine:crate",
+            &[],
+            Some(("minecraft:overworld".into(), 10, 64, 0)),
+        )
+        .unwrap();
+    let make = |handle, x| BlockEntityView {
+        handle,
+        dimension: "minecraft:overworld".into(),
+        x,
+        y: 64,
+        slots: vec![Some(stack("minecraft:raw_iron", 3)), None, None, None],
+        slot_components: vec![Vec::new(); 4],
+        ..Default::default()
+    };
+    let mut views = [make(b, 10), make(a, 0)];
+    mods.tick_block_entities(&mut views);
+    for view in &views {
+        assert_eq!(view.slots[0], Some(stack("minecraft:raw_iron", 1)));
+        assert_eq!(view.slots[1], Some(stack("minecraft:iron_ingot", 2)));
+        assert!(view.changed);
+    }
+    mods.tick_block_entities(&mut views[1..]);
+    assert_eq!(views[1].slots[0], None);
+    assert_eq!(views[1].slots[1], Some(stack("minecraft:iron_ingot", 3)));
+    assert_eq!(mods.entries()[0].status, Status::Running);
+}
+
+#[test]
+fn shared_inventory_bindings_belong_to_live_handles() {
+    let mut mods = machines();
+    let (a, _) = mods.create_block_entity("test_machine:crate", &[]).unwrap();
+    let (b, _) = mods.create_block_entity("test_machine:crate", &[]).unwrap();
+    let expected = Some(("test_machine".into(), "public".into()));
+    assert_eq!(mods.shared_inventory_channel(a), expected);
+    assert_eq!(mods.shared_inventory_channel(b), expected);
+    assert_eq!(mods.shared_inventory_channel(b + 1), None);
+    mods.remove_block_entity(a);
+    assert_eq!(mods.shared_inventory_channel(a), None);
+    assert_eq!(mods.shared_inventory_channel(b), expected);
+}
+
+#[test]
+fn block_entity_views_follow_handles_across_reordered_subsets() {
+    let paths = [
+        mods_dir().join("horizon_mods_test_machine.hmod"),
+        mods_dir().join("horizon_mods_test_machine_peer.hmod"),
+    ];
+    let mut mods = Mods::load(&paths, |_| true, |_| false);
+    mods.set_item_facts(std::sync::Arc::new(Facts));
+    let (a, _) = mods
+        .create_block_entity("test_machine:smelter", &[])
+        .unwrap();
+    let (peer, _) = mods.create_block_entity("test_peer:cell", &[]).unwrap();
+    let (b, _) = mods
+        .create_block_entity("test_machine:smelter", &[])
+        .unwrap();
+    let mut peer_view = smelter(peer, Some(stack("minecraft:diamond", 7)));
+    peer_view.x = 20;
+    let mut views = [
+        smelter(b, Some(stack("minecraft:raw_iron", 4))),
+        peer_view.clone(),
+        smelter(a, Some(stack("minecraft:raw_iron", 2))),
+    ];
+    views[0].x = 40;
+    for _ in 0..3 {
+        mods.tick_block_entities(&mut views);
+    }
+    assert_eq!(
+        views[0].slots,
+        [
+            Some(stack("minecraft:raw_iron", 3)),
+            Some(stack("minecraft:iron_ingot", 1))
+        ]
+    );
+    assert_eq!(
+        views[2].slots,
+        [
+            Some(stack("minecraft:raw_iron", 1)),
+            Some(stack("minecraft:iron_ingot", 1))
+        ]
+    );
+    // Only a is lent next; b's old index must no longer resolve to a.
+    let b_before = views[0].clone();
+    for _ in 0..3 {
+        mods.tick_block_entities(&mut views[2..]);
+    }
+    assert_eq!(views[0], b_before);
+    assert_eq!(
+        views[2].slots,
+        [None, Some(stack("minecraft:iron_ingot", 2))]
+    );
+    // Put b at a different index and switch the active subset again.
+    views.swap(0, 2);
+    for _ in 0..3 {
+        mods.tick_block_entities(&mut views[1..]);
+    }
+    assert_eq!(views[2].handle, b);
+    assert_eq!(
+        views[2].slots,
+        [
+            Some(stack("minecraft:raw_iron", 2)),
+            Some(stack("minecraft:iron_ingot", 2))
+        ]
+    );
+    assert_eq!(
+        views[0].slots,
+        [None, Some(stack("minecraft:iron_ingot", 2))]
+    );
+    assert_eq!(views[1].handle, peer);
+    assert_eq!(views[1].slots, peer_view.slots);
+    assert!(
+        mods.entries()
+            .iter()
+            .all(|entry| entry.status == Status::Running)
+    );
+}
+
+#[test]
 fn block_entities_see_only_their_own() {
     let mut mods = machines();
     let (h, _) = mods
@@ -789,23 +1341,31 @@ fn block_entities_need_their_capability_and_blocks() {
 }
 
 #[test]
-fn a_block_entity_that_traps_gives_its_slots_back() {
-    let mut mods = machines();
-    let (h, _) = mods
-        .create_block_entity("test_machine:smelter", &[])
-        .unwrap();
-    let mut views = [smelter(h, Some(stack("minecraft:tnt", 3)))];
-    mods.tick_block_entities(&mut views);
-    assert!(matches!(mods.entries()[0].status, Status::Failed(_)));
-    assert!(matches!(mods.drain()[..], [Output::Stopped { .. }]));
-    // Its slots are back, with what it wrote before it stopped.
-    assert_eq!(views[0].handle, h);
-    assert_eq!(views[0].slots, [Some(stack("minecraft:tnt", 3)), None]);
-    assert_eq!(views[0].properties[0].value, "true");
-    // A stopped mod's block entities are left alone after that.
-    mods.tick_block_entities(&mut views);
-    assert_eq!(views[0].slots, [Some(stack("minecraft:tnt", 3)), None]);
-    assert_eq!(mods.save_block_entity(h), None);
+fn a_block_entity_that_traps_or_exhausts_fuel_gives_its_slots_back() {
+    for input in ["minecraft:tnt", "minecraft:gunpowder"] {
+        let mut mods = machines();
+        let (h, _) = mods
+            .create_block_entity("test_machine:smelter", &[])
+            .unwrap();
+        let (other, _) = mods
+            .create_block_entity("test_machine:smelter", &[])
+            .unwrap();
+        let mut untouched = smelter(other, Some(stack("minecraft:raw_iron", 2)));
+        untouched.x = 20;
+        let mut views = [smelter(h, Some(stack(input, 3))), untouched.clone()];
+        mods.tick_block_entities(&mut views);
+        assert!(matches!(mods.entries()[0].status, Status::Failed(_)));
+        assert!(matches!(mods.drain()[..], [Output::Stopped { .. }]));
+        // Its slots are back, with what it wrote before it stopped.
+        assert_eq!(views[0].handle, h);
+        assert_eq!(views[0].slots, [Some(stack(input, 3)), None]);
+        assert_eq!(views[0].properties[0].value, "true");
+        assert_eq!(views[1], untouched);
+        // A stopped mod's block entities are left alone after that.
+        mods.tick_block_entities(&mut views);
+        assert_eq!(views[0].slots, [Some(stack(input, 3)), None]);
+        assert_eq!(mods.save_block_entity(h), None);
+    }
 }
 
 #[test]
@@ -1178,6 +1738,32 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
         }),
         EventOutcome::Cancel
     );
+    assert_eq!(
+        mods.item_entity_interaction_event(ItemEvent {
+            action: ItemAction::InteractEntity,
+            item: "test_machine:wrench".into(),
+            player: "Player".into(),
+            dimension: "minecraft:overworld".into(),
+            x: -36,
+            y: 70,
+            z: -10,
+            target: "minecraft:wolf;tamed=false;owner_is_player=false".into(),
+        }),
+        Some(EventOutcome::Pass)
+    );
+    assert_eq!(
+        mods.item_entity_interaction_event(ItemEvent {
+            action: ItemAction::InteractEntity,
+            item: "other_mod:unknown".into(),
+            player: "Player".into(),
+            dimension: "minecraft:overworld".into(),
+            x: -36,
+            y: 70,
+            z: -10,
+            target: "minecraft:wolf;tamed=true;owner_is_player=true".into(),
+        }),
+        None
+    );
     assert!(mods.command("machine_api logic_events"));
     let logic_feedback = mods.drain();
     assert_eq!(logic_feedback.len(), 1);
@@ -1191,7 +1777,7 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
         "{text}"
     );
     assert!(
-        text.contains("item=attack-entity:test_machine:wrench:minecraft:overworld:-36,70,-10:test_machine:automaton"),
+        text.contains("item=interact-entity:test_machine:wrench:minecraft:overworld:-36,70,-10:minecraft:wolf;tamed=false;owner_is_player=false"),
         "{text}"
     );
     assert!(text.contains("air_fallback=true finished=true"), "{text}");
@@ -1353,8 +1939,17 @@ fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
     assert!(mods.entity_state(h).is_none());
 
     // 2. Entities host API, animated models, draw lists, dimensions & portals
-    assert_eq!(mods.dimensions().len(), 1);
-    assert_eq!(mods.dimensions()[0].id, "test_machine:twilight");
+    assert_eq!(mods.dimensions().len(), 2);
+    assert!(
+        mods.dimensions()
+            .iter()
+            .any(|d| d.id == "test_machine:twilight")
+    );
+    assert!(
+        mods.dimensions()
+            .iter()
+            .any(|d| d.id == "test_machine:noisy")
+    );
     assert_eq!(mods.portals().len(), 1);
     assert_eq!(mods.portals()[0].id, "test_machine:twilight_portal");
 
@@ -1370,7 +1965,7 @@ fn api_0_5_deep_entities_models_dimensions_and_vanilla_hooks() {
                 z: 0.5,
             },
             Output::Feedback {
-                text: "spawned=2 near=1 dims=4".into(),
+                text: "spawned=2 near=1 dims=5".into(),
                 error: false,
             },
         ]

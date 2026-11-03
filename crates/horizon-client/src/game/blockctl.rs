@@ -54,6 +54,8 @@ impl Game<'_> {
             self.world
                 .block_entities
                 .insert((pos[0], pos[1], pos[2]), entity);
+        } else {
+            self.ensure_mod_block_entity(pos, &name);
         }
         Ok(())
     }
@@ -140,8 +142,8 @@ impl Game<'_> {
                         .block_entities
                         .get_mut(&key)
                         .ok_or("no container there")?;
-                    let slot = entity
-                        .slots_mut()
+                    let mut slots = entity.slots_mut();
+                    let slot = slots
                         .iter_mut()
                         .find(|s| s.is_none())
                         .ok_or("container is full")?;

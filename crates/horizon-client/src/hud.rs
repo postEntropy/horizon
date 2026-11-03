@@ -370,6 +370,11 @@ impl HudAtlas {
             for namespace in namespaces.flatten().filter(|entry| entry.path().is_dir()) {
                 let dir = namespace.path().join("gui");
                 walk(&dir, &mut files);
+                if namespace.file_name() != "minecraft" {
+                    walk(&namespace.path().join("textures/entity"), &mut files);
+                    walk(&namespace.path().join("textures/item"), &mut files);
+                    walk(&namespace.path().join("textures/block"), &mut files);
+                }
             }
         }
         files.retain(|p| {
@@ -387,10 +392,11 @@ impl HudAtlas {
                 let relative = path.strip_prefix(root.join("assets")).ok()?;
                 let mut parts = relative.components();
                 let namespace = parts.next()?.as_os_str().to_string_lossy();
-                let gui_relative = parts.as_path();
+                let relative = parts.as_path();
+                let relative = relative.strip_prefix("textures").unwrap_or(relative);
                 format!(
                     "{namespace}/{}",
-                    gui_relative
+                    relative
                         .with_extension("")
                         .to_string_lossy()
                         .replace('\\', "/")
@@ -500,6 +506,19 @@ impl HudAtlas {
                     h: gh,
                 },
             );
+            if let Some((ns, rest)) = name.split_once('/') {
+                sprites.insert(
+                    format!("{ns}:{rest}"),
+                    Rect {
+                        u0: px as f32 / width as f32,
+                        v0: py as f32 / height as f32,
+                        u1: (px + w) as f32 / width as f32,
+                        v1: (py + h) as f32 / height as f32,
+                        w: gw,
+                        h: gh,
+                    },
+                );
+            }
         }
         let mut fire_sprites = crate::sprites::Sprites::default();
         let mut fire_animations = Vec::new();
@@ -1463,6 +1482,24 @@ mod tests {
             .unwrap()
             .write_image_data(&pixels)
             .unwrap();
+    }
+    #[test]
+    fn atlas_includes_namespaced_mod_entity_textures() {
+        let root =
+            std::env::temp_dir().join(format!("horizon-mod-entity-atlas-{}", std::process::id()));
+        let path = root.join("assets/example/textures/entity/automaton.png");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut encoder = png::Encoder::new(fs::File::create(path).unwrap(), 2, 2);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder
+            .write_header()
+            .unwrap()
+            .write_image_data(&[255; 16])
+            .unwrap();
+        let atlas = HudAtlas::build(&root).unwrap();
+        assert!(atlas.sprites.contains_key("example/entity/automaton"));
+        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn a_pack_texture_keeps_the_default_textures_gui_size() {

@@ -49,10 +49,13 @@ pub use exports::horizon::mods::mod_entities::{
     AiGoal, EntityType, Guest as __ModEntitiesGuest, SpawnCategory,
 };
 pub use horizon::mods::{
-    capabilities, chat, config, dimensions, entities, game, hud, inventory, item_data,
-    item_transfer, keys, log, machine, models, net, recipes, render, server, storage, target, ui,
-    vanilla_hooks, world_read as world,
+    capabilities, chat, config, dimensions, entities, game, hud, interaction_context, inventory,
+    item_data, item_transfer, keys, log, machine, machine_slot_limits, models, net, recipes,
+    render, server, status_effects, storage, target, ui, vanilla_hooks, world_read as world,
 };
+
+pub mod active_machines;
+pub mod block_state;
 
 /// The game's calls into a mod. Only the hooks [`Registration`] or
 /// [`LogicHooks`] asks for are called; the others may stay as their defaults.
@@ -60,7 +63,9 @@ pub trait Mod: Sized + 'static {
     /// Once, after loading: the mod's state and the hooks it wants. An error
     /// keeps the mod off and is shown to the player.
     fn init() -> Result<(Self, Registration), String>;
-    /// Every game tick, when [`Registration::tick`] is set.
+    /// Every game tick, when [`Registration::tick`] is set. A mod with API 0.6
+    /// capability `status-effects` receives this once per player after the
+    /// authoritative food tick instead.
     fn tick(&mut self, _tick: u64) {}
     /// Every rendered frame, when [`Registration::frame`] is set.
     fn frame(&mut self, _seconds: f32) {}

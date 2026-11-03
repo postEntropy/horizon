@@ -337,6 +337,15 @@ impl Game<'_> {
             "minecraft:the_nether".into(),
             "minecraft:the_end".into(),
         ];
+        reg.dimensions.extend(
+            super::mod_dimension_specs()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .keys()
+                .cloned(),
+        );
+        reg.dimensions.sort();
+        reg.dimensions.dedup();
         reg.players = vec![PLAYER_NAME.into()];
         // Timelines of the overworld clock and their time markers.
         self.ui.markers.clear();

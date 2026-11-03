@@ -1600,7 +1600,7 @@ impl Game<'_> {
             );
             if self.carried.is_none()
                 && tooltip.is_none()
-                && let Some(stack) = self.slot_mut(slot).clone()
+                && let Some(stack) = self.slot_view(slot)
             {
                 tooltip = Some(self.stack_tooltip(&stack));
             }

@@ -273,6 +273,45 @@ mod blend_tests {
     use super::*;
 
     #[test]
+    fn loads_mod_biome_climate_and_colours_from_registry_bundle() {
+        let root = std::env::temp_dir().join(format!("horizon-mod-biome-{}", std::process::id()));
+        let maps = root.join("assets/minecraft/textures/colormap");
+        fs::create_dir_all(&maps).unwrap();
+        fs::create_dir_all(root.join("worldgen")).unwrap();
+        for name in ["grass", "foliage", "dry_foliage"] {
+            let file = fs::File::create(maps.join(format!("{name}.png"))).unwrap();
+            let mut encoder = png::Encoder::new(file, 1, 1);
+            encoder.set_color(png::ColorType::Rgb);
+            encoder.set_depth(png::BitDepth::Eight);
+            encoder
+                .write_header()
+                .unwrap()
+                .write_image_data(&[1, 2, 3])
+                .unwrap();
+        }
+        let bundle = serde_json::json!({
+            "minecraft:plains": "{}",
+            "example:crystal_grove": r##"{"has_precipitation":false,"temperature":0.7,"downfall":0.0,"effects":{"water_color":4159204,"grass_color":6737151,"foliage_color":6737151},"attributes":{"minecraft:visual/sky_color":"#5ab8d9"}}"##,
+        });
+        fs::write(
+            root.join("worldgen/biomes.json"),
+            serde_json::to_vec(&bundle).unwrap(),
+        )
+        .unwrap();
+        let biomes = Biomes::load(&root).unwrap();
+        let info = biomes.get(biomes.id("example:crystal_grove"));
+        assert_eq!(info.name, "example:crystal_grove");
+        assert_eq!(info.temperature, 0.7);
+        assert_eq!(info.downfall, 0.0);
+        assert!(!info.precipitation);
+        assert_eq!(info.grass, 6737151);
+        assert_eq!(info.foliage, 6737151);
+        assert_eq!(info.water, 4159204);
+        assert_eq!(info.sky, Some(0x5ab8d9));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn one_biome_keeps_its_colour() {
         let weights = gaussian_weights([10.3, 64.0, -7.9], |_, _, _| 4);
         assert_eq!(weights.len(), 1);

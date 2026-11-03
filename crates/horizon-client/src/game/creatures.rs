@@ -1333,7 +1333,7 @@ impl Game<'_> {
                         at[2].floor() as i32,
                     ];
                     let drops =
-                        self.mod_loot_table_drops("minecraft:villager", pos, &table, vanilla);
+                        self.mod_loot_table_drops("minecraft:villager", pos, table, vanilla);
                     for d in drops {
                         self.spawn_item(d, at, [0.0, 0.2, 0.0], 10);
                     }
@@ -2368,10 +2368,9 @@ impl Game<'_> {
                             .mobs
                             .iter()
                             .any(|m| m.id == id && !m.kind.flags.fire_immune)
+                            && let Some(m) = self.mobs.iter_mut().find(|m| m.id == id)
                         {
-                            if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-                                m.ignite_for_ticks(100);
-                            }
+                            m.ignite_for_ticks(100);
                         }
                         self.mod_mob_damage(id, 5.0, source);
                     }
@@ -2590,6 +2589,36 @@ impl Game<'_> {
             .as_ref()
             .map(|h| h.item.to_string())
             .unwrap_or_default();
+        let mob = &self.mobs[index];
+        let entity_type = if mob.kind.id.contains(':') {
+            mob.kind.id.clone()
+        } else {
+            format!("minecraft:{}", mob.kind.id)
+        };
+        let target = if mob.species() == Species::Wolf {
+            let owner_is_player =
+                mob.extra.owner.is_some() && mob.extra.owner == self.level.player_uuid;
+            format!(
+                "{entity_type};tamed={};owner_is_player={owner_is_player}",
+                mob.extra.tame
+            )
+        } else {
+            entity_type
+        };
+        let target_pos = [
+            mob.position.x.floor() as i32,
+            mob.position.y.floor() as i32,
+            mob.position.z.floor() as i32,
+        ];
+        if let Some(outcome) = self.mod_interact_entity_item(&item, &target, target_pos) {
+            if outcome != horizon_mods::EventOutcome::Pass {
+                self.swing_arm();
+            }
+            // The mod-owned item's PASS is the result of its direct
+            // item/entity interaction; do not reinterpret the item as generic
+            // animal food after that callback.
+            return Ok(true);
+        }
         if self.mod_entity_interact(index, &item) {
             self.swing_arm();
             return Ok(true);

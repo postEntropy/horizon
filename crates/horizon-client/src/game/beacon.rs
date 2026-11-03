@@ -495,7 +495,7 @@ impl Game<'_> {
         let slots: Vec<usize> = (0..36).chain([INPUT]).collect();
         for i in slots {
             let (sx, sy) = self.slot_position(i);
-            if let Some(stack) = self.slot_mut(i).clone() {
+            if let Some(stack) = self.slot_view(i) {
                 self.draw_item(batch, &stack, ox + sx, oy + sy);
             }
         }

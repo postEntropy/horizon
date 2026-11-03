@@ -92,6 +92,7 @@ mod loom;
 mod mace;
 mod machines;
 mod maps;
+mod menu_mapping;
 mod minecarts;
 mod mob_blocks;
 mod mob_gear;
@@ -1716,7 +1717,12 @@ fn mod_dimension_specs()
     SPECS.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
 }
 
-#[cfg(feature = "mods")]
+fn data_dimension_ids() -> &'static std::sync::Mutex<Vec<String>> {
+    use std::sync::{Mutex, OnceLock};
+    static IDS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
+    IDS.get_or_init(|| Mutex::new(Vec::new()))
+}
+
 pub(super) fn register_mod_dimension_spec(spec: ModDimensionSpec) {
     register_dimension_info(&spec.id, spec.min_y, spec.height, spec.logical_height);
     let mut specs = mod_dimension_specs()
@@ -1794,14 +1800,19 @@ fn custom_dimension(id: &str) -> &'static DimensionInfo {
 }
 
 fn register_dimensions_from_resources(root: &std::path::Path) {
-    fn visit_dimensions(root: &std::path::Path, namespace: &str, dir: &std::path::Path) {
+    fn visit_dimensions(
+        root: &std::path::Path,
+        namespace: &str,
+        dir: &std::path::Path,
+        ids: &mut Vec<String>,
+    ) {
         let Ok(entries) = std::fs::read_dir(dir) else {
             return;
         };
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                visit_dimensions(root, namespace, &path);
+                visit_dimensions(root, namespace, &path, ids);
                 continue;
             }
             if path.extension().is_none_or(|ext| ext != "json") {
@@ -1817,6 +1828,18 @@ fn register_dimensions_from_resources(root: &std::path::Path) {
                 continue;
             };
             let (type_namespace, type_path) = kind.split_once(':').unwrap_or(("minecraft", kind));
+            let valid_part = |s: &str| {
+                !s.is_empty()
+                    && s != "."
+                    && s != ".."
+                    && s.bytes().all(|b| {
+                        b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b)
+                    })
+            };
+            if !valid_part(type_namespace) || type_path.split('/').any(|part| !valid_part(part)) {
+                log::warn!("Horizon: invalid dimension type {kind}");
+                continue;
+            }
             let dimension_dir = root.join("data").join(namespace).join("dimension");
             let Ok(relative) = path.strip_prefix(&dimension_dir) else {
                 continue;
@@ -1836,6 +1859,12 @@ fn register_dimensions_from_resources(root: &std::path::Path) {
             let type_data = std::fs::read(type_file)
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+            // A WASM mod may register this dimension and its height at runtime
+            // without providing a data-pack dimension type. Do not invent a
+            // conflicting default before its registration.
+            if namespace != "minecraft" && type_data.is_none() {
+                continue;
+            }
             let int = |key: &str, default| {
                 type_data
                     .as_ref()
@@ -1849,16 +1878,55 @@ fn register_dimensions_from_resources(root: &std::path::Path) {
             let logical_height = int("logical_height", height);
             if height > 0 {
                 register_dimension_info(&dimension_id, min_y, height, logical_height);
+                if namespace != "minecraft" {
+                    let generator = match dimension["generator"]["type"].as_str() {
+                        Some("minecraft:flat" | "flat") => Some(ModDimensionGenerator::Flat),
+                        Some("minecraft:noise" | "noise") => Some(ModDimensionGenerator::Noise),
+                        _ => None,
+                    };
+                    if let Some(generator) = generator {
+                        ids.push(dimension_id.clone());
+                        let boolean = |key: &str, default| {
+                            type_data
+                                .as_ref()
+                                .and_then(|v| v[key].as_bool())
+                                .unwrap_or(default)
+                        };
+                        let scale = type_data
+                            .as_ref()
+                            .and_then(|v| v["coordinate_scale"].as_f64())
+                            .filter(|v| v.is_finite() && *v > 0.0)
+                            .unwrap_or(1.0);
+                        register_mod_dimension_spec(ModDimensionSpec {
+                            id: dimension_id,
+                            has_skylight: boolean("has_skylight", true),
+                            has_ceiling: boolean("has_ceiling", false),
+                            ultrawarm: boolean("ultrawarm", false),
+                            coordinate_scale: scale,
+                            min_y,
+                            height,
+                            logical_height,
+                            fixed_time: type_data.as_ref().and_then(|v| v["fixed_time"].as_u64()),
+                            generator,
+                            surface_block: None,
+                        });
+                    }
+                }
             }
         }
     }
 
     let data = root.join("data");
+    let mut ids = Vec::new();
     let Ok(namespaces) = std::fs::read_dir(data) else {
+        data_dimension_ids()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         return;
     };
     for namespace in namespaces.flatten() {
-        if !namespace.file_type().is_ok_and(|kind| kind.is_dir()) {
+        if !namespace.path().is_dir() {
             continue;
         }
         let namespace = namespace.file_name().to_string_lossy().into_owned();
@@ -1866,8 +1934,14 @@ fn register_dimensions_from_resources(root: &std::path::Path) {
             root,
             &namespace,
             &root.join("data").join(&namespace).join("dimension"),
+            &mut ids,
         );
     }
+    ids.sort();
+    ids.dedup();
+    *data_dimension_ids()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = ids;
 }
 fn facing_offset(facing: &str) -> [i32; 3] {
     match facing {
@@ -4101,13 +4175,29 @@ impl Game<'_> {
                                     self.apply_effect_action(a);
                                 }
                             } else {
-                                self.add_player_effect(
-                                    horizon_client::effects::EffectInstance::new(
-                                        def.id,
+                                let mut instance = horizon_client::effects::EffectInstance::new(
+                                    def.id,
+                                    eff.duration,
+                                    eff.amplifier,
+                                );
+                                instance.ambient = eff.ambient;
+                                instance.visible = eff.visible;
+                                instance.show_icon = eff.show_icon;
+                                self.add_player_effect(instance);
+                            }
+                        } else {
+                            #[cfg(feature = "mods")]
+                            if self.mod_has_status_effect(&eff.id) {
+                                let mut instance =
+                                    horizon_client::effects::EffectInstance::new_namespaced(
+                                        &eff.id,
                                         eff.duration,
                                         eff.amplifier,
-                                    ),
-                                );
+                                    );
+                                instance.ambient = eff.ambient;
+                                instance.visible = eff.visible;
+                                instance.show_icon = eff.show_icon;
+                                self.add_player_effect(instance);
                             }
                         }
                     }
@@ -5686,26 +5776,26 @@ impl Game<'_> {
             x >= ox + sx && x < ox + sx + 16.0 && y >= oy + sy && y < oy + sy + 16.0
         })
     }
-    fn slot_mut(&mut self, i: usize) -> &mut Option<ItemStack> {
+    fn slot_mut(&mut self, i: usize) -> horizon_client::shared_inventory::SlotMut<'_> {
         if i >= mount_menu::SADDLE {
-            return self.mount_slot_mut(i);
+            return self.mount_slot_mut(i).into();
         }
         if i >= stations::INPUT {
-            return self.station_slot_mut(i);
+            return self.station_slot_mut(i).into();
         }
         if (500..504).contains(&i) {
-            return &mut self.armor[i - 500];
+            return (&mut self.armor[i - 500]).into();
         }
         if i == 504 {
-            return &mut self.offhand;
+            return (&mut self.offhand).into();
         }
         if i >= 300 {
             return self.container_slot_mut(i - 300);
         }
         if (100..109).contains(&i) {
-            &mut self.craft_grid[i - 100]
+            (&mut self.craft_grid[i - 100]).into()
         } else {
-            &mut self.inventory[i]
+            (&mut self.inventory[i]).into()
         }
     }
     /// What a slot shows: the crafting result slots are computed.
@@ -6122,63 +6212,7 @@ impl Game<'_> {
         ) -> Option<bool>,
     ) -> bool {
         use horizon_client::menu::{Env, Kind, Menu};
-        #[derive(Clone, Copy)]
-        struct Map {
-            container: usize,
-            table: bool,
-            cells: usize,
-            plain: bool,
-        }
-        impl Map {
-            fn main(&self) -> usize {
-                match (self.plain, self.table) {
-                    (false, _) => self.container,
-                    (true, true) => 10,
-                    (true, false) => 9,
-                }
-            }
-            fn to_menu(self, g: usize) -> Option<usize> {
-                let main = self.main();
-                if self.plain {
-                    match g {
-                        200 => Some(0),
-                        100..109 if g - 100 < self.cells => Some(1 + g - 100),
-                        500..504 if !self.table => Some(5 + g - 500),
-                        504 if !self.table => Some(45),
-                        9..36 => Some(main + g - 9),
-                        0..9 => Some(main + 27 + g),
-                        _ => None,
-                    }
-                } else {
-                    match g {
-                        300.. if g < 300 + self.container => Some(g - 300),
-                        9..36 => Some(main + g - 9),
-                        0..9 => Some(main + 27 + g),
-                        _ => None,
-                    }
-                }
-            }
-            fn to_game(self, i: usize) -> Option<usize> {
-                let main = self.main();
-                if self.plain {
-                    match i {
-                        0 => None,
-                        1..=9 if i - 1 < self.cells => Some(100 + i - 1),
-                        5..9 if !self.table => Some(500 + i - 5),
-                        45 if !self.table => Some(504),
-                        _ if i >= main && i < main + 27 => Some(9 + i - main),
-                        _ if i >= main + 27 && i < main + 36 => Some(i - main - 27),
-                        _ => None,
-                    }
-                } else if i < self.container {
-                    Some(300 + i)
-                } else if i < self.container + 27 {
-                    Some(9 + i - self.container)
-                } else {
-                    Some(i - self.container - 27)
-                }
-            }
-        }
+        use menu_mapping::Map;
         // Menu slot -> game slot, for every menu slot.
         let mut plain_map = None;
         let crafter_open = matches!(self.container_kind(), Some(BlockEntity::Crafter(_)));
@@ -6284,16 +6318,8 @@ impl Game<'_> {
             )
         } else {
             let (kind, map) = if self.container.is_some() {
-                // A mod block entity may expose fewer real slots than the
-                // generic 9-wide menu the server opens for it. Keep the
-                // server menu's slot layout when predicting remote clicks;
-                // unmapped extra machine slots remain scratch slots.
-                let size = match (self.remote.is_some(), self.container_kind()) {
-                    (true, Some(BlockEntity::Mod { items, .. })) => {
-                        items.len().div_ceil(9).clamp(1, 6) * 9
-                    }
-                    _ => self.container_size(),
-                };
+                // Physical slots and the row-padded menu have separate sizes.
+                let size = self.container_size();
                 let (kind, count) = match self.container_kind() {
                     Some(BlockEntity::Chest(_)) => {
                         let shulker = self.container.is_some_and(|k| {
@@ -6326,6 +6352,10 @@ impl Game<'_> {
                 };
                 let map = Map {
                     container: count,
+                    menu_container: match kind {
+                        Kind::Chest(rows) => rows * 9,
+                        _ => count,
+                    },
                     table: false,
                     cells: 0,
                     plain: false,
@@ -6335,6 +6365,7 @@ impl Game<'_> {
                 let table = self.craft_size == 3;
                 let map = Map {
                     container: 0,
+                    menu_container: 0,
                     table,
                     cells: self.craft_size * self.craft_size,
                     plain: true,
@@ -6364,6 +6395,22 @@ impl Game<'_> {
             menu.mount = self.mount_menu_entity();
         }
         let total = menu.slot_count();
+        if let Some(BlockEntity::Mod { handle, .. }) = self.container_kind() {
+            for (slot, game_slot) in game_of.iter().enumerate() {
+                let access = match game_slot {
+                    Some(g) if *g >= 300 => self.mod_player_slot_access(*handle, *g - 300),
+                    None => (false, false),
+                    _ => continue,
+                };
+                menu.set_slot_access(slot, access.0, access.1);
+                if let Some(g) = game_slot
+                    && *g >= 300
+                    && let Some(limit) = self.mod_item_slot_limit(*handle, *g - 300)
+                {
+                    menu.set_slot_limit(slot, limit);
+                }
+            }
+        }
         let before: Vec<Option<ItemStack>> = game_of
             .iter()
             .map(|g| g.and_then(|g| self.slot_mut(g).clone()))
@@ -7076,6 +7123,24 @@ impl Game<'_> {
         };
         let held_shift = self.has_shift_down();
         if self.crafter_click(slot, held_shift, right) {
+            return;
+        }
+        // Control clicks and legacy UI fallbacks must use the same slot gates
+        // as the normal press path. Never fall back to raw mod inventory swaps.
+        if matches!(self.container_kind(), Some(BlockEntity::Mod { .. })) {
+            let input = if held_shift {
+                horizon_client::menu::Input::QuickMove
+            } else {
+                horizon_client::menu::Input::Pickup
+            };
+            if self.menu_click(Some(slot), i32::from(right), input) {
+                if let Some(key) = self.container {
+                    self.container_changed(key);
+                }
+                if slot >= 300 {
+                    self.mod_menu_click((slot - 300) as u32, u8::from(right));
+                }
+            }
             return;
         }
         if held_shift && self.container.is_some() && self.container_quick_move(slot) {
@@ -11251,6 +11316,7 @@ impl Game<'_> {
             self.options.dedicated.is_none() && self.loading_reason().is_some();
         let (uploads, unloaded) =
             horizon_client::spans::time("streaming", || self.streaming.update(&mut self.world));
+        self.mod_bind_loaded_block_entities();
         if let Some(lod) = &mut self.lod {
             self.lod_observe
                 .extend(uploads.iter().map(|(key, _)| (key.0, key.2)));
@@ -14304,6 +14370,30 @@ mod tests {
     use super::*;
     use horizon_client::container_screen::{Button, Clicks, Release, Target};
     use horizon_client::keymapping::{KeyAction, SPRINT, ToggleKeys};
+
+    #[test]
+    fn data_dimension_registers_generator_and_type() {
+        let root = std::env::temp_dir().join(format!(
+            "horizon-dimension-registration-{}",
+            std::process::id()
+        ));
+        let data = root.join("data/test_dimension_registration");
+        std::fs::create_dir_all(data.join("dimension/nested")).unwrap();
+        std::fs::create_dir_all(data.join("dimension_type")).unwrap();
+        std::fs::write(data.join("dimension/nested/room.json"), r#"{"type":"test_dimension_registration:room","generator":{"type":"minecraft:flat","settings":{"biome":"minecraft:plains","layers":[]}}}"#).unwrap();
+        std::fs::write(data.join("dimension_type/room.json"), r#"{"min_y":0,"height":256,"logical_height":128,"coordinate_scale":2.0,"has_skylight":false,"has_ceiling":true,"ultrawarm":true,"fixed_time":18000}"#).unwrap();
+        register_dimensions_from_resources(&root);
+        let spec = mod_dimension_spec("test_dimension_registration:nested/room").unwrap();
+        assert_eq!(spec.generator, ModDimensionGenerator::Flat);
+        assert_eq!(
+            (spec.min_y, spec.height, spec.logical_height),
+            (0, 256, 128)
+        );
+        assert_eq!(spec.coordinate_scale, 2.0);
+        assert!(!spec.has_skylight && spec.has_ceiling && spec.ultrawarm);
+        assert_eq!(spec.fixed_time, Some(18000));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn sleep_fade_lasts_ten_ticks_after_waking() {

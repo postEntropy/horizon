@@ -55,9 +55,16 @@ pub fn minecraft_registry_addition(path: &str) -> bool {
         return false;
     };
     rest.ends_with(".json")
-        && ["recipe/", "advancement/", "loot_table/"]
-            .iter()
-            .any(|kind| rest.starts_with(kind))
+        && [
+            "recipe/",
+            "recipes/",
+            "advancement/",
+            "advancements/",
+            "loot_table/",
+            "loot_tables/",
+        ]
+        .iter()
+        .any(|kind| rest.starts_with(kind))
 }
 
 /// Vanilla asset paths a content mod may add to its resource pack. The pack
@@ -88,6 +95,23 @@ pub fn shared_builtin_data_map(path: &str) -> bool {
     )
 }
 
+/// An item reference may target another mod, but must use a resource id.
+fn item_reference(id: &str) -> bool {
+    let Some((namespace, path)) = id.split_once(':') else {
+        return false;
+    };
+    let valid = |value: &str, slash: bool| {
+        !value.is_empty()
+            && value.bytes().all(|b| {
+                b.is_ascii_lowercase()
+                    || b.is_ascii_digit()
+                    || b"_.-".contains(&b)
+                    || (slash && b == b'/')
+            })
+    };
+    valid(namespace, false) && valid(path, true)
+}
+
 /// A vanilla identifier, `minecraft:path`.
 fn vanilla_id(id: &str) -> bool {
     id.strip_prefix("minecraft:").is_some_and(|path| {
@@ -110,6 +134,8 @@ pub struct BlockProperties {
     pub light: Option<u8>,
     pub requires_tool: Option<bool>,
     pub friction: Option<f32>,
+    /// Whether the block participates in the world's random tick selection.
+    pub random_ticks: Option<bool>,
     /// A `MapColor` id, 0 to 61.
     pub map_color: Option<u8>,
     /// A vanilla block whose sounds this block uses.
@@ -159,12 +185,65 @@ pub enum Rarity {
     Epic,
 }
 
+/// Explicit food/consumption properties and ordered probabilistic effects.
+/// Unknown fields are refused rather than silently discarded.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Food {
+    pub nutrition: u32,
+    pub saturation: f32,
+    #[serde(default)]
+    pub can_always_eat: bool,
+    pub consume_seconds: f32,
+    #[serde(default)]
+    pub effects: Vec<FoodEffect>,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FoodEffect {
+    pub id: String,
+    pub duration: i32,
+    pub amplifier: i32,
+    pub probability: f32,
+    #[serde(default)]
+    pub ambient: bool,
+    #[serde(default = "visible_effect")]
+    pub visible: bool,
+    #[serde(default = "visible_effect")]
+    pub show_icon: bool,
+}
+
+fn visible_effect() -> bool {
+    true
+}
+
+impl Food {
+    fn valid(&self) -> bool {
+        self.nutrition <= i32::MAX as u32
+            && self.saturation.is_finite()
+            && self.saturation >= 0.0
+            && self.consume_seconds.is_finite()
+            && self.consume_seconds > 0.0
+            && self.effects.len() <= 64
+            && self.effects.iter().all(|effect| {
+                item_reference(&effect.id)
+                    && effect.duration >= -1
+                    && (0..=255).contains(&effect.amplifier)
+                    && effect.probability.is_finite()
+                    && (0.0..=1.0).contains(&effect.probability)
+            })
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ItemFile {
     template: String,
     max_stack_size: Option<u8>,
     rarity: Option<Rarity>,
+    crafting_remainder: Option<String>,
+    use_remainder: Option<String>,
+    food: Option<Food>,
 }
 
 /// An item the mod adds: a vanilla template item's components under a new
@@ -176,6 +255,9 @@ pub struct Item {
     pub template: String,
     pub max_stack_size: Option<u8>,
     pub rarity: Option<Rarity>,
+    pub crafting_remainder: Option<String>,
+    pub use_remainder: Option<String>,
+    pub food: Option<Food>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -445,6 +527,29 @@ impl Content {
             if file.max_stack_size.is_some_and(|n| !(1..=99).contains(&n)) {
                 return Err(format!("{name}: max_stack_size is 1 to 99"));
             }
+            if file
+                .crafting_remainder
+                .as_deref()
+                .is_some_and(|id| !item_reference(id))
+            {
+                return Err(format!(
+                    "{name}: crafting_remainder must be a namespaced item id"
+                ));
+            }
+            if file
+                .use_remainder
+                .as_deref()
+                .is_some_and(|id| !item_reference(id))
+            {
+                return Err(format!(
+                    "{name}: use_remainder must be a namespaced item id"
+                ));
+            }
+            if file.food.as_ref().is_some_and(|food| !food.valid()) {
+                return Err(format!(
+                    "{name}: food requires finite nonnegative nutrition/saturation and positive consumption time"
+                ));
+            }
             if !ids.insert(item.clone()) {
                 return Err(format!("{name}: {item} is also a block's item"));
             }
@@ -453,6 +558,9 @@ impl Content {
                 template: file.template,
                 max_stack_size: file.max_stack_size,
                 rarity: file.rarity,
+                crafting_remainder: file.crafting_remainder,
+                use_remainder: file.use_remainder,
+                food: file.food,
             });
         }
         for (rt, name) in recipe_types {
@@ -578,7 +686,7 @@ capabilities = ["registries"]
 "#;
     const BLOCK: &[u8] = br#"{"template": "minecraft:iron_block",
         "properties": {"hardness": 4.0, "light": 3, "sounds": "minecraft:amethyst_block"}}"#;
-    const ITEM: &[u8] = br#"{"template": "minecraft:diamond", "rarity": "uncommon"}"#;
+    const ITEM: &[u8] = br#"{"template": "minecraft:diamond", "rarity": "uncommon", "use_remainder":"minecraft:glass_bottle"}"#;
 
     fn scratch(name: &str) -> PathBuf {
         let dir =
@@ -595,6 +703,106 @@ capabilities = ["registries"]
         let content = package.and_then(|p| Content::read(&path, &p.manifest));
         std::fs::remove_dir_all(&dir).unwrap();
         content
+    }
+
+    #[test]
+    fn food_declarations_refuse_invalid_numbers_and_unknown_effects() {
+        let food = Food {
+            nutrition: 4,
+            saturation: 2.4,
+            can_always_eat: false,
+            consume_seconds: 1.6,
+            effects: Vec::new(),
+        };
+        assert!(food.valid());
+        let valid_effect = FoodEffect {
+            id: "minecraft:speed".into(),
+            duration: 120,
+            amplifier: 1,
+            probability: 0.5,
+            ambient: false,
+            visible: true,
+            show_icon: true,
+        };
+        for chance in [-0.1, 1.1, f32::NAN, f32::INFINITY] {
+            assert!(
+                !Food {
+                    effects: vec![FoodEffect {
+                        probability: chance,
+                        ..valid_effect.clone()
+                    }],
+                    ..food.clone()
+                }
+                .valid()
+            );
+        }
+        assert!(
+            !Food {
+                effects: vec![valid_effect; 65],
+                ..food.clone()
+            }
+            .valid()
+        );
+
+        for value in [f32::NAN, f32::INFINITY, -1.0] {
+            assert!(
+                !Food {
+                    saturation: value,
+                    ..food.clone()
+                }
+                .valid()
+            );
+        }
+        for value in [0.0, -1.0, f32::INFINITY] {
+            assert!(
+                !Food {
+                    consume_seconds: value,
+                    ..food.clone()
+                }
+                .valid()
+            );
+        }
+        assert!(
+            serde_json::from_str::<Food>(
+                r#"{"nutrition":4,"saturation":2.4,"consume_seconds":1.6,"unsupported_effects":[]}"#
+            )
+            .is_err()
+        );
+        let error = hmod("invalid-food", MANIFEST_TEXT, &[("data/ruby/horizon/item/a.json",
+            br#"{"template":"minecraft:stick","food":{"nutrition":4,"saturation":2.4,"consume_seconds":0}}"#)]).unwrap_err();
+        assert!(error.contains("food requires"), "{error}");
+    }
+
+    #[test]
+    fn crafting_remainder_ids_use_resource_syntax() {
+        for id in ["minecraft:bowl", "other_mod:containers/cup"] {
+            assert!(item_reference(id));
+        }
+        for id in [
+            "bowl",
+            ":bowl",
+            "minecraft:",
+            "Minecraft:bowl",
+            "a:b:c",
+            "a/b:cup",
+            "a:bad cup",
+            "#a:bowl",
+        ] {
+            assert!(!item_reference(id), "{id}");
+        }
+        let error = hmod(
+            "bad-remainder",
+            MANIFEST_TEXT,
+            &[(
+                "data/ruby/horizon/item/a.json",
+                br#"{"template":"minecraft:stick","crafting_remainder":"bowl"}"#,
+            )],
+        )
+        .unwrap_err();
+        assert!(
+            error.contains("crafting_remainder must be a namespaced item id"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -634,6 +842,10 @@ capabilities = ["registries"]
         );
         assert_eq!(content.items[0].id, "ruby:ruby");
         assert_eq!(content.items[0].rarity, Some(Rarity::Uncommon));
+        assert_eq!(
+            content.items[0].use_remainder.as_deref(),
+            Some("minecraft:glass_bottle")
+        );
     }
 
     #[test]

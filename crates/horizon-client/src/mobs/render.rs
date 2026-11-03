@@ -334,7 +334,7 @@ pub fn body_color(m: &Mob, alpha: f32) -> u32 {
 pub fn layers(m: &Mob) -> Vec<Layer> {
     use Species as S;
     let mut v = Vec::new();
-    if &*m.kind.id == "minecraft:player" {
+    if &*m.kind.id == "minecraft:player" || !m.kind.id.starts_with("minecraft:") {
         return v;
     }
     let white = 0xFFFF_FFFF;
@@ -1089,7 +1089,9 @@ fn render_visible(
         .cloned()
         .unwrap_or_else(|| m.kind.model.clone());
     let mut poses = Poses::new(&model);
-    anim::setup(m, &s, &mut poses, &data.animations);
+    if m.kind.id.starts_with("minecraft:") {
+        anim::setup(m, &s, &mut poses, &data.animations);
+    }
     pose_override(m, alpha, &mut poses);
     let draw_body = |out: &mut Vec<Vertex>| {
         if let Some(uv) = atlas(&texture) {

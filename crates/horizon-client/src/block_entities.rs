@@ -65,6 +65,8 @@ pub struct BlockEntities {
     out: FxHashSet<Pos>,
     /// `Ticking` by block state id; empty until the game builds it.
     states: Vec<Ticking>,
+    /// Mod block entities restored from chunks, including those without tickers.
+    loaded_mods: Vec<Pos>,
 }
 
 impl std::ops::Deref for BlockEntities {
@@ -239,6 +241,7 @@ impl BlockEntities {
         self.pending.clear();
         self.out.clear();
         self.freed = false;
+        self.loaded_mods.clear();
     }
     /// A loaded or generated chunk's block entities, in the order the chunk
     /// lists them; they tick in its block entity map's order
@@ -246,12 +249,20 @@ impl BlockEntities {
     pub fn load_chunk(&mut self, entities: Vec<(Pos, BlockEntity)>) {
         let order = chunk_map_order(entities.iter().map(|(p, _)| *p));
         for (p, e) in entities {
+            if matches!(e, BlockEntity::Mod { .. }) {
+                self.loaded_mods.push(p);
+            }
             self.map.insert(p, e);
         }
         for p in order {
             self.add(p);
         }
     }
+    /// Restores host-owned inventory bindings before hoppers can access a chunk.
+    pub fn take_loaded_mods(&mut self) -> Vec<Pos> {
+        std::mem::take(&mut self.loaded_mods)
+    }
+
     /// `LevelChunk.setBlockState` on a block entity's position, from state
     /// `old` to `new`: a ticker made, kept or dropped.
     pub fn state_changed(&mut self, pos: Pos, old: u32, new: u32) {

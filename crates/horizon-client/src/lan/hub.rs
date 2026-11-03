@@ -22,6 +22,7 @@ use horizon_core::geometry::{Aabb, ShapeOp, Vec3, VoxelShape};
 use horizon_protocol::ids::play::clientbound as ids;
 use horizon_protocol::{
     entity_data::{Value, serializer},
+    packets::configuration::CustomPayload,
     packets::play::{self, Clientbound as C, Serverbound as S},
     text::{literal, translatable},
 };
@@ -294,6 +295,7 @@ impl Hub {
             .unwrap_or(&config.dimension);
         let dimension_type = sync
             .id("minecraft:dimension_type", dimension_type_name)
+            .or_else(|| sync.id("minecraft:dimension_type", "minecraft:overworld"))
             .unwrap_or(0);
         let clock_ids = (0..sync.dynamic.len("minecraft:world_clock") as i32).collect();
         let mut encoder = encoder;
@@ -695,18 +697,33 @@ impl Hub {
 
     /// ClientboundUpdateMobEffectPacket for one of the guest's effects.
     fn send_effect(&mut self, i: usize, e: &EffectInstance, blend: bool) -> Option<SentEffect> {
-        let effect = self
-            .sync
-            .id("minecraft:mob_effect", &format!("minecraft:{}", e.id))?;
+        let full_id = e.namespaced_id();
         let flags = PlayerEffects::flags(e);
         let g = &self.guests[i];
-        g.send(&C::UpdateMobEffect(play::UpdateMobEffect {
-            id: g.entity_id,
-            effect,
-            amplifier: e.amplifier,
-            duration: e.duration,
-            flags: flags | if blend { 8 } else { 0 },
-        }));
+        if full_id.starts_with("minecraft:") {
+            let effect = self.sync.id("minecraft:mob_effect", &full_id)?;
+            g.send(&C::UpdateMobEffect(play::UpdateMobEffect {
+                id: g.entity_id,
+                effect,
+                amplifier: e.amplifier,
+                duration: e.duration,
+                flags: flags | if blend { 8 } else { 0 },
+            }));
+        } else {
+            let data = crate::effects::encode_mod_effect_packet(
+                &crate::effects::ModEffectPacket::Update {
+                    entity_id: g.entity_id,
+                    id: full_id,
+                    duration: e.duration,
+                    amplifier: e.amplifier,
+                    flags: flags | if blend { 8 } else { 0 },
+                },
+            );
+            g.send(&C::CustomPayload(CustomPayload {
+                channel: "horizon:status_effect".into(),
+                data,
+            }));
+        }
         Some(SentEffect {
             id: e.id,
             amplifier: e.amplifier,
@@ -779,6 +796,20 @@ impl Hub {
             .map(|s| s.id)
             .collect();
         for id in removed {
+            if id.contains(':') {
+                let g = &self.guests[i];
+                let data = crate::effects::encode_mod_effect_packet(
+                    &crate::effects::ModEffectPacket::Remove {
+                        entity_id: g.entity_id,
+                        id: id.to_owned(),
+                    },
+                );
+                g.send(&C::CustomPayload(CustomPayload {
+                    channel: "horizon:status_effect".into(),
+                    data,
+                }));
+                continue;
+            }
             let Some(effect) = self
                 .sync
                 .id("minecraft:mob_effect", &format!("minecraft:{id}"))
@@ -2416,6 +2447,10 @@ impl Hub {
         self.dimension_type = self
             .sync
             .id("minecraft:dimension_type", dimension_type_name)
+            .or_else(|| {
+                self.sync
+                    .id("minecraft:dimension_type", "minecraft:overworld")
+            })
             .unwrap_or(0);
         let d = self.sync.dynamic.dimension(self.dimension_type);
         self.encoder

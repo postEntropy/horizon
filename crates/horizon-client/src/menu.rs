@@ -14,7 +14,7 @@ use crate::{
     crafting::Recipes,
     items::{ItemStack, Items},
 };
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 mod bundle;
 pub mod place;
@@ -259,6 +259,8 @@ const OFFHAND: usize = 40;
 pub struct Menu {
     kind: Kind,
     slots: Vec<Slot>,
+    player_slot_access: HashMap<usize, (bool, bool)>,
+    mod_slot_limits: HashMap<usize, u32>,
     containers: [Vec<Option<ItemStack>>; 4],
     grid_size: usize,
     pub carried: Option<ItemStack>,
@@ -662,6 +664,8 @@ impl Menu {
         Self {
             kind,
             slots,
+            player_slot_access: HashMap::new(),
+            mod_slot_limits: HashMap::new(),
             containers,
             grid_size,
             carried: None,
@@ -1217,7 +1221,42 @@ impl Menu {
 
     // ---- Slot ----
 
+    /// Additional restrictions for a game-owned mod container or an empty
+    /// padding slot. These gates cannot relax the vanilla role's own rules.
+    pub fn set_slot_access(&mut self, slot: usize, insert: bool, extract: bool) -> bool {
+        if slot >= self.slots.len() {
+            return false;
+        }
+        if insert && extract {
+            self.player_slot_access.remove(&slot);
+        } else {
+            self.player_slot_access.insert(slot, (insert, extract));
+        }
+        true
+    }
+
+    /// Capacity of a mod machine's physical slot, including internal
+    /// reservoirs larger than the served item's ordinary stack size.
+    pub fn set_slot_limit(&mut self, slot: usize, max: u32) -> bool {
+        if slot >= self.slots.len() {
+            return false;
+        }
+        if max == 0 {
+            self.mod_slot_limits.remove(&slot);
+        } else {
+            self.mod_slot_limits.insert(slot, max);
+        }
+        true
+    }
+
     fn may_place(&self, env: &Env, s: usize, stack: &ItemStack) -> bool {
+        if self
+            .player_slot_access
+            .get(&s)
+            .is_some_and(|access| !access.0)
+        {
+            return false;
+        }
         match self.slots[s].role {
             Role::Plain | Role::CreativeDisplay => true,
             Role::Armor(eq) => env
@@ -1301,6 +1340,13 @@ impl Menu {
     }
 
     fn may_pickup(&self, env: &Env, s: usize) -> bool {
+        if self
+            .player_slot_access
+            .get(&s)
+            .is_some_and(|access| !access.1)
+        {
+            return false;
+        }
         match self.slots[s].role {
             Role::Inert => false,
             // AnvilMenu.mayPickup: the levels to pay, and a price.
@@ -1330,6 +1376,9 @@ impl Menu {
 
     /// `Slot.getMaxStackSize(stack)`.
     fn slot_max(&self, env: &Env, s: usize, stack: &ItemStack) -> u32 {
+        if let Some(&limit) = self.mod_slot_limits.get(&s) {
+            return limit;
+        }
         let own = match self.slots[s].role {
             Role::Armor(_)
             | Role::MountEquip(_)
@@ -1357,7 +1406,12 @@ impl Menu {
         if (slot.container == MAIN || slot.role == Role::LoomResult)
             && let Some(st) = stack.as_mut()
         {
-            st.count = st.count.min(CONTAINER_MAX.min(Self::max_stack(env, st)));
+            st.count = st.count.min(
+                self.mod_slot_limits
+                    .get(&s)
+                    .copied()
+                    .unwrap_or_else(|| CONTAINER_MAX.min(Self::max_stack(env, st))),
+            );
             // The beacon's container holds one item (getMaxStackSize 1).
             if self.kind == Kind::Beacon {
                 st.count = st.count.min(1);
@@ -2515,6 +2569,13 @@ impl Menu {
             if !in_range(slot_index) {
                 return Err(OUT_OF_BOUNDS);
             }
+            if self
+                .player_slot_access
+                .get(&(slot_index as usize))
+                .is_some_and(|access| !access.1)
+            {
+                return Ok(());
+            }
             if let Some(stack) = self.slot(slot_index as usize) {
                 let mut copy = stack.clone();
                 copy.count = Self::max_stack(env, stack);
@@ -3043,6 +3104,80 @@ pub(crate) mod tests {
         let mut menu = Menu::new(kind);
         menu.creative = true;
         test(&env, &mut menu);
+    }
+
+    #[test]
+    fn restricted_mod_slots_refuse_extraction_in_every_click_mode() {
+        for input in [
+            Input::Pickup,
+            Input::QuickMove,
+            Input::Swap,
+            Input::Throw,
+            Input::Clone,
+        ] {
+            with_menu(Kind::Chest(1), |env, menu| {
+                menu.set_slot(env, 6, stack("minecraft:diamond", 5));
+                assert!(menu.set_slot_access(6, false, false));
+                menu.click(env, 6, 0, input).unwrap();
+                assert_eq!(menu.slot(6).unwrap().count, 5, "{input:?}");
+                assert!(menu.carried.is_none(), "{input:?}");
+                assert!(menu.dropped.is_empty(), "{input:?}");
+            });
+        }
+        with_menu(Kind::Chest(1), |env, menu| {
+            menu.set_slot(env, 6, stack("minecraft:diamond", 5));
+            menu.set_slot_access(6, false, false);
+            menu.carried = stack("minecraft:diamond", 1);
+            menu.click(env, 0, 0, Input::PickupAll).unwrap();
+            assert_eq!(menu.carried.as_ref().unwrap().count, 1);
+            assert_eq!(menu.slot(6).unwrap().count, 5);
+        });
+    }
+
+    #[test]
+    fn protected_meal_capacity_survives_menu_seed_and_click() {
+        with_menu(Kind::Chest(1), |env, menu| {
+            assert_eq!(
+                env.items.get("minecraft:mushroom_stew").unwrap().max_stack,
+                1
+            );
+            menu.set_slot_limit(6, 64);
+            menu.set_slot_access(6, false, false);
+            menu.set_slot(env, 6, stack("minecraft:mushroom_stew", 64));
+            assert_eq!(menu.slot(6).unwrap().count, 64);
+            menu.click(env, 6, 0, Input::Pickup).unwrap();
+            assert_eq!(menu.slot(6).unwrap().count, 64);
+            assert!(menu.carried.is_none());
+        });
+    }
+
+    #[test]
+    fn restricted_mod_slots_refuse_placement_and_drag_without_relaxing_vanilla() {
+        with_menu(Kind::Chest(1), |env, menu| {
+            for slot in 0..9 {
+                menu.set_slot_access(slot, false, true);
+            }
+            menu.carried = stack("minecraft:diamond", 3);
+            menu.click(env, 6, 0, Input::Pickup).unwrap();
+            assert!(menu.slot(6).is_none());
+            menu.click(env, -999, 0, Input::QuickCraft).unwrap();
+            menu.click(env, 6, 1, Input::QuickCraft).unwrap();
+            menu.click(env, -999, 2, Input::QuickCraft).unwrap();
+            assert!(menu.slot(6).is_none());
+            assert_eq!(menu.carried.as_ref().unwrap().count, 3);
+            menu.carried = None;
+            menu.set_slot(env, 9, stack("minecraft:diamond", 3));
+            menu.click(env, 9, 0, Input::QuickMove).unwrap();
+            assert!((0..9).all(|i| menu.slot(i).is_none()));
+            assert!(!menu.set_slot_access(menu.slot_count(), false, false));
+        });
+        with_menu(Kind::Furnace("smelting"), |env, menu| {
+            menu.set_slot_access(2, true, true);
+            menu.carried = stack("minecraft:diamond", 1);
+            menu.click(env, 2, 0, Input::Pickup).unwrap();
+            assert!(menu.slot(2).is_none());
+            assert_eq!(menu.carried.as_ref().unwrap().count, 1);
+        });
     }
 
     /// `HorseInventoryMenu`: a shift-click wears horse armour, then saddles,

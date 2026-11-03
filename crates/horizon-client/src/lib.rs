@@ -161,6 +161,7 @@ pub use horizon_server_files as server;
 pub mod server_packs;
 pub mod settings;
 pub mod shadows;
+pub mod shared_inventory;
 pub mod signs;
 pub mod skins;
 pub mod snbt;

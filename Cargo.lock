@@ -1342,6 +1342,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "horizon-mods-test-effects"
+version = "0.1.0"
+dependencies = [
+ "horizon-mod-sdk",
+]
+
+[[package]]
 name = "horizon-mods-test-guest"
 version = "0.1.0"
 dependencies = [

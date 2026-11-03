@@ -1,7 +1,7 @@
 <!-- Generated from crates/horizon-mod-sdk/wit/horizon.wit and the manifest's capabilities by crates/horizon-mods/tests/api_reference.rs; a test fails when this file is out of date. Update it with: HORIZON_WRITE_DOCS=1 cargo test -p horizon-mods --features pack --test api_reference -->
 # Mod API reference
 
-The contract between Horizon and its mods: the WIT package `horizon:mods@0.1.0`, every interface, type, function and hook in it, and the capabilities a manifest may list. The guide is [mods.md](../mods.md); stability and versions: [stability.md](stability.md). Manifest `api` lines this game serves: `0.1`, `0.2`, `0.3`, `0.4`, `0.5`.
+The contract between Horizon and its mods: the WIT package `horizon:mods@0.1.0`, every interface, type, function and hook in it, and the capabilities a manifest may list. The guide is [mods.md](../mods.md); stability and versions: [stability.md](stability.md). Manifest `api` lines this game serves: `0.1`, `0.2`, `0.3`, `0.4`, `0.5`, `0.6`.
 
 ## Capabilities
 
@@ -14,12 +14,14 @@ The contract between Horizon and its mods: the WIT package `horizon:mods@0.1.0`,
 | `registries` | data files (`assets/`, `data/`), no interface | add blocks and items to your worlds |
 | `config` | [`config`](#config) | expose configurable settings in the Mods screen |
 | `server` | [`server`](#server) | change blocks, drops, sounds and rules in your worlds |
+| `interaction-context` | [`interaction-context`](#interaction-context) | read whether a player is sneaking during block interaction |
 | `keys` | [`keys`](#keys) | add keybindings to Controls |
 | `target` | [`target`](#target) | see the block or entity you are looking at |
 | `inventory-read` | [`inventory`](#inventory) | see the items in your inventory and open container |
 | `block-entities` | [`machine`](#machine) | run its blocks' machines in your worlds |
 | `item-transfer` | [`item-transfer`](#item-transfer) | control which sides allow item insertion and extraction |
 | `item-data` | [`item-data`](#item-data) | preserve item data components in machine inventories |
+| `machine-slot-limits` | [`machine-slot-limits`](#machine-slot-limits) | set machine-slot stack limits above vanilla item limits |
 | `capabilities` | [`capabilities`](#capabilities) | exchange energy, fluids, items, attachments and accessories |
 | `ui` | [`ui`](#ui) | open custom machine and container screens |
 | `net` | [`net`](#net) | send mod packets between client and server |
@@ -30,24 +32,25 @@ The contract between Horizon and its mods: the WIT package `horizon:mods@0.1.0`,
 | `models` | [`models`](#models) | animate custom 3D models and block-entity attachments |
 | `dimensions` | [`dimensions`](#dimensions) | register custom dimensions and portals |
 | `vanilla-hooks` | [`vanilla-hooks`](#vanilla-hooks) | hook into loot drops, combat damage, XP and plant growth |
+| `status-effects` | [`status-effects`](#status-effects) | register and run player status effects on the server |
 
 ## World `horizon-mod`
 
-- Imports (what the game offers): `log`, `game`, `chat`, `hud`, `storage`
+- Imports (what the game offers): `log`, `game`, `chat`, `hud`, `storage`, `status-effects`
 - Exports (what the mod provides): `events`
 
 ## World `horizon-machine-mod`
 
 A mod with API 0.3 logic, API 0.4 machines and API 0.5 deep systems: the SDK builds every mod against this world. Mods built for `horizon-mod` alone still load.
 
-- Imports (what the game offers): `config`, `server`, `keys`, `target`, `inventory`, `machine`, `item-transfer`, `item-data`, `capabilities`, `ui`, `net`, `recipes`, `world-read`, `render`, `entities`, `models`, `dimensions`, `vanilla-hooks`, `log`, `game`, `chat`, `hud`, `storage`
+- Imports (what the game offers): `config`, `server`, `interaction-context`, `keys`, `target`, `inventory`, `item-transfer`, `machine`, `machine-slot-limits`, `capabilities`, `item-data`, `ui`, `net`, `recipes`, `world-read`, `render`, `entities`, `models`, `dimensions`, `vanilla-hooks`, `log`, `game`, `chat`, `hud`, `storage`, `status-effects`
 - Exports (what the mod provides): `block-entities`, `logic`, `mod-entities`, `events`
 
 ## World `machine-host`
 
 The game's side of `horizon-machine-mod` beyond `horizon-mod`.
 
-- Imports (what the game offers): `config`, `server`, `keys`, `target`, `inventory`, `machine`, `item-transfer`, `item-data`, `capabilities`, `ui`, `net`, `recipes`, `world-read`, `render`, `entities`, `models`, `dimensions`, `vanilla-hooks`
+- Imports (what the game offers): `config`, `server`, `interaction-context`, `keys`, `target`, `inventory`, `item-transfer`, `machine`, `machine-slot-limits`, `capabilities`, `item-data`, `ui`, `net`, `recipes`, `world-read`, `render`, `entities`, `models`, `dimensions`, `vanilla-hooks`
 - Exports (what the mod provides): `block-entities`, `mod-entities`
 
 ## `log`
@@ -149,6 +152,34 @@ Capability `storage`: a per-mod folder of small key/value files, quota'd (docs/m
 | `set` | `func(key: string, value: list<u8>) -> result<_, string>` | Errs on a malformed key or over quota (bytes for the whole mod). |
 | `delete` | `func(key: string)` | No error if `key` was already absent. |
 
+## `status-effects`
+
+Access: capability `status-effects`.
+
+Capability `status-effects` (API 0.6): namespaced player effects whose instances and countdown are owned by the authoritative game server.
+
+### record `active-effect`
+
+A mod with this capability and `events.registration.tick = true` gets one callback per player after that player's authoritative food tick.
+
+| Field | Type | |
+| --- | --- | --- |
+| `id` | `string` |  |
+| `duration` | `s32` |  |
+| `amplifier` | `s32` |  |
+| `ambient` | `bool` |  |
+| `visible` | `bool` |  |
+| `show-icon` | `bool` |  |
+| `food` | `u32` |  |
+| `saturation` | `f32` |  |
+
+| Function | Signature | What it does |
+| --- | --- | --- |
+| `register` | `func(id: string) -> result<_, string>` | Register an effect id owned by this mod. Must be called during init. |
+| `active` | `func() -> list<active-effect>` | Active effects registered by this mod for the player being ticked. |
+| `player-id` | `func() -> string` | Stable UUID of the player whose server tick is currently being handled. |
+| `set-food` | `func(id: string, food: u32, saturation: f32) -> result<_, string>` | Set the current player's food level and saturation during an active registered effect's server tick. Values are clamped by the host. |
+
 ## `events`
 
 Access: exported by the mod: the game calls it.
@@ -160,7 +191,7 @@ What the game calls. Only the hooks `init` asks for are ever called.
 | Field | Type | |
 | --- | --- | --- |
 | `commands` | `list<string>` | Chat commands, without the slash. A name vanilla already uses is refused (vanilla's command runs). |
-| `tick` | `bool` | Call `tick` every game tick (20 per second while playing). |
+| `tick` | `bool` | Call `tick` every game tick, or once per player tick for a mod with the `status-effects` capability. |
 | `frame` | `bool` | Call `frame` every rendered frame. Budget: 0.1 ms. |
 | `chat` | `bool` | Call `chat` for each chat line the player receives. |
 
@@ -172,61 +203,15 @@ What the game calls. Only the hooks `init` asks for are ever called.
 | `command` | `func(name: string, args: string) -> result<option<string>, string>` | `/name args`: ok(some(text)) is shown as feedback, err(text) in red. |
 | `chat` | `func(text: string)` | Each chat line the player receives, as plain text. |
 
-## `machine`
+## `machine-slot-limits`
 
-Access: capability `block-entities`.
+Access: capability `machine-slot-limits`.
 
-Capability `block-entities` (API 0.4): what the code of a mod's block entities may read and change while the game ticks them. A handle names one block entity and is valid only during the `block-entities` call it was passed to; slots and block state belong to the game (hoppers, menus, drops and saves see them), the mod keeps the rest of its state itself.
-
-### record `block-entity-position`
-
-| Field | Type | |
-| --- | --- | --- |
-| `dimension` | `string` |  |
-| `x` | `s32` |  |
-| `y` | `s32` |  |
-| `z` | `s32` |  |
-
-### record `item-stack`
-
-An item and how many. Read or write its non-default components with `item-data`.
-
-| Field | Type | |
-| --- | --- | --- |
-| `id` | `string` | `minecraft:coal`, `<mod>:<path>`, ... |
-| `count` | `u32` |  |
-
-### enum `cooking-kind`
-
-| Case | |
-| --- | --- |
-| `smelting` |  |
-| `blasting` |  |
-| `smoking` |  |
-| `campfire` |  |
-
-### record `cooking-recipe`
-
-| Field | Type | |
-| --- | --- | --- |
-| `output` | `item-stack` |  |
-| `cooking-time` | `u32` | Ticks the recipe takes in its vanilla block. |
-| `experience` | `f32` |  |
+Optional API 0.4 machine-slot capacity overrides. A limit of zero restores the item's normal maximum; u32::MAX requests the largest representable count.
 
 | Function | Signature | What it does |
 | --- | --- | --- |
-| `get-slot` | `func(handle: u32, slot: u32) -> option<item-stack>` | The block entity's slot, none when empty or out of range. |
-| `set-slot` | `func(handle: u32, slot: u32, stack: option<item-stack>) -> bool` | Empties the slot with none; a stack over the item's maximum is cut to it. False for a slot out of range, an unknown item or a handle not in this call. |
-| `insert-slot` | `func(handle: u32, slot: u32, stack: item-stack) -> bool` | Atomically adds the whole default-component stack to an empty or matching slot. It will not merge into a slot with custom components, since this record does not carry components. Returns false without changing the slot if it is full, contains another item, has custom components, the item is unknown, or the handle/slot is invalid. Use `max-stack-size` to decide whether a larger result should be split. |
-| `get-position` | `func(handle: u32) -> option<block-entity-position>` | The loaded block entity's dimension and world position. |
-| `get-world-rule` | `func(name: string) -> option<string>` | Reads a game-side rule value attached to this world's mod runtime. |
-| `set-world-rule` | `func(name: string, value: string) -> result<_, string>` | Sets a namespaced rule value for coordination between this mod's machines. |
-| `get-property` | `func(handle: u32, name: string) -> option<string>` | A property of the block entity's block state (`lit` -> `true`). |
-| `set-property` | `func(handle: u32, name: string, value: string) -> bool` | False when the block has no such property or value. |
-| `max-stack-size` | `func(id: string) -> u32` | The most of `id` one slot holds; 0 for an unknown item. |
-| `burn-time` | `func(id: string) -> u32` | Ticks `id` burns as a furnace's fuel (the game's fuel values), 0 if it is no fuel. |
-| `remainder` | `func(id: string) -> option<string>` | What is left of `id` once used up as fuel or an ingredient (a bucket from a lava bucket). |
-| `cooking` | `func(kind: cooking-kind, input: string) -> option<cooking-recipe>` | The data pack's cooking recipe of `kind` for `input`. |
+| `set-slot-limit` | `func(handle: u32, slot: u32, max-count: u32) -> bool` | Sets one block-entity slot's stack limit for this machine instance. |
 
 ## `item-transfer`
 
@@ -249,16 +234,95 @@ Capability `item-transfer` (API 0.4): sided access for mod machine slots. Rules 
 | --- | --- | --- |
 | `set-slot-access` | `func(handle: u32, slot: u32, face: face, insert: bool, extract: bool) -> bool` | Sets whether hoppers may insert into or extract from one slot through `face`. Unconfigured slot faces allow both. Returns false for an unknown block entity handle or out-of-range slot. |
 
-## `item-data`
+## `machine`
 
-Access: capability `item-data`.
+Access: capability `block-entities`.
 
-Capability `item-data` (API 0.4): opaque data components on machine slots.
+Capability `block-entities` (API 0.4): what the code of a mod's block entities may read and change while the game ticks them. A handle names one block entity and is valid only during the `block-entities` call it was passed to; slots and block state belong to the game (hoppers, menus, drops and saves see them), the mod keeps the rest of its state itself.
+
+### type `face`
+
+`type face = face`
+
+### enum `item-move-kind`
+
+| Case | |
+| --- | --- |
+| `pull` |  |
+| `push` |  |
+
+### record `block-entity-position`
+
+| Field | Type | |
+| --- | --- | --- |
+| `dimension` | `string` |  |
+| `x` | `s32` |  |
+| `y` | `s32` |  |
+| `z` | `s32` |  |
+
+### record `item-stack`
+
+An item and how many. Read or write its non-default components with `item-data`.
+
+| Field | Type | |
+| --- | --- | --- |
+| `id` | `string` | `minecraft:coal`, `<mod>:<path>`, ... |
+| `count` | `u32` |  |
+
+### record `slot-stack`
+
+| Field | Type | |
+| --- | --- | --- |
+| `slot` | `u32` |  |
+| `stack` | `item-stack` |  |
+
+### record `smithing-output`
+
+A smithing result computed from the active data pack, including the output's opaque item components (for example the trim on armor).
+
+| Field | Type | |
+| --- | --- | --- |
+| `stack` | `item-stack` |  |
+| `components` | `list<u8>` |  |
+
+### enum `cooking-kind`
+
+| Case | |
+| --- | --- |
+| `smelting` |  |
+| `blasting` |  |
+| `smoking` |  |
+| `campfire` |  |
+
+### record `cooking-recipe`
+
+| Field | Type | |
+| --- | --- | --- |
+| `output` | `item-stack` |  |
+| `cooking-time` | `u32` | Ticks the recipe takes in its vanilla block. |
+| `experience` | `f32` |  |
 
 | Function | Signature | What it does |
 | --- | --- | --- |
-| `get-slot-components` | `func(handle: u32, slot: u32) -> list<u8>` | Returns the stack's `minecraft:components` compound as binary network NBT (empty when the stack has only defaults, or the slot is empty). |
-| `set-slot-components` | `func(handle: u32, slot: u32, components: list<u8>) -> bool` | Replaces the compound with binary network NBT; empty clears it. The value must be a compound root and at most 64 KiB. False for an invalid value, empty slot, or out-of-range slot. |
+| `request-item-move` | `func(handle: u32, slot: u32, face: face, kind: item-move-kind, count: u32) -> option<u64>` | Queues an atomic transfer between this machine slot and an adjacent inventory. Only callable for a handle/slot lent to this tick. Count is 1..64; at most 4096 outstanding requests per mod. No slots change here. The game revalidates the live handle and loaded containers after all views return, applies sided automation rules, and moves full components. None means refused. A request id means queued, not successful movement. |
+| `take-item-move-result` | `func(request: u64) -> option<u32>` | Consumes a completed request's actual moved count (possibly zero). None for unknown or pending requests. Requests are transient: do not save their ids; removal/reload discards them without modifying inventories. |
+| `process-items` | `func(handle: u32, inputs: list<slot-stack>, outputs: list<slot-stack>, simulate: bool) -> bool` | Atomically consumes inputs and inserts default-component outputs in one owned, loaned inventory. Inputs must match id/count and use distinct slots; remaining input components are preserved. Outputs must all fit without truncation or merging into custom components. At most 64 inputs and 64 outputs. Invalid/empty requests return false without changes. Simulation validates the same operation without writing slots or dirty flags. Input/output overlap is allowed; outputs see consumed inputs. |
+| `set-player-slot-access` | `func(handle: u32, slot: u32, insert: bool, extract: bool) -> bool` | Restricts player menu insertion/extraction for an owned live slot. Unconfigured slots allow both. This is separate from hopper face rules; it never changes guest access to its own processing inventory. |
+| `get-slot` | `func(handle: u32, slot: u32) -> option<item-stack>` | The block entity's slot, none when empty or out of range. |
+| `smithing-result` | `func(handle: u32, template-slot: u32, base-slot: u32, addition-slot: u32) -> option<smithing-output>` | Applies the active smithing transform or trim recipe to three machine slots. The result carries game-owned item components when present. |
+| `set-slot` | `func(handle: u32, slot: u32, stack: option<item-stack>) -> bool` | Empties the slot with none; a stack over the item's maximum is cut to it. False for a slot out of range, an unknown item or a handle not in this call. |
+| `insert-slot` | `func(handle: u32, slot: u32, stack: item-stack) -> bool` | Atomically adds the whole default-component stack to an empty or matching slot. It will not merge into a slot with custom components, since this record does not carry components. Returns false without changing the slot if it is full, contains another item, has custom components, the item is unknown, or the handle/slot is invalid. Use `max-stack-size` to decide whether a larger result should be split. |
+| `bind-shared-inventory` | `func(handle: u32, channel: string) -> bool` | Aliases this owned block entity's inventory to a host-owned channel. Channels are scoped to this mod and world, survive endpoint unload, and share real inventory operations (not tick snapshots). Call on create and whenever the frequency/owner changes, outside a machine tick. Empty or oversized channel names and mismatched slot counts are refused. Rebinding never transfers the previous channel's contents into the new channel. |
+| `get-position` | `func(handle: u32) -> option<block-entity-position>` | The loaded block entity's dimension and world position. |
+| `get-world-rule` | `func(name: string) -> option<string>` | Reads a game-side rule value attached to this world's mod runtime. |
+| `set-world-rule` | `func(name: string, value: string) -> result<_, string>` | Sets a namespaced rule value for coordination between this mod's machines. |
+| `get-property` | `func(handle: u32, name: string) -> option<string>` | A property of the block entity's block state (`lit` -> `true`). |
+| `set-property` | `func(handle: u32, name: string, value: string) -> bool` | False when the block has no such property or value. |
+| `max-stack-size` | `func(id: string) -> u32` | The most of `id` one slot holds; 0 for an unknown item. |
+| `block-in-tag` | `func(id: string, tag: string) -> bool` | Whether a block id belongs to a block tag in the active data packs. Unknown blocks/tags return false. Supply the id without state properties. |
+| `burn-time` | `func(id: string) -> u32` | Ticks `id` burns as a furnace's fuel (the game's fuel values), 0 if it is no fuel. |
+| `remainder` | `func(id: string) -> option<string>` | What is left of `id` once used up as fuel or an ingredient (a bucket from a lava bucket). |
+| `cooking` | `func(kind: cooking-kind, input: string) -> option<cooking-recipe>` | The data pack's cooking recipe of `kind` for `input`. |
 
 ## `block-entities`
 
@@ -333,6 +397,16 @@ Capability `server` (API 0.3): server-side world queries and mutations during bl
 | `get-rule` | `func(name: string) -> option<string>` | Reads a game rule value as text (`true`, `false`, or integer). |
 | `set-rule` | `func(name: string, value: string) -> result<_, string>` | Sets a game rule value as text. |
 | `get-block-face` | `func() -> option<string>` | Hit face of the block for the current block callback, if available. |
+
+## `interaction-context`
+
+Access: capability `interaction-context`.
+
+Optional context for the block callback currently being dispatched.
+
+| Function | Signature | What it does |
+| --- | --- | --- |
+| `is-sneaking` | `func() -> bool` | Whether the player is sneaking during this block interaction. |
 
 ## `keys`
 
@@ -459,6 +533,26 @@ Capability `capabilities` (API 0.4): standard Forge Energy (FE), fluid tanks, it
 | `get-accessory` | `func(entity: string, slot-kind: string, index: u32) -> option<item-slot>` | Reads a Curios-style accessory slot (`ring`, `belt`, `charm`, `back`, ...) on `entity`. |
 | `set-accessory` | `func(entity: string, slot-kind: string, index: u32, id: string, count: u32) -> result<_, string>` | Writes a Curios-style accessory slot on `entity`. |
 
+## `item-data`
+
+Access: capability `item-data`.
+
+Capability `item-data` (API 0.4): opaque data components on machine slots.
+
+### type `energy-view`
+
+`type energy-view = energy-view`
+
+| Function | Signature | What it does |
+| --- | --- | --- |
+| `register-energy-item` | `func(id: string, spec: energy-view) -> bool` | Declares energy support for an item in this mod's namespace. `stored` must be zero; capacity must be positive and fit in s64. Limits apply per transfer call. At most 4096 items per mod. Register again after reload. |
+| `get-slot-energy` | `func(handle: u32, slot: u32) -> option<energy-view>` | Queries an owned machine slot during its tick. None for unsupported items, counts other than one, or malformed/out-of-capacity energy data. Stored energy is the stack's Long `horizon:energy` component (default 0). |
+| `receive-slot-energy` | `func(handle: u32, slot: u32, amount: u64, simulate: bool) -> u64` | Adds at most the requested amount, available capacity and max-receive. Returns the actual amount. Simulation does not change components. A refused write returns zero; all unrelated stack components are preserved. |
+| `extract-slot-energy` | `func(handle: u32, slot: u32, amount: u64, simulate: bool) -> u64` | Removes at most the request, stored energy and max-extract. Same slot isolation, simulation and atomic-write rules as receive-slot-energy. |
+| `get-slot-string-component` | `func(handle: u32, slot: u32, path: list<string>) -> option<string>` | Reads a String through 1..8 compound keys in an owned slot's components. The first key is a component id; remaining keys may address custom-data. None for a missing path, other tag type, malformed data or unloaned slot. |
+| `get-slot-components` | `func(handle: u32, slot: u32) -> list<u8>` | Returns the stack's `minecraft:components` compound as binary network NBT (empty when the stack has only defaults, or the slot is empty). |
+| `set-slot-components` | `func(handle: u32, slot: u32, components: list<u8>) -> bool` | Replaces the compound with binary network NBT; empty clears it. The value must be a compound root and at most 64 KiB. False for an invalid value, empty slot, or out-of-range slot. |
+
 ## `ui`
 
 Access: capability `ui`.
@@ -552,14 +646,15 @@ Capability `recipes` (API 0.4): read the loaded recipe graph and register custom
 | `id` | `string` | Recipe id (`minecraft:iron_ingot_from_smelting_raw_iron`, `<mod>:<name>`). |
 | `kind` | `string` | Recipe type (`minecraft:crafting_shaped`, `minecraft:smelting`, `<mod>:<machine>`). |
 | `inputs` | `list<ingredient-slot>` | Input ingredients. |
-| `outputs` | `list<string>` | Output item ids and counts (`id*count`), or resource outputs as `@fluid/<tank>/<id>*<amount>` / `@chemical/<tank>/<id>*<amount>`. |
+| `outputs` | `list<string>` | Output item ids and counts (`id*count`), with optional chance (`id*count@chance`), or resource outputs as `@fluid/<tank>/<id>*<amount>` / `@chemical/<tank>/<id>*<amount>`. |
 | `ticks` | `u32` | Processing time in ticks (0 for instant crafting). |
 | `energy` | `u64` | Energy cost in FE (0 when none). |
 
 | Function | Signature | What it does |
 | --- | --- | --- |
+| `revision` | `func() -> u64` | Changes whenever a host or guest publishes a recipe. Cache entries only while this value remains equal; a new runtime starts a new sequence. |
 | `get` | `func(id: string) -> option<recipe-entry>` | Looks up a recipe by id. |
-| `by-type` | `func(kind: string) -> list<recipe-entry>` | Lists recipes of a given type (`minecraft:smelting`, `<mod>:crusher`, ...). |
+| `by-type` | `func(kind: string) -> list<recipe-entry>` | Lists machine recipes and exposed vanilla smithing transforms by type (`minecraft:smithing_transform`, `<mod>:crusher`, ...). |
 | `for-input` | `func(item-id: string) -> list<recipe-entry>` | Lists recipes that consume `item-id`, including ingredients whose item tags include it in the active content registry. |
 | `for-output` | `func(item-id: string) -> list<recipe-entry>` | Lists recipes that produce `item-id`. |
 | `register` | `func(entry: recipe-entry) -> result<_, string>` | Registers a custom machine recipe under the mod's namespace. Entries must use valid namespaced ids and bounded item/resource selectors; each mod may register at most 4 MiB of recipe data. |
@@ -650,6 +745,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `use-in-air` |  |
 | `use-on-block` |  |
 | `attack-entity` |  |
+| `interact-entity` | Server-side right-click with the held item. `target` is the namespaced entity id; wolf targets include `tamed` and `owner_is_player` booleans. An explicit `PASS` stops this item/entity route without generic animal feeding. |
 | `finish-using` |  |
 
 ### record `item-event`

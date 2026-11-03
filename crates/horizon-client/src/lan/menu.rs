@@ -85,7 +85,7 @@ impl Slots {
         }
         let mut items = Vec::new();
         for k in self.halves() {
-            items.extend_from_slice(world.block_entities.get(&k)?.slots());
+            items.extend_from_slice(&world.block_entities.get(&k)?.slots());
         }
         Some(items)
     }
@@ -98,7 +98,7 @@ impl Slots {
         let mut rest = items.into_iter();
         for k in self.halves() {
             if let Some(e) = world.block_entities.get_mut(&k) {
-                for slot in e.slots_mut() {
+                for slot in e.slots_mut().iter_mut() {
                     *slot = rest.next().flatten();
                 }
             }

@@ -24,7 +24,7 @@ pub const API: &str = "0.1";
 /// 0.5 adds custom entities (`entities`), animated models and draw lists
 /// (`models`), dimensions (`dimensions`) and named vanilla hooks
 /// (`vanilla-hooks`) (docs/mods.md).
-pub const APIS: [&str; 5] = [API, "0.2", "0.3", "0.4", "0.5"];
+pub const APIS: [&str; 6] = [API, "0.2", "0.3", "0.4", "0.5", "0.6"];
 /// Namespaces no mod may claim: vanilla's, the convention tags' (mods add
 /// to those, docs/mods.md) and the game's own.
 const RESERVED_NAMESPACES: [&str; 5] = ["minecraft", "c", "forge", "horizon", "neoforge"];
@@ -87,6 +87,10 @@ pub struct Manifest {
     /// checks still use only `id` and `namespaces`.
     #[serde(default)]
     pub contributes: Vec<String>,
+    /// A content mod whose carried resources fully implement its behavior and
+    /// therefore does not need a WebAssembly component.
+    #[serde(default, rename = "content-only")]
+    pub content_only: bool,
     /// Typed settings schema (`[config.<key>]`, API 0.3).
     #[serde(default)]
     pub config: BTreeMap<String, ConfigSchema>,
@@ -123,6 +127,8 @@ pub enum Capability {
     Config,
     /// Server-side block, item, drop, sound and rule actions (API 0.3).
     Server,
+    /// Sneaking state during a block interaction callback (API 0.4).
+    InteractionContext,
     /// Custom keybindings in Controls (API 0.3).
     Keys,
     /// Crosshair block and entity target (API 0.3).
@@ -136,6 +142,8 @@ pub enum Capability {
     ItemTransfer,
     /// Read and write opaque Minecraft data components on machine slots (API 0.4).
     ItemData,
+    /// Override per-slot machine stack limits beyond the vanilla item maximum (API 0.4).
+    MachineSlotLimits,
     /// Energy (FE), fluid tanks, item slots, data attachments and accessories (API 0.4).
     Capabilities,
     /// Declarative container menus and screens (API 0.4).
@@ -156,9 +164,11 @@ pub enum Capability {
     Dimensions,
     /// Named hooks into vanilla behaviour (loot, damage, XP, crops, explosions) (API 0.5).
     VanillaHooks,
+    /// Register namespaced player effects and update them on authoritative server ticks (API 0.6).
+    StatusEffects,
 }
 impl Capability {
-    pub const ALL: [Capability; 23] = [
+    pub const ALL: [Capability; 26] = [
         Capability::GameRead,
         Capability::Chat,
         Capability::Hud,
@@ -166,12 +176,14 @@ impl Capability {
         Capability::Registries,
         Capability::Config,
         Capability::Server,
+        Capability::InteractionContext,
         Capability::Keys,
         Capability::Target,
         Capability::InventoryRead,
         Capability::BlockEntities,
         Capability::ItemTransfer,
         Capability::ItemData,
+        Capability::MachineSlotLimits,
         Capability::Capabilities,
         Capability::Ui,
         Capability::Net,
@@ -182,6 +194,7 @@ impl Capability {
         Capability::Models,
         Capability::Dimensions,
         Capability::VanillaHooks,
+        Capability::StatusEffects,
     ];
     /// Minimum manifest `api` version that grants this capability.
     pub fn min_api(self) -> &'static str {
@@ -197,8 +210,10 @@ impl Capability {
             | Capability::InventoryRead
             | Capability::WorldRead => "0.3",
             Capability::BlockEntities
+            | Capability::InteractionContext
             | Capability::ItemTransfer
             | Capability::ItemData
+            | Capability::MachineSlotLimits
             | Capability::Capabilities
             | Capability::Ui
             | Capability::Net
@@ -208,6 +223,7 @@ impl Capability {
             | Capability::Models
             | Capability::Dimensions
             | Capability::VanillaHooks => "0.5",
+            Capability::StatusEffects => "0.6",
         }
     }
     /// The WIT interface it grants, in `horizon:mods`.
@@ -220,12 +236,14 @@ impl Capability {
             Capability::Registries => "registries",
             Capability::Config => "config",
             Capability::Server => "server",
+            Capability::InteractionContext => "interaction-context",
             Capability::Keys => "keys",
             Capability::Target => "target",
             Capability::InventoryRead => "inventory",
             Capability::BlockEntities => "machine",
             Capability::ItemTransfer => "item-transfer",
             Capability::ItemData => "item-data",
+            Capability::MachineSlotLimits => "machine-slot-limits",
             Capability::Capabilities => "capabilities",
             Capability::Ui => "ui",
             Capability::Net => "net",
@@ -236,6 +254,7 @@ impl Capability {
             Capability::Models => "models",
             Capability::Dimensions => "dimensions",
             Capability::VanillaHooks => "vanilla-hooks",
+            Capability::StatusEffects => "status-effects",
         }
     }
     /// What the player reads before turning the mod on: "May <this>".
@@ -248,12 +267,18 @@ impl Capability {
             Capability::Registries => "add blocks and items to your worlds",
             Capability::Config => "expose configurable settings in the Mods screen",
             Capability::Server => "change blocks, drops, sounds and rules in your worlds",
+            Capability::InteractionContext => {
+                "read whether a player is sneaking during block interaction"
+            }
             Capability::Keys => "add keybindings to Controls",
             Capability::Target => "see the block or entity you are looking at",
             Capability::InventoryRead => "see the items in your inventory and open container",
             Capability::BlockEntities => "run its blocks' machines in your worlds",
             Capability::ItemTransfer => "control which sides allow item insertion and extraction",
             Capability::ItemData => "preserve item data components in machine inventories",
+            Capability::MachineSlotLimits => {
+                "set machine-slot stack limits above vanilla item limits"
+            }
             Capability::Capabilities => {
                 "exchange energy, fluids, items, attachments and accessories"
             }
@@ -266,6 +291,7 @@ impl Capability {
             Capability::Models => "animate custom 3D models and block-entity attachments",
             Capability::Dimensions => "register custom dimensions and portals",
             Capability::VanillaHooks => "hook into loot drops, combat damage, XP and plant growth",
+            Capability::StatusEffects => "register and run player status effects on the server",
         }
     }
     /// The capability a component import needs, `Ok(None)` for one every
@@ -298,12 +324,14 @@ impl fmt::Display for Capability {
             Capability::Registries => "registries",
             Capability::Config => "config",
             Capability::Server => "server",
+            Capability::InteractionContext => "interaction-context",
             Capability::Keys => "keys",
             Capability::Target => "target",
             Capability::InventoryRead => "inventory-read",
             Capability::BlockEntities => "block-entities",
             Capability::ItemTransfer => "item-transfer",
             Capability::ItemData => "item-data",
+            Capability::MachineSlotLimits => "machine-slot-limits",
             Capability::Capabilities => "capabilities",
             Capability::Ui => "ui",
             Capability::Net => "net",
@@ -314,6 +342,7 @@ impl fmt::Display for Capability {
             Capability::Models => "models",
             Capability::Dimensions => "dimensions",
             Capability::VanillaHooks => "vanilla-hooks",
+            Capability::StatusEffects => "status-effects",
         };
         f.write_str(name)
     }
@@ -326,6 +355,7 @@ fn api_rank(api: &str) -> u8 {
         "0.3" => 3,
         "0.4" => 4,
         "0.5" => 5,
+        "0.6" => 6,
         _ => 0,
     }
 }
@@ -359,6 +389,13 @@ impl Manifest {
         }
         if !m.config.is_empty() && rank < api_rank("0.3") {
             return Err(format!("{MANIFEST}: [config] needs api = \"0.3\""));
+        }
+        if m.content_only
+            && (rank < api_rank("0.2") || !m.capabilities.contains(&Capability::Registries))
+        {
+            return Err(format!(
+                "{MANIFEST}: content-only requires API 0.2 and the registries capability"
+            ));
         }
         for (key, schema) in &m.config {
             let key_ok = (1..=64).contains(&key.len())
@@ -525,6 +562,11 @@ impl Package {
                 "{WASM}: missing (only a content mod, with capability registries, may have no code)"
             ));
         }
+        if manifest.content_only && wasm.is_some() {
+            return Err(format!(
+                "{MANIFEST}: content-only packages must not contain {WASM}"
+            ));
+        }
         Ok(Package { manifest, wasm })
     }
     /// The `.hmod` bytes for `manifest_text` and a component.
@@ -648,8 +690,8 @@ capabilities = ["game-read", "hud"]
     fn refuses_bad_ids_and_apis() {
         let bad_id = EXAMPLE.replace("coords_hud", "Coords HUD");
         assert!(Manifest::parse(&bad_id).unwrap_err().contains("is not"));
-        let bad_api = EXAMPLE.replace("api = \"0.1\"", "api = \"0.6\"");
-        assert!(Manifest::parse(&bad_api).unwrap_err().contains("API 0.6"));
+        let bad_api = EXAMPLE.replace("api = \"0.1\"", "api = \"0.7\"");
+        assert!(Manifest::parse(&bad_api).unwrap_err().contains("API 0.7"));
         let unknown = format!("{EXAMPLE}network = true\n");
         assert!(Manifest::parse(&unknown).is_err());
     }
@@ -680,6 +722,25 @@ capabilities = ["registries", "entities", "models", "dimensions", "vanilla-hooks
                 .unwrap_err()
                 .contains("needs api = \"0.5\"")
         );
+    }
+
+    #[test]
+    fn status_effects_need_api_0_6() {
+        let text = r#"
+id = "farmersdelight"
+name = "Farmer's Delight"
+version = "1.0.0"
+api = "0.6"
+side = "both"
+capabilities = ["status-effects"]
+"#;
+        let manifest = Manifest::parse(text).unwrap();
+        assert_eq!(
+            manifest.check_imports(["horizon:mods/status-effects@0.1.0"]),
+            Ok(())
+        );
+        let old = Manifest::parse(&text.replace("0.6", "0.5")).unwrap_err();
+        assert!(old.contains("capability status-effects needs api = \"0.6\""));
     }
 
     #[test]

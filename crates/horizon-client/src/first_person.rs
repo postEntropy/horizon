@@ -557,11 +557,9 @@ impl Destroying {
             self.delay = 5;
         } else if !self.active || !self.same_target(w, pos) {
             let not_air = !w.is_air(pos);
-            if not_air && self.progress == 0.0 {
-                if !w.attack_block(pos) {
-                    self.stop(w);
-                    return true;
-                }
+            if not_air && self.progress == 0.0 && !w.attack_block(pos) {
+                self.stop(w);
+                return true;
             }
             if not_air && w.destroy_progress(pos) >= 1.0 {
                 w.destroy_block(pos);

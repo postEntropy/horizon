@@ -10,6 +10,149 @@ pub struct FlatTerrain {
     platform: Option<u32>,
 }
 impl FlatTerrain {
+    /// Loads a data-pack flat dimension's explicit biome and bottom-up layers.
+    /// Returns `None` when no definition exists; invalid definitions are errors.
+    pub fn from_dimension_file(
+        root: &std::path::Path,
+        dimension: &str,
+        min_y: i32,
+        height: i32,
+        registry: &BlockRegistry,
+        biomes: &crate::biome::Biomes,
+    ) -> Result<Option<Self>, String> {
+        Self::from_dimension_file_with_biomes(
+            root,
+            dimension,
+            min_y,
+            height,
+            registry,
+            &biomes.index,
+        )
+    }
+
+    fn from_dimension_file_with_biomes(
+        root: &std::path::Path,
+        dimension: &str,
+        min_y: i32,
+        height: i32,
+        registry: &BlockRegistry,
+        biomes: &std::collections::HashMap<String, u16>,
+    ) -> Result<Option<Self>, String> {
+        let (namespace, path) = dimension.split_once(':').ok_or("invalid dimension id")?;
+        if namespace.is_empty()
+            || namespace == "."
+            || namespace == ".."
+            || path.is_empty()
+            || !namespace
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b))
+            || path.split('/').any(|part| {
+                part.is_empty()
+                    || part == "."
+                    || part == ".."
+                    || !part.bytes().all(|b| {
+                        b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b)
+                    })
+            })
+        {
+            return Err(format!("invalid dimension id {dimension}"));
+        }
+        let path = root
+            .join("data")
+            .join(namespace)
+            .join("dimension")
+            .join(format!("{path}.json"));
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(format!("{}: {e}", path.display())),
+        };
+        let doc: serde_json::Value =
+            serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        let generator = &doc["generator"];
+        if generator["type"].as_str() != Some("minecraft:flat") {
+            return Err(format!(
+                "{}: expected minecraft:flat generator",
+                path.display()
+            ));
+        }
+        let settings = &generator["settings"];
+        if settings["features"].as_bool().unwrap_or(false)
+            || settings["lakes"].as_bool().unwrap_or(false)
+        {
+            return Err("flat dimension features and lakes are not yet supported".into());
+        }
+        let biome_name = settings["biome"]
+            .as_str()
+            .ok_or("flat dimension has no biome")?;
+        let biome = *biomes
+            .get(biome_name)
+            .ok_or_else(|| format!("unknown biome {biome_name}"))?;
+        let layers_json = settings["layers"]
+            .as_array()
+            .ok_or("flat dimension has no layers")?;
+        if !(crate::chunk::MIN_Y..crate::chunk::MIN_Y + crate::chunk::HEIGHT).contains(&min_y)
+            || height <= 0
+        {
+            return Err("dimension starts outside supported height".into());
+        }
+        let mut layers = vec![0; (min_y - crate::chunk::MIN_Y) as usize];
+        let mut count = 0_i32;
+        for layer in layers_json {
+            let name = layer["block"].as_str().ok_or("flat layer has no block")?;
+            let state = registry
+                .default_state(name)
+                .ok_or_else(|| format!("unknown flat layer block {name}"))?
+                .0;
+            let thickness = layer["height"]
+                .as_u64()
+                .and_then(|n| i32::try_from(n).ok())
+                .ok_or("invalid flat layer height")?;
+            count = count
+                .checked_add(thickness)
+                .ok_or("flat layers exceed dimension height")?;
+            if count > height
+                || min_y
+                    .checked_add(count)
+                    .is_none_or(|top| top > crate::chunk::MIN_Y + crate::chunk::HEIGHT)
+            {
+                return Err("flat layers exceed dimension height".into());
+            }
+            layers.extend(std::iter::repeat_n(state, thickness as usize));
+        }
+        let mut water = None;
+        let mut surface = None;
+        for (i, &id) in layers.iter().enumerate().rev() {
+            let state = horizon_world::registry::BlockStateId(id);
+            let Some(block) = registry.state(state) else {
+                continue;
+            };
+            if matches!(
+                block.name.as_str(),
+                "minecraft:air" | "minecraft:cave_air" | "minecraft:void_air"
+            ) {
+                continue;
+            }
+            let height = crate::chunk::MIN_Y + i as i32 + 1;
+            if matches!(block.name.as_str(), "minecraft:water" | "minecraft:lava") {
+                water.get_or_insert((height, state));
+            } else {
+                surface = Some(crate::lod::Surface {
+                    height,
+                    state,
+                    water,
+                    biome,
+                });
+                break;
+            }
+        }
+        Ok(Some(Self {
+            layers,
+            biome,
+            surface,
+            platform: None,
+        }))
+    }
     /// The overworld generator of `world_gen_settings` (`data.dimensions`), if it
     /// is flat. Its `features` and `lakes` decorate the world; a world without
     /// them (the default) gets only its layers, as FlatLevelSource places them.
@@ -303,6 +446,79 @@ mod tests {
             |b| ["minecraft:stone", "minecraft:bedrock"].contains(&b),
             |b| ["minecraft:plains", "minecraft:desert"].contains(&b),
         )
+    }
+
+    #[test]
+    fn mod_dimension_uses_data_layers_and_biome() {
+        use horizon_world::{DATA_VERSION, chunk::BlockState, nbt::JavaString};
+        let names = ["minecraft:air", "minecraft:bedrock", "example:soil"];
+        let states = names
+            .iter()
+            .map(|name| {
+                BlockState {
+                    name: (*name).into(),
+                    properties: Default::default(),
+                }
+                .to_nbt()
+            })
+            .collect();
+        let defaults = Tag::compound(
+            names
+                .iter()
+                .enumerate()
+                .map(|(id, name)| (JavaString::from(*name), Tag::Int(id as i32))),
+        );
+        let registry = BlockRegistry::from_nbt(&Tag::compound([
+            ("DataVersion", Tag::Int(DATA_VERSION)),
+            ("states", Tag::List(states)),
+            ("defaults", defaults),
+        ]))
+        .unwrap();
+        let root = std::env::temp_dir().join(format!("horizon-flatgen-{}", std::process::id()));
+        let path = root.join("data/example/dimension");
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(path.join("moon.json"), r#"{"type":"example:moon","generator":{"type":"minecraft:flat","settings":{"biome":"example:moon","layers":[{"block":"minecraft:bedrock","height":1},{"block":"example:soil","height":3}]}}}"#).unwrap();
+        let biomes = [("example:moon".to_owned(), 7)].into_iter().collect();
+        let terrain = FlatTerrain::from_dimension_file_with_biomes(
+            &root,
+            "example:moon",
+            -32,
+            64,
+            &registry,
+            &biomes,
+        )
+        .unwrap()
+        .unwrap();
+        let chunk = terrain.finish(terrain.proto(&mut (), 0, 0));
+        assert_eq!(chunk.get(0, -33, 0), 0);
+        assert_eq!(chunk.get(0, -32, 0), 1);
+        assert_eq!(chunk.get(0, -29, 0), 2);
+        assert_eq!(chunk.get(0, -28, 0), 0);
+        assert_eq!(chunk.biome(0, -32, 0), 7);
+        assert_eq!(terrain.spawn_height(), -28);
+        assert!(
+            FlatTerrain::from_dimension_file_with_biomes(
+                &root,
+                "example:moon",
+                -32,
+                2,
+                &registry,
+                &biomes
+            )
+            .is_err()
+        );
+        assert!(
+            FlatTerrain::from_dimension_file_with_biomes(
+                &root,
+                "example:../moon",
+                -32,
+                64,
+                &registry,
+                &biomes
+            )
+            .is_err()
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

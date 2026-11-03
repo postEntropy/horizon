@@ -75,6 +75,79 @@ impl Ingredient {
         self.0.contains(&*stack.item)
     }
 }
+/// Expands the loader ingredient forms used by cooking-pot data. Unknown
+/// predicates fail closed instead of silently treating their base as a match.
+fn pot_ingredient(
+    value: &Value,
+    resolve: &impl Fn(&str) -> Vec<String>,
+    depth: usize,
+) -> Option<Ingredient> {
+    if depth > 32 {
+        return None;
+    }
+    let combine = |children: &[Value]| -> Option<Ingredient> {
+        let mut all = Vec::new();
+        for child in children {
+            for id in pot_ingredient(child, resolve, depth + 1)?.1 {
+                if !all.contains(&id) {
+                    all.push(id);
+                }
+            }
+        }
+        Some(Ingredient::of(all))
+    };
+    match value {
+        Value::String(id) => Some(Ingredient::of(resolve(id))),
+        Value::Array(children) => combine(children),
+        Value::Object(object) => {
+            let kind = object
+                .get("type")
+                .or_else(|| object.get("neoforge:ingredient_type"));
+            let kind = match kind {
+                Some(value) => Some(value.as_str()?),
+                None => None,
+            };
+            let allowed: &[&str] = match kind {
+                Some("neoforge:compound") => &["type", "neoforge:ingredient_type", "children"],
+                Some("neoforge:difference") => {
+                    &["type", "neoforge:ingredient_type", "base", "subtracted"]
+                }
+                None => &["item", "tag"],
+                _ => return None,
+            };
+            if object.keys().any(|key| !allowed.contains(&key.as_str()))
+                || (object.contains_key("type") && object.contains_key("neoforge:ingredient_type"))
+                || (object.contains_key("item") && object.contains_key("tag"))
+            {
+                return None;
+            }
+            match kind {
+                Some("neoforge:compound") => combine(object.get("children")?.as_array()?),
+                Some("neoforge:difference") => {
+                    let base = pot_ingredient(object.get("base")?, resolve, depth + 1)?;
+                    let excluded = pot_ingredient(object.get("subtracted")?, resolve, depth + 1)?;
+                    Some(Ingredient::of(
+                        base.1
+                            .into_iter()
+                            .filter(|id| !excluded.0.contains(id))
+                            .collect(),
+                    ))
+                }
+                Some(_) => None,
+                None => {
+                    if let Some(id) = object.get("item").and_then(Value::as_str) {
+                        Some(Ingredient::of(resolve(id)))
+                    } else {
+                        let tag = object.get("tag")?.as_str()?;
+                        Some(Ingredient::of(resolve(&format!("#{tag}"))))
+                    }
+                }
+            }
+        }
+        _ => None,
+    }
+}
+
 /// `PlacementInfo`: the ingredients to find and, per recipe slot, the index
 /// of its ingredient (`slotsToIngredientIndex`, -1 for an empty slot). Empty
 /// when the recipe is impossible to place.
@@ -1151,6 +1224,11 @@ pub enum MachineInput {
 #[derive(Clone, Debug)]
 pub enum MachineOutput {
     Item(ItemStack),
+    /// A chanced item output (e.g. Create crushing results).
+    ItemWithChance {
+        stack: ItemStack,
+        chance: f32,
+    },
     Resource {
         kind: MachineResourceKind,
         tank: u32,
@@ -1386,7 +1464,224 @@ impl Recipes {
             let result = || Template::parse(&v["result"]);
             let special = |recipe: Option<Special>| recipe.map(Recipe::Special);
             let rtype = v["type"].as_str().unwrap_or("");
-            if rtype.starts_with("mekanism:") {
+            if rtype == "farmersdelight:cooking" {
+                let resolve = |selector: &str| -> Vec<String> {
+                    match selector.strip_prefix('#') {
+                        Some(tag) => items.item_tag_order.get(tag).cloned().unwrap_or_default(),
+                        None if items.items.contains_key(selector) => vec![selector.to_owned()],
+                        None => Vec::new(),
+                    }
+                };
+                let inputs = v["ingredients"].as_array().and_then(|values| {
+                    if values.is_empty() || values.len() > 6 {
+                        return None;
+                    }
+                    values
+                        .iter()
+                        .map(|value| {
+                            let ingredient = pot_ingredient(value, &resolve, 0)?;
+                            (!ingredient.0.is_empty()).then_some(MachineInput::Item {
+                                ingredient,
+                                count: 1,
+                            })
+                        })
+                        .collect::<Option<Vec<_>>>()
+                });
+                if let (Some(inputs), Some(output)) = (inputs, result())
+                    && let Some(id) = &output.item
+                    && items.items.contains_key(id.as_ref())
+                    && output.count > 0
+                    && output.count <= 64
+                {
+                    machine.push(MachineRecipe {
+                        id: name.clone(),
+                        kind: rtype.to_owned(),
+                        inputs,
+                        outputs: vec![MachineOutput::Item(output.create())],
+                        ticks: v["cookingtime"]
+                            .as_u64()
+                            .unwrap_or(200)
+                            .clamp(1, u32::MAX as u64) as u32,
+                        energy: 0,
+                    });
+                } else {
+                    log::warn!(
+                        "Horizon: cooking-pot recipe {name} has unsupported or unresolved ingredients/result"
+                    );
+                }
+            } else if rtype == "minecraft:smithing_transform" {
+                let output = v["result"]["id"].as_str();
+                let inputs = ["template", "base", "addition"]
+                    .map(&ing)
+                    .into_iter()
+                    .collect::<Option<Vec<_>>>();
+                if let (Some(output), Some(inputs)) = (output, inputs)
+                    && items.items.contains_key(output)
+                {
+                    machine.push(MachineRecipe {
+                        id: format!("minecraft:{stem}"),
+                        kind: rtype.to_owned(),
+                        inputs: inputs
+                            .into_iter()
+                            .map(|ingredient| MachineInput::Item {
+                                ingredient,
+                                count: 1,
+                            })
+                            .collect(),
+                        outputs: vec![MachineOutput::Item(ItemStack::new(
+                            output,
+                            v["result"]["count"].as_u64().unwrap_or(1) as u32,
+                        ))],
+                        ticks: 0,
+                        energy: 0,
+                    });
+                }
+            } else if rtype == "ae2:inscriber" {
+                let mode = v["mode"].as_str().unwrap_or("");
+                let ingredients = &v["ingredients"];
+                let ingredient_keys: &[&str] = match mode {
+                    "inscribe" => &["top", "middle"],
+                    "press" => &["top", "middle", "bottom"],
+                    _ => &[],
+                };
+                let inputs: Option<Vec<_>> = ingredient_keys
+                    .iter()
+                    .filter_map(|key| ingredients.get(*key))
+                    .map(|ingredient| Ingredient::parse(ingredient, items))
+                    .collect();
+                let expected_count = ingredient_keys
+                    .iter()
+                    .filter(|key| ingredients.get(**key).is_some())
+                    .count();
+                let output = v["result"]["item"]
+                    .as_str()
+                    .or_else(|| v["result"]["id"].as_str());
+                if !mode.is_empty()
+                    && ingredients.get("middle").is_some()
+                    && expected_count > 0
+                    && inputs
+                        .as_ref()
+                        .is_some_and(|inputs| inputs.len() == expected_count)
+                    && output.is_some_and(|item| items.items.contains_key(item))
+                    && let (Some(inputs), Some(output)) = (inputs, output)
+                {
+                    machine.push(MachineRecipe {
+                        id: name.clone(),
+                        kind: format!("ae2:inscriber:{mode}"),
+                        inputs: inputs
+                            .into_iter()
+                            .map(|ingredient| MachineInput::Item {
+                                ingredient,
+                                count: 1,
+                            })
+                            .collect(),
+                        outputs: vec![MachineOutput::Item(ItemStack::new(
+                            output,
+                            v["result"]["count"].as_u64().unwrap_or(1) as u32,
+                        ))],
+                        ticks: 0,
+                        energy: 0,
+                    });
+                }
+            } else if rtype == "avaritia:compressor" {
+                let cost = v["cost"].as_u64().unwrap_or(0) as u32;
+                let ingredients = v["ingredients"].as_array();
+                let result = v["result"]["item"].as_str();
+                if cost > 0
+                    && ingredients.is_some_and(|ingredients| ingredients.len() == 1)
+                    && result.is_some_and(|item| items.items.contains_key(item))
+                    && let (Some(ingredient), Some(result)) = (
+                        ingredients
+                            .and_then(|ingredients| ingredients.first())
+                            .and_then(|ingredient| Ingredient::parse(ingredient, items)),
+                        result,
+                    )
+                {
+                    machine.push(MachineRecipe {
+                        id: name.clone(),
+                        kind: rtype.to_owned(),
+                        inputs: vec![MachineInput::Item {
+                            ingredient,
+                            count: cost,
+                        }],
+                        outputs: vec![MachineOutput::Item(ItemStack::new(
+                            result,
+                            v["result"]["count"].as_u64().unwrap_or(1) as u32,
+                        ))],
+                        ticks: 0,
+                        energy: 0,
+                    });
+                }
+            } else if rtype == "create:crushing" || rtype == "thermal:crystallizer" {
+                let mut inputs = Vec::new();
+                let mut resource_tanks = HashMap::<MachineResourceKind, u32>::new();
+                for input in v["ingredients"].as_array().into_iter().flatten() {
+                    if let Some(ingredient) = Ingredient::parse(input, items) {
+                        let count = input["count"].as_u64().unwrap_or(1) as u32;
+                        inputs.push(MachineInput::Item {
+                            ingredient,
+                            count: count.max(1),
+                        });
+                        continue;
+                    }
+                    let fluid = input["fluid"]
+                        .as_str()
+                        .map(str::to_owned)
+                        .or_else(|| input["fluid_tag"].as_str().map(|tag| format!("#{tag}")));
+                    if let Some(fluid) = fluid {
+                        let tank = resource_tanks
+                            .entry(MachineResourceKind::Fluid)
+                            .or_default();
+                        let accepted = if let Some(tag) = fluid.strip_prefix('#') {
+                            fluid_tags.get(tag).cloned().unwrap_or_default()
+                        } else {
+                            vec![fluid]
+                        };
+                        inputs.push(MachineInput::Resource {
+                            kind: MachineResourceKind::Fluid,
+                            tank: *tank,
+                            accepted,
+                            amount: input["amount"].as_u64().unwrap_or(1).max(1) as u32,
+                        });
+                        *tank += 1;
+                    }
+                }
+                let outputs_json = v["results"].as_array().or_else(|| v["result"].as_array());
+                let mut outputs = Vec::new();
+                for output in outputs_json.into_iter().flatten() {
+                    let Some(item) = output["item"].as_str() else {
+                        continue;
+                    };
+                    if !items.items.contains_key(item) {
+                        continue;
+                    }
+                    let stack =
+                        ItemStack::new(item, output["count"].as_u64().unwrap_or(1).max(1) as u32);
+                    let chance = output["chance"].as_f64().unwrap_or(1.0) as f32;
+                    if chance < 1.0 {
+                        outputs.push(MachineOutput::ItemWithChance { stack, chance });
+                    } else {
+                        outputs.push(MachineOutput::Item(stack));
+                    }
+                }
+                if !inputs.is_empty() && !outputs.is_empty() {
+                    machine.push(MachineRecipe {
+                        id: name.clone(),
+                        kind: rtype.to_owned(),
+                        inputs,
+                        outputs,
+                        ticks: if rtype == "create:crushing" {
+                            v["processingTime"]
+                                .as_u64()
+                                .or_else(|| v["processing_time"].as_u64())
+                                .unwrap_or(100) as u32
+                        } else {
+                            0
+                        },
+                        energy: v["energy"].as_u64().unwrap_or(0),
+                    });
+                }
+            } else if rtype.starts_with("mekanism:") {
                 type InputSpec = (&'static str, Option<MachineResourceKind>);
                 let variants: Vec<Vec<InputSpec>> = match rtype {
                     "mekanism:combining" => vec![vec![("main_input", None), ("extra_input", None)]],
@@ -2062,6 +2357,34 @@ impl Recipes {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pot_ingredients_expand_unions_and_exclusions_without_ignoring_predicates() {
+        use serde_json::json;
+        let resolve = |id: &str| match id {
+            "#vegetables" => vec!["carrot".into(), "melon".into()],
+            "#empty" => Vec::new(),
+            id => vec![id.to_owned()],
+        };
+        let difference = json!({"type":"neoforge:difference", "base":{"tag":"vegetables"},"subtracted":{"item":"melon"}});
+        assert_eq!(
+            super::pot_ingredient(&difference, &resolve, 0).unwrap().1,
+            ["carrot"]
+        );
+        let union = json!({"type":"neoforge:compound","children":[difference,{"item":"fish"},{"tag":"empty"}]});
+        assert_eq!(
+            super::pot_ingredient(&union, &resolve, 0).unwrap().1,
+            ["carrot", "fish"]
+        );
+        assert!(
+            super::pot_ingredient(
+                &json!({"type":"unknown:predicate","base":{"item":"carrot"}}),
+                &resolve,
+                0
+            )
+            .is_none()
+        );
+        assert!(super::pot_ingredient(&union, &resolve, 33).is_none());
+    }
     use super::*;
     use crate::banner::BannerLayer;
 

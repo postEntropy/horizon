@@ -169,6 +169,12 @@ impl Boat {
 /// The wood of a boat or chest boat item or entity type, and whether it
 /// carries a chest.
 pub(super) fn any_boat_wood(item: &str) -> Option<(&str, bool)> {
+    if matches!(
+        item,
+        "bambooeverything:bamboo_raft" | "bambooeverything:dry_bamboo_raft"
+    ) {
+        return Some(("bamboo", false));
+    }
     let name = item.strip_prefix("minecraft:")?;
     if let Some(wood) = name
         .strip_suffix("_chest_boat")

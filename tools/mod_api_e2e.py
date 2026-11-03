@@ -536,6 +536,10 @@ def verify_mod_models(ctl_bin, socket, cwd, env, entity_handle):
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
     state = ctl(ctl_bin, socket, cwd, env, 'state')
     mod_models = state.get('mod_models') or {}
+    assert any(model.get('id') == 'test_machine:automaton'
+               and model.get('texture') == 'test_machine/entity/automaton'
+               and model.get('texture_loaded') and 'head' in model.get('parts', [])
+               for model in mod_models.get('entity_models', [])), mod_models
     anims = mod_models.get('animations') or {}
     bones = mod_models.get('bone_poses') or {}
     draws = mod_models.get('draw_lists') or {}
@@ -621,6 +625,7 @@ def verify_custom_dimension(ctl_bin, socket, cwd, env):
     assert abs(player_pos[0] - (-15.25)) < 1.5 and abs(player_pos[2] - (-5.25)) < 1.5, twilight_state
     wait_for_block(ctl_bin, socket, cwd, env, (-16, 63, -6), 'minecraft:moss_block', attempts=30)
     wait_for_block(ctl_bin, socket, cwd, env, (-16, -64, -6), 'minecraft:bedrock', attempts=10)
+    wait_for_block(ctl_bin, socket, cwd, env, (-16, -63, -6), 'minecraft:gold_block', attempts=10)
 
     # Return to Overworld by activating the portal inside the custom dimension.
     command(ctl_bin, socket, cwd, env, 'setblock -16 64 -7 minecraft:mossy_cobblestone')
@@ -635,6 +640,9 @@ def verify_custom_dimension(ctl_bin, socket, cwd, env):
     assert 'tp_twilight=ok' in tp_out, tp_out
     wait_for_dimension(ctl_bin, socket, cwd, env, 'test_machine:twilight')
     wait_for_block(ctl_bin, socket, cwd, env, (8, 63, 8), 'minecraft:moss_block', attempts=30)
+    ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+    biome = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_world 8 64 8')
+    assert 'biome=test_machine:crystal_grove' in biome, biome
 
     back_out = command(ctl_bin, socket, cwd, env, 'machine_api tp_overworld')
     assert 'tp_overworld=ok' in back_out, back_out
@@ -642,6 +650,26 @@ def verify_custom_dimension(ctl_bin, socket, cwd, env):
     command(ctl_bin, socket, cwd, env, 'setblock -31 70 -12 minecraft:air')
     command(ctl_bin, socket, cwd, env, 'clear @s')
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
+
+def verify_noise_dimension(ctl_bin, socket, cwd, env):
+    response = command(ctl_bin, socket, cwd, env, 'machine_api tp_noisy')
+    assert 'tp_noisy=ok' in response, response
+    wait_for_dimension(ctl_bin, socket, cwd, env, 'test_machine:noisy')
+    wait_for_block(ctl_bin, socket, cwd, env, (0, -64, 0), 'minecraft:bedrock', attempts=30)
+    ctl(ctl_bin, socket, cwd, env, 'wait', 10)
+    position = ctl(ctl_bin, socket, cwd, env, 'state')['player']['block_pos']
+    biome = command(ctl_bin, socket, cwd, env, f'machine_api api_0_3_world {position[0]} {position[1]} {position[2]}')
+    assert 'biome=test_machine:crystal_grove' in biome, biome
+    command(ctl_bin, socket, cwd, env, 'machine_api tp_overworld')
+    wait_for_dimension(ctl_bin, socket, cwd, env, 'minecraft:overworld')
+
+def verify_data_dimension(ctl_bin, socket, cwd, env):
+    command(ctl_bin, socket, cwd, env, 'execute in test_machine:data_only run tp @s 0.5 8 0.5')
+    wait_for_dimension(ctl_bin, socket, cwd, env, 'test_machine:data_only')
+    wait_for_block(ctl_bin, socket, cwd, env, (0, 0, 0), 'minecraft:bedrock', attempts=30)
+    wait_for_block(ctl_bin, socket, cwd, env, (0, 4, 0), 'minecraft:gold_block', attempts=30)
+    command(ctl_bin, socket, cwd, env, 'execute in minecraft:overworld run tp @s -31.5 70 -11.5')
+    wait_for_dimension(ctl_bin, socket, cwd, env, 'minecraft:overworld')
 
 
 def verify_api_0_3_gaps(ctl_bin, socket, cwd, env):
@@ -694,6 +722,7 @@ def verify_api_0_3_gaps(ctl_bin, socket, cwd, env):
     ctl(ctl_bin, socket, cwd, env, 'wait', 3)
     twilight_world = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_world 8 64 8')
     assert 'at=8,64,8 below=minecraft:moss_block' in twilight_world, twilight_world
+    assert 'biome=test_machine:crystal_grove' in twilight_world, twilight_world
     assert 'far_block=none far_biome=none low=none high=none' in twilight_world, twilight_world
     stale_probe = command(ctl_bin, socket, cwd, env, 'machine_api api_0_3_world probe -31 69 -11')
     assert 'probe=-31,69,-11 block=none biome=none light=none' in stale_probe, stale_probe
@@ -731,7 +760,7 @@ def verify_api_0_3_gaps(ctl_bin, socket, cwd, env):
     ctl(ctl_bin, socket, cwd, env, 'wait', 2)
 
 
-def check_mode(client, ctl_bin, mods, *, in_frame):
+def check_mode(client, ctl_bin, mods, *, in_frame, deep_only=False, dimension_only=False):
     mode = 'in-frame' if in_frame else 'integrated'
     work = Path(tempfile.mkdtemp(prefix=f'horizon-mod-api-{mode}-'))
     game_dir = work / 'game'
@@ -760,6 +789,33 @@ def check_mode(client, ctl_bin, mods, *, in_frame):
     process = log = socket = None
     try:
         process, log, socket = start_game(client, ctl_bin, mods, work, env, in_frame=in_frame)
+        if dimension_only:
+            verify_data_dimension(ctl_bin, socket, game_dir, env)
+            ctl(ctl_bin, socket, game_dir, env, 'save')
+            stop_game(process, log, ctl_bin, socket, game_dir, env)
+            process = log = socket = None
+            process, log, socket = start_game(client, ctl_bin, mods, work, env, in_frame=in_frame)
+            verify_data_dimension(ctl_bin, socket, game_dir, env)
+            print(f'PASS {mode}: data-only dimension and save/reopen')
+            return
+        if deep_only:
+            entity_age = verify_custom_entity(ctl_bin, socket, game_dir, env)
+            verify_custom_dimension(ctl_bin, socket, game_dir, env)
+            verify_noise_dimension(ctl_bin, socket, game_dir, env)
+            verify_data_dimension(ctl_bin, socket, game_dir, env)
+            ctl(ctl_bin, socket, game_dir, env, 'save')
+            stop_game(process, log, ctl_bin, socket, game_dir, env)
+            process = log = socket = None
+            process, log, socket = start_game(client, ctl_bin, mods, work, env, in_frame=in_frame)
+            verify_custom_entity_after_reopen(ctl_bin, socket, game_dir, env, entity_age)
+            command(ctl_bin, socket, game_dir, env, 'machine_api tp_twilight')
+            wait_for_dimension(ctl_bin, socket, game_dir, env, 'test_machine:twilight')
+            wait_for_block(ctl_bin, socket, game_dir, env, (8, 63, 8), 'minecraft:moss_block', attempts=30)
+            ctl(ctl_bin, socket, game_dir, env, 'wait', 3)
+            biome = command(ctl_bin, socket, game_dir, env, 'machine_api api_0_3_world 8 64 8')
+            assert 'biome=test_machine:crystal_grove' in biome, biome
+            print(f'PASS {mode}: custom Geo entity, model poses, dimension data and entity save/reopen')
+            return
         verify_explosion_hook(ctl_bin, socket, game_dir, env)
         command(ctl_bin, socket, game_dir, env, 'experience add @s 50 points')
         xp_levels = command(ctl_bin, socket, game_dir, env, 'experience query @s levels')
@@ -973,6 +1029,8 @@ def main():
     parser.add_argument('--bin-dir', help='prebuilt horizon-client and horizon-ctl')
     parser.add_argument('--mod', help='prebuilt test-machine .hmod')
     parser.add_argument('--peer-mod', help='prebuilt second test mod for cross-mod capability transfer')
+    parser.add_argument('--deep-only', action='store_true', help='run entity/model/dimension scenarios only')
+    parser.add_argument('--dimension-only', action='store_true', help='run data-only dimension scenario only')
     args = parser.parse_args()
     if not RESOURCES.joinpath('horizon-resources.json').exists():
         sys.exit(f'no prepared resources in {RESOURCES}')
@@ -997,7 +1055,7 @@ def main():
 
     modes = [False, True] if args.mode == 'both' else [args.mode == 'in-frame']
     for in_frame in modes:
-        check_mode(client, ctl_bin, [mod, peer_mod], in_frame=in_frame)
+        check_mode(client, ctl_bin, [mod, peer_mod], in_frame=in_frame, deep_only=args.deep_only, dimension_only=args.dimension_only)
 
 
 if __name__ == '__main__':

@@ -570,6 +570,51 @@ impl Game<'_> {
             None => list.push(e),
         }
     }
+    fn remote_mod_effect(&mut self, bytes: &[u8]) {
+        use horizon_client::effects::ModEffectPacket;
+        let Some(packet) = horizon_client::effects::decode_mod_effect_packet(bytes) else {
+            return;
+        };
+        let Some(remote) = self.remote.as_ref() else {
+            return;
+        };
+        let target = match &packet {
+            ModEffectPacket::Update { entity_id, .. }
+            | ModEffectPacket::Remove { entity_id, .. } => *entity_id,
+        };
+        if target != remote.entity_id {
+            return;
+        }
+        match packet {
+            ModEffectPacket::Remove { id, .. } => {
+                self.potions.effects.list.retain(|effect| effect.id != id);
+            }
+            ModEffectPacket::Update {
+                id,
+                duration,
+                amplifier,
+                flags,
+                ..
+            } => {
+                let mut effect = horizon_client::effects::EffectInstance::new_namespaced(
+                    &id, duration, amplifier,
+                );
+                effect.ambient = flags & 1 != 0;
+                effect.visible = flags & 2 != 0;
+                effect.show_icon = flags & 4 != 0;
+                match self
+                    .potions
+                    .effects
+                    .list
+                    .iter_mut()
+                    .find(|effect| effect.id == id)
+                {
+                    Some(current) => *current = effect,
+                    None => self.potions.effects.list.push(effect),
+                }
+            }
+        }
+    }
     fn item_id(&self, name: &str) -> i32 {
         let r = self.remote.as_ref().expect("remote");
         r.builtin
@@ -2203,6 +2248,9 @@ impl Game<'_> {
                 self.apply_remote_health();
             }
             C::UpdateMobEffect(p) => self.remote_effect(&p),
+            C::CustomPayload(p) if p.channel == "horizon:status_effect" => {
+                self.remote_mod_effect(&p.data)
+            }
             C::RemoveMobEffect(p) => {
                 if self.remote.as_ref().is_some_and(|r| r.entity_id == p.id)
                     && let Some(id) = self.remote_effect_id(p.effect)
@@ -4703,7 +4751,7 @@ impl Game<'_> {
         if let Some(key) = self.container.take() {
             // Server containers stay renderable but lose their copied slots.
             if let Some(entity) = self.world.block_entities.get_mut(&key) {
-                for s in entity.slots_mut() {
+                for s in entity.slots_mut().iter_mut() {
                     *s = None;
                 }
             }

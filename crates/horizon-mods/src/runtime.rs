@@ -42,11 +42,12 @@ mod logic_bindings {
 pub use bindings::horizon::mods::{
     game::{Clock, Player},
     hud::{Corner, Line},
+    status_effects::ActiveEffect,
 };
 use bindings::{
     HorizonMod,
     exports::horizon::mods::events::Registration,
-    horizon::mods::{chat, game, hud, log as mod_log, storage},
+    horizon::mods::{chat, game, hud, log as mod_log, status_effects, storage},
 };
 use logic_bindings::LogicHost;
 pub use logic_bindings::exports::horizon::mods::logic::{
@@ -56,9 +57,9 @@ pub use logic_bindings::exports::horizon::mods::logic::{
 use machine_bindings::{
     MachineHost,
     horizon::mods::{
-        capabilities, config, dimensions, entities, inventory, item_data, item_transfer, keys,
-        machine, models, net, recipes, render, server, target, ui, vanilla_hooks,
-        world_read as world,
+        capabilities, config, dimensions, entities, interaction_context, inventory, item_data,
+        item_transfer, keys, machine, models, net, recipes, render, server, target, ui,
+        vanilla_hooks, world_read as world,
     },
 };
 use wasmtime::component::{Func, Val};
@@ -96,7 +97,8 @@ pub use machine_bindings::{
         entities::EntityState,
         inventory::StackView,
         keys::KeyBinding,
-        machine::{CookingKind, CookingRecipe, ItemStack as Stack},
+        machine::{CookingKind, CookingRecipe, ItemMoveKind, ItemStack as Stack},
+        machine_slot_limits,
         models::{BonePose, DrawPart, DrawPartKind},
         recipes::{IngredientSlot, RecipeEntry},
         render::{BoxShape, GhostBlock},
@@ -164,8 +166,24 @@ pub trait ItemFacts: Send + Sync {
     /// What is left once the item is used up (a bucket from a lava bucket).
     fn remainder(&self, id: &str) -> Option<String>;
     fn cooking_recipe(&self, kind: CookingKind, input: &str) -> Option<CookingRecipe>;
+    /// The active smithing transform or trim result. `base_components` is the
+    /// encoded component data on the base input; returned bytes encode the
+    /// result's components using the same opaque format.
+    fn smithing_result(
+        &self,
+        _template: &str,
+        _base: &str,
+        _addition: &str,
+        _base_components: &[u8],
+    ) -> Option<(Stack, Vec<u8>)> {
+        None
+    }
     /// Whether the active item registry includes `id` in `tag`.
     fn item_in_tag(&self, _id: &str, _tag: &str) -> bool {
+        false
+    }
+    /// Active block-tag membership, including data-pack additions.
+    fn block_in_tag(&self, _id: &str, _tag: &str) -> bool {
         false
     }
 }
@@ -226,6 +244,7 @@ fn seed_block_entity_capabilities(
         .fluids
         .retain(|key, _| !positions.contains(&key.0) || tanks.contains(key));
 
+    let mut touched_item_positions = HashSet::new();
     for view in views {
         if !known_handles.contains(&view.handle) {
             continue;
@@ -239,8 +258,14 @@ fn seed_block_entity_capabilities(
         for (tank, fluid) in &view.fluids {
             shared.fluids.insert((pos.clone(), *tank), fluid.clone());
         }
-        if shared.dirty_item_slots.remove(&pos) {
-            let slot_map = shared.item_slots.get(&pos);
+        let item_pos = shared
+            .item_aliases
+            .get(&pos)
+            .cloned()
+            .unwrap_or_else(|| pos.clone());
+        touched_item_positions.insert(item_pos.clone());
+        if shared.dirty_item_slots.contains(&item_pos) {
+            let slot_map = shared.item_slots.get(&item_pos);
             for (idx, cell) in view.slots.iter_mut().enumerate() {
                 let next = slot_map
                     .and_then(|m| m.get(&(idx as u32)))
@@ -270,12 +295,15 @@ fn seed_block_entity_capabilities(
                 })
                 .collect();
             if slots.is_empty() {
-                shared.item_slots.remove(&pos);
+                shared.item_slots.remove(&item_pos);
             } else {
-                shared.item_slots.insert(pos, slots);
+                shared.item_slots.insert(item_pos, slots);
             }
         }
     }
+    shared
+        .dirty_item_slots
+        .retain(|pos| !touched_item_positions.contains(pos));
 }
 
 fn sync_block_entity_capabilities(
@@ -309,7 +337,8 @@ fn sync_block_entity_capabilities(
                 }
             }
         }
-        let slot_map = shared.item_slots.get(&pos);
+        let item_pos = shared.item_aliases.get(&pos).unwrap_or(&pos);
+        let slot_map = shared.item_slots.get(item_pos);
         for (idx, cell) in view.slots.iter_mut().enumerate() {
             let next = slot_map
                 .and_then(|m| m.get(&(idx as u32)))
@@ -349,9 +378,22 @@ pub struct WorldCell {
     pub light: u8,
 }
 
-/// A server-side mutation requested by a mod via capability `server`.
+/// A server mutation requested through `server`, or an inventory transaction
+/// requested by a loaned machine through `machine`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ServerAction {
+    MoveItem {
+        dimension: String,
+        x: i32,
+        y: i32,
+        z: i32,
+        handle: u32,
+        request: u64,
+        slot: u32,
+        face: String,
+        kind: ItemMoveKind,
+        count: u32,
+    },
     SetBlock {
         dimension: String,
         x: i32,
@@ -420,6 +462,8 @@ pub enum Output {
     ScreenOpened { mod_id: String, spec: ScreenSpec },
     /// The mod closed its declarative screen (API 0.4).
     ScreenClosed { mod_id: String },
+    /// Authoritative player hunger/saturation update from a registered effect.
+    SetPlayerFood { food: u32, saturation: f32 },
     /// A packet sent from client to server via `net.send-to-server` (API 0.4).
     PacketToServer {
         mod_id: String,
@@ -500,10 +544,15 @@ struct SharedWorld {
     energy_budget_tick: Option<u64>,
     fluids: HashMap<(String, u32), FluidView>,
     item_slots: HashMap<String, BTreeMap<u32, (String, u32)>>,
+    item_aliases: HashMap<String, String>,
+    /// Item energy declarations, keyed by item id with the declaring mod id.
+    item_energy_specs: HashMap<String, (String, EnergyView)>,
+    item_slot_limits: HashMap<String, BTreeMap<u32, u32>>,
     dirty_item_slots: HashSet<String>,
     attachments: HashMap<(String, String), Vec<u8>>,
     accessories: HashMap<(String, String, u32), (String, u32)>,
     recipes: Vec<RecipeEntry>,
+    recipe_revision: u64,
     registered_recipe_sizes: HashMap<String, HashMap<String, usize>>,
     entities: HashMap<u32, EntityState>,
     next_entity_handle: u32,
@@ -518,6 +567,7 @@ struct SharedWorld {
     bone_poses: HashMap<String, Vec<BonePose>>,
     draw_lists: HashMap<String, Vec<DrawPart>>,
     dimensions: Vec<DimensionSpec>,
+    data_dimensions: Vec<String>,
     portals: Vec<PortalSpec>,
     damage_multiplier: f32,
     xp_multiplier: f32,
@@ -570,6 +620,10 @@ struct State {
     snapshot: Arc<Snapshot>,
     shared: Arc<Mutex<SharedWorld>>,
     out: Vec<Output>,
+    registered_effects: HashSet<String>,
+    effect_context: Vec<ActiveEffect>,
+    effect_player_id: String,
+    status_effects_allowed: bool,
     panel: Option<Panel>,
     /// Capability `storage`'s folder; made on first `set`.
     data_dir: PathBuf,
@@ -583,10 +637,19 @@ struct State {
     /// lent to the current `tick` call (none outside it).
     facts: Option<Arc<dyn ItemFacts>>,
     views: Vec<BlockEntityView>,
+    /// Handle positions valid only while views are lent to the current callback.
+    view_indices: HashMap<u32, usize>,
+    inventory_view_indices: HashMap<String, usize>,
     /// Position retained between callbacks so create/save hooks can address capabilities.
     positions: HashMap<u32, (String, i32, i32, i32)>,
     block_entity_slots: HashMap<u32, u32>,
+    shared_inventory_channels: HashMap<u32, String>,
+    shared_inventory_sizes: HashMap<String, u32>,
+    slot_limits: HashMap<(u32, u32), u32>,
     slot_access: BTreeMap<(u32, u32, String), (bool, bool)>,
+    player_slot_access: HashMap<(u32, u32), (bool, bool)>,
+    next_item_move: u64,
+    item_moves: HashMap<u64, (u32, Option<u32>)>,
     /// Capability `config`: typed schema, values, and persistence path.
     config_file: PathBuf,
     config_schemas: BTreeMap<String, ConfigSchema>,
@@ -601,6 +664,8 @@ struct State {
     screen_slots: BTreeMap<u32, (String, u32)>,
     /// Hit face exposed only while dispatching a block callback.
     active_block_face: Option<String>,
+    /// Sneaking input exposed only while dispatching a block callback.
+    active_sneaking: bool,
     /// Capability `render`: declarative 3D boxes and ghost blocks.
     shapes: Vec<BoxShape>,
     ghost_blocks: Vec<GhostBlock>,
@@ -637,6 +702,26 @@ pub struct Mods {
 }
 
 impl Mods {
+    /// Supplies the authoritative player effect list for the mod tick.
+    pub fn set_status_effect_context(&mut self, player_id: String, effects: Vec<ActiveEffect>) {
+        for entry in &mut self.entries {
+            if let Some(run) = entry.run.as_mut() {
+                run.store.data_mut().effect_player_id = player_id.clone();
+                run.store.data_mut().effect_context = effects.clone();
+            }
+        }
+    }
+
+    /// Whether a loaded mod registered this namespaced effect id.
+    pub fn has_status_effect(&self, id: &str) -> bool {
+        self.entries.iter().any(|entry| {
+            entry
+                .run
+                .as_ref()
+                .is_some_and(|run| run.store.data().registered_effects.contains(id))
+        })
+    }
+
     /// A stable snapshot of capability attachments, for the game save layer.
     pub fn attachment_snapshot(&self) -> Vec<(String, String, Vec<u8>)> {
         self.shared
@@ -757,7 +842,24 @@ impl Mods {
         enabled: impl Fn(&str) -> bool,
         reserved: impl Fn(&str) -> bool,
     ) -> Mods {
+        Self::load_with_dimensions(paths, enabled, reserved, Vec::new())
+    }
+
+    /// Starts mods with the dimensions registered by the loaded data packs.
+    /// The list is available to their initialization callbacks.
+    pub fn load_with_dimensions(
+        paths: &[PathBuf],
+        enabled: impl Fn(&str) -> bool,
+        reserved: impl Fn(&str) -> bool,
+        mut data_dimensions: Vec<String>,
+    ) -> Mods {
         let mut mods = Mods::default();
+        data_dimensions.sort();
+        data_dimensions.dedup();
+        mods.shared
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .data_dimensions = data_dimensions;
         for path in paths {
             let modified = modified(path);
             let mut entry = Entry {
@@ -888,6 +990,10 @@ impl Mods {
             snapshot,
             shared,
             out: Vec::new(),
+            registered_effects: HashSet::new(),
+            effect_context: Vec::new(),
+            effect_player_id: String::new(),
+            status_effects_allowed: m.capabilities.contains(&Capability::StatusEffects),
             panel: None,
             data_dir,
             storage_budget: STORAGE_WRITE_BUDGET,
@@ -897,9 +1003,17 @@ impl Mods {
                 .build(),
             facts,
             views: Vec::new(),
+            view_indices: HashMap::new(),
+            inventory_view_indices: HashMap::new(),
             positions: HashMap::new(),
             block_entity_slots: HashMap::new(),
+            shared_inventory_channels: HashMap::new(),
+            shared_inventory_sizes: HashMap::new(),
+            slot_limits: HashMap::new(),
             slot_access: BTreeMap::new(),
+            player_slot_access: HashMap::new(),
+            next_item_move: 0,
+            item_moves: HashMap::new(),
             config_file,
             config_schemas: m.config.clone(),
             configs,
@@ -910,6 +1024,7 @@ impl Mods {
             screen_backgrounds: Vec::new(),
             screen_slots: BTreeMap::new(),
             active_block_face: None,
+            active_sneaking: false,
             shapes: Vec::new(),
             ghost_blocks: Vec::new(),
             vanilla_hooks: Vec::new(),
@@ -1253,6 +1368,7 @@ impl Mods {
         if let Ok(mut sh) = self.shared.lock() {
             sh.recipes.retain(|r| r.id != entry.id);
             sh.recipes.push(entry);
+            sh.recipe_revision = sh.recipe_revision.wrapping_add(1);
         }
     }
 
@@ -1263,6 +1379,7 @@ impl Mods {
             for entry in entries {
                 sh.recipes.retain(|r| r.id != entry.id);
                 sh.recipes.push(entry);
+                sh.recipe_revision = sh.recipe_revision.wrapping_add(1);
             }
         }
     }
@@ -1317,7 +1434,7 @@ impl Mods {
                     reason: reason.clone(),
                 });
                 entry.status = Status::Failed(reason);
-                self.stranded = std::mem::take(&mut run.store.data_mut().views);
+                self.stranded = run.store.data_mut().take_views();
                 entry.run = None;
                 None
             }
@@ -1337,11 +1454,32 @@ impl Mods {
             shared.energy_receive_used.clear();
             shared.energy_extract_used.clear();
         }
-        self.each(
-            FUEL_TICK,
-            |h| h.tick,
-            |m, s| m.events.horizon_mods_events().call_tick(s, tick),
-        );
+        for i in 0..self.entries.len() {
+            let global_tick = self.entries[i]
+                .run
+                .as_ref()
+                .is_some_and(|run| run.hooks.tick && !run.store.data().status_effects_allowed);
+            if global_tick {
+                self.call(i, FUEL_TICK, |m, s| {
+                    m.events.horizon_mods_events().call_tick(s, tick)
+                });
+            }
+        }
+    }
+    /// For status-effect mods, `tick` runs once per player after the player's
+    /// authoritative food tick. Other mods retain their existing global tick.
+    pub fn player_tick(&mut self, tick: u64) {
+        for i in 0..self.entries.len() {
+            let player_tick = self.entries[i]
+                .run
+                .as_ref()
+                .is_some_and(|run| run.hooks.tick && run.store.data().status_effects_allowed);
+            if player_tick {
+                self.call(i, FUEL_TICK, |m, s| {
+                    m.events.horizon_mods_events().call_tick(s, tick)
+                });
+            }
+        }
     }
     /// A rendered frame, `seconds` after the last.
     pub fn frame(&mut self, seconds: f32) {
@@ -1383,6 +1521,16 @@ impl Mods {
 
     /// Dispatches a block callback (API 0.3) to the mod that registered the block.
     pub fn block_event(&mut self, event: BlockEvent, face: String) -> EventOutcome {
+        self.block_event_with_context(event, face, false)
+    }
+
+    /// Dispatches a block callback with transient player interaction context.
+    pub fn block_event_with_context(
+        &mut self,
+        event: BlockEvent,
+        face: String,
+        sneaking: bool,
+    ) -> EventOutcome {
         let block_id = event
             .state
             .split_once('[')
@@ -1396,6 +1544,7 @@ impl Mods {
         };
         if let Some(run) = self.entries[i].run.as_mut() {
             run.store.data_mut().active_block_face = (!face.is_empty()).then_some(face);
+            run.store.data_mut().active_sneaking = sneaking;
         }
         let outcome = self
             .call(i, FUEL_EVENT, |m, s| {
@@ -1408,6 +1557,7 @@ impl Mods {
             .unwrap_or(EventOutcome::Pass);
         if let Some(run) = self.entries[i].run.as_mut() {
             run.store.data_mut().active_block_face = None;
+            run.store.data_mut().active_sneaking = false;
         }
         outcome
     }
@@ -1425,6 +1575,23 @@ impl Mods {
             logic_of(m)?.horizon_mods_logic().call_on_item(s, &event)
         })
         .unwrap_or(EventOutcome::Pass)
+    }
+
+    /// Dispatches a right-click item/entity event only to its registered item
+    /// owner. `None` means no mod owns the item; `Some(Pass)` is an explicit
+    /// item result and must not fall through to generic entity feeding.
+    pub fn item_entity_interaction_event(&mut self, event: ItemEvent) -> Option<EventOutcome> {
+        let i = self.entries.iter().position(|e| {
+            e.run
+                .as_ref()
+                .is_some_and(|r| r.logic.items.iter().any(|it| it == &event.item))
+        })?;
+        Some(
+            self.call(i, FUEL_EVENT, |m, s| {
+                logic_of(m)?.horizon_mods_logic().call_on_item(s, &event)
+            })
+            .unwrap_or(EventOutcome::Pass),
+        )
     }
 
     /// Dispatches a server lifecycle or world event (API 0.3) to every subscribed mod.
@@ -1681,10 +1848,18 @@ impl Mods {
             .filter(|((at, _), _)| at == &pos)
             .map(|((_, tank), view)| (*tank, view.clone()))
             .collect();
-        let item_slots = shared
-            .dirty_item_slots
-            .remove(&pos)
-            .then(|| shared.item_slots.get(&pos).cloned().unwrap_or_default());
+        let item_pos = shared
+            .item_aliases
+            .get(&pos)
+            .cloned()
+            .unwrap_or_else(|| pos.clone());
+        let item_slots = shared.dirty_item_slots.remove(&item_pos).then(|| {
+            shared
+                .item_slots
+                .get(&item_pos)
+                .cloned()
+                .unwrap_or_default()
+        });
         (energy, fluids, item_slots)
     }
 
@@ -1706,6 +1881,17 @@ impl Mods {
         if let Some(position) = position {
             if let Some(run) = self.entries[i].run.as_mut() {
                 run.store.data_mut().positions.insert(handle, position);
+            }
+        }
+        if let Some((dimension, x, y, z)) = self.entries[i]
+            .run
+            .as_ref()
+            .and_then(|run| run.store.data().positions.get(&handle).cloned())
+        {
+            let pos = format!("{dimension}:{x},{y},{z}");
+            if let Ok(mut shared) = self.shared.lock() {
+                shared.item_slot_limits.remove(&pos);
+                shared.item_aliases.remove(&pos);
             }
         }
         if let Some(run) = self.entries[i].run.as_mut() {
@@ -1734,6 +1920,14 @@ impl Mods {
         // the current mod's machines makes cross-mod transfer depend on load
         // order and can expose stale values for a neighbor that ticks later.
         if let Ok(mut shared) = self.shared.lock() {
+            for view in views.iter() {
+                if let Some((owner, channel)) = self.shared_inventory_channel(view.handle) {
+                    shared.item_aliases.insert(
+                        capability_position(view),
+                        format!("shared:{owner}:{channel}"),
+                    );
+                }
+            }
             let known_handles: HashSet<u32> = self.handles.keys().copied().collect();
             seed_block_entity_capabilities(&mut shared, views, &known_handles);
         }
@@ -1753,7 +1947,7 @@ impl Mods {
                 .collect();
             let handles: Vec<u32> = lent.iter().map(|v| v.handle).collect();
             if let Some(run) = self.entries[i].run.as_mut() {
-                run.store.data_mut().views = lent;
+                run.store.data_mut().lend_views(lent);
             }
             self.call(i, FUEL_TICK, |m, s| {
                 machine_of(m)?
@@ -1763,7 +1957,7 @@ impl Mods {
             // A mod that stopped in the call left its views in `stranded`,
             // with what it wrote before it stopped.
             let returned = match self.entries[i].run.as_mut() {
-                Some(run) => std::mem::take(&mut run.store.data_mut().views),
+                Some(run) => run.store.data_mut().take_views(),
                 None => std::mem::take(&mut self.stranded),
             };
             for (&slot, view) in mine.iter().zip(returned) {
@@ -1777,6 +1971,43 @@ impl Mods {
         if let Ok(shared) = self.shared.lock() {
             let known_handles: HashSet<u32> = self.handles.keys().copied().collect();
             sync_block_entity_capabilities(&shared, views, &known_handles);
+        }
+    }
+
+    /// The host inventory channel requested by this handle's owner. The tuple
+    /// scopes opaque channel names to the mod; the game scopes them to its world.
+    pub fn shared_inventory_channel(&self, handle: u32) -> Option<(String, String)> {
+        let owner = *self.handles.get(&handle)?;
+        let state = self.entries.get(owner)?.run.as_ref()?.store.data();
+        Some((
+            state.id.clone(),
+            state.shared_inventory_channels.get(&handle)?.clone(),
+        ))
+    }
+
+    /// Whether this live guest still awaits a queued inventory transaction.
+    pub fn item_move_pending(&self, handle: u32, request: u64) -> bool {
+        self.handles
+            .get(&handle)
+            .and_then(|&owner| self.entries[owner].run.as_ref())
+            .and_then(|run| run.store.data().item_moves.get(&request))
+            .is_some_and(|&(h, result)| h == handle && result.is_none())
+    }
+
+    /// Confirms an already applied, game-owned inventory transaction. A stale
+    /// handle, duplicate completion, failed guest or reload cannot receive it.
+    pub fn complete_item_move(&mut self, handle: u32, request: u64, moved: u32) {
+        let Some(&owner) = self.handles.get(&handle) else {
+            return;
+        };
+        let Some(run) = self.entries[owner].run.as_mut() else {
+            return;
+        };
+        if let Some((h, result)) = run.store.data_mut().item_moves.get_mut(&request)
+            && *h == handle
+            && result.is_none()
+        {
+            *result = Some(moved);
         }
     }
 
@@ -1814,7 +2045,11 @@ impl Mods {
             if let Some(run) = self.entries[i].run.as_mut() {
                 let state = run.store.data_mut();
                 state.block_entity_slots.remove(&handle);
+                state.shared_inventory_channels.remove(&handle);
+                state.slot_limits.retain(|(h, _), _| *h != handle);
+                state.player_slot_access.retain(|(h, _), _| *h != handle);
                 state.slot_access.retain(|(h, _, _), _| *h != handle);
+                state.item_moves.retain(|_, (h, _)| *h != handle);
                 if let Some((dimension, x, y, z)) = state.positions.remove(&handle) {
                     let pos = format!("{dimension}:{x},{y},{z}");
                     let block_target = format!("block:{pos}");
@@ -1824,6 +2059,8 @@ impl Mods {
                         shared.energy.remove(&pos);
                         shared.fluids.retain(|(at, _), _| at != &pos);
                         shared.item_slots.remove(&pos);
+                        shared.item_aliases.remove(&pos);
+                        shared.item_slot_limits.remove(&pos);
                         shared.dirty_item_slots.remove(&pos);
                         shared.animations.remove(&block_target);
                         shared.animations.remove(&short_block_target);
@@ -1854,6 +2091,64 @@ impl Mods {
                     .copied()
             })
             .unwrap_or((true, true))
+    }
+
+    /// Player access is closed when the machine's owner has stopped running.
+    pub fn player_slot_access(&self, handle: u32, slot: u32) -> (bool, bool) {
+        let Some(run) = self
+            .handles
+            .get(&handle)
+            .and_then(|&owner| self.entries[owner].run.as_ref())
+        else {
+            return (false, false);
+        };
+        let state = run.store.data();
+        if state
+            .block_entity_slots
+            .get(&handle)
+            .is_none_or(|&count| slot >= count)
+        {
+            return (false, false);
+        }
+        state
+            .player_slot_access
+            .get(&(handle, slot))
+            .copied()
+            .unwrap_or((true, true))
+    }
+
+    pub fn slot_limit(&self, handle: u32, slot: u32) -> Option<u32> {
+        let owner = *self.handles.get(&handle)?;
+        self.entries[owner]
+            .run
+            .as_ref()?
+            .store
+            .data()
+            .slot_limits
+            .get(&(handle, slot))
+            .copied()
+    }
+
+    /// Refreshes the capability snapshot after a game-owned inventory move.
+    /// This does not queue a guest write back over the real inventory.
+    pub fn publish_game_item_slots(&self, pos: &str, slots: &[Option<Stack>]) {
+        if let Ok(mut shared) = self.shared.lock() {
+            let key = shared
+                .item_aliases
+                .get(pos)
+                .cloned()
+                .unwrap_or_else(|| pos.to_owned());
+            let values = slots
+                .iter()
+                .enumerate()
+                .filter_map(|(slot, stack)| {
+                    let stack = stack.as_ref()?;
+                    (stack.count > 0).then(|| (slot as u32, (stack.id.clone(), stack.count)))
+                })
+                .collect();
+            shared.item_slots.insert(key.clone(), values);
+            shared.dirty_item_slots.remove(&key);
+        }
     }
 
     /// Every running mod's custom entity types (API 0.5).
@@ -2246,6 +2541,13 @@ impl Mods {
             }
             self.entries[i].modified = now;
             self.entries[i].run = None;
+            if let Some(manifest) = &self.entries[i].manifest
+                && let Ok(mut shared) = self.shared.lock()
+            {
+                shared
+                    .item_energy_specs
+                    .retain(|_, (owner, _)| owner != &manifest.id);
+            }
             // The new instance knows none of the old one's block entities:
             // the game creates them again from their saves.
             self.handles.retain(|_, owner| *owner != i);
@@ -2391,6 +2693,7 @@ fn block_callback(func: Func, store: &Store<State>) -> wasmtime::Result<BlockCal
 
 /// Checks that `id` is `<namespace>:<path>` where `namespace` belongs to `m`.
 fn owns_id(m: &Manifest, id: &str) -> bool {
+    let id = id.strip_prefix("screen:").unwrap_or(id);
     id.split_once(':')
         .is_some_and(|(ns, path)| !path.is_empty() && m.owned_namespaces().any(|o| o == ns))
 }
@@ -2735,11 +3038,68 @@ fn load_persisted_configs(
 }
 
 impl State {
+    fn lend_views(&mut self, views: Vec<BlockEntityView>) {
+        self.view_indices.clear();
+        self.inventory_view_indices.clear();
+        self.view_indices.reserve(views.len());
+        for (index, view) in views.iter().enumerate() {
+            // Match the previous lookup's first-view behavior for duplicate handles.
+            self.view_indices.entry(view.handle).or_insert(index);
+            if let Some(channel) = self.shared_inventory_channels.get(&view.handle) {
+                self.inventory_view_indices
+                    .entry(channel.clone())
+                    .or_insert(index);
+            }
+        }
+        self.views = views;
+    }
+
+    fn take_views(&mut self) -> Vec<BlockEntityView> {
+        // Every alias returns the canonical inventory, including mutations made
+        // before a trap. Position, block properties and other capabilities stay local.
+        for index in 0..self.views.len() {
+            let handle = self.views[index].handle;
+            let Some(channel) = self.shared_inventory_channels.get(&handle) else {
+                continue;
+            };
+            let Some(&canonical) = self.inventory_view_indices.get(channel) else {
+                continue;
+            };
+            if index != canonical
+                && (self.views[index].slots != self.views[canonical].slots
+                    || self.views[index].slot_components != self.views[canonical].slot_components)
+            {
+                self.views[index].slots = self.views[canonical].slots.clone();
+                self.views[index].slot_components = self.views[canonical].slot_components.clone();
+                self.views[index].changed = true;
+            }
+        }
+        self.inventory_view_indices.clear();
+        self.view_indices.clear();
+        std::mem::take(&mut self.views)
+    }
+
     /// The block entity `handle` lent to this call.
     fn view(&mut self, handle: u32) -> Option<&mut BlockEntityView> {
-        self.views.iter_mut().find(|v| v.handle == handle)
+        self.views.get_mut(*self.view_indices.get(&handle)?)
+    }
+    fn inventory_view(&mut self, handle: u32) -> Option<&mut BlockEntityView> {
+        let mut index = *self.view_indices.get(&handle)?;
+        if let Some(channel) = self.shared_inventory_channels.get(&handle) {
+            index = *self.inventory_view_indices.get(channel)?;
+        }
+        self.views.get_mut(index)
+    }
+
+    fn machine_slot_max(&self, handle: u32, slot: u32, item: &str) -> u32 {
+        self.slot_limits
+            .get(&(handle, slot))
+            .copied()
+            .or_else(|| self.facts.as_ref().map(|facts| facts.max_stack_size(item)))
+            .unwrap_or(u32::MAX)
     }
     fn owns_id(&self, id: &str) -> bool {
+        let id = id.strip_prefix("screen:").unwrap_or(id);
         id.split_once(':').is_some_and(|(ns, path)| {
             !path.is_empty() && self.owned_namespaces.iter().any(|o| o == ns)
         })
@@ -2753,7 +3113,11 @@ impl State {
             .any(|(dimension, x, y, z)| pos == format!("{dimension}:{x},{y},{z}"))
     }
     fn machine_position_string(&self, handle: u32) -> Option<String> {
-        if let Some(view) = self.views.iter().find(|v| v.handle == handle) {
+        if let Some(view) = self
+            .view_indices
+            .get(&handle)
+            .and_then(|&i| self.views.get(i))
+        {
             return Some(capability_position(view));
         }
         let (dimension, x, y, z) = self.positions.get(&handle)?;
@@ -2766,6 +3130,7 @@ impl State {
         let Ok(mut sh) = self.shared.lock() else {
             return;
         };
+        let pos = sh.item_aliases.get(&pos).cloned().unwrap_or(pos);
         match stack {
             Some(s) if s.count > 0 && !s.id.is_empty() => {
                 sh.item_slots
@@ -2795,7 +3160,244 @@ impl State {
         }
     }
 }
+impl status_effects::Host for State {
+    fn register(&mut self, id: String) -> Result<(), String> {
+        if !self.status_effects_allowed {
+            return Err("manifest needs API 0.6 capability status-effects".into());
+        }
+        let Some((namespace, _)) = id.split_once(':') else {
+            return Err("status-effect id must be namespaced".into());
+        };
+        if !valid_recipe_id(&id) || !self.owned_namespaces.iter().any(|owned| owned == namespace) {
+            return Err(format!(
+                "status-effect id {id:?} is invalid or outside this mod's namespace"
+            ));
+        }
+        if !self.registered_effects.insert(id.clone()) {
+            return Err(format!("status-effect id {id:?} was registered twice"));
+        }
+        Ok(())
+    }
+
+    fn active(&mut self) -> Vec<ActiveEffect> {
+        self.effect_context
+            .iter()
+            .filter(|effect| self.registered_effects.contains(&effect.id))
+            .cloned()
+            .collect()
+    }
+
+    fn player_id(&mut self) -> String {
+        self.effect_player_id.clone()
+    }
+
+    fn set_food(&mut self, id: String, food: u32, saturation: f32) -> Result<(), String> {
+        let active = self.effect_context.iter().any(|effect| effect.id == id);
+        if !self.registered_effects.contains(&id) || !active {
+            return Err(format!(
+                "status effect {id:?} is not active for this player"
+            ));
+        }
+        if food > 20 || !saturation.is_finite() || !(0.0..=20.0).contains(&saturation) {
+            return Err("food must be 0..20 and saturation must be finite and 0..20".into());
+        }
+        self.out.push(Output::SetPlayerFood {
+            food,
+            saturation: saturation.min(food as f32),
+        });
+        Ok(())
+    }
+}
 impl machine::Host for State {
+    fn set_player_slot_access(
+        &mut self,
+        handle: u32,
+        slot: u32,
+        insert: bool,
+        extract: bool,
+    ) -> bool {
+        if self
+            .block_entity_slots
+            .get(&handle)
+            .is_none_or(|&count| slot >= count)
+        {
+            return false;
+        }
+        if insert && extract {
+            self.player_slot_access.remove(&(handle, slot));
+        } else {
+            self.player_slot_access
+                .insert((handle, slot), (insert, extract));
+        }
+        true
+    }
+
+    fn process_items(
+        &mut self,
+        handle: u32,
+        inputs: Vec<machine::SlotStack>,
+        outputs: Vec<machine::SlotStack>,
+        simulate: bool,
+    ) -> bool {
+        if inputs.len() > 64 || outputs.len() > 64 || (inputs.is_empty() && outputs.is_empty()) {
+            return false;
+        }
+        let Some(view) = self.inventory_view(handle) else {
+            return false;
+        };
+        let (mut slots, mut components) = (view.slots.clone(), view.slot_components.clone());
+        let mut consumed = HashSet::new();
+        for input in &inputs {
+            if input.stack.count == 0 || !consumed.insert(input.slot) {
+                return false;
+            }
+            let Some(cell) = slots.get_mut(input.slot as usize) else {
+                return false;
+            };
+            let Some(current) = cell else {
+                return false;
+            };
+            if current.id != input.stack.id || current.count < input.stack.count {
+                return false;
+            }
+            current.count -= input.stack.count;
+            if current.count == 0 {
+                *cell = None;
+                let Some(data) = components.get_mut(input.slot as usize) else {
+                    return false;
+                };
+                data.clear();
+            }
+        }
+        for output in &outputs {
+            let stack = &output.stack;
+            let max = self.machine_slot_max(handle, output.slot, &stack.id);
+            if stack.count == 0
+                || stack.count > max
+                || self
+                    .facts
+                    .as_ref()
+                    .is_some_and(|f| f.max_stack_size(&stack.id) == 0)
+            {
+                return false;
+            }
+            let Some(cell) = slots.get_mut(output.slot as usize) else {
+                return false;
+            };
+            if components
+                .get(output.slot as usize)
+                .is_none_or(|data| !data.is_empty())
+            {
+                return false;
+            }
+            match cell {
+                Some(current) if current.id == stack.id => {
+                    let Some(total) = current.count.checked_add(stack.count).filter(|n| *n <= max)
+                    else {
+                        return false;
+                    };
+                    current.count = total;
+                }
+                None => *cell = Some(stack.clone()),
+                _ => return false,
+            }
+        }
+        if simulate {
+            return true;
+        }
+        let Some(view) = self.inventory_view(handle) else {
+            return false;
+        };
+        if view.slots != slots || view.slot_components != components {
+            view.slots = slots.clone();
+            view.slot_components = components;
+            view.changed = true;
+        }
+        for (slot, stack) in slots.iter().enumerate() {
+            self.sync_shared_item_slot(handle, slot as u32, stack.as_ref());
+        }
+        true
+    }
+    fn block_in_tag(&mut self, id: String, tag: String) -> bool {
+        self.facts
+            .as_ref()
+            .is_some_and(|facts| facts.block_in_tag(&id, &tag))
+    }
+    fn request_item_move(
+        &mut self,
+        handle: u32,
+        slot: u32,
+        face: item_transfer::Face,
+        kind: ItemMoveKind,
+        count: u32,
+    ) -> Option<u64> {
+        if !(1..=64).contains(&count) || self.item_moves.len() >= 4096 {
+            return None;
+        }
+        let view = self.view(handle)?;
+        view.slots.get(slot as usize)?;
+        let (dimension, x, y, z) = (view.dimension.clone(), view.x, view.y, view.z);
+        self.next_item_move = self.next_item_move.checked_add(1)?;
+        let request = self.next_item_move;
+        let face = match face {
+            item_transfer::Face::Down => "down",
+            item_transfer::Face::Up => "up",
+            item_transfer::Face::North => "north",
+            item_transfer::Face::South => "south",
+            item_transfer::Face::West => "west",
+            item_transfer::Face::East => "east",
+        }
+        .to_owned();
+        self.item_moves.insert(request, (handle, None));
+        self.out.push(Output::Server(ServerAction::MoveItem {
+            dimension,
+            x,
+            y,
+            z,
+            handle,
+            request,
+            slot,
+            face,
+            kind,
+            count,
+        }));
+        Some(request)
+    }
+    fn take_item_move_result(&mut self, request: u64) -> Option<u32> {
+        let result = self.item_moves.get(&request)?.1?;
+        self.item_moves.remove(&request);
+        Some(result)
+    }
+    fn bind_shared_inventory(&mut self, handle: u32, channel: String) -> bool {
+        if !self.views.is_empty()
+            || !self.block_entity_slots.contains_key(&handle)
+            || channel.is_empty()
+            || channel.len() > 256
+            || channel.chars().any(char::is_control)
+        {
+            return false;
+        }
+        let slots = self.block_entity_slots[&handle];
+        if self
+            .shared_inventory_sizes
+            .get(&channel)
+            .is_some_and(|size| *size != slots)
+        {
+            return false;
+        }
+        self.shared_inventory_sizes.insert(channel.clone(), slots);
+        if let Some(pos) = self.machine_position_string(handle) {
+            let Ok(mut shared) = self.shared.lock() else {
+                return false;
+            };
+            shared
+                .item_aliases
+                .insert(pos, format!("shared:{}:{channel}", self.id));
+        }
+        self.shared_inventory_channels.insert(handle, channel);
+        true
+    }
+
     fn get_position(&mut self, handle: u32) -> Option<machine::BlockEntityPosition> {
         if let Some(view) = self.view(handle) {
             return Some(machine::BlockEntityPosition {
@@ -2822,24 +3424,49 @@ impl machine::Host for State {
         Ok(())
     }
     fn get_slot(&mut self, handle: u32, slot: u32) -> Option<Stack> {
-        self.view(handle)?
+        self.inventory_view(handle)?
             .slots
             .get(slot as usize)
             .cloned()
             .flatten()
+    }
+    fn smithing_result(
+        &mut self,
+        handle: u32,
+        template_slot: u32,
+        base_slot: u32,
+        addition_slot: u32,
+    ) -> Option<machine::SmithingOutput> {
+        let (template, base, addition, base_components) = {
+            let view = self.inventory_view(handle)?;
+            (
+                view.slots.get(template_slot as usize)?.as_ref()?.id.clone(),
+                view.slots.get(base_slot as usize)?.as_ref()?.id.clone(),
+                view.slots.get(addition_slot as usize)?.as_ref()?.id.clone(),
+                view.slot_components
+                    .get(base_slot as usize)
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+        };
+        let facts = self.facts.as_ref()?;
+        let (stack, components) =
+            facts.smithing_result(&template, &base, &addition, &base_components)?;
+        Some(machine::SmithingOutput { stack, components })
     }
     fn set_slot(&mut self, handle: u32, slot: u32, stack: Option<Stack>) -> bool {
         let stack = match stack {
             Some(s) if s.count > 0 => {
                 // Unknown items are refused; with no facts set (a test host)
                 // nothing is known about items, so any id passes uncut.
-                let max = match &self.facts {
-                    Some(facts) => match facts.max_stack_size(&s.id) {
-                        0 => return false,
-                        max => max,
-                    },
-                    None => u32::MAX,
-                };
+                let item_max = self
+                    .facts
+                    .as_ref()
+                    .map_or(u32::MAX, |facts| facts.max_stack_size(&s.id));
+                if item_max == 0 {
+                    return false;
+                }
+                let max = self.machine_slot_max(handle, slot, &s.id);
                 Some(Stack {
                     count: s.count.min(max),
                     id: s.id,
@@ -2847,7 +3474,7 @@ impl machine::Host for State {
             }
             _ => None,
         };
-        let Some(view) = self.view(handle) else {
+        let Some(view) = self.inventory_view(handle) else {
             return false;
         };
         let Some(cell) = view.slots.get_mut(slot as usize) else {
@@ -2869,14 +3496,11 @@ impl machine::Host for State {
         if stack.count == 0 {
             return false;
         }
-        let max = match &self.facts {
-            Some(facts) => facts.max_stack_size(&stack.id),
-            None => u32::MAX,
-        };
+        let max = self.machine_slot_max(handle, slot, &stack.id);
         if max == 0 || stack.count > max {
             return false;
         }
-        let Some(view) = self.view(handle) else {
+        let Some(view) = self.inventory_view(handle) else {
             return false;
         };
         let Some(current) = view.slots.get(slot as usize) else {
@@ -2941,6 +3565,42 @@ impl machine::Host for State {
     }
 }
 
+impl machine_slot_limits::Host for State {
+    fn set_slot_limit(&mut self, handle: u32, slot: u32, max_count: u32) -> bool {
+        let Some(&slot_count) = self.block_entity_slots.get(&handle) else {
+            return false;
+        };
+        if slot >= slot_count {
+            return false;
+        }
+        if max_count == 0 {
+            self.slot_limits.remove(&(handle, slot));
+        } else {
+            self.slot_limits
+                .insert((handle, slot), max_count.min(i32::MAX as u32));
+        }
+        if let Some(pos) = self.machine_position_string(handle)
+            && let Ok(mut shared) = self.shared.lock()
+        {
+            if max_count == 0 {
+                if let Some(limits) = shared.item_slot_limits.get_mut(&pos) {
+                    limits.remove(&slot);
+                    if limits.is_empty() {
+                        shared.item_slot_limits.remove(&pos);
+                    }
+                }
+            } else {
+                shared
+                    .item_slot_limits
+                    .entry(pos)
+                    .or_default()
+                    .insert(slot, max_count.min(i32::MAX as u32));
+            }
+        }
+        true
+    }
+}
+
 impl item_transfer::Host for State {
     fn set_slot_access(
         &mut self,
@@ -2965,15 +3625,170 @@ impl item_transfer::Host for State {
             item_transfer::Face::West => "west",
             item_transfer::Face::East => "east",
         };
-        self.slot_access
-            .insert((handle, slot, face.to_owned()), (insert, extract));
+        if insert && extract {
+            // This is the unconfigured policy. Keeping explicit defaults costs
+            // 162 map entries per ordinary 27-slot shared chest.
+            if !self.slot_access.is_empty() {
+                self.slot_access.remove(&(handle, slot, face.to_owned()));
+            }
+        } else {
+            self.slot_access
+                .insert((handle, slot, face.to_owned()), (insert, extract));
+        }
         true
     }
 }
 
+fn item_components(bytes: &[u8]) -> Option<horizon_world::nbt::Compound> {
+    if bytes.is_empty() {
+        return Some(Default::default());
+    }
+    if bytes.len() > MAX_ITEM_COMPONENT_BYTES {
+        return None;
+    }
+    let (NbtTag::Compound(compound), used) = read_network(bytes, NbtLimits::default()).ok()? else {
+        return None;
+    };
+    (used == bytes.len()).then_some(compound)
+}
+
+fn item_stored_energy(bytes: &[u8], capacity: u64) -> Option<u64> {
+    let components = item_components(bytes)?;
+    let stored = match components.get(&"horizon:energy".into()) {
+        None => 0,
+        Some(NbtTag::Long(value)) => u64::try_from(*value).ok()?,
+        _ => return None,
+    };
+    (stored <= capacity).then_some(stored)
+}
+
+impl State {
+    fn transfer_item_energy(
+        &mut self,
+        handle: u32,
+        slot: u32,
+        amount: u64,
+        simulate: bool,
+        receive: bool,
+    ) -> u64 {
+        let Some(energy) = item_data::Host::get_slot_energy(self, handle, slot) else {
+            return 0;
+        };
+        let transferred = if receive {
+            amount
+                .min(energy.max_receive)
+                .min(energy.capacity - energy.stored)
+        } else {
+            amount.min(energy.max_extract).min(energy.stored)
+        };
+        if transferred == 0 {
+            return transferred;
+        }
+        let bytes = item_data::Host::get_slot_components(self, handle, slot);
+        let Some(mut components) = item_components(&bytes) else {
+            return 0;
+        };
+        let stored = if receive {
+            energy.stored + transferred
+        } else {
+            energy.stored - transferred
+        };
+        components.insert("horizon:energy".into(), NbtTag::Long(stored as i64));
+        let Ok(updated) =
+            horizon_world::nbt::write_network(&NbtTag::Compound(components), NbtLimits::default())
+        else {
+            return 0;
+        };
+        if updated.len() > MAX_ITEM_COMPONENT_BYTES {
+            return 0;
+        }
+        if simulate {
+            return transferred;
+        }
+        if !item_data::Host::set_slot_components(self, handle, slot, updated) {
+            return 0;
+        }
+        transferred
+    }
+}
+
 impl item_data::Host for State {
+    fn get_slot_string_component(
+        &mut self,
+        handle: u32,
+        slot: u32,
+        path: Vec<String>,
+    ) -> Option<String> {
+        if path.is_empty() || path.len() > 8 {
+            return None;
+        }
+        let components = item_components(&self.get_slot_components(handle, slot))?;
+        let root = NbtTag::Compound(components);
+        let mut tag = &root;
+        for key in &path {
+            tag = tag.get(key)?;
+        }
+        let NbtTag::String(value) = tag else {
+            return None;
+        };
+        value.to_string().ok()
+    }
+    fn register_energy_item(&mut self, id: String, spec: EnergyView) -> bool {
+        if !self.owns_id(&id)
+            || id.matches(':').count() != 1
+            || !id
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_./-:".contains(&b))
+            || spec.stored != 0
+            || spec.capacity == 0
+            || spec.capacity > i64::MAX as u64
+            || id.len() > 256
+        {
+            return false;
+        }
+        let Ok(mut shared) = self.shared.lock() else {
+            return false;
+        };
+        if !shared.item_energy_specs.contains_key(&id)
+            && shared
+                .item_energy_specs
+                .values()
+                .filter(|(owner, _)| owner == &self.id)
+                .count()
+                >= 4096
+        {
+            return false;
+        }
+        shared.item_energy_specs.insert(id, (self.id.clone(), spec));
+        true
+    }
+
+    fn get_slot_energy(&mut self, handle: u32, slot: u32) -> Option<EnergyView> {
+        let stack = self
+            .inventory_view(handle)?
+            .slots
+            .get(slot as usize)?
+            .as_ref()?
+            .clone();
+        if stack.count != 1 {
+            return None;
+        }
+        let mut energy = self.shared.lock().ok()?.item_energy_specs.get(&stack.id)?.1;
+        let bytes = self.get_slot_components(handle, slot);
+        energy.stored = item_stored_energy(&bytes, energy.capacity)?;
+        Some(energy)
+    }
+
+    fn receive_slot_energy(&mut self, handle: u32, slot: u32, amount: u64, simulate: bool) -> u64 {
+        self.transfer_item_energy(handle, slot, amount, simulate, true)
+    }
+
+    fn extract_slot_energy(&mut self, handle: u32, slot: u32, amount: u64, simulate: bool) -> u64 {
+        self.transfer_item_energy(handle, slot, amount, simulate, false)
+    }
+
     fn get_slot_components(&mut self, handle: u32, slot: u32) -> Vec<u8> {
-        let Some(view) = self.view(handle) else {
+        let Some(view) = self.inventory_view(handle) else {
             return Vec::new();
         };
         if view.slots.get(slot as usize).is_none_or(Option::is_none) {
@@ -2996,7 +3811,7 @@ impl item_data::Host for State {
         {
             return false;
         }
-        let Some(view) = self.view(handle) else {
+        let Some(view) = self.inventory_view(handle) else {
             return false;
         };
         if view.slots.get(slot as usize).is_none_or(Option::is_none) {
@@ -3235,6 +4050,12 @@ impl server::Host for State {
     }
 }
 
+impl interaction_context::Host for State {
+    fn is_sneaking(&mut self) -> bool {
+        self.active_sneaking
+    }
+}
+
 impl keys::Host for State {
     fn register(&mut self, binding: KeyBinding) -> Result<(), String> {
         if !storage_key_ok(&binding.id) {
@@ -3435,20 +4256,34 @@ impl capabilities::Host for State {
             if !valid_id(&id) {
                 return;
             }
-            let max = match &self.facts {
-                Some(facts) => match facts.max_stack_size(&id) {
-                    0 => return,
-                    max => max,
-                },
-                None => 99,
-            };
+            let item_max = self
+                .facts
+                .as_ref()
+                .map_or(99, |facts| facts.max_stack_size(&id));
+            if item_max == 0 {
+                return;
+            }
+            let slot_max = self
+                .shared
+                .lock()
+                .ok()
+                .and_then(|shared| {
+                    shared
+                        .item_slot_limits
+                        .get(&pos)
+                        .and_then(|limits| limits.get(&slot))
+                        .copied()
+                })
+                .unwrap_or(item_max);
+            let max = slot_max.min(i32::MAX as u32);
             if count > max {
                 return;
             }
             Some((id, count))
         };
-        let in_lent_view = self.views.iter().any(|v| v.handle == handle);
+        let in_lent_view = self.view_indices.contains_key(&handle);
         if let Ok(mut sh) = self.shared.lock() {
+            let pos = sh.item_aliases.get(&pos).cloned().unwrap_or(pos);
             if !in_lent_view {
                 sh.dirty_item_slots.insert(pos.clone());
             }
@@ -3469,7 +4304,7 @@ impl capabilities::Host for State {
                 }
             }
         }
-        if let Some(view) = self.view(handle)
+        if let Some(view) = self.inventory_view(handle)
             && let Some(cell) = view.slots.get_mut(slot as usize)
         {
             let replacement = next.map(|(id, count)| Stack { id, count });
@@ -3490,8 +4325,9 @@ impl capabilities::Host for State {
         let Ok(sh) = self.shared.lock() else {
             return Vec::new();
         };
+        let pos = sh.item_aliases.get(&pos).unwrap_or(&pos);
         sh.item_slots
-            .get(&pos)
+            .get(pos)
             .map(|m| {
                 m.iter()
                     .map(|(&slot, (id, count))| ItemSlot {
@@ -3748,6 +4584,9 @@ impl net::Host for State {
 }
 
 impl recipes::Host for State {
+    fn revision(&mut self) -> u64 {
+        self.shared.lock().map(|sh| sh.recipe_revision).unwrap_or(0)
+    }
     fn get(&mut self, id: String) -> Option<RecipeEntry> {
         self.shared
             .lock()
@@ -3834,6 +4673,7 @@ impl recipes::Host for State {
                 .or_default()
                 .insert(entry.id.clone(), entry_bytes);
             sh.recipes.push(entry);
+            sh.recipe_revision = sh.recipe_revision.wrapping_add(1);
         } else {
             return Err("recipe registry is unavailable".into());
         }
@@ -4238,6 +5078,11 @@ impl dimensions::Host for State {
             "minecraft:the_end".to_owned(),
         ];
         if let Ok(sh) = self.shared.lock() {
+            for id in &sh.data_dimensions {
+                if !out.contains(id) {
+                    out.push(id.clone());
+                }
+            }
             for d in &sh.dimensions {
                 if !out.contains(&d.id) {
                     out.push(d.id.clone());

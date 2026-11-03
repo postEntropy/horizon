@@ -159,7 +159,7 @@ impl Game<'_> {
         extra_ids.sort();
         for id in extra_ids {
             seen.insert(id.clone());
-            all.push(ItemStack::new(&**id, 1));
+            all.push(ItemStack::new(id, 1));
         }
 
         if query.is_empty() {

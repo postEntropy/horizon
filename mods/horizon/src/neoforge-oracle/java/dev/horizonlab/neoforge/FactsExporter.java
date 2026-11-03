@@ -70,9 +70,15 @@ public final class FactsExporter {
                 new TreeSet<>(Arrays.asList(System.getProperty("horizon.oracle.namespaces", "").split(",")));
         namespaces.remove("");
         String machines = System.getProperty("horizon.oracle.machines", "");
+        String food = System.getProperty("horizon.oracle.food", "");
+        String energy = System.getProperty("horizon.oracle.energy", "");
         try (Writer w = Files.newBufferedWriter(out, StandardCharsets.UTF_8);
                 JsonWriter json = new JsonWriter(w)) {
-            if (machines.isEmpty()) {
+            if (!energy.isEmpty()) {
+                EnergyTrace.run(server, Path.of(energy), json);
+            } else if (!food.isEmpty()) {
+                FoodTrace.run(server, Path.of(food), json);
+            } else if (machines.isEmpty()) {
                 new Export(server, namespaces, json).run();
             } else {
                 MachineTrace.run(server, Path.of(machines), json);
@@ -341,6 +347,10 @@ public final class FactsExporter {
                 json.name("class").value(item.getClass().getName());
                 json.name("max_stack_size").value(stack.getMaxStackSize());
                 json.name("rarity").value(stack.getRarity().getSerializedName());
+                var craftingRemainder = item.getCraftingRemainingItem();
+                if (craftingRemainder != null) {
+                    json.name("crafting_remainder").value(BuiltInRegistries.ITEM.getKey(craftingRemainder).toString());
+                }
                 if (item instanceof BlockItem bi) {
                     json.name("block").value(BuiltInRegistries.BLOCK.getKey(bi.getBlock()).toString());
                 }
@@ -350,6 +360,28 @@ public final class FactsExporter {
                     json.beginObject();
                     json.name("nutrition").value(food.nutrition());
                     json.name("saturation").value(food.saturation());
+                    json.name("can_always_eat").value(food.canAlwaysEat());
+                    json.name("eat_seconds").value(food.eatSeconds());
+                    json.name("effect_count").value(food.effects().size());
+                    json.name("effects").beginArray();
+                    for (var possible : food.effects()) {
+                        var effect = possible.effect();
+                        json.beginObject();
+                        json.name("id").value(BuiltInRegistries.MOB_EFFECT.getKey(effect.getEffect().value()).toString());
+                        json.name("duration").value(effect.getDuration());
+                        json.name("amplifier").value(effect.getAmplifier());
+                        json.name("probability").value(possible.probability());
+                        json.name("ambient").value(effect.isAmbient());
+                        json.name("visible").value(effect.isVisible());
+                        json.name("show_icon").value(effect.showIcon());
+                        json.endObject();
+                    }
+                    json.endArray();
+                    var remainder = food.usingConvertsTo();
+                    if (remainder.isPresent() && !remainder.get().isEmpty()) {
+                        json.name("use_remainder").value(BuiltInRegistries.ITEM.getKey(remainder.get().getItem()).toString());
+                        json.name("use_remainder_count").value(remainder.get().getCount());
+                    }
                     json.endObject();
                 }
                 json.endObject();

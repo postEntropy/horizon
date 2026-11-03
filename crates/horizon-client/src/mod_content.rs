@@ -239,6 +239,9 @@ struct NewItem {
     rename: Rename,
     max_stack_size: Option<u8>,
     rarity: Option<Rarity>,
+    crafting_remainder: Option<String>,
+    use_remainder: Option<String>,
+    food: Option<horizon_mods::content::Food>,
 }
 
 struct Plan<'a> {
@@ -446,6 +449,9 @@ impl<'a> Plan<'a> {
                     rename: Rename::new(item, &b.decl.id),
                     max_stack_size: None,
                     rarity: None,
+                    crafting_remainder: None,
+                    use_remainder: None,
+                    food: None,
                 });
             }
         }
@@ -455,6 +461,9 @@ impl<'a> Plan<'a> {
                     rename: Rename::new(&i.template, &i.id),
                     max_stack_size: i.max_stack_size,
                     rarity: i.rarity,
+                    crafting_remainder: i.crafting_remainder.clone(),
+                    use_remainder: i.use_remainder.clone(),
+                    food: i.food.clone(),
                 });
             }
         }
@@ -694,6 +703,9 @@ impl<'a> Plan<'a> {
         if let Some(v) = p.friction {
             row.set("friction", J::f64(v as f64));
         }
+        if let Some(v) = p.random_ticks {
+            row.set("random_ticks", J::Bool(v));
+        }
         if let Some(v) = p.map_color {
             let col = if v == 0 { 0 } else { MAP_COLORS[v as usize] };
             row.set("map_color", J::Num(col.into()));
@@ -778,6 +790,56 @@ impl<'a> Plan<'a> {
             if components {
                 if let Some(n) = i.max_stack_size {
                     v.set("minecraft:max_stack_size", J::Num(n.into()));
+                }
+                if let Some(food) = &i.food {
+                    let number = |value: f32| {
+                        J::Num(serde_json::Number::from_f64(f64::from(value)).unwrap())
+                    };
+                    v.set(
+                        "minecraft:food",
+                        J::Obj(vec![
+                            ("nutrition".into(), J::Num(food.nutrition.into())),
+                            ("saturation".into(), number(food.saturation)),
+                            ("can_always_eat".into(), J::Bool(food.can_always_eat)),
+                        ]),
+                    );
+                    let effects = food
+                        .effects
+                        .iter()
+                        .map(|effect| {
+                            J::Obj(vec![
+                                ("type".into(), J::Str("minecraft:apply_effects".into())),
+                                ("probability".into(), number(effect.probability)),
+                                (
+                                    "effects".into(),
+                                    J::Arr(vec![J::Obj(vec![
+                                        ("id".into(), J::Str(effect.id.clone())),
+                                        ("duration".into(), J::Num(effect.duration.into())),
+                                        ("amplifier".into(), J::Num(effect.amplifier.into())),
+                                        ("ambient".into(), J::Bool(effect.ambient)),
+                                        ("show_particles".into(), J::Bool(effect.visible)),
+                                        ("show_icon".into(), J::Bool(effect.show_icon)),
+                                    ])]),
+                                ),
+                            ])
+                        })
+                        .collect();
+                    v.set(
+                        "minecraft:consumable",
+                        J::Obj(vec![
+                            ("consume_seconds".into(), number(food.consume_seconds)),
+                            ("on_consume_effects".into(), J::Arr(effects)),
+                        ]),
+                    );
+                }
+                if let Some(remainder) = &i.use_remainder {
+                    v.set(
+                        "minecraft:use_remainder",
+                        J::Obj(vec![("id".into(), J::Str(remainder.clone()))]),
+                    );
+                }
+                if let Some(remainder) = &i.crafting_remainder {
+                    v.set("minecraft:crafting_remainder", J::Str(remainder.clone()));
                 }
                 if let Some(r) = i.rarity {
                     let r = match r {
@@ -1733,13 +1795,15 @@ pub fn namespaces(root: &Path) -> Vec<String> {
 }
 
 /// The namespaces whose tags loaders read in `root`: `minecraft`, and in a
-/// root built by [`build`] the convention tags (`c`, shared between mods as
-/// on NeoForge and Fabric) and the content mods' own.
+/// root built by [`build`] the convention tags (`c`), loader shared tags
+/// (`forge`, `neoforge`) and the content mods' own.
 pub fn tag_namespaces(root: &Path) -> Vec<String> {
     let mods = namespaces(root);
     let mut out = vec!["minecraft".to_owned()];
     if !mods.is_empty() {
         out.push("c".to_owned());
+        out.push("forge".to_owned());
+        out.push("neoforge".to_owned());
         out.extend(mods);
     }
     out
@@ -1913,6 +1977,38 @@ fn normalize_worldgen_entry(bundle: &str, text: &str) -> String {
         }
     } else if bundle == "worldgen/biomes.json" {
         if let Some(object) = doc.as_object_mut() {
+            if !object.contains_key("has_precipitation")
+                && let Some(kind) = object.get("precipitation").and_then(Value::as_str)
+                && matches!(kind, "none" | "rain" | "snow")
+            {
+                object.insert("has_precipitation".into(), Value::Bool(kind != "none"));
+                changed = true;
+            }
+            let legacy_colors = object
+                .get("effects")
+                .and_then(Value::as_object)
+                .map(|effects| {
+                    [
+                        ("sky_color", "minecraft:visual/sky_color"),
+                        ("fog_color", "minecraft:visual/fog_color"),
+                        ("water_fog_color", "minecraft:visual/water_fog_color"),
+                    ]
+                    .into_iter()
+                    .filter_map(|(old, new)| effects.get(old).cloned().map(|value| (new, value)))
+                    .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            if !legacy_colors.is_empty() {
+                let attributes = object.entry("attributes").or_insert_with(|| json!({}));
+                if let Some(attributes) = attributes.as_object_mut() {
+                    for (key, value) in legacy_colors {
+                        if !attributes.contains_key(key) {
+                            attributes.insert(key.into(), value);
+                            changed = true;
+                        }
+                    }
+                }
+            }
             if let Some(stages) = object.get_mut("carvers").and_then(Value::as_object_mut) {
                 let mut ordered = Vec::new();
                 for stage in ["air", "liquid"] {
@@ -3291,26 +3387,26 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
                 .apply(&mut doc)
                 .map_err(|e| format!("{bundle}: {e}"))?;
         }
-        if *bundle == "worldgen/biomes.json" && !skipped_carvers.is_empty() {
-            if let J::Obj(biomes) = &mut doc {
-                for (_, raw) in biomes {
-                    let J::Str(text) = raw else { continue };
-                    let Ok(mut biome) = serde_json::from_str::<serde_json::Value>(text) else {
-                        continue;
-                    };
-                    let Some(carvers) = biome.get_mut("carvers").and_then(|v| v.as_array_mut())
-                    else {
-                        continue;
-                    };
-                    let before = carvers.len();
-                    carvers.retain(|entry| {
-                        !entry
-                            .as_str()
-                            .is_some_and(|id| skipped_carvers.contains_key(id))
-                    });
-                    if carvers.len() != before {
-                        *text = serde_json::to_string(&biome)?;
-                    }
+        if *bundle == "worldgen/biomes.json"
+            && !skipped_carvers.is_empty()
+            && let J::Obj(biomes) = &mut doc
+        {
+            for (_, raw) in biomes {
+                let J::Str(text) = raw else { continue };
+                let Ok(mut biome) = serde_json::from_str::<serde_json::Value>(text) else {
+                    continue;
+                };
+                let Some(carvers) = biome.get_mut("carvers").and_then(|v| v.as_array_mut()) else {
+                    continue;
+                };
+                let before = carvers.len();
+                carvers.retain(|entry| {
+                    !entry
+                        .as_str()
+                        .is_some_and(|id| skipped_carvers.contains_key(id))
+                });
+                if carvers.len() != before {
+                    *text = serde_json::to_string(&biome)?;
                 }
             }
         }

@@ -36,5 +36,17 @@ required-features = ["runtime", "pack"]
 name = "api_reference"
 required-features = ["pack"]
 
+[[example]]
+name = "port_tick_bench"
+required-features = ["runtime", "pack"]
+
+[[example]]
+name = "pack_port_fixture"
+required-features = ["pack"]
+
+[[example]]
+name = "farmer_pot_probe"
+required-features = ["runtime", "pack"]
+
 [lints]
 workspace = true

@@ -466,6 +466,25 @@ pub fn encode_block_entity(
     e: &crate::containers::BlockEntity,
     block: &str,
 ) -> Tag {
+    encode_block_entity_with_items(p, e, block, true)
+}
+
+/// Disk saves and picked block items refer to canonical shared storage. Network
+/// and command snapshots still expose the current contents through the usual NBT.
+pub fn encode_block_entity_for_save(
+    p: (i32, i32, i32),
+    e: &crate::containers::BlockEntity,
+    block: &str,
+) -> Tag {
+    encode_block_entity_with_items(p, e, block, false)
+}
+
+fn encode_block_entity_with_items(
+    p: (i32, i32, i32),
+    e: &crate::containers::BlockEntity,
+    block: &str,
+    include_shared_items: bool,
+) -> Tag {
     use crate::containers::BlockEntity;
     let components = match e {
         BlockEntity::Banner(b) => b.components.clone(),
@@ -564,7 +583,9 @@ pub fn encode_block_entity(
             entries.push(("mod_block", string(block)));
             entries.push(("mod_data", Tag::ByteArray(saved.clone())));
             entries.push(("mod_slots", Tag::Int(items.len() as i32)));
-            entries.push(("Items", encode_items(items)));
+            if include_shared_items || items.channel().is_none() {
+                entries.push(("Items", encode_items(&items.read())));
+            }
             if let Some(energy) = energy {
                 entries.push((
                     "horizon_energy",
@@ -655,7 +676,7 @@ pub fn decode_block_entity(tag: &Tag) -> Option<((i32, i32, i32), crate::contain
                 block,
                 handle: 0,
                 saved,
-                items,
+                items: items.into(),
                 energy,
                 fluids,
             },
@@ -986,7 +1007,7 @@ pub fn encode_with(
         .iter()
         .map(|(p, e)| {
             let block = block_name(p);
-            let mut current = encode_block_entity(*p, e, &block);
+            let mut current = encode_block_entity_for_save(*p, e, &block);
             if let Some((_, name)) = chunk.block_names.iter().find(|(q, _)| q == p)
                 && let Tag::Compound(map) = &mut current
             {
@@ -998,7 +1019,7 @@ pub fn encode_with(
                 .filter(|tag| {
                     crate::block_entity_nbt::id(tag) == crate::block_entity_nbt::id(&current)
                 });
-            let merged = match source {
+            let mut merged = match source {
                 Some(original) => {
                     let loaded = decode_block_entity(original).map_or_else(
                         || current.clone(),
@@ -1008,6 +1029,11 @@ pub fn encode_with(
                 }
                 None => current,
             };
+            if matches!(e, crate::containers::BlockEntity::Mod { items, .. } if items.channel().is_some())
+                && let Tag::Compound(map) = &mut merged
+            {
+                map.remove(&"Items".into());
+            }
             crate::block_entity_nbt::canonical(&merged).unwrap_or(merged)
         })
         .collect();
@@ -2364,8 +2390,8 @@ pub struct Level {
     pub xp_seed: i32,
     /// ServerPlayer.seenCredits: the end poem has been shown.
     pub seen_credits: bool,
-    /// Player.active_effects: (id, duration, amplifier, ambient, show_icon).
-    pub active_effects: Vec<(String, i32, i32, bool, bool)>,
+    /// Player.active_effects: (id, duration, amplifier, ambient, particles, icon).
+    pub active_effects: Vec<(String, i32, i32, bool, bool, bool)>,
     /// Player.EnderItems: the ender chest inventory (27 slots).
     pub ender_items: Vec<Option<crate::items::ItemStack>>,
     /// The `recipeBook` compound: open/filter settings and unlocked recipes.
@@ -2644,6 +2670,7 @@ impl Level {
                         get("duration").unwrap_or(0) as i32,
                         get("amplifier").unwrap_or(0) as i32,
                         get("ambient").unwrap_or(0) != 0,
+                        get("show_particles").is_none_or(|v| v != 0),
                         get("show_icon").is_none_or(|v| v != 0),
                     ))
                 })
@@ -2746,13 +2773,13 @@ impl Level {
                 Tag::List(
                     self.active_effects
                         .iter()
-                        .map(|(id, duration, amplifier, ambient, icon)| {
+                        .map(|(id, duration, amplifier, ambient, particles, icon)| {
                             Tag::compound([
                                 ("id", string(id)),
                                 ("duration", Tag::Int(*duration)),
                                 ("amplifier", Tag::Byte(*amplifier as i8)),
                                 ("ambient", Tag::Byte(i8::from(*ambient))),
-                                ("show_particles", Tag::Byte(1)),
+                                ("show_particles", Tag::Byte(i8::from(*particles))),
                                 ("show_icon", Tag::Byte(i8::from(*icon))),
                             ])
                         })
@@ -3972,7 +3999,7 @@ mod tests {
             block: "test_machine:smelter".into(),
             handle: 0,
             saved: vec![1, 2, 3],
-            items: Vec::new(),
+            items: Vec::new().into(),
             energy: Some(ModEnergyBuffer {
                 stored: u64::MAX,
                 capacity: u64::MAX,
@@ -4365,7 +4392,7 @@ mod tests {
         // A player loaded with an effect that has since run out: the loaded
         // compound still holds it, but the save writes only what is active.
         let mut level = Level {
-            active_effects: vec![("minecraft:speed".into(), 200, 1, false, true)],
+            active_effects: vec![("minecraft:speed".into(), 200, 1, false, true, true)],
             ..Level::default()
         };
         let loaded = level.player_tag();
@@ -4373,6 +4400,25 @@ mod tests {
         level.player_extra = Some(loaded);
         level.active_effects.clear();
         assert!(level.player_tag().get("active_effects").is_none());
+    }
+
+    #[test]
+    fn modded_effect_names_and_visual_flags_round_trip_in_player_nbt() {
+        let level = Level {
+            active_effects: vec![(
+                "farmersdelight:nourishment".into(),
+                600,
+                0,
+                false,
+                false,
+                false,
+            )],
+            ..Level::default()
+        };
+        let tag = level.player_tag();
+        let mut loaded = Level::default();
+        loaded.read_player(&tag);
+        assert_eq!(loaded.active_effects, level.active_effects);
     }
 
     #[test]

@@ -17,7 +17,7 @@ use horizon_mod_sdk::{
     dimensions::{self, DimensionSpec, GeneratorKind, PortalSpec},
     entities, inventory, item_data, item_transfer,
     keys::{self, KeyBinding},
-    machine::{self, CookingKind, ItemStack},
+    machine::{self, CookingKind, ItemMoveKind, ItemStack},
     models::{self, BonePose, DrawPart, DrawPartKind},
     net,
     recipes::{self, IngredientSlot, RecipeEntry},
@@ -32,6 +32,8 @@ use std::collections::HashMap;
 struct Machines {
     /// Each smelter's ticks of cooking so far.
     progress: HashMap<u32, u32>,
+    shared_crates: Vec<u32>,
+    item_move_requests: HashMap<u32, Vec<u64>>,
     /// Each custom entity's age in ticks.
     entity_ticks: HashMap<u32, u32>,
     last_packet: String,
@@ -47,6 +49,27 @@ struct Machines {
 
 impl Mod for Machines {
     fn init() -> Result<(Self, Registration), String> {
+        let spec = EnergyView {
+            stored: 0,
+            capacity: 2500,
+            max_receive: 800,
+            max_extract: 300,
+        };
+        // A namespace-mismatch fixture reuses this WASM under another mod id.
+        let _ = item_data::register_energy_item("test_machine:battery", spec);
+        assert!(!item_data::register_energy_item("minecraft:stick", spec));
+        assert!(!item_data::register_energy_item("test_peer:battery", spec));
+        assert!(!item_data::register_energy_item(
+            "test_machine:invalid",
+            EnergyView { stored: 1, ..spec }
+        ));
+        assert!(!item_data::register_energy_item(
+            "test_machine:invalid",
+            EnergyView {
+                capacity: 0,
+                ..spec
+            }
+        ));
         let _ = keys::register(&KeyBinding {
             id: "vein_mine".into(),
             label: "Vein Mine".into(),
@@ -72,6 +95,20 @@ impl Mod for Machines {
             generator: GeneratorKind::Flat,
             surface_block: "minecraft:moss_block".into(),
         });
+        let _ = dimensions::register_dimension(&DimensionSpec {
+            id: "test_machine:noisy".into(),
+            ultrawarm: false,
+            natural: true,
+            coordinate_scale: 1.0,
+            has_skylight: true,
+            has_ceiling: false,
+            min_y: -64,
+            height: 384,
+            ambient_light: 0.0,
+            fixed_time: None,
+            generator: GeneratorKind::Noise,
+            surface_block: String::new(),
+        });
         let _ = dimensions::register_portal(&PortalSpec {
             id: "test_machine:twilight_portal".into(),
             frame_block: "minecraft:mossy_cobblestone".into(),
@@ -83,6 +120,8 @@ impl Mod for Machines {
         Ok((
             Machines {
                 progress,
+                shared_crates: Vec::new(),
+                item_move_requests: HashMap::new(),
                 entity_ticks: HashMap::new(),
                 last_packet: String::new(),
                 last_server_event: String::new(),
@@ -108,6 +147,11 @@ impl Mod for Machines {
                 block: "test_machine:crate".into(),
                 slots: 4,
                 ticks: false,
+            },
+            BlockEntityType {
+                block: "test_machine:shared_router".into(),
+                slots: 4,
+                ticks: true,
             },
         ]
     }
@@ -225,6 +269,7 @@ impl Mod for Machines {
             ItemAction::UseOnBlock => "use-on-block",
             ItemAction::FinishUsing => "finish-using",
             ItemAction::AttackEntity => "attack-entity",
+            ItemAction::InteractEntity => "interact-entity",
         };
         self.last_item_event = format!(
             "{action_name}:{}:{}:{},{},{}:{}",
@@ -382,6 +427,64 @@ impl Mod for Machines {
     }
     fn command(&mut self, _name: &str, args: &str) -> Result<Option<String>, String> {
         match args {
+            arg if arg.starts_with("player_access ") => {
+                let words: Vec<_> = arg.split_whitespace().collect();
+                if words.len() != 5 {
+                    return Err("player_access HANDLE SLOT INSERT EXTRACT".into());
+                }
+                let handle = words[1].parse::<u32>().map_err(|e| e.to_string())?;
+                let slot = words[2].parse::<u32>().map_err(|e| e.to_string())?;
+                let insert = words[3].parse::<bool>().map_err(|e| e.to_string())?;
+                let extract = words[4].parse::<bool>().map_err(|e| e.to_string())?;
+                Ok(Some(
+                    machine::set_player_slot_access(handle, slot, insert, extract).to_string(),
+                ))
+            }
+
+            "atomic_items" => {
+                machine::set_world_rule("test_machine:atomic_items", "true")?;
+                Ok(None)
+            }
+            "block_tags" => Ok(Some(format!(
+                "heat={} cold={} unknown={}",
+                machine::block_in_tag("minecraft:magma_block", "farmersdelight:heat_sources"),
+                machine::block_in_tag("minecraft:stone", "farmersdelight:heat_sources"),
+                machine::block_in_tag("unknown:missing", "unknown:missing")
+            ))),
+            arg if arg.starts_with("item_slots ") => {
+                let slots = capabilities::get_item_slots(arg.trim_start_matches("item_slots "));
+                Ok(Some(
+                    slots
+                        .iter()
+                        .map(|s| format!("{}={}*{}", s.slot, s.id, s.count))
+                        .collect::<Vec<_>>()
+                        .join(","),
+                ))
+            }
+            "move_pull" | "move_push" | "move_push_remove" | "move_trap" => {
+                machine::set_world_rule("test_machine:item_move_operation", args)?;
+                for &handle in self.progress.keys() {
+                    assert!(
+                        machine::request_item_move(
+                            handle,
+                            0,
+                            item_transfer::Face::East,
+                            ItemMoveKind::Pull,
+                            1
+                        )
+                        .is_none()
+                    );
+                }
+                Ok(None)
+            }
+            "item_energy_receive" | "item_energy_extract" => {
+                machine::set_world_rule("test_machine:item_energy_operation", args)?;
+                for &handle in self.progress.keys() {
+                    assert!(item_data::get_slot_energy(handle, 0).is_none());
+                    assert_eq!(item_data::receive_slot_energy(handle, 0, 10, false), 0);
+                }
+                Ok(None)
+            }
             "config" => {
                 let before = config::get_int("speed").unwrap_or(0);
                 config::set_int("speed", 5)?;
@@ -558,7 +661,9 @@ impl Mod for Machines {
                     ticks: 100,
                     energy: 2000,
                 };
+                let before_revision = recipes::revision();
                 recipes::register(&recipe)?;
+                assert_ne!(recipes::revision(), before_revision);
                 let by_id = recipes::get("test_machine:crush_iron").is_some_and(|entry| {
                     entry.kind == "test_machine:crusher" && entry.outputs == recipe.outputs
                 });
@@ -567,7 +672,9 @@ impl Mod for Machines {
                 let found_by_output = recipes::for_output("minecraft:iron_ingot").len();
                 let mut replacement = recipe;
                 replacement.outputs = vec!["minecraft:gold_ingot*1".into()];
+                let before_revision = recipes::revision();
                 recipes::register(&replacement)?;
+                assert_ne!(recipes::revision(), before_revision);
                 let replaced = recipes::get("test_machine:crush_iron")
                     .is_some_and(|entry| entry.outputs == replacement.outputs);
                 let old_output = recipes::for_output("minecraft:iron_ingot").len();
@@ -759,6 +866,10 @@ impl Mod for Machines {
             "tp_twilight" => {
                 dimensions::teleport("@s", "test_machine:twilight", 8.5, 64.0, 8.5)?;
                 Ok(Some("tp_twilight=ok".into()))
+            }
+            "tp_noisy" => {
+                dimensions::teleport("@s", "test_machine:noisy", 0.5, 120.0, 0.5)?;
+                Ok(Some("tp_noisy=ok".into()))
             }
             "tp_overworld" => {
                 dimensions::teleport("@s", "minecraft:overworld", -31.5, 70.0, -11.5)?;
@@ -1200,6 +1311,16 @@ impl Mod for Machines {
         source != "minecraft:cactus" && source != "cactus"
     }
     fn create_block_entity(&mut self, handle: u32, block: &str, saved: &[u8]) {
+        if block == "test_machine:crate" || block == "test_machine:shared_router" {
+            assert!(!machine::bind_shared_inventory(
+                handle.wrapping_add(1),
+                "public"
+            ));
+            assert!(!machine::bind_shared_inventory(handle, ""));
+            assert!(!machine::bind_shared_inventory(handle, &"x".repeat(257)));
+            assert!(machine::bind_shared_inventory(handle, "public"));
+            self.shared_crates.push(handle);
+        }
         if block == "test_machine:smelter" {
             let progress = saved.try_into().map_or(0, u32::from_le_bytes);
             self.progress.insert(handle, progress);
@@ -1212,7 +1333,154 @@ impl Mod for Machines {
         }
     }
     fn tick_block_entities(&mut self, handles: &[u32]) {
+        // Previously seen handles outside this loan must not resolve through an old index.
+        for &handle in self.progress.keys().filter(|h| !handles.contains(h)) {
+            assert!(machine::get_slot(handle, 0).is_none());
+            assert!(!machine::set_slot(handle, 0, None));
+        }
+        // Handles are allocated globally, but neighboring owners' slots stay private.
+        for &handle in handles {
+            for neighbor in [handle.wrapping_sub(1), handle.wrapping_add(1)] {
+                if !handles.contains(&neighbor) {
+                    assert!(machine::get_slot(neighbor, 0).is_none());
+                    assert!(!machine::set_slot(neighbor, 0, None));
+                }
+            }
+        }
         for &h in handles {
+            if machine::get_world_rule("test_machine:atomic_items").as_deref() == Some("true") {
+                let input = machine::SlotStack {
+                    slot: 0,
+                    stack: ItemStack {
+                        id: "minecraft:raw_iron".into(),
+                        count: 2,
+                    },
+                };
+                let outputs = [
+                    machine::SlotStack {
+                        slot: 1,
+                        stack: ItemStack {
+                            id: "minecraft:iron_ingot".into(),
+                            count: 1,
+                        },
+                    },
+                    machine::SlotStack {
+                        slot: 2,
+                        stack: ItemStack {
+                            id: "minecraft:gold_ingot".into(),
+                            count: 1,
+                        },
+                    },
+                ];
+                let before = (0..4)
+                    .map(|slot| machine::get_slot(h, slot).map(|s| (s.id, s.count)))
+                    .collect::<Vec<_>>();
+                let possible = machine::process_items(h, &[input.clone()], &outputs, true);
+                assert_eq!(
+                    (0..4)
+                        .map(|slot| machine::get_slot(h, slot).map(|s| (s.id, s.count)))
+                        .collect::<Vec<_>>(),
+                    before
+                );
+                assert!(!machine::process_items(
+                    h,
+                    &[input.clone(), input.clone()],
+                    &outputs,
+                    false
+                ));
+                assert_eq!(
+                    machine::process_items(h, &[input], &outputs, false),
+                    possible
+                );
+                continue;
+            }
+            if let Some(operation) = machine::get_world_rule("test_machine:item_energy_operation") {
+                let before = item_data::get_slot_components(h, 0);
+                if operation == "item_energy_extract" {
+                    let expected = item_data::extract_slot_energy(h, 0, 1000, true);
+                    assert_eq!(item_data::get_slot_components(h, 0), before);
+                    assert_eq!(item_data::extract_slot_energy(h, 0, 1000, false), expected);
+                } else {
+                    let expected = item_data::receive_slot_energy(h, 0, 1000, true);
+                    assert_eq!(item_data::get_slot_components(h, 0), before);
+                    assert_eq!(item_data::receive_slot_energy(h, 0, 1000, false), expected);
+                }
+                continue;
+            }
+            if let Some(operation) = machine::get_world_rule("test_machine:item_move_operation") {
+                let requests = self.item_move_requests.entry(h).or_default();
+                requests.retain(|request| {
+                    if let Some(moved) = machine::take_item_move_result(*request) {
+                        *self.progress.entry(h).or_default() += moved;
+                        assert!(machine::take_item_move_result(*request).is_none());
+                        false
+                    } else {
+                        true
+                    }
+                });
+                for (handle, slot, count) in [
+                    (h.wrapping_add(100000), 0, 1),
+                    (h, u32::MAX, 1),
+                    (h, 0, 0),
+                    (h, 0, 65),
+                ] {
+                    assert!(
+                        machine::request_item_move(
+                            handle,
+                            slot,
+                            item_transfer::Face::East,
+                            ItemMoveKind::Pull,
+                            count
+                        )
+                        .is_none()
+                    );
+                }
+                let before = machine::get_slot(h, 0).map(|s| (s.id, s.count));
+                let kind = if operation == "move_push" || operation == "move_push_remove" {
+                    ItemMoveKind::Push
+                } else {
+                    ItemMoveKind::Pull
+                };
+                if operation == "move_push_remove"
+                    && let Some(position) = machine::get_position(h)
+                {
+                    server::set_block(
+                        &position.dimension,
+                        BlockPos {
+                            x: position.x + 1,
+                            y: position.y,
+                            z: position.z,
+                        },
+                        "minecraft:air",
+                    )
+                    .unwrap();
+                }
+                let request =
+                    machine::request_item_move(h, 0, item_transfer::Face::East, kind, 1).unwrap();
+                assert_eq!(machine::get_slot(h, 0).map(|s| (s.id, s.count)), before);
+                requests.push(request);
+                if operation == "move_trap" {
+                    panic!("intent before trap");
+                }
+                continue;
+            }
+            if self.shared_crates.contains(&h) {
+                if let Some(mut input) = machine::get_slot(h, 0) {
+                    input.count -= 1;
+                    let rest = (input.count > 0).then_some(input);
+                    assert!(machine::set_slot(h, 0, rest.as_ref()));
+                    let produced = machine::get_slot(h, 1).map_or(0, |stack| stack.count);
+                    assert!(machine::set_slot(
+                        h,
+                        1,
+                        Some(&ItemStack {
+                            id: "minecraft:iron_ingot".into(),
+                            count: produced + 1
+                        })
+                    ));
+                }
+                continue;
+            }
             if let Some(position) = machine::get_position(h) {
                 let key = format!(
                     "{}:{},{},{}",
@@ -1299,6 +1567,12 @@ impl Mod for Machines {
                 let _ = item_data::set_slot_components(h, 0, &components);
             }
             let progress = self.progress.entry(h).or_default();
+            if machine::get_slot(h, 0).is_some_and(|s| s.id == "minecraft:gunpowder") {
+                machine::set_property(h, "lit", "true");
+                loop {
+                    std::hint::spin_loop();
+                }
+            }
             if machine::get_slot(h, 0).is_some_and(|s| s.id == "minecraft:tnt") {
                 machine::set_property(h, "lit", "true");
                 panic!("tnt in the smelter");
@@ -1358,11 +1632,15 @@ impl Mod for Machines {
         }
     }
     fn save_block_entity(&mut self, handle: u32) -> Vec<u8> {
+        assert!(machine::get_slot(handle, 0).is_none());
+        assert!(!machine::set_slot(handle, 0, None));
         let progress = self.progress.get(&handle).copied().unwrap_or(0);
         progress.to_le_bytes().to_vec()
     }
     fn remove_block_entity(&mut self, handle: u32) {
+        self.item_move_requests.remove(&handle);
         self.progress.remove(&handle);
+        self.shared_crates.retain(|h| *h != handle);
     }
     fn block_entity_data(&mut self, handle: u32) -> Vec<i32> {
         vec![self.progress.get(&handle).copied().unwrap_or(0) as i32]

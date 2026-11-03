@@ -2116,13 +2116,22 @@ impl Game<'_> {
             // LivingEntity.baseTick: outside the world border, then tickEffects.
             game.border_damage();
             game.tick_mob_effects();
+            {
+                let Some(player) = game.player.as_mut() else {
+                    return (Vec::new(), None);
+                };
+                let _ = player.peaceful_regeneration(rules);
+                game.mods.with_player_damage_hook(player, dim, |player| {
+                    let _ = player.food_tick(health, rules);
+                });
+            }
+            // Player effects and FoodData tick on the server first; mods then
+            // get this guest's authoritative state before it is saved/synced.
+            game.tick_player_mod_callback();
+            game.show_mod_output();
             let Some(player) = game.player.as_mut() else {
                 return (Vec::new(), None);
             };
-            let _ = player.peaceful_regeneration(rules);
-            game.mods.with_player_damage_hook(player, dim, |player| {
-                let _ = player.food_tick(health, rules);
-            });
             events.append(&mut player.events);
             let _ = MotionWorld {
                 entities: &[],

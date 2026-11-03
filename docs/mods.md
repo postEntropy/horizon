@@ -287,9 +287,13 @@ blocks and items by declaring them in `data/<id>/horizon/block/*.json` and
 
 ```json
 { "template": "minecraft:iron_block",
-  "properties": { "hardness": 4.0, "light": 3, "sounds": "minecraft:amethyst_block" },
+  "properties": { "hardness": 4.0, "light": 3, "random_ticks": true,
+                  "sounds": "minecraft:amethyst_block" },
   "item": true }
 ```
+
+`random_ticks` opts the copied block states into the world's random-tick
+selection. A logic component can then handle the block's `random-tick` hook.
 
 The fence: files go in the mod's own namespaces (`assets/<id>/`,
 `data/<id>/`, and those its manifest lists), plus additions to vanilla tags
@@ -316,6 +320,17 @@ api = "0.2"
 capabilities = ["registries"]
 namespaces = ["kaisyn", "towns_and_towers"]
 ```
+
+Mods whose complete behavior is carried by their registries and vanilla
+templates can declare `content-only = true`. This requires API 0.2 and
+`registries`, and the package must not contain `mod.wasm`:
+
+```toml
+content-only = true
+```
+
+This is for mods that add only data-backed blocks, items, recipes, tags, and
+loot. It does not waive missing or unsupported carried resources.
 
 A listed namespace is the mod's as its id is: its `assets/` and `data/`
 files load, and the game reads its tags, recipes, names and loot. Blocks and
@@ -411,6 +426,24 @@ id-and-count slot interface. Mods that need to inspect or alter components
 directly declare the separate `item-data` capability. Invalid or oversized NBT
 is rejected.
 
+`item-data` also provides item energy support. A battery/tool mod registers its
+own item IDs with `register-energy-item` (zero initial energy, capacity and
+per-call receive/extract limits). Chargers query or call `receive-slot-energy`
+on their own machine slots and debit only the returned amount; consumers use
+`extract-slot-energy`. Simulation leaves the stack unchanged. Energy is stored
+in the stack's Long `horizon:energy` component, so normal inventory moves and
+saves carry it with the item. Unsupported items, counts other than one, invalid
+components and refused writes transfer zero. Re-register declarations on reload;
+an item ID alone does not imply energy support.
+
+`machine::request-item-move` queues a bounded pull/push between a loaned machine
+slot and an adjacent inventory. It does not edit the guest's snapshot. After all
+views return, the game revalidates the live handle and loaded endpoints, applies
+automation rules and moves real stacks with their components. Poll and consume
+`take-item-move-result` for the actual moved count; a request ID only means queued.
+Do not spend private resources or report success merely because it was accepted.
+IDs are transient and cannot be saved or reused after removal/hot-reload.
+
 Use `item_transfer::set_slot_access(handle, slot, face, insert, extract)` while
 creating the block entity (or in another callback while its handle is valid) to
 restrict automation. For example, an output-only slot can accept insertion from
@@ -502,7 +535,8 @@ needs `vscreen` or an active X11 display.
 ## Distribution
 
 - **The file.** `.hmod`: a zip holding `horizon-mod.toml`, `mod.wasm` and,
-  later, `assets/` and `data/`. `mod.wasm` is capped at 32 MiB.
+  later, `assets/` and `data/`. A `content-only` package has no `mod.wasm`.
+  Components are capped at 32 MiB.
 - **Integrity.** Every download is checked against the SHA-256 the index
   lists before the file reaches `horizon-mods/`.
 - **Signing.** Authors sign `.hmod` files with an Ed25519 key (minisign

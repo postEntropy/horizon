@@ -2649,6 +2649,45 @@ impl GeneratorWorker {
 mod tests {
     use super::*;
     #[test]
+    fn custom_noise_dimension_uses_data_driven_checkerboard_biomes() {
+        let root = std::env::var_os("HORIZON_TEST_RESOURCES")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.local/horizon-client/26.3")
+            });
+        if !root.join("worldgen/world_presets.json").exists() {
+            eprintln!("skipping: no worldgen bundle at {}", root.display());
+            return;
+        }
+        let registry = Box::leak(Box::new(crate::level::data::load_registry(&root).unwrap()));
+        let mut data = GeneratorData::load(&root.join("worldgen"), registry).unwrap();
+        Arc::get_mut(&mut data).unwrap().dimensions.insert(
+            "example:checker".into(),
+            r#"{"type":"minecraft:overworld","generator":{"type":"minecraft:noise","settings":"minecraft:overworld","biome_source":{"type":"minecraft:checkerboard","biomes":["minecraft:plains","minecraft:desert"],"scale":0}}}"#.into(),
+        );
+        let mut worker = OverworldGenerator::for_world(
+            data,
+            12345,
+            "minecraft:normal",
+            "example:checker",
+            false,
+        )
+        .unwrap()
+        .worker();
+        assert_eq!(
+            worker.noise_biomes(&[[0, 0, 0], [4, 0, 0]]),
+            [
+                Some("minecraft:plains".into()),
+                Some("minecraft:desert".into())
+            ]
+        );
+        let first = worker.generate_proto(ChunkPos::new(0, 0)).unwrap();
+        let second = worker.generate_proto(ChunkPos::new(1, 0)).unwrap();
+        assert_eq!(first.biome_at(0, 64, 0), "minecraft:plains");
+        assert_eq!(second.biome_at(16, 64, 0), "minecraft:desert");
+        assert_ne!(first.block_name(0, 0, 0), "minecraft:air");
+    }
+    #[test]
     fn end_identity_surface_matches_normal_surface_and_rejects_custom_rules() {
         let root = std::env::var_os("HORIZON_TEST_RESOURCES")
             .map(std::path::PathBuf::from)

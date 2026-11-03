@@ -102,7 +102,7 @@ pub enum BlockEntity {
         block: String,
         handle: u32,
         saved: Vec<u8>,
-        items: Vec<Option<ItemStack>>,
+        items: crate::shared_inventory::Inventory,
         energy: Option<ModEnergyBuffer>,
         fluids: HashMap<u32, ModFluidTank>,
     },
@@ -326,11 +326,13 @@ impl BlockEntity {
             Self::Sculk(_) => Vec::new(),
             Self::Banner(_) => Vec::new(),
             Self::Crafter(c) => c.items.iter().flatten().cloned().collect(),
-            Self::Mod { items, .. } => items.iter().flatten().cloned().collect(),
+            Self::Mod { items, .. } if items.channel().is_some() => Vec::new(),
+            Self::Mod { items, .. } => items.read().iter().flatten().cloned().collect(),
         }
     }
-    pub fn slots(&self) -> &[Option<ItemStack>] {
-        match self {
+    pub fn slots(&self) -> crate::shared_inventory::Slots<'_> {
+        use crate::shared_inventory::Slots;
+        Slots::Local(match self {
             Self::Chest(items) => items,
             Self::Furnace(f) => &f.items,
             Self::Brewing(b) => &b.items,
@@ -347,11 +349,12 @@ impl BlockEntity {
             | Self::Vault(_)
             | Self::Beehive(_)
             | Self::CommandBlock(_) => &[],
-            Self::Mod { items, .. } => items,
-        }
+            Self::Mod { items, .. } => return Slots::Shared(items.read()),
+        })
     }
-    pub fn slots_mut(&mut self) -> &mut [Option<ItemStack>] {
-        match self {
+    pub fn slots_mut(&mut self) -> crate::shared_inventory::SlotsMut<'_> {
+        use crate::shared_inventory::SlotsMut;
+        SlotsMut::Local(match self {
             Self::Chest(items) => items,
             Self::Furnace(f) => &mut f.items,
             Self::Brewing(b) => &mut b.items,
@@ -368,8 +371,8 @@ impl BlockEntity {
             | Self::Vault(_)
             | Self::Beehive(_)
             | Self::CommandBlock(_) => &mut [],
-            Self::Mod { items, .. } => items,
-        }
+            Self::Mod { items, .. } => return SlotsMut::Shared(items.read()),
+        })
     }
 }
 /// Evaluator for `context_int_provider` / `context_float_provider` values.

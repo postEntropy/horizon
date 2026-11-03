@@ -132,7 +132,10 @@ impl Game<'_> {
         self.container_parts().iter().map(|p| p.1).sum()
     }
     /// Container slot `n` (menu slot `300 + n`).
-    pub(super) fn container_slot_mut(&mut self, mut n: usize) -> &mut Option<ItemStack> {
+    pub(super) fn container_slot_mut(
+        &mut self,
+        mut n: usize,
+    ) -> horizon_client::shared_inventory::SlotMut<'_> {
         let mut target = None;
         for (pos, size) in self.container_parts() {
             if n < size {
@@ -145,10 +148,10 @@ impl Game<'_> {
             self.world
                 .block_entities
                 .get_mut(&pos)
-                .and_then(|e| e.slots_mut().get_mut(i))
+                .and_then(|e| e.slots_mut().slot(i))
         }) {
             Some(slot) => slot,
-            None => &mut self.scratch_slot,
+            None => (&mut self.scratch_slot).into(),
         }
     }
     pub(super) fn container_block_is_shulker(&self) -> bool {

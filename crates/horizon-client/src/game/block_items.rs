@@ -25,7 +25,7 @@ impl Game<'_> {
             .facts()
             .get(self.world.block(key.0, key.1, key.2))
             .name;
-        let mut tag = save::encode_block_entity(key, entity, block);
+        let mut tag = save::encode_block_entity_for_save(key, entity, block);
         if let (Some(name), Tag::Compound(map)) = (self.world.block_names.get(&key), &mut tag) {
             map.insert("CustomName".into(), Tag::String(name.as_str().into()));
         }

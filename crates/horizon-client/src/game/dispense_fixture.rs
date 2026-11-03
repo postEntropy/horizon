@@ -348,7 +348,9 @@ impl Game<'_> {
         for p in containers {
             let entity = &self.world.block_entities[&p];
             let single = match entity {
-                BlockEntity::Jukebox(j) => std::slice::from_ref(&j.record),
+                BlockEntity::Jukebox(j) => {
+                    horizon_client::shared_inventory::Slots::Local(std::slice::from_ref(&j.record))
+                }
                 _ => entity.slots(),
             };
             for (i, slot) in single.iter().enumerate() {

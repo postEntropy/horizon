@@ -148,10 +148,12 @@ impl Game<'_> {
                     from: Some([p.previous.x, p.previous.y, p.previous.z]),
                 };
                 let hit = self.mod_mob_damage(id, amount, source);
-                if hit && let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-                    if m.alive() && m.species() != Species::Wither {
-                        m.add_effect("minecraft:wither", 200, 1);
-                    }
+                if hit
+                    && let Some(m) = self.mobs.iter_mut().find(|m| m.id == id)
+                    && m.alive()
+                    && m.species() != Species::Wither
+                {
+                    m.add_effect("minecraft:wither", 200, 1);
                 }
                 let killed = hit
                     && self

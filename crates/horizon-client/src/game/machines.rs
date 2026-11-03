@@ -222,18 +222,13 @@ impl Containers<'_> {
             kind,
         })
     }
-    fn get(&self, view: &View, slot: usize) -> Option<&ItemStack> {
+    fn get(&self, view: &View, slot: usize) -> Option<ItemStack> {
         if let Kind::Composter(level) = view.kind {
             // OutputContainer holds one bone meal; InputContainer composts at once.
-            return (level == 8 && slot == 0).then_some(&self.bone_meal);
+            return (level == 8 && slot == 0).then(|| self.bone_meal.clone());
         }
         let (pos, i) = view.locate(slot)?;
-        self.world
-            .block_entities
-            .get(&pos)?
-            .slots()
-            .get(i)?
-            .as_ref()
+        self.world.block_entities.get(&pos)?.slots().get(i)?.clone()
     }
     fn is_empty(&self, view: &View) -> bool {
         (0..view.len()).all(|i| self.get(view, i).is_none())
@@ -305,7 +300,7 @@ impl Containers<'_> {
     fn is_full(&self, view: &View, face: Direction) -> bool {
         view.slots_for_face(Some(face)).into_iter().all(|i| {
             self.get(view, i)
-                .is_some_and(|s| s.count >= self.max_stack(s))
+                .is_some_and(|s| s.count >= self.max_stack(&s))
         })
     }
     /// `AbstractContainerMenu.getRedstoneSignalFromContainer`.
@@ -320,7 +315,7 @@ impl Containers<'_> {
         let mut total = 0.0f32;
         for i in 0..view.len() {
             if let Some(s) = self.get(view, i) {
-                total += s.count as f32 / self.max_stack(s).min(64) as f32;
+                total += s.count as f32 / self.max_stack(&s).min(64) as f32;
             }
         }
         total /= view.len().max(1) as f32;
@@ -410,13 +405,13 @@ impl Game<'_> {
             bone_meal: bone_meal(),
         }
     }
-    fn slot_mut_at(&mut self, view: &View, slot: usize) -> Option<&mut Option<ItemStack>> {
+    fn slot_mut_at(
+        &mut self,
+        view: &View,
+        slot: usize,
+    ) -> Option<horizon_client::shared_inventory::SlotMut<'_>> {
         let (pos, i) = view.locate(slot)?;
-        self.world
-            .block_entities
-            .get_mut(&pos)?
-            .slots_mut()
-            .get_mut(i)
+        self.world.block_entities.get_mut(&pos)?.slots_mut().slot(i)
     }
     fn mod_slot_access(&self, view: &View, slot: usize, face: Direction) -> (bool, bool) {
         if view.kind != Kind::Mod {
@@ -437,6 +432,156 @@ impl Game<'_> {
             Direction::East => "east",
         };
         self.mod_item_slot_access(*handle, local_slot, face)
+    }
+    fn slot_capacity(&self, view: &View, slot: usize, stack: &ItemStack) -> u32 {
+        #[cfg(feature = "mods")]
+        if let Some((pos, slot)) = view.locate(slot)
+            && let Some(BlockEntity::Mod { handle, .. }) = self.world.block_entities.get(&pos)
+            && let Some(limit) = self.mod_item_slot_limit(*handle, slot)
+        {
+            return limit;
+        }
+        #[cfg(not(feature = "mods"))]
+        let _ = (view, slot);
+        self.containers().max_stack(stack)
+    }
+
+    /// Called only after all mod views have returned. Every successful step
+    /// moves a real one-item stack; blocked destinations leave the source alone.
+    #[cfg(feature = "mods")]
+    pub(super) fn mod_move_item_adjacent(
+        &mut self,
+        pos: Pos,
+        handle: u32,
+        slot: u32,
+        face: &str,
+        pull: bool,
+        count: u32,
+    ) -> u32 {
+        let Some(direction) = dir_from_name(face) else {
+            return 0;
+        };
+        let delta = step(direction);
+        let Some(other) = pos
+            .0
+            .checked_add(delta[0])
+            .zip(pos.1.checked_add(delta[1]))
+            .zip(pos.2.checked_add(delta[2]))
+            .map(|((x, y), z)| (x, y, z))
+        else {
+            return 0;
+        };
+        if !self.world.loaded(pos.0, pos.2)
+            || !self.world.loaded(other.0, other.2)
+            || !matches!(self.world.block_entities.get(&pos), Some(BlockEntity::Mod {handle: live, ..}) if *live == handle)
+        {
+            return 0;
+        }
+        let c = self.containers();
+        let Some(own) = c.view(pos, false) else {
+            return 0;
+        };
+        let Some(neighbor) = c.view(other, false) else {
+            return 0;
+        };
+        if slot as usize >= own.len() || matches!(neighbor.kind, Kind::Composter(_)) {
+            return 0;
+        }
+        // Includes double-chest overlap and canonical shared-channel aliases.
+        for &(a, _) in &own.parts {
+            for &(b, _) in &neighbor.parts {
+                if a == b {
+                    return 0;
+                }
+                if let (
+                    Some(BlockEntity::Mod { items: left, .. }),
+                    Some(BlockEntity::Mod { items: right, .. }),
+                ) = (
+                    self.world.block_entities.get(&a),
+                    self.world.block_entities.get(&b),
+                ) && left.shares_storage_with(right)
+                {
+                    return 0;
+                }
+            }
+        }
+        let external_face = direction.opposite();
+        let (source, target, source_face, target_face, source_slots, target_slots) = if pull {
+            (
+                &neighbor,
+                &own,
+                Some(external_face),
+                None,
+                neighbor.slots_for_face(Some(external_face)),
+                vec![slot as usize],
+            )
+        } else {
+            (
+                &own,
+                &neighbor,
+                None,
+                Some(external_face),
+                vec![slot as usize],
+                neighbor.slots_for_face(Some(external_face)),
+            )
+        };
+        let mut moved = 0;
+        for _ in 0..count.min(64) {
+            let mut selected = None;
+            for &from in &source_slots {
+                let c = self.containers();
+                let Some(stack) = c.get(source, from) else {
+                    continue;
+                };
+                if let Some(face) = source_face
+                    && (!c.can_take(source, from, &stack, face)
+                        || !self.mod_slot_access(source, from, face).1)
+                {
+                    continue;
+                }
+                for &to in &target_slots {
+                    if !c.can_place(target, to, &stack)
+                        || target_face.is_some_and(|face| !self.mod_slot_access(target, to, face).0)
+                    {
+                        continue;
+                    }
+                    let limit = self.slot_capacity(target, to, &stack);
+                    if limit > 0
+                        && c.get(target, to).is_none_or(|existing| {
+                            existing.same_item_same_components(&stack) && existing.count < limit
+                        })
+                    {
+                        selected = Some((from, to));
+                        break;
+                    }
+                }
+                if selected.is_some() {
+                    break;
+                }
+            }
+            let Some((from, to)) = selected else {
+                break;
+            };
+            let Some(one) = self.take_one(source, from) else {
+                break;
+            };
+            match self.try_move_in_item(None, target, one, to, target_face) {
+                None => {
+                    moved += 1;
+                    self.view_changed(source);
+                }
+                Some(rest) => {
+                    self.put_back(source, from, rest);
+                    break;
+                }
+            }
+        }
+        if moved > 0 {
+            for &(pos, _) in source.parts.iter().chain(&target.parts) {
+                self.mod_publish_item_inventory(pos);
+            }
+        }
+        moved
     }
     /// `BlockEntity.setChanged` for every block entity of a container.
     fn view_changed(&mut self, view: &View) {
@@ -483,14 +628,17 @@ impl Game<'_> {
             return Some(stack);
         }
         let was_empty = c.is_empty(view);
-        let max = c.max_stack(&stack);
+        let max = self.slot_capacity(view, slot, &stack);
         let mut success = false;
-        let target = self.slot_mut_at(view, slot)?;
-        match target {
+        let mut target = self.slot_mut_at(view, slot)?;
+        match &mut *target {
             None => {
-                *target = Some(stack.clone());
-                stack.count = 0;
-                success = true;
+                let taken = stack.count.min(max);
+                if taken > 0 {
+                    *target = Some(ItemStack { count: taken, ..stack.clone() });
+                    stack.count -= taken;
+                    success = true;
+                }
             }
             Some(current)
                 // HopperBlockEntity.canMergeItems
@@ -504,6 +652,7 @@ impl Game<'_> {
             }
             Some(_) => {}
         }
+        drop(target);
         if success {
             if was_empty && view.kind == Kind::Hopper {
                 let dest = view.parts[0].0;
@@ -544,7 +693,7 @@ impl Game<'_> {
     }
     /// Remove one item from a slot (`removeItem(slot, 1)`).
     fn take_one(&mut self, view: &View, slot: usize) -> Option<ItemStack> {
-        let target = self.slot_mut_at(view, slot)?;
+        let mut target = self.slot_mut_at(view, slot)?;
         let current = target.as_mut()?;
         let one = ItemStack {
             count: 1,
@@ -558,8 +707,8 @@ impl Game<'_> {
     }
     /// Undo `take_one` after a failed move.
     fn put_back(&mut self, view: &View, slot: usize, one: ItemStack) {
-        if let Some(target) = self.slot_mut_at(view, slot) {
-            match target {
+        if let Some(mut target) = self.slot_mut_at(view, slot) {
+            match &mut *target {
                 Some(current) => current.count += one.count,
                 None => *target = Some(one),
             }
@@ -612,7 +761,7 @@ impl Game<'_> {
         }
         let c = self.containers();
         let full =
-            (0..view.len()).all(|i| c.get(&view, i).is_some_and(|s| s.count == c.max_stack(s)));
+            (0..view.len()).all(|i| c.get(&view, i).is_some_and(|s| s.count == c.max_stack(&s)));
         if !full {
             changed |= self.hopper_suck(pos, &view);
         }
@@ -677,7 +826,7 @@ impl Game<'_> {
                 let Some(stack) = c.get(&source, slot) else {
                     continue;
                 };
-                if !c.can_take(&source, slot, stack, Direction::Down)
+                if !c.can_take(&source, slot, &stack, Direction::Down)
                     || !self.mod_slot_access(&source, slot, Direction::Down).1
                 {
                     continue;
@@ -799,7 +948,7 @@ impl Game<'_> {
         else {
             return Ok(());
         };
-        let Some(stack) = self.containers().get(&view, slot).cloned() else {
+        let Some(stack) = self.containers().get(&view, slot) else {
             return Ok(());
         };
         let target = offset(key, facing);
@@ -829,7 +978,7 @@ impl Game<'_> {
         } else {
             self.dispense_item(key, facing, stack)?
         };
-        if let Some(entry) = self.slot_mut_at(&view, slot) {
+        if let Some(mut entry) = self.slot_mut_at(&view, slot) {
             *entry = remaining;
         }
         self.container_changed(key);

@@ -3,6 +3,74 @@
 //! effects (regeneration, poison, wither, hunger, saturation, instant
 //! effects), and the derived flags the movement and damage code read.
 use crate::brewing;
+use std::{
+    collections::HashMap,
+    sync::{Mutex, OnceLock},
+};
+
+fn intern_namespaced_id(id: &str) -> &'static str {
+    static IDS: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+    let mut ids = IDS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    ids.entry(id.to_owned())
+        .or_insert_with(|| Box::leak(id.to_owned().into_boxed_str()))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ModEffectPacket {
+    Update {
+        entity_id: i32,
+        id: String,
+        duration: i32,
+        amplifier: i32,
+        flags: i8,
+    },
+    Remove {
+        entity_id: i32,
+        id: String,
+    },
+}
+
+pub fn encode_mod_effect_packet(packet: &ModEffectPacket) -> Vec<u8> {
+    let value = match packet {
+        ModEffectPacket::Update {
+            entity_id,
+            id,
+            duration,
+            amplifier,
+            flags,
+        } => serde_json::json!({
+            "operation": "update", "entity_id": entity_id, "id": id,
+            "duration": duration, "amplifier": amplifier, "flags": flags,
+        }),
+        ModEffectPacket::Remove { entity_id, id } => serde_json::json!({
+            "operation": "remove", "entity_id": entity_id, "id": id,
+        }),
+    };
+    serde_json::to_vec(&value).unwrap_or_default()
+}
+
+pub fn decode_mod_effect_packet(bytes: &[u8]) -> Option<ModEffectPacket> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    let entity_id = i32::try_from(value["entity_id"].as_i64()?).ok()?;
+    let id = value["id"].as_str()?.to_owned();
+    if !id.contains(':') {
+        return None;
+    }
+    match value["operation"].as_str()? {
+        "remove" => Some(ModEffectPacket::Remove { entity_id, id }),
+        "update" => Some(ModEffectPacket::Update {
+            entity_id,
+            id,
+            duration: i32::try_from(value["duration"].as_i64()?).ok()?,
+            amplifier: i32::try_from(value["amplifier"].as_i64()?).ok()?,
+            flags: i8::try_from(value["flags"].as_i64()?).ok()?,
+        }),
+        _ => None,
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EffectInstance {
@@ -13,6 +81,7 @@ pub struct EffectInstance {
     pub amplifier: i32,
     pub ambient: bool,
     pub visible: bool,
+    pub show_icon: bool,
     pub hidden: Option<Box<EffectInstance>>,
 }
 impl EffectInstance {
@@ -23,7 +92,29 @@ impl EffectInstance {
             amplifier: amplifier.clamp(0, 255),
             ambient: false,
             visible: true,
+            show_icon: true,
             hidden: None,
+        }
+    }
+    /// Construct an effect registered by a mod; retain its complete id so
+    /// saves and client synchronization remain namespace-safe.
+    pub fn new_namespaced(id: &str, duration: i32, amplifier: i32) -> Self {
+        let id = intern_namespaced_id(id);
+        Self {
+            id,
+            duration,
+            amplifier: amplifier.clamp(0, 255),
+            ambient: false,
+            visible: true,
+            show_icon: true,
+            hidden: None,
+        }
+    }
+    pub fn namespaced_id(&self) -> String {
+        if self.id.contains(':') {
+            self.id.to_owned()
+        } else {
+            format!("minecraft:{}", self.id)
         }
     }
     fn infinite(&self) -> bool {
@@ -64,6 +155,10 @@ impl EffectInstance {
         }
         if take.visible != self.visible {
             self.visible = take.visible;
+            changed = true;
+        }
+        if take.show_icon != self.show_icon {
+            self.show_icon = take.show_icon;
             changed = true;
         }
         changed
@@ -179,29 +274,36 @@ impl PlayerEffects {
         self.list.clear();
     }
     /// The effects of a saved player (`Player.active_effects`: id,
-    /// duration, amplifier, ambient, visible).
-    pub fn from_saved(saved: &[(String, i32, i32, bool, bool)]) -> Self {
+    /// duration, amplifier, ambient, particles, icon).
+    pub fn from_saved(saved: &[(String, i32, i32, bool, bool, bool)]) -> Self {
         let mut effects = Self::default();
-        for (id, duration, amplifier, ambient, _) in saved {
-            if let Some(def) = brewing::effect(id) {
-                let mut e = EffectInstance::new(def.id, *duration, *amplifier);
-                e.ambient = *ambient;
-                effects.add(e);
-            }
+        for (id, duration, amplifier, ambient, visible, show_icon) in saved {
+            let mut e = if let Some(def) = brewing::effect(id) {
+                EffectInstance::new(def.id, *duration, *amplifier)
+            } else if id.contains(':') {
+                EffectInstance::new_namespaced(id, *duration, *amplifier)
+            } else {
+                continue;
+            };
+            e.ambient = *ambient;
+            e.visible = *visible;
+            e.show_icon = *show_icon;
+            effects.add(e);
         }
         effects
     }
     /// `Player.active_effects` for the save.
-    pub fn saved(&self) -> Vec<(String, i32, i32, bool, bool)> {
+    pub fn saved(&self) -> Vec<(String, i32, i32, bool, bool, bool)> {
         self.list
             .iter()
             .map(|e| {
                 (
-                    format!("minecraft:{}", e.id),
+                    e.namespaced_id(),
                     e.duration,
                     e.amplifier,
                     e.ambient,
                     e.visible,
+                    e.show_icon,
                 )
             })
             .collect()
@@ -209,7 +311,7 @@ impl PlayerEffects {
     /// ClientboundUpdateMobEffectPacket's flags without blending: ambient,
     /// particles visible and the icon shown (always, for these effects).
     pub fn flags(e: &EffectInstance) -> i8 {
-        i8::from(e.ambient) | i8::from(e.visible) << 1 | 4
+        i8::from(e.ambient) | i8::from(e.visible) << 1 | i8::from(e.show_icon) << 2
     }
     /// `LivingEntity.tickEffects` (server part) with the omens' effect ticks:
     /// `omen` answers `BadOmenMobEffect` (every tick) and `RaidOmenMobEffect`
@@ -572,6 +674,81 @@ mod tests {
                 16.0,
                 "add_value",
             )]
+        );
+    }
+
+    #[test]
+    fn modded_effect_id_flags_and_duration_round_trip_through_player_save() {
+        let mut effects = PlayerEffects::default();
+        let mut effect = EffectInstance::new_namespaced("farmersdelight:nourishment", 2, 0);
+        effect.visible = false;
+        effect.show_icon = false;
+        effects.add(effect);
+
+        let saved = effects.saved();
+        assert_eq!(
+            saved,
+            [(
+                "farmersdelight:nourishment".into(),
+                2,
+                0,
+                false,
+                false,
+                false
+            )]
+        );
+        let mut loaded = PlayerEffects::from_saved(&saved);
+        let restored = loaded.get("farmersdelight:nourishment").unwrap();
+        assert_eq!(restored.duration, 2);
+        assert!(!restored.visible && !restored.show_icon);
+        assert!(loaded.tick().is_empty());
+        assert_eq!(
+            loaded.get("farmersdelight:nourishment").unwrap().duration,
+            1
+        );
+        assert!(loaded.tick().is_empty());
+        assert!(loaded.get("farmersdelight:nourishment").is_none());
+    }
+
+    #[test]
+    fn modded_effect_client_packet_round_trips_update_and_remove() {
+        let update = ModEffectPacket::Update {
+            entity_id: 42,
+            id: "farmersdelight:nourishment".into(),
+            duration: 600,
+            amplifier: 0,
+            flags: 0,
+        };
+        assert_eq!(
+            decode_mod_effect_packet(&encode_mod_effect_packet(&update)),
+            Some(update.clone())
+        );
+        let ModEffectPacket::Update {
+            id,
+            duration,
+            amplifier,
+            flags,
+            ..
+        } = update
+        else {
+            unreachable!()
+        };
+        let mut effects = PlayerEffects::default();
+        let mut effect = EffectInstance::new_namespaced(&id, duration, amplifier);
+        effect.ambient = flags & 1 != 0;
+        effect.visible = flags & 2 != 0;
+        effect.show_icon = flags & 4 != 0;
+        effects.add(effect);
+        let synced = effects.get("farmersdelight:nourishment").unwrap();
+        assert_eq!(synced.duration, 600);
+        assert!(!synced.visible && !synced.show_icon);
+        let remove = ModEffectPacket::Remove {
+            entity_id: 42,
+            id: "farmersdelight:nourishment".into(),
+        };
+        assert_eq!(
+            decode_mod_effect_packet(&encode_mod_effect_packet(&remove)),
+            Some(remove)
         );
     }
 }

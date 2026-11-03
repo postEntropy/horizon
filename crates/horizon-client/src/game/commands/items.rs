@@ -196,7 +196,7 @@ impl Game<'_> {
                     items.get(*i).cloned().flatten()
                 }
                 Some(horizon_client::containers::BlockEntity::Mod { items, .. }) => {
-                    items.get(*i).cloned().flatten()
+                    items.read().get(*i).cloned().flatten()
                 }
                 _ => None,
             },
@@ -281,7 +281,7 @@ impl Game<'_> {
                     }
                 }
                 Some(horizon_client::containers::BlockEntity::Mod { items, .. }) => {
-                    match items.get_mut(*i) {
+                    match items.read().get_mut(*i) {
                         Some(slot) => {
                             *slot = stack;
                             true

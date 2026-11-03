@@ -412,8 +412,14 @@ impl GameLevel<'_> {
         if side_effects {
             match kind {
                 PreRemove::Contents { slots, .. } => {
-                    let items = entity.as_ref().map_or(&[][..], BlockEntity::slots);
-                    self.spill_container_contents(pos, old, slots, items, entity.is_some());
+                    let items = match entity.as_ref() {
+                        Some(BlockEntity::Mod { items, .. }) if items.channel().is_some() => {
+                            horizon_client::shared_inventory::Slots::Local(&[])
+                        }
+                        Some(entity) => entity.slots(),
+                        None => horizon_client::shared_inventory::Slots::Local(&[]),
+                    };
+                    self.spill_container_contents(pos, old, slots, &items, entity.is_some());
                 }
                 PreRemove::Campfire => {
                     for _ in 0..4 {

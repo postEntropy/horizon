@@ -2,6 +2,37 @@ use super::*;
 use crate::{assets::Assets, blocks::BlockFacts, containers::Providers, items::Items};
 
 #[test]
+fn migrates_legacy_biome_climate_and_visual_attributes() {
+    let old = r#"{"precipitation":"none","effects":{"sky_color":-16777216,"fog_color":12638463,"water_fog_color":329011},"attributes":{"minecraft:visual/fog_color":123}}"#;
+    let normalized = normalize_worldgen_entry("worldgen/biomes.json", old);
+    let value: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+    assert_eq!(value["has_precipitation"], false);
+    assert_eq!(value["attributes"]["minecraft:visual/sky_color"], -16777216);
+    assert_eq!(value["attributes"]["minecraft:visual/fog_color"], 123);
+    assert_eq!(
+        value["attributes"]["minecraft:visual/water_fog_color"],
+        329011
+    );
+    let already_set = r#"{"precipitation":"rain","has_precipitation":false}"#;
+    let normalized = normalize_worldgen_entry("worldgen/biomes.json", already_set);
+    let value: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+    assert_eq!(value["has_precipitation"], false);
+}
+
+#[test]
+fn optional_compactmachines_biome_migration() {
+    let Some(path) = std::env::var_os("HORIZON_TEST_COMPACTMACHINES_BIOME") else {
+        return;
+    };
+    let input = std::fs::read_to_string(path).unwrap();
+    let value: serde_json::Value =
+        serde_json::from_str(&normalize_worldgen_entry("worldgen/biomes.json", &input)).unwrap();
+    assert_eq!(value["has_precipitation"], false);
+    assert_eq!(value["attributes"]["minecraft:visual/sky_color"], -16777216);
+    assert!(value["attributes"]["minecraft:gameplay/natural_mob_spawns"]["spawns_by_category"]["monster"].as_array().is_some_and(|v| !v.is_empty()));
+}
+
+#[test]
 fn renames_ids_keys_and_states() {
     let mut r = Rename::new("minecraft:iron_block", "ruby:ruby_block");
     r.states = 10..12;
@@ -127,6 +158,91 @@ fn ruby_mod(dir: &Path) -> ContentMod {
 /// The overlay over the real prepared resources: every loader reads it, the
 /// new blocks behave like their templates with the overrides, and vanilla's
 /// states are where they were.
+#[test]
+fn mod_item_crafting_remainder_reaches_real_item_facts() {
+    let Some(base) = prepared() else {
+        return;
+    };
+    let scratch = std::env::temp_dir().join(format!("horizon-remainder-{}", std::process::id()));
+    let mut content = ruby_mod(&scratch.join("ruby"));
+    content.content.items[0].crafting_remainder = Some("minecraft:bowl".into());
+    content.content.items[0].use_remainder = Some("minecraft:glass_bottle".into());
+    content.content.items[0].food = Some(horizon_mods::content::Food {
+        nutrition: 7,
+        saturation: 3.5,
+        can_always_eat: true,
+        consume_seconds: 0.8,
+        effects: vec![
+            horizon_mods::content::FoodEffect {
+                id: "minecraft:speed".into(),
+                duration: 120,
+                amplifier: 1,
+                probability: 0.5,
+                ambient: true,
+                visible: false,
+                show_icon: false,
+            },
+            horizon_mods::content::FoodEffect {
+                id: "minecraft:regeneration".into(),
+                duration: -1,
+                amplifier: 2,
+                probability: 1.0,
+                ambient: false,
+                visible: true,
+                show_icon: true,
+            },
+        ],
+    });
+    let id = content.content.items[0].id.clone();
+    let root = resource_root(&base, &[content], &scratch.join("cache")).unwrap();
+    let assets = crate::assets::Assets::load(&root).unwrap();
+    let facts = crate::blocks::BlockFacts::load(&root, assets.registry).unwrap();
+    let items = crate::items::Items::load(&root, assets.registry, &facts).unwrap();
+    assert_eq!(
+        items.get(&id).unwrap().crafting_remainder.as_deref(),
+        Some("minecraft:bowl")
+    );
+    assert_eq!(
+        items.get(&id).unwrap().use_remainder.as_deref(),
+        Some("minecraft:glass_bottle")
+    );
+    assert_eq!(items.get(&id).unwrap().food, Some((7, 3.5)));
+    use crate::items::{ConsumeEffect, ConsumeEffectSpec};
+    assert_eq!(
+        items.get(&id).unwrap().consumable.as_ref().unwrap().effects,
+        vec![
+            ConsumeEffect::ApplyEffects {
+                effects: vec![ConsumeEffectSpec {
+                    id: "minecraft:speed".into(),
+                    duration: 120,
+                    amplifier: 1,
+                    ambient: true,
+                    visible: false,
+                    show_icon: false,
+                }],
+                probability: 0.5
+            },
+            ConsumeEffect::ApplyEffects {
+                effects: vec![ConsumeEffectSpec {
+                    id: "minecraft:regeneration".into(),
+                    duration: -1,
+                    amplifier: 2,
+                    ambient: false,
+                    visible: true,
+                    show_icon: true,
+                }],
+                probability: 1.0
+            },
+        ]
+    );
+    assert!(items.get(&id).unwrap().can_always_eat);
+    assert_eq!(
+        items.get(&id).unwrap().consumable.as_ref().unwrap().seconds,
+        0.8
+    );
+    fs::remove_dir_all(scratch).unwrap();
+}
+
 #[test]
 fn content_root_loads_with_every_table() {
     let Some(base) = prepared() else {

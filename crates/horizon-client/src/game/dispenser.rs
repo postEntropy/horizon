@@ -528,7 +528,7 @@ impl Game<'_> {
                 .get(&rest.item)
                 .map_or(64, |i| i.max_stack)
                 .max(1);
-            for cell in entity.slots_mut() {
+            for cell in entity.slots_mut().iter_mut() {
                 match cell {
                     None => {
                         let n = rest.count.min(max);

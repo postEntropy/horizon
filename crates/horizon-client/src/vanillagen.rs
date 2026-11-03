@@ -115,9 +115,11 @@ impl VanillaTerrain {
             for (reason, mut names) in by_reason {
                 names.sort();
                 let examples = names.iter().take(6).cloned().collect::<Vec<_>>().join(", ");
-                let additional = (names.len() > 6)
-                    .then(|| format!(", and {} more", names.len() - 6))
-                    .unwrap_or_default();
+                let additional = if names.len() > 6 {
+                    format!(", and {} more", names.len() - 6)
+                } else {
+                    String::new()
+                };
                 log::warn!(
                     "Horizon: skipped {} placed features ({reason}); examples: {examples}{additional}",
                     names.len()
