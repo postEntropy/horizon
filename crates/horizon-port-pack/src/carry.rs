@@ -27,6 +27,13 @@ fn template_id(template: &str) -> String {
 #[derive(Debug, Default, Serialize)]
 pub struct Report {
     pub copied: usize,
+    /// Locally authored data files merged from `mods/<key>/port/data/` after
+    /// carrying the original mod jar. This includes pack-script translations.
+    #[serde(default)]
+    pub authored_port_data: usize,
+    /// Locally authored resource files merged from `mods/<key>/port/assets/`.
+    #[serde(default)]
+    pub authored_port_assets: usize,
     /// Namespaces besides the mod id its content owns ([`extra_namespaces`]),
     /// listed in the manifest's `namespaces`.
     pub namespaces: Vec<String>,
@@ -50,6 +57,8 @@ pub struct Report {
     /// Model identifiers that still have no unique model file to carry.
     pub models_unresolved: BTreeMap<String, String>,
     pub recipes_upgraded: usize,
+    /// Known vanilla recipes already in the target ingredient format.
+    pub recipes_compatible: usize,
     pub loot_tables_upgraded: usize,
     /// Advancements whose criteria were rewritten ([`upgrade_advancement`]).
     pub advancements_upgraded: usize,
@@ -152,6 +161,23 @@ pub fn template(name: &str, properties: &BTreeSet<String>) -> Option<&'static st
 /// `tall`; sides and `up` that are `true` or `false` are a vine's (Chipped's
 /// vines), which the names alone take for a wall.
 pub fn block_template(name: &str, blockstate: &Value) -> Option<&'static str> {
+    if let Some(("buddingcrystals", path)) = name.split_once(':') {
+        if path.starts_with("budding_") {
+            return Some("minecraft:amethyst_block");
+        }
+        if path.starts_with("small_") && path.ends_with("_bud") {
+            return Some("minecraft:small_amethyst_bud");
+        }
+        if path.starts_with("medium_") && path.ends_with("_bud") {
+            return Some("minecraft:medium_amethyst_bud");
+        }
+        if path.starts_with("large_") && path.ends_with("_bud") {
+            return Some("minecraft:large_amethyst_bud");
+        }
+        if path.ends_with("_cluster") {
+            return Some("minecraft:amethyst_cluster");
+        }
+    }
     let props = properties(blockstate);
     if props == BTreeSet::from(["active".into(), "facing".into()]) {
         return Some(
@@ -191,78 +217,36 @@ pub fn block_template(name: &str, blockstate: &Value) -> Option<&'static str> {
     })
 }
 
-/// Drops custom blockstate axes only when doing so keeps every selected model
-/// identical. This carries decorative blocks whose Java state adds properties
-/// such as `occupied` or `waterlogged` even though those properties do not
-/// change the model. Blocks whose custom state selects different models stay
-/// out until Horizon can represent that state natively.
-fn reduce_blockstate(blockstate: &mut Value) -> Option<&'static str> {
-    if blockstate.get("multipart").is_some() {
-        return None;
-    }
-    let variants = blockstate.get("variants")?.as_object()?;
-    let properties = properties(blockstate);
-    let facing = properties.contains("facing");
-    let template = if facing {
-        "minecraft:carved_pumpkin"
-    } else {
-        "minecraft:stone"
-    };
-    let allowed: BTreeSet<&str> = if facing {
-        BTreeSet::from(["facing"])
-    } else {
-        BTreeSet::new()
-    };
-    if facing {
-        let directions: BTreeSet<String> = values(blockstate, "facing");
-        if directions
-            .iter()
-            .any(|direction| !matches!(direction.as_str(), "north" | "south" | "east" | "west"))
-        {
-            return None;
-        }
-    }
-
-    let mut projected = serde_json::Map::new();
-    for (selector, models) in variants {
-        let mut kept = Vec::new();
-        for part in selector.split(',') {
-            let (property, value) = part.split_once('=')?;
-            if allowed.contains(property) {
-                kept.push((property, value));
+/// Explicit vanilla shapes for carried blocks whose source model has no
+/// reliable structural hint (for example a plain-state torch or ladder).
+fn pack_block_template(mod_id: &str, name: &str) -> Option<&'static str> {
+    match mod_id {
+        "buddingcrystals" => {
+            if name.starts_with("budding_") {
+                Some("minecraft:amethyst_block")
+            } else if name.starts_with("small_") && name.ends_with("_bud") {
+                Some("minecraft:small_amethyst_bud")
+            } else if name.starts_with("medium_") && name.ends_with("_bud") {
+                Some("minecraft:medium_amethyst_bud")
+            } else if name.starts_with("large_") && name.ends_with("_bud") {
+                Some("minecraft:large_amethyst_bud")
+            } else if name.ends_with("_cluster") {
+                Some("minecraft:amethyst_cluster")
+            } else {
+                None
             }
         }
-        kept.sort_unstable_by_key(|(property, _)| *property);
-        let key = kept
-            .into_iter()
-            .map(|(property, value)| format!("{property}={value}"))
-            .collect::<Vec<_>>()
-            .join(",");
-        if let Some(previous) = projected.get(&key)
-            && previous != models
-        {
-            return None;
-        }
-        projected.insert(key, models.clone());
+        "bambooeverything" => match name {
+            "bamboo_ladder" | "dry_bamboo_ladder" => Some("minecraft:ladder"),
+            "bamboo_torch" | "dry_bamboo_torch" => Some("minecraft:torch"),
+            "bamboo_wall_torch" | "dry_bamboo_wall_torch" => Some("minecraft:wall_torch"),
+            _ => None,
+        },
+        _ => None,
     }
-    if projected.is_empty() {
-        return None;
-    }
-    if let Some(generic) = projected.get("")
-        && projected
-            .iter()
-            .filter(|(key, _)| !key.is_empty())
-            .any(|(_, models)| models != generic)
-    {
-        return None;
-    }
-    blockstate["variants"] = Value::Object(projected);
-    Some(template)
 }
 
-/// Adapts mod-only state names to equivalent vanilla template properties so
-/// carried blockstates can select the right model while the block copies a
-/// vanilla state schema.
+/// Adapts explicitly recognized mod property domains to vanilla equivalents.
 fn adapt_blockstate_properties(blockstate: &mut Value) -> bool {
     let mut changed = false;
     let cardinal = BTreeSet::from(["north", "east", "south", "west"]);
@@ -278,15 +262,18 @@ fn adapt_blockstate_properties(blockstate: &mut Value) -> bool {
         }
     }
 
-    let engraved = values(blockstate, "engraved");
-    if !engraved.is_empty()
-        && engraved
-            .iter()
-            .all(|value| matches!(value.as_str(), "true" | "false"))
-    {
-        changed |= map_state_property(blockstate, "engraved", |value| {
-            matches!(value, "true" | "false").then(|| vec![("lit".to_owned(), value.to_owned())])
-        });
+    for source in ["engraved", "working"] {
+        let active = values(blockstate, source);
+        if !active.is_empty()
+            && active
+                .iter()
+                .all(|value| matches!(value.as_str(), "true" | "false"))
+        {
+            changed |= map_state_property(blockstate, source, |value| {
+                matches!(value, "true" | "false")
+                    .then(|| vec![("lit".to_owned(), value.to_owned())])
+            });
+        }
     }
 
     let water = values(blockstate, "water");
@@ -749,40 +736,219 @@ pub fn ingredient(v: &Value) -> Option<Value> {
     }
 }
 
+/// A pre-1.20 ingredient as 26.3's item id or tag selector.
+fn legacy_ingredient(v: &Value) -> Option<Value> {
+    match v {
+        Value::Array(items) => {
+            let mut ids = Vec::with_capacity(items.len());
+            for item in items {
+                let converted = legacy_ingredient(item)?;
+                // Vanilla's list form names concrete items; a tag in a union
+                // needs expansion against the active registry, not flattening.
+                if !converted.as_str().is_some_and(|id| !id.starts_with('#')) {
+                    return None;
+                }
+                ids.push(converted);
+            }
+            match ids.len() {
+                0 => None,
+                1 => ids.into_iter().next(),
+                _ => Some(Value::Array(ids)),
+            }
+        }
+        Value::Object(object) => {
+            if object
+                .keys()
+                .any(|key| !matches!(key.as_str(), "item" | "tag" | "data"))
+                || (object.contains_key("item") && object.contains_key("tag"))
+            {
+                return None;
+            }
+            if object
+                .get("data")
+                .is_some_and(|data| data.as_u64() != Some(0))
+            {
+                return None;
+            }
+            if let Some(Value::String(item)) = object.get("item") {
+                Some(json!(item))
+            } else if let Some(Value::String(tag)) = object.get("tag") {
+                Some(json!(format!("#{tag}")))
+            } else {
+                None
+            }
+        }
+        Value::String(_) => Some(v.clone()),
+        _ => None,
+    }
+}
+
 /// A vanilla recipe upgraded in place; `false` (unchanged) when it is not
 /// a vanilla type or one of its ingredients has no 26.3 form.
 pub fn upgrade_recipe(recipe: &mut Value) -> bool {
-    let kind = recipe["type"].as_str().unwrap_or("");
-    if !kind.starts_with("minecraft:") || recipe.get("neoforge:conditions").is_some() {
-        return false;
+    normalize_recipe(recipe).unwrap_or(false)
+}
+
+/// None means unsupported; Some(false) means compatible without rewriting.
+fn normalize_recipe(recipe: &mut Value) -> Option<bool> {
+    let source_kind = recipe["type"].as_str().unwrap_or("");
+    if source_kind == "forge:conditional" {
+        let children = recipe.get("recipes").and_then(Value::as_array)?;
+        if children.len() != 1 {
+            return None;
+        }
+        let conditions = children[0]
+            .get("conditions")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let config_only = !conditions.is_empty()
+            && conditions.iter().all(|condition| {
+                (condition["type"].as_str() == Some("buddingcrystals:config")
+                    && condition["config"]
+                        .as_str()
+                        .is_some_and(|name| name.starts_with("enable_crafting_budding_")))
+                    || (condition["type"].as_str() == Some("forge:mod_loaded")
+                        && condition["modid"].as_str().is_some())
+            });
+        if !config_only {
+            return None;
+        }
+        let mut inner = children[0].get("recipe").cloned()?;
+        if normalize_recipe(&mut inner).is_some() {
+            *recipe = inner;
+            return Some(true);
+        }
+        return None;
+    }
+    if source_kind.is_empty()
+        || (source_kind.contains(':') && !source_kind.starts_with("minecraft:"))
+        || recipe.get("neoforge:conditions").is_some()
+        || recipe.get("forge:conditions").is_some()
+    {
+        return None;
     }
     let mut out = recipe.clone();
+    let kind = if source_kind.contains(':') {
+        source_kind.to_owned()
+    } else {
+        format!("minecraft:{source_kind}")
+    };
+    let mut changed = kind != source_kind;
+    if let Some(Value::String(current)) = out.get_mut("type") {
+        *current = kind;
+    }
     if let Some(key) = out.get_mut("key").and_then(Value::as_object_mut) {
         for v in key.values_mut() {
-            let Some(new) = ingredient(v) else {
-                return false;
-            };
+            let new = legacy_ingredient(v).or_else(|| ingredient(v))?;
+            changed |= *v != new;
             *v = new;
         }
     }
     if let Some(list) = out.get_mut("ingredients").and_then(Value::as_array_mut) {
         for v in list.iter_mut() {
-            let Some(new) = ingredient(v) else {
-                return false;
-            };
+            let new = legacy_ingredient(v).or_else(|| ingredient(v))?;
+            changed |= *v != new;
             *v = new;
         }
     }
     for field in ["ingredient", "base", "addition", "template"] {
         if let Some(v) = out.get_mut(field) {
-            let Some(new) = ingredient(v) else {
-                return false;
-            };
+            let new = legacy_ingredient(v).or_else(|| ingredient(v))?;
+            changed |= *v != new;
             *v = new;
         }
     }
+    if let Some(result) = out.get_mut("result").and_then(Value::as_object_mut) {
+        if let Some(item) = result.remove("item") {
+            if result
+                .get("data")
+                .and_then(Value::as_u64)
+                .is_some_and(|data| data != 0)
+            {
+                return None;
+            }
+            result.remove("data");
+            result.entry("id").or_insert(item);
+            changed = true;
+        }
+    }
+    changed |= *recipe != out;
     *recipe = out;
-    true
+    Some(changed)
+}
+
+/// Structural coverage only; item/tag resolution still belongs to the active
+/// game registry. Never credit a known type solely because its name matches.
+fn compatible_recipe_structure(recipe: &Value) -> bool {
+    fn selector(value: &Value) -> bool {
+        if let Some(id) = value.as_str() {
+            return !id.trim_start_matches('#').is_empty();
+        }
+        value.as_array().is_some_and(|ids| {
+            !ids.is_empty()
+                && ids.iter().all(|id| {
+                    id.as_str()
+                        .is_some_and(|id| !id.is_empty() && !id.starts_with('#'))
+                })
+        })
+    }
+    if recipe_result(recipe).is_none_or(str::is_empty) {
+        return false;
+    }
+    if recipe["result"].get("count").is_some_and(|count| {
+        count
+            .as_u64()
+            .is_none_or(|count| !(1..=64).contains(&count))
+    }) {
+        return false;
+    }
+    match recipe["type"].as_str() {
+        Some("minecraft:crafting_shapeless") => recipe["ingredients"]
+            .as_array()
+            .is_some_and(|inputs| (1..=9).contains(&inputs.len()) && inputs.iter().all(selector)),
+        Some("minecraft:crafting_shaped") => {
+            let Some(rows) = recipe["pattern"].as_array() else {
+                return false;
+            };
+            let Some(key) = recipe["key"].as_object() else {
+                return false;
+            };
+            if !(1..=3).contains(&rows.len()) || key.is_empty() {
+                return false;
+            }
+            let mut width = None;
+            let mut used = std::collections::BTreeSet::new();
+            for row in rows {
+                let Some(row) = row.as_str() else {
+                    return false;
+                };
+                let len = row.chars().count();
+                if !(1..=3).contains(&len) || width.is_some_and(|width| width != len) {
+                    return false;
+                }
+                width = Some(len);
+                for symbol in row.chars().filter(|&symbol| symbol != ' ') {
+                    used.insert(symbol.to_string());
+                }
+            }
+            !used.is_empty()
+                && used.len() == key.len()
+                && key.iter().all(|(symbol, value)| {
+                    symbol.chars().count() == 1 && used.contains(symbol) && selector(value)
+                })
+        }
+        Some(
+            "minecraft:smelting"
+            | "minecraft:blasting"
+            | "minecraft:smoking"
+            | "minecraft:campfire_cooking",
+        ) => selector(&recipe["ingredient"]),
+        Some("minecraft:smithing_transform") => ["template", "base", "addition"]
+            .iter()
+            .all(|field| selector(&recipe[*field])),
+        _ => false,
+    }
 }
 
 /// Renames the 1.21 noise parameter fields to 26.3's worldgen noise schema.
@@ -948,6 +1114,11 @@ pub fn upgrade_loot(v: &mut Value) {
     match v {
         Value::Array(a) => a.iter_mut().for_each(upgrade_loot),
         Value::Object(o) => {
+            if o.get("type").and_then(Value::as_str) == Some("buddingcrystals:optional_item") {
+                // BuddingCrystals uses this optional item entry in alternatives;
+                // the presence is already governed by the enclosing conditions.
+                o.insert("type".to_owned(), json!("minecraft:item"));
+            }
             if let Some(Value::Array(pools)) = o.get_mut("pools") {
                 for pool in pools {
                     for key in ["rolls", "bonus_rolls"] {
@@ -1130,24 +1301,47 @@ fn shared_tag(root: &str, ns: &str, rest: &str) -> bool {
         && rest.starts_with("tags/")
 }
 
-/// NeoForge/Forge registries still use plural block/item tag directories;
-/// Horizon and the vanilla 26.3 reader use their singular registry names.
-fn canonical_tag_path(name: &str) -> String {
-    if !name.starts_with("data/forge/tags/") && !name.starts_with("data/neoforge/tags/") {
+/// 1.18 datapacks use plural registry directories. Horizon and the vanilla
+/// 26.3 reader use singular names for tags and several data registries.
+fn canonical_data_path(name: &str) -> String {
+    let Some((root, namespace, rest)) = split(name) else {
+        return name.to_owned();
+    };
+    if root != "data" {
         return name.to_owned();
     }
-    let Some((prefix, tag)) = name.split_once("/tags/") else {
-        return name.to_owned();
+    let mut parts = rest.splitn(2, '/');
+    let (directory, remainder) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));
+    let directory = match directory {
+        "recipes" => "recipe",
+        "advancements" => "advancement",
+        "loot_tables" => "loot_table",
+        "functions" => "function",
+        "predicates" => "predicate",
+        "item_modifiers" => "item_modifier",
+        _ => directory,
     };
-    let Some((kind, rest)) = tag.split_once('/') else {
-        return name.to_owned();
+    let (directory, remainder) = if directory == "tags" {
+        let mut tags = remainder.splitn(2, '/');
+        let (kind, tail) = (tags.next().unwrap_or(""), tags.next().unwrap_or(""));
+        let kind = match kind {
+            "blocks" => "block",
+            "items" => "item",
+            _ => kind,
+        };
+        return if tail.is_empty() {
+            format!("data/{namespace}/tags/{kind}")
+        } else {
+            format!("data/{namespace}/tags/{kind}/{tail}")
+        };
+    } else {
+        (directory, remainder)
     };
-    let kind = match kind {
-        "blocks" => "block",
-        "items" => "item",
-        _ => kind,
-    };
-    format!("{prefix}/tags/{kind}/{rest}")
+    if remainder.is_empty() {
+        format!("data/{namespace}/{directory}")
+    } else {
+        format!("data/{namespace}/{directory}/{remainder}")
+    }
 }
 
 /// Where a jar entry goes: `Some(true)` inside the content mod (its own
@@ -1683,7 +1877,7 @@ fn carry_kind(
                 }
             }
         }
-        let carried_name = canonical_tag_path(&name);
+        let carried_name = canonical_data_path(&name);
         let dest = if keep {
             report.copied += 1;
             inside.join(&carried_name)
@@ -1693,29 +1887,31 @@ fn carry_kind(
         };
         if keep {
             // The path in one of the mod's own namespaces; "" for tag additions.
-            let (ns, rel) = match split(&name) {
-                Some((_, ns, rest)) if owned.contains(&ns) || contributes.contains(&ns) => {
-                    (ns, rest)
-                }
-                _ => ("", ""),
+            let ns = match split(&name) {
+                Some((_, ns, _)) if owned.contains(&ns) || contributes.contains(&ns) => ns,
+                _ => "",
             };
             // Blocks and items are declared under the mod id only.
             let own = ns == id;
-            if name.starts_with("data/")
-                && (rel.starts_with("worldgen/") || rel.starts_with("structure/"))
+            let carried_rel = split(&carried_name).map_or("", |(_, _, rest)| rest);
+            if carried_name.starts_with("data/")
+                && (carried_rel.starts_with("worldgen/") || carried_rel.starts_with("structure/"))
             {
                 report.worldgen += 1;
             }
-            if let Some(file) = rel
+            if let Some(file) = carried_rel
                 .strip_prefix("recipe/")
-                .filter(|_| name.starts_with("data/"))
+                .filter(|_| carried_name.starts_with("data/"))
             {
                 if let Ok(mut recipe) = serde_json::from_slice::<Value>(&bytes) {
                     tags_used(&recipe, &mut convention);
                     let renamed = renamed_ids(&mut recipe);
-                    let upgraded = upgrade_recipe(&mut recipe);
+                    let normalized = normalize_recipe(&mut recipe);
+                    let upgraded = normalized == Some(true);
                     if upgraded {
                         report.recipes_upgraded += 1;
+                    } else if normalized == Some(false) && compatible_recipe_structure(&recipe) {
+                        report.recipes_compatible += 1;
                     } else {
                         report.recipes_kept.push(file.to_owned());
                     }
@@ -1723,11 +1919,11 @@ fn carry_kind(
                         bytes = serde_json::to_vec_pretty(&recipe).unwrap_or(bytes);
                     }
                 }
-            } else if let Some(kind) = rel
+            } else if let Some(kind) = carried_rel
                 .strip_prefix("worldgen/")
                 .and_then(|r| r.split_once('/'))
                 .map(|(kind, _)| kind)
-                .filter(|_| name.starts_with("data/") && name.ends_with(".json"))
+                .filter(|_| carried_name.starts_with("data/") && carried_name.ends_with(".json"))
             {
                 if let Ok(mut v) = serde_json::from_slice::<Value>(&bytes) {
                     if kind == "structure" {
@@ -1754,7 +1950,7 @@ fn carry_kind(
                         changed |= upgrade_density_function(&mut v["noise_router"]);
                     }
                     if kind == "structure" {
-                        let path = rel.trim_start_matches("worldgen/structure/");
+                        let path = carried_rel.trim_start_matches("worldgen/structure/");
                         let structure = format!("{ns}:{}", path.trim_end_matches(".json"));
                         changed |= crate::worldgen::disables(&structure, &mut v);
                         changed |=
@@ -1764,9 +1960,9 @@ fn carry_kind(
                         bytes = serde_json::to_vec_pretty(&v).unwrap_or(bytes);
                     }
                 }
-            } else if let Some(path) = rel
+            } else if let Some(path) = carried_rel
                 .strip_prefix("lithostitched/worldgen_modifier/")
-                .filter(|_| name.starts_with("data/") && name.ends_with(".json"))
+                .filter(|_| carried_name.starts_with("data/") && carried_name.ends_with(".json"))
             {
                 // Additions to other sets and pools, as files the game merges.
                 let modifier = serde_json::from_slice::<Value>(&bytes).ok();
@@ -1791,9 +1987,9 @@ fn carry_kind(
                         &serde_json::to_vec_pretty(&added).unwrap_or_default(),
                     )?;
                 }
-            } else if rel.starts_with("trial_spawner/")
-                && name.starts_with("data/")
-                && name.ends_with(".json")
+            } else if carried_rel.starts_with("trial_spawner/")
+                && carried_name.starts_with("data/")
+                && carried_name.ends_with(".json")
             {
                 // Trial spawner configs (Moog's arenas): their mobs' NBT.
                 if let Ok(mut config) = serde_json::from_slice::<Value>(&bytes)
@@ -1801,13 +1997,15 @@ fn carry_kind(
                 {
                     bytes = serde_json::to_vec_pretty(&config).unwrap_or(bytes);
                 }
-            } else if rel.starts_with("tags/worldgen/biome/") && name.starts_with("data/") {
+            } else if carried_rel.starts_with("tags/worldgen/biome/")
+                && carried_name.starts_with("data/")
+            {
                 if let Ok(v) = serde_json::from_slice::<Value>(&bytes) {
                     crate::worldgen::convention_tags(&v, &mut biome_conventions);
                 }
-            } else if rel.starts_with("advancement/")
-                && name.starts_with("data/")
-                && name.ends_with(".json")
+            } else if carried_rel.starts_with("advancement/")
+                && carried_name.starts_with("data/")
+                && carried_name.ends_with(".json")
             {
                 if let Ok(mut advancement) = serde_json::from_slice::<Value>(&bytes)
                     && upgrade_advancement(&mut advancement)
@@ -1815,8 +2013,8 @@ fn carry_kind(
                     report.advancements_upgraded += 1;
                     bytes = serde_json::to_vec_pretty(&advancement).unwrap_or(bytes);
                 }
-            } else if rel.starts_with("loot_table/") && name.starts_with("data/") {
-                if let Some(b) = rel
+            } else if carried_rel.starts_with("loot_table/") && carried_name.starts_with("data/") {
+                if let Some(b) = carried_rel
                     .strip_prefix("loot_table/blocks/")
                     .and_then(|b| b.strip_suffix(".json"))
                     .filter(|_| own)
@@ -1832,7 +2030,7 @@ fn carry_kind(
                         bytes = serde_json::to_vec_pretty(&table).unwrap_or(bytes);
                     }
                 }
-            } else if let Some(b) = rel
+            } else if let Some(b) = carried_rel
                 .strip_prefix("blockstates/")
                 .and_then(|b| b.strip_suffix(".json"))
                 .filter(|_| own)
@@ -1840,9 +2038,6 @@ fn carry_kind(
                 if let Ok(mut v) = serde_json::from_slice::<Value>(&bytes) {
                     let original = v.clone();
                     let mut adapted = adapt_blockstate_properties(&mut v);
-                    if block_template(b, &v).is_none() && reduce_blockstate(&mut v).is_some() {
-                        adapted = true;
-                    }
                     if block_template(b, &v).is_none() {
                         v = original;
                         adapted = false;
@@ -1853,13 +2048,13 @@ fn carry_kind(
                     bytes = serde_json::to_vec_pretty(&v).unwrap_or(bytes);
                     blockstates.insert(b.to_owned(), v);
                 }
-            } else if let Some(m) = rel
+            } else if let Some(m) = carried_rel
                 .strip_prefix("models/item/")
                 .and_then(|m| m.strip_suffix(".json"))
                 .filter(|_| own)
             {
                 item_models.insert(m.to_owned());
-            } else if let Some(m) = rel
+            } else if let Some(m) = carried_rel
                 .strip_prefix("models/item/")
                 .and_then(|m| m.strip_suffix(".json"))
                 .filter(|_| contributes.contains(&ns))
@@ -1934,7 +2129,15 @@ fn carry_kind(
                 break;
             };
             let mut custom_state_properties = None;
-            let choice = facts.template(full, allowed).or_else(|| {
+            let pack_template = pack_block_template(id, b);
+            let choice = pack_template
+                .map(|template| crate::oracle::Choice {
+                        template: template.to_owned(),
+                        properties: Map::new(),
+                        differences: Vec::new(),
+                    })
+                .or_else(|| facts.template(full, allowed))
+                .or_else(|| {
                 let template = blockstates
                     .get(b)
                     .and_then(|state| block_template(b, state))?;
@@ -2029,6 +2232,9 @@ fn carry_kind(
                     report.loot_tables_added += 1;
                 }
             }
+            if id == "buddingcrystals" && b.starts_with("budding_") {
+                v["properties"]["random_ticks"] = json!(true);
+            }
             write_decl("block", b, &v)?;
             report.blocks.insert(b.to_owned(), choice.template);
             if !choice.differences.is_empty() {
@@ -2077,18 +2283,27 @@ fn carry_kind(
                 continue;
             };
             let file = inside.join(format!("data/c/tags/item/{path}.json"));
-            if file.exists() {
-                continue;
-            }
             if let Some(members) = facts.tag_members("item", tag, id) {
-                let v = json!({"values": members});
-                write(&file, &serde_json::to_vec_pretty(&v).unwrap_or_default())?;
-                report.convention_tags += 1;
+                let existed = file.exists();
+                let mut value = if existed {
+                    serde_json::from_slice(&fs::read(&file).map_err(|e| e.to_string())?)
+                        .map_err(|e| format!("{}: {e}", file.display()))?
+                } else {
+                    json!({"values": []})
+                };
+                if supplement_convention_tag(&mut value, &members) || !existed {
+                    write(
+                        &file,
+                        &serde_json::to_vec_pretty(&value).unwrap_or_default(),
+                    )?;
+                    report.convention_tags += 1;
+                }
             }
         }
     } else {
         for (b, state) in &blockstates {
-            match block_template(b, state) {
+            let template = pack_block_template(id, b).or_else(|| block_template(b, state));
+            match template {
                 Some(t)
                     if let Some(properties) =
                         properties_outside_template(state, &template_id(t), state_schemas) =>
@@ -2110,7 +2325,11 @@ fn carry_kind(
                     );
                 }
                 Some(t) => {
-                    write_decl("block", b, &json!({"template": t}))?;
+                    let mut declaration = json!({"template": t});
+                    if id == "buddingcrystals" && b.starts_with("budding_") {
+                        declaration["properties"]["random_ticks"] = json!(true);
+                    }
+                    write_decl("block", b, &declaration)?;
                     report.blocks.insert(b.clone(), t.to_owned());
                     if adapted_states.contains(b) {
                         report.differences.insert(
@@ -2313,6 +2532,30 @@ fn unregistered_recipes(
     }
     report.recipes_unregistered.sort();
     Ok(())
+}
+
+/// Add observed vanilla/owned members without dropping declared references,
+/// optional entries or an explicit replacing tag's semantics.
+fn supplement_convention_tag(value: &mut Value, members: &[String]) -> bool {
+    if value.get("replace").and_then(Value::as_bool) == Some(true) {
+        return false;
+    }
+    let Some(values) = value.get_mut("values").and_then(Value::as_array_mut) else {
+        return false;
+    };
+    let mut changed = false;
+    for member in members {
+        if !values.iter().any(|entry| {
+            entry
+                .as_str()
+                .or_else(|| entry.get("id").and_then(Value::as_str))
+                == Some(member)
+        }) {
+            values.push(Value::String(member.clone()));
+            changed = true;
+        }
+    }
+    changed
 }
 
 /// The tags a recipe's ingredients name (`#ns:path` or `{"tag": ...}`).
@@ -2521,6 +2764,47 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    fn compatible_recipes_require_complete_structure() {
+        let mut recipe = json!({"type":"minecraft:crafting_shapeless", "ingredients":["minecraft:stone"], "result":{"id":"test:result"}});
+        assert!(compatible_recipe_structure(&recipe));
+        recipe["ingredients"] = json!([]);
+        assert!(!compatible_recipe_structure(&recipe));
+        recipe["ingredients"] = json!(["minecraft:stone"]);
+        recipe["result"]["count"] = json!(0);
+        assert!(!compatible_recipe_structure(&recipe));
+        assert!(!compatible_recipe_structure(
+            &json!({"type":"minecraft:smelting"})
+        ));
+        let mut shaped = json!({"type":"minecraft:crafting_shaped", "pattern":["aa"], "key":{"a":"minecraft:stone"}, "result":{"id":"test:result"}});
+        assert!(compatible_recipe_structure(&shaped));
+        shaped["pattern"] = json!(["ab"]);
+        assert!(!compatible_recipe_structure(&shaped));
+    }
+
+    #[test]
+    fn observed_convention_members_supplement_existing_additions() {
+        let mut tag = json!({"replace": false, "values": ["farm:tomato", "#farm:vegetables", {"id":"minecraft:carrot", "required":false}]});
+        let members = vec![
+            "farm:tomato".into(),
+            "minecraft:carrot".into(),
+            "minecraft:potato".into(),
+        ];
+        assert!(supplement_convention_tag(&mut tag, &members));
+        assert_eq!(
+            tag["values"],
+            json!(["farm:tomato", "#farm:vegetables", {"id":"minecraft:carrot", "required":false}, "minecraft:potato"])
+        );
+        assert!(!supplement_convention_tag(&mut tag, &members));
+        tag["replace"] = json!(true);
+        let before = tag.clone();
+        assert!(!supplement_convention_tag(
+            &mut tag,
+            &["minecraft:beetroot".into()]
+        ));
+        assert_eq!(tag, before);
+    }
+
+    #[test]
     fn repairs_only_unique_missing_model_paths() {
         let root =
             std::env::temp_dir().join(format!("horizon-model-aliases-{}", std::process::id()));
@@ -2633,11 +2917,30 @@ mod tests {
             "result": {"id": "gem:gem_block", "count": 1}});
         assert!(upgrade_recipe(&mut r));
         assert_eq!(r["key"], json!({"#": "gem:gem", "s": "#c:rods/wooden"}));
+        let normalized = r.clone();
+        assert_eq!(normalize_recipe(&mut r), Some(false));
+        assert_eq!(r, normalized);
+
         let mut custom = json!({"type": "gem:infuse", "ingredient": {"item": "gem:gem"}});
         assert!(!upgrade_recipe(&mut custom));
         let mut tag_list = json!({"type": "minecraft:smelting",
             "ingredient": [{"tag": "c:ores"}, {"item": "gem:gem"}]});
         assert!(!upgrade_recipe(&mut tag_list));
+        assert_eq!(
+            tag_list["ingredient"],
+            json!([{"tag":"c:ores"}, {"item":"gem:gem"}])
+        );
+        let mut predicate = json!({"type":"minecraft:smelting", "ingredient": {"item":"gem:gem", "type":"custom:predicate"}});
+        let before = predicate.clone();
+        assert!(!upgrade_recipe(&mut predicate));
+        assert_eq!(predicate, before);
+        for data in [json!(-1), json!(1), json!("0"), json!(false), Value::Null] {
+            let mut invalid =
+                json!({"type":"minecraft:smelting", "ingredient":{"item":"gem:gem", "data":data}});
+            let before = invalid.clone();
+            assert!(!upgrade_recipe(&mut invalid));
+            assert_eq!(invalid, before);
+        }
     }
 
     #[test]

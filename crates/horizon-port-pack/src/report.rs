@@ -233,12 +233,67 @@ fn pack_file_status(record: &Record, work: &Path) -> Option<(Status, String)> {
     Some((status, reason))
 }
 
-/// A carried-over mod: ported when its content is complete (data tier with no
-/// missing blocks/processors, or code tier with `carry/mod.wasm`) and no
-/// harness check failed; else partial, with what is missing.
+/// A carried-over mod: data tiers are ported when their content is complete;
+/// code tiers also need an explicit completion attestation with at least one
+/// existing evidence artifact. A WASM file by itself only proves compilation.
 fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     let dir = work.join("mods").join(key);
     let has_wasm = dir.join("carry/mod.wasm").is_file();
+    let content_only = std::fs::read_to_string(dir.join("carry/horizon-mod.toml"))
+        .ok()
+        .and_then(|text| horizon_mods::Manifest::parse(&text).ok())
+        .is_some_and(|manifest| manifest.content_only);
+    let porting_status: Option<Value> = std::fs::read(dir.join("porting-status.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+    let is_code_tier = matches!(tier, "logic" | "machines" | "deep");
+    let completion_attested = porting_status
+        .as_ref()
+        .is_some_and(|status| status["complete"] == true);
+    let has_completion_evidence = porting_status
+        .as_ref()
+        .and_then(|status| status["evidence"].as_array())
+        .is_some_and(|evidence| {
+            evidence.iter().any(|entry| {
+                let Some(relative) = entry.as_str() else {
+                    return false;
+                };
+                let path = Path::new(relative);
+                !path.is_absolute()
+                    && !path
+                        .components()
+                        .any(|component| matches!(component, std::path::Component::ParentDir))
+                    && dir.join(path).is_file()
+            })
+        });
+    let mut porting_gaps: Vec<String> = if porting_status
+        .as_ref()
+        .is_some_and(|status| status["complete"] == false)
+    {
+        porting_status
+            .as_ref()
+            .into_iter()
+            .flat_map(|status| status["pending"].as_array().into_iter().flatten())
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    if porting_status
+        .as_ref()
+        .is_some_and(|status| status["complete"] == false)
+        && porting_gaps.is_empty()
+    {
+        porting_gaps.push("port implementation marked incomplete".into());
+    }
+    if is_code_tier && !completion_attested && porting_status.is_none() {
+        porting_gaps
+            .push("100% code completion is unverified (missing porting-status.json)".into());
+    } else if is_code_tier && completion_attested && !has_completion_evidence {
+        porting_gaps
+            .push("complete=true has no existing evidence artifact in the mod folder".into());
+    }
     let harness: Option<Value> = std::fs::read(dir.join("harness/result.json"))
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok());
@@ -262,7 +317,9 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
     {
         Some(c) => c,
         None if has_wasm && dir.join("carry/horizon-mod.toml").is_file() => {
-            return if harness_gaps.is_empty() {
+            let mut gaps = harness_gaps.clone();
+            gaps.append(&mut porting_gaps);
+            return if gaps.is_empty() {
                 let suffix = if harness.is_some() {
                     "; harness green"
                 } else {
@@ -270,10 +327,7 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
                 };
                 Some((Status::Ported, format!("ported-wasm (mod.wasm{suffix})")))
             } else {
-                Some((
-                    Status::Partial,
-                    format!("mod.wasm; {}", harness_gaps.join("; ")),
-                ))
+                Some((Status::Partial, format!("mod.wasm; {}", gaps.join("; "))))
             };
         }
         None => return None,
@@ -449,6 +503,7 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
         ));
     }
     gaps.extend(harness_gaps);
+    gaps.append(&mut porting_gaps);
 
     if has_wasm {
         let mut summary = if blocks == 0 && items == 0 && worldgen > 0 {
@@ -468,7 +523,7 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
         return Some((Status::Partial, format!("{summary}; {}", gaps.join("; "))));
     }
 
-    if tier != "data" {
+    if tier != "data" && !content_only {
         gaps.push("needs mod.wasm".into());
     }
 
@@ -492,7 +547,7 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
                 ))
             };
         }
-        let what = if tier != "data" {
+        let what = if tier != "data" && !content_only {
             "assets/data carried; needs mod.wasm".into()
         } else {
             "nothing registered to compare".into()
@@ -510,7 +565,9 @@ fn carried(work: &Path, key: &str, tier: &str) -> Option<(Status, String)> {
         );
     }
     if gaps.is_empty() {
-        let suffix = if harness.is_some() {
+        let suffix = if content_only {
+            "content-only"
+        } else if harness.is_some() {
             "harness green"
         } else {
             "data carried"
@@ -760,7 +817,10 @@ mod tests {
         assert_eq!(by["done_logic"].status, Status::Partial);
         assert!(
             by["done_logic"].reason.starts_with("ported-wasm")
-                && by["done_logic"].reason.contains("1 blocks left out"),
+                && by["done_logic"].reason.contains("1 blocks left out")
+                && by["done_logic"]
+                    .reason
+                    .contains("missing porting-status.json"),
             "{}",
             by["done_logic"].reason
         );
@@ -808,6 +868,21 @@ mod tests {
         );
         std::fs::create_dir_all(work.join("mods/wasm_loot_mod/carry")).unwrap();
         std::fs::write(work.join("mods/wasm_loot_mod/carry/mod.wasm"), b"\0asm").unwrap();
+        std::fs::write(
+            work.join("mods/wasm_loot_mod/harness/evidence.json"),
+            b"{\"checks\":{\"loot\":{\"passed\":1,\"failed\":0}}}",
+        )
+        .unwrap();
+        std::fs::write(
+            work.join("mods/wasm_loot_mod/porting-status.json"),
+            serde_json::json!({
+                "complete": true,
+                "pending": [],
+                "evidence": ["harness/evidence.json"]
+            })
+            .to_string(),
+        )
+        .unwrap();
         let loot_rows = build(&[record("wasm_loot_mod", "content", "logic", &[])], &work);
         assert_eq!(loot_rows[0].status, Status::Ported);
         std::fs::remove_dir_all(&work).unwrap();

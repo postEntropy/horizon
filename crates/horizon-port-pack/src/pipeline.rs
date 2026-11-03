@@ -132,6 +132,92 @@ fn vanilla_state_schemas(resources: &Path) -> Result<carry::StateSchemas, String
 
 /// Step 4: supported-tier mods with a jar (or the ones in `only`) carried over
 /// into `<work>/mods/<id>/carry/`. Returns how many were.
+fn merge_authored_port_tree(mod_dir: &Path, tree: &str) -> Result<usize, String> {
+    fn walk(
+        source: &Path,
+        root: &Path,
+        destination: &Path,
+        merge_language: bool,
+        copied: &mut usize,
+    ) -> Result<(), String> {
+        let entries =
+            fs::read_dir(source).map_err(|error| format!("{}: {error}", source.display()))?;
+        let mut entries: Vec<_> = entries
+            .map(|entry| entry.map_err(|error| format!("{}: {error}", source.display())))
+            .collect::<Result<_, _>>()?;
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let path = entry.path();
+            let kind = entry
+                .file_type()
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            if kind.is_dir() {
+                walk(&path, root, destination, merge_language, copied)?;
+            } else if kind.is_file() {
+                let relative = path
+                    .strip_prefix(root)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                let target = destination.join(relative);
+                if let Some(parent) = target.parent() {
+                    fs::create_dir_all(parent)
+                        .map_err(|error| format!("{}: {error}", parent.display()))?;
+                }
+                let is_lang_json = merge_language
+                    && relative
+                        .extension()
+                        .is_some_and(|extension| extension == "json")
+                    && relative.components().any(|part| part.as_os_str() == "lang");
+                if is_lang_json && target.is_file() {
+                    let mut existing: Value = serde_json::from_slice(
+                        &fs::read(&target)
+                            .map_err(|error| format!("{}: {error}", target.display()))?,
+                    )
+                    .map_err(|error| format!("{}: {error}", target.display()))?;
+                    let incoming: Value = serde_json::from_slice(
+                        &fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?,
+                    )
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                    let (Some(existing), Some(incoming)) =
+                        (existing.as_object_mut(), incoming.as_object())
+                    else {
+                        return Err(format!(
+                            "language files must be JSON objects: {}",
+                            path.display()
+                        ));
+                    };
+                    existing.extend(incoming.clone());
+                    write_json(&target, &Value::Object(existing.clone()))?;
+                } else {
+                    fs::copy(&path, &target)
+                        .map_err(|error| format!("{}: {error}", target.display()))?;
+                }
+                *copied += 1;
+            }
+        }
+        Ok(())
+    }
+
+    if !matches!(tree, "assets" | "data") {
+        return Err(format!("unsupported authored port tree {tree:?}"));
+    }
+    let source = mod_dir.join("port").join(tree);
+    if !source.is_dir() {
+        return Ok(0);
+    }
+    let destination = mod_dir.join("carry").join(tree);
+    fs::create_dir_all(&destination)
+        .map_err(|error| format!("{}: {error}", destination.display()))?;
+    let mut copied = 0;
+    walk(
+        &source,
+        &source,
+        &destination,
+        tree == "assets",
+        &mut copied,
+    )?;
+    Ok(copied)
+}
+
 pub fn carry(
     work: &Path,
     resources: Option<&Path>,
@@ -271,12 +357,20 @@ pub fn carry(
             (false, None) => carry::carry(jar, info, &out, facts, &allowed, &pack, &conventions),
         };
         match result {
-            Ok(report) => {
+            Ok(mut report) => {
+                let authored_data = merge_authored_port_tree(&out, "data")?;
+                let authored_assets = merge_authored_port_tree(&out, "assets")?;
+                report.authored_port_data = authored_data;
+                report.authored_port_assets = authored_assets;
+                report.copied += authored_data + authored_assets;
+                write_json(&out.join("carry-report.json"), &report)?;
                 done += 1;
                 log(format!(
-                    "{}: {} files, {} recipes upgraded ({} kept), {} loot tables upgraded ({} added), {} item definitions added, {} blocks ({} left out, {} with differences), {} items ({} left out), {} convention tags, {} outside",
+                    "{}: {} files ({} authored port-data, {} authored port-assets), {} recipes upgraded ({} kept), {} loot tables upgraded ({} added), {} item definitions added, {} blocks ({} left out, {} with differences), {} items ({} left out), {} convention tags, {} outside",
                     r.key,
                     report.copied,
+                    authored_data,
+                    authored_assets,
                     report.recipes_upgraded,
                     report.recipes_kept.len(),
                     report.loot_tables_upgraded,
@@ -882,14 +976,20 @@ pub fn report(work: &Path, log: Log) -> Result<Vec<report::Row>, String> {
     Ok(rows)
 }
 
-/// What a player's machine can carry or port today: content mods, integrations,
-/// and server-only mods in tiers Horizon's mod API supports (`data` 0.2,
-/// `logic` 0.3, `machines` 0.4, `deep` 0.5). Integrations may remain partial
-/// until their dependencies are ported; keeping them in the pipeline lets
-/// their own data be carried and their jars be fetched in the same pass.
+/// What a player's machine can carry or port today: content, client UI,
+/// integrations, and server-only mods in tiers Horizon's mod API supports
+/// (`data` 0.2, `client` 0.2, `logic` 0.3, `machines` 0.4, `deep` 0.5).
+/// Integrations may remain partial until their dependencies are ported; keeping
+/// them in the pipeline lets their own data be carried and their jars be fetched
+/// in the same pass.
 pub fn portable(r: &inventory::Record) -> bool {
-    matches!(r.class.as_str(), "content" | "integration" | "server-only")
-        && matches!(r.tier.as_str(), "data" | "logic" | "machines" | "deep")
+    matches!(
+        r.class.as_str(),
+        "content" | "client-ui" | "integration" | "server-only"
+    ) && matches!(
+        r.tier.as_str(),
+        "data" | "client" | "logic" | "machines" | "deep"
+    )
 }
 
 /// Unknown mods with jars are fetched for a metadata and file-census pass.
@@ -983,6 +1083,22 @@ fn stage_profile_pack_files(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn client_ui_mods_are_portable() {
+        let jade = inventory::Record {
+            class: "client-ui".into(),
+            tier: "client".into(),
+            ..Default::default()
+        };
+        let library = inventory::Record {
+            class: "library".into(),
+            tier: "none".into(),
+            ..Default::default()
+        };
+        assert!(portable(&jade));
+        assert!(!portable(&library));
+    }
 
     #[test]
     fn a_namespace_two_mods_claim_is_neither_s() {

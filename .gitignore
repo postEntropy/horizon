@@ -31,3 +31,8 @@
 /.horizon-cache/
 /crash-reports/
 /debug/
+# Local FTB StoneBlock 3 copies or archives, if staged inside this checkout.
+/FTB StoneBlock 3/
+/ftb-stoneblock-3/
+/ftb-stoneblock-3-*.zip
+/modpacks/Instances/FTB StoneBlock 3/

@@ -633,8 +633,19 @@ mod tests {
             fs::read(work.join("jars/curseforge-7-8")).unwrap(),
             b"jar b"
         );
-        // A second run finds them in place.
-        let again = fetch(&work, &records, None, &|_| true, &|_| {}).unwrap();
+        // A bare CurseForge destination has no hash or indexed association:
+        // its name alone is insufficient evidence to reuse it.
+        let unindexed = fetch(&work, &records, None, &|_| true, &|_| {}).unwrap();
+        assert_eq!(unindexed.count(How::Present), 1);
+        assert_eq!(unindexed.count(How::NeedsKey), 2);
+        assert_eq!(
+            fs::read(work.join("jars/curseforge-7-8")).unwrap(),
+            b"jar b"
+        );
+        // The normal subsequent import carries the inventory's jar association.
+        let mut indexed = records;
+        indexed[1].jar = Some(work.join("jars/curseforge-7-8"));
+        let again = fetch(&work, &indexed, None, &|_| true, &|_| {}).unwrap();
         assert_eq!(again.count(How::Present), 2);
         assert_eq!(Fetched::load(&work).count(How::Present), 2);
         fs::remove_dir_all(&root).unwrap();

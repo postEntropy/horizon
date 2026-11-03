@@ -376,6 +376,10 @@ unsupported vanilla data) in `outside/`. After all selected jars are carried, th
 checks recipe outputs against the prepared vanilla item registry and every carried mod's item and
 block declarations. Recipes for missing optional mods or undeclared items move to `outside/` and
 are listed as `recipes_unregistered`; a cross-mod recipe stays when its output mod is carried.
+Locally authored carry additions belong in `mods/<id>/port/data/` and `mods/<id>/port/assets/`.
+Each `carry` run overlays those files after the jar content, so a port can translate pack-script
+recipes, loot tables or assets without editing generated carry output. `carry-report.json` records
+the counts as `authored_port_data` and `authored_port_assets`.
 Without `--resources`, vanilla item outputs cannot be checked. Files of
 the mod's own content that the game's content loader would refuse whole also go to `outside/`,
 with the per-file reason in `carry-report.json`'s `outside_reasons`; `unreadable` keeps the
@@ -865,9 +869,12 @@ the self-drop tables it registers in code (step 4).
 
 `coverage.json` and `coverage.md`, per mod and totalled per class and tier:
 
-- **ported**: `.hmod` built, harness green;
+- **ported**: data carry-over is complete, or a code mod has a built `.hmod`,
+  no failed harness checks, and `mods/<id>/porting-status.json` with
+  `complete: true` plus an `evidence` array naming at least one existing file
+  under that mod's work directory;
 - **partial**: `.hmod` built, harness passes the listed parts (e.g. blocks and recipes yes,
-  machine processing not yet), with the failing checks and the API gaps blocking them;
+  machine processing not yet), or code exists without the completion attestation and evidence;
 - **not yet**: waiting on an API tier or a dependency, which is named;
 - **not needed**: performance, library mapped to the API, pack tooling folded into the
   pipeline, client-ui built in.
@@ -875,11 +882,17 @@ the self-drop tables it registers in code (step 4).
 Plus the licence summary (how many ports could be published) and, for a pack, "playable?":
 whether every required content mod is ported or partial with its blocks and items present.
 
-`horizon-port-pack report <work>` writes the per-mod rows and the class, tier and licence totals from the inventory, each mod's `carry-report.json`
-and its harness result. A data-tier mod is **ported** when its harness is green and nothing was
-left out (blocks with a class of their own are counted and named, since facts cannot show
-their extra code); **partial** with the failing checks, the blocks left out and what the
-templates miss; **not yet** with the API tier it waits for, or the dependency; **not needed**
+`horizon-port-pack report <work>` writes the per-mod rows and the class, tier and licence totals from the inventory, each mod's `carry-report.json`, its harness result, and its explicit code-completion record. A code port needs a `porting-status.json` such as:
+
+```json
+{
+  "complete": true,
+  "pending": [],
+  "evidence": ["harness/component-validation.json"]
+}
+```
+
+The listed evidence file must exist under `mods/<id>/`. A WASM file alone proves compilation, not complete gameplay. A data-tier mod is **ported** when its supported carry-over is complete and any harness checks present pass (blocks with a class of their own are counted and named, since facts cannot show their extra code); **partial** with the failing checks, the blocks left out and what the templates miss; **not yet** with the API tier it waits for, or the dependency; **not needed**
 for libraries, performance mods, pack tooling and what Horizon has built in. Unclassified mods
 count as not yet; `port` fetches their jars when possible and uses loader metadata and file census
 to reclassify them. A jar that remains ambiguous is marked for review instead of being guessed into a tier.

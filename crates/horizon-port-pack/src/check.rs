@@ -158,6 +158,7 @@ pub fn check(jar_path: &Path, out: &Path) -> Result<Check, String> {
     let c = &info.census;
     let recipes = report
         .recipes_upgraded
+        .saturating_add(report.recipes_compatible)
         .saturating_sub(report.recipes_unregistered.len());
     let loot = c.loot_tables + report.loot_tables_added;
     let content =
@@ -343,7 +344,7 @@ displayName = "Ruby"
     #[test]
     fn recipes_for_left_out_blocks_are_left_out_too() {
         let dir = temp("left-out");
-        let odd = br#"{"variants": {"wobble=1": {"model": "ruby:block/odd"}}}"#;
+        let odd = br#"{"variants": {"wobble=INVALID": {"model": "ruby:block/odd"}}}"#;
         let plain = br#"{"variants": {"": {"model": "ruby:block/ruby_block"}}}"#;
         let recipe = |result: &str| {
             format!(

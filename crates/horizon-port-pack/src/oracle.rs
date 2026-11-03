@@ -75,9 +75,512 @@ pub struct Item {
     pub block: Option<String>,
     #[serde(default)]
     pub food: Option<Value>,
+    #[serde(default)]
+    pub crafting_remainder: Option<String>,
 }
 
 const VANILLA_PACKAGE: &str = "net.minecraft.";
+struct ObservedFdFood {
+    id: &'static str,
+    effect: &'static str,
+    duration: i64,
+    eat_seconds: f64,
+    can_always_eat: bool,
+    probability: f64,
+    visible: bool,
+    show_icon: bool,
+    use_remainder: Option<&'static str>,
+}
+
+struct ObservedFdSpecialFood {
+    nutrition: u64,
+    saturation: f64,
+    use_remainder: Option<&'static str>,
+}
+
+/// These subclasses alter the vanilla food facts (or add a right-click item
+/// interaction). Keep support limited to the individually consumed IDs whose
+/// full public result was captured in the L4 black-box trace.
+fn observed_fd_special_food(id: &str, item: &Item, food: &Value) -> Option<ObservedFdSpecialFood> {
+    let (
+        class,
+        facts_nutrition,
+        facts_saturation,
+        always,
+        eat_seconds,
+        nutrition,
+        saturation,
+        remainder,
+        effects,
+    ) = match id {
+        "farmersdelight:apple_cider" => (
+            "vectorwing.farmersdelight.common.item.DrinkableItem",
+            0,
+            0.0,
+            true,
+            1.6,
+            4,
+            0.0,
+            Some("minecraft:glass_bottle"),
+            json!([{"id":"minecraft:absorption","duration":1200,"amplifier":0,"probability":1.0,"ambient":false,"visible":true,"show_icon":true}]),
+        ),
+        "farmersdelight:bone_broth" => (
+            "vectorwing.farmersdelight.common.item.DrinkableItem",
+            8,
+            11.2,
+            false,
+            1.6,
+            12,
+            11.2,
+            Some("minecraft:bowl"),
+            json!([{"id":"farmersdelight:nourishment","duration":1200,"amplifier":0,"probability":1.0,"ambient":false,"visible":false,"show_icon":false}]),
+        ),
+        "farmersdelight:dog_food" => (
+            "vectorwing.farmersdelight.common.item.DogFoodItem",
+            4,
+            1.6,
+            false,
+            1.6,
+            4,
+            1.6,
+            Some("minecraft:bowl"),
+            json!([]),
+        ),
+        "farmersdelight:melon_popsicle" => (
+            "vectorwing.farmersdelight.common.item.PopsicleItem",
+            3,
+            1.2,
+            true,
+            0.8,
+            7,
+            1.2,
+            None,
+            json!([]),
+        ),
+        "farmersdelight:tomato_sauce" => (
+            "vectorwing.farmersdelight.common.item.ConsumableItem",
+            4,
+            3.2,
+            false,
+            1.6,
+            8,
+            3.2,
+            Some("minecraft:bowl"),
+            json!([]),
+        ),
+        _ => return None,
+    };
+    (item.class == class
+        && food["nutrition"].as_u64() == Some(facts_nutrition)
+        && food["saturation"].as_f64() == Some(facts_saturation)
+        && food["can_always_eat"].as_bool() == Some(always)
+        && food["eat_seconds"].as_f64() == Some(eat_seconds)
+        && food["effects"] == effects)
+        .then_some(ObservedFdSpecialFood {
+            nutrition,
+            saturation,
+            use_remainder: remainder,
+        })
+}
+
+const OBSERVED_FD_FOODS: &[ObservedFdFood] = &[
+    ObservedFdFood {
+        id: "farmersdelight:bacon_and_eggs",
+        effect: "farmersdelight:nourishment",
+        duration: 1200,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:baked_cod_stew",
+        effect: "farmersdelight:nourishment",
+        duration: 6000,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:beef_stew",
+        effect: "farmersdelight:nourishment",
+        duration: 3600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:chicken_soup",
+        effect: "farmersdelight:nourishment",
+        duration: 3600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:cooked_rice",
+        effect: "farmersdelight:nourishment",
+        duration: 600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:fish_stew",
+        effect: "farmersdelight:nourishment",
+        duration: 3600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:fried_rice",
+        effect: "farmersdelight:nourishment",
+        duration: 3600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:gleaming_salad",
+        effect: "farmersdelight:nourishment",
+        duration: 6000,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:grilled_salmon",
+        effect: "farmersdelight:nourishment",
+        duration: 3600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:honey_glazed_ham",
+        effect: "farmersdelight:nourishment",
+        duration: 6000,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:mushroom_rice",
+        effect: "farmersdelight:nourishment",
+        duration: 3600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:noodle_soup",
+        effect: "farmersdelight:nourishment",
+        duration: 6000,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:onion_soup",
+        effect: "farmersdelight:nourishment",
+        duration: 3600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:pasta_with_meatballs",
+        effect: "farmersdelight:nourishment",
+        duration: 3600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:pasta_with_mutton_chop",
+        effect: "farmersdelight:nourishment",
+        duration: 3600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:pumpkin_soup",
+        effect: "farmersdelight:nourishment",
+        duration: 6000,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:ratatouille",
+        effect: "farmersdelight:nourishment",
+        duration: 1200,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:roast_chicken",
+        effect: "farmersdelight:nourishment",
+        duration: 6000,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:roasted_mutton_chops",
+        effect: "farmersdelight:nourishment",
+        duration: 6000,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:shepherds_pie",
+        effect: "farmersdelight:nourishment",
+        duration: 6000,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:squid_ink_pasta",
+        effect: "farmersdelight:nourishment",
+        duration: 6000,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:steak_and_potatoes",
+        effect: "farmersdelight:nourishment",
+        duration: 3600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:stuffed_pumpkin",
+        effect: "farmersdelight:nourishment",
+        duration: 6000,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:vegetable_noodles",
+        effect: "farmersdelight:nourishment",
+        duration: 6000,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:vegetable_soup",
+        effect: "farmersdelight:nourishment",
+        duration: 3600,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:apple_pie_slice",
+        effect: "minecraft:speed",
+        duration: 600,
+        eat_seconds: 0.8,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: None,
+    },
+    ObservedFdFood {
+        id: "farmersdelight:cake_slice",
+        effect: "minecraft:speed",
+        duration: 400,
+        eat_seconds: 0.8,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: None,
+    },
+    ObservedFdFood {
+        id: "farmersdelight:chocolate_pie_slice",
+        effect: "minecraft:speed",
+        duration: 600,
+        eat_seconds: 0.8,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: None,
+    },
+    ObservedFdFood {
+        id: "farmersdelight:fruit_salad",
+        effect: "minecraft:regeneration",
+        duration: 100,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: true,
+        show_icon: true,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:glow_berry_custard",
+        effect: "minecraft:glowing",
+        duration: 100,
+        eat_seconds: 1.6,
+        can_always_eat: true,
+        probability: 1.0,
+        visible: true,
+        show_icon: true,
+        use_remainder: Some("minecraft:glass_bottle"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:mixed_salad",
+        effect: "minecraft:regeneration",
+        duration: 100,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: true,
+        show_icon: true,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:nether_salad",
+        effect: "minecraft:nausea",
+        duration: 240,
+        eat_seconds: 1.6,
+        can_always_eat: false,
+        probability: 0.3,
+        visible: true,
+        show_icon: true,
+        use_remainder: Some("minecraft:bowl"),
+    },
+    ObservedFdFood {
+        id: "farmersdelight:pumpkin_pie_slice",
+        effect: "minecraft:speed",
+        duration: 600,
+        eat_seconds: 0.8,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: None,
+    },
+    ObservedFdFood {
+        id: "farmersdelight:sweet_berry_cheesecake_slice",
+        effect: "minecraft:speed",
+        duration: 600,
+        eat_seconds: 0.8,
+        can_always_eat: false,
+        probability: 1.0,
+        visible: false,
+        show_icon: false,
+        use_remainder: None,
+    },
+];
+
+fn observed_fd_food(id: &str, item: &Item, food: &Value) -> Option<&'static ObservedFdFood> {
+    if item.class != "vectorwing.farmersdelight.common.item.ConsumableItem" {
+        return None;
+    }
+    let observed = OBSERVED_FD_FOODS
+        .iter()
+        .find(|observed| observed.id == id)?;
+    let effects = food["effects"].as_array()?;
+    let effect = effects.first()?;
+    (effects.len() == 1
+        && food["eat_seconds"].as_f64() == Some(observed.eat_seconds)
+        && food["can_always_eat"].as_bool() == Some(observed.can_always_eat)
+        && effect["id"].as_str() == Some(observed.effect)
+        && effect["duration"].as_i64() == Some(observed.duration)
+        && effect["amplifier"].as_i64() == Some(0)
+        && effect["probability"].as_f64() == Some(observed.probability)
+        && effect["ambient"].as_bool() == Some(false)
+        && effect["visible"].as_bool() == Some(observed.visible)
+        && effect["show_icon"].as_bool() == Some(observed.show_icon))
+    .then_some(observed)
+}
 
 /// A state key with its properties sorted, so keys compare across blocks.
 /// Which states of a block drop the block itself.
@@ -331,13 +834,159 @@ impl Facts {
             return Err("a block item without a block".into());
         }
         let mut differences = Vec::new();
-        if !item.class.starts_with(VANILLA_PACKAGE) {
+        let observed_fd_consumption = item
+            .food
+            .as_ref()
+            .and_then(|food| observed_fd_food(id, item, food));
+        let observed_fd_special = item
+            .food
+            .as_ref()
+            .and_then(|food| observed_fd_special_food(id, item, food));
+        let observed_fd_supported =
+            observed_fd_consumption.is_some() || observed_fd_special.is_some();
+        if !item.class.starts_with(VANILLA_PACKAGE) && !observed_fd_supported {
             differences.push(format!("class {} (behaviour beyond Item)", item.class));
         }
-        if item.food.is_some() {
-            return Err("food (no food template yet)".into());
-        }
         let mut decl = json!({"template": "minecraft:stick"});
+        if let Some(food) = &item.food {
+            // A subclass may change consumption beyond FOOD; do not guess it.
+            if item.class != "net.minecraft.world.item.Item" && !observed_fd_supported {
+                return Err("food with custom item behavior".into());
+            }
+            let effects = food["effects"]
+                .as_array()
+                .ok_or("food effects were not exported")?;
+            let mut supported_effects = Vec::with_capacity(effects.len());
+            if effects.len() > 64 {
+                return Err("too many food effects".into());
+            }
+            for effect in effects {
+                let effect_id = effect["id"].as_str().ok_or("missing food effect id")?;
+                let vanilla_name = effect_id.strip_prefix("minecraft:");
+                let item_namespace = id.split_once(':').map(|(namespace, _)| namespace);
+                let farmer_nourishment = effect_id == "farmersdelight:nourishment"
+                    && item_namespace == Some("farmersdelight")
+                    && observed_fd_supported;
+                if !farmer_nourishment && vanilla_name.is_none() {
+                    return Err("custom food effect is not supported".into());
+                }
+                // Matches the effect ids available to the game's brewing::effect lookup.
+                if let Some(name) = vanilla_name
+                    && !matches!(
+                        name,
+                        "speed"
+                            | "slowness"
+                            | "haste"
+                            | "mining_fatigue"
+                            | "strength"
+                            | "instant_health"
+                            | "instant_damage"
+                            | "jump_boost"
+                            | "nausea"
+                            | "regeneration"
+                            | "resistance"
+                            | "fire_resistance"
+                            | "water_breathing"
+                            | "invisibility"
+                            | "blindness"
+                            | "night_vision"
+                            | "hunger"
+                            | "weakness"
+                            | "poison"
+                            | "wither"
+                            | "health_boost"
+                            | "absorption"
+                            | "saturation"
+                            | "glowing"
+                            | "levitation"
+                            | "luck"
+                            | "unluck"
+                            | "slow_falling"
+                            | "conduit_power"
+                            | "dolphins_grace"
+                            | "bad_omen"
+                            | "hero_of_the_village"
+                            | "darkness"
+                            | "trial_omen"
+                            | "raid_omen"
+                            | "wind_charged"
+                            | "weaving"
+                            | "oozing"
+                            | "infested"
+                            | "breath_of_the_nautilus"
+                    )
+                {
+                    return Err("unknown vanilla food effect".into());
+                }
+                let show_icon = effect["show_icon"]
+                    .as_bool()
+                    .ok_or("missing food effect icon flag")?;
+                let duration = effect["duration"]
+                    .as_i64()
+                    .filter(|&n| (-1..=i32::MAX as i64).contains(&n))
+                    .ok_or("invalid food effect duration")?;
+                let amplifier = effect["amplifier"]
+                    .as_i64()
+                    .filter(|&n| (0..=255).contains(&n))
+                    .ok_or("invalid food effect amplifier")?;
+                let probability = effect["probability"]
+                    .as_f64()
+                    .filter(|&n| n.is_finite() && (0.0..=1.0).contains(&n))
+                    .ok_or("invalid food effect probability")?;
+                let ambient = effect["ambient"]
+                    .as_bool()
+                    .ok_or("missing food effect ambient flag")?;
+                let visible = effect["visible"]
+                    .as_bool()
+                    .ok_or("missing food effect visibility flag")?;
+                supported_effects.push(json!({"id":effect_id,"duration":duration,"amplifier":amplifier,"probability":probability,"ambient":ambient,"visible":visible,"show_icon":show_icon}));
+            }
+            let nutrition = food["nutrition"]
+                .as_u64()
+                .filter(|&v| v <= i32::MAX as u64)
+                .ok_or("invalid food nutrition")?;
+            let saturation = food["saturation"]
+                .as_f64()
+                .filter(|v| v.is_finite() && *v >= 0.0 && *v <= f32::MAX as f64)
+                .ok_or("invalid food saturation")?;
+            let duration = food["eat_seconds"]
+                .as_f64()
+                .filter(|v| v.is_finite() && *v > 0.0 && *v <= f32::MAX as f64)
+                .ok_or("invalid food consumption duration")?;
+            let always = food["can_always_eat"]
+                .as_bool()
+                .ok_or("missing food can_always_eat")?;
+            decl["template"] = json!("minecraft:apple");
+            let nutrition = observed_fd_special
+                .as_ref()
+                .map_or(nutrition, |food| food.nutrition);
+            let saturation = observed_fd_special
+                .as_ref()
+                .map_or(saturation, |food| food.saturation);
+            decl["food"] = json!({"nutrition":nutrition, "saturation":saturation,
+                "can_always_eat":always, "consume_seconds":duration, "effects":supported_effects});
+            if let Some(remainder) = food.get("use_remainder") {
+                let remainder = remainder.as_str().ok_or("invalid food use remainder")?;
+                if food["use_remainder_count"].as_u64() != Some(1) {
+                    return Err("food use remainder count is missing or unsupported".into());
+                }
+                decl["use_remainder"] = json!(remainder);
+            } else if let Some(remainder) =
+                observed_fd_consumption.and_then(|food| food.use_remainder)
+            {
+                // The food component omits the result for these subclasses;
+                // record the observed one-item finish result.
+                decl["use_remainder"] = json!(remainder);
+            } else if let Some(remainder) = observed_fd_special
+                .as_ref()
+                .and_then(|food| food.use_remainder)
+            {
+                decl["use_remainder"] = json!(remainder);
+            }
+        }
+        if let Some(remainder) = &item.crafting_remainder {
+            decl["crafting_remainder"] = json!(remainder);
+        }
         if item.max_stack_size != 64 {
             decl["max_stack_size"] = json!(item.max_stack_size);
         }
@@ -387,6 +1036,229 @@ mod tests {
         json!({"class": class, "properties": props, "default": default, "item": "x",
             "explosion_resistance": 3.0, "friction": 0.6, "speed_factor": 1.0,
             "jump_factor": 1.0, "states": states})
+    }
+
+    #[test]
+    fn ordinary_food_uses_observed_components_and_refuses_incomplete_data() {
+        let mut facts: Facts = serde_json::from_value(json!({"blocks":{}, "items":{"test:food":{
+            "class":"net.minecraft.world.item.Item", "max_stack_size":16, "rarity":"common",
+            "crafting_remainder":"minecraft:bowl", "food":{"nutrition":7,"saturation":3.5,
+            "can_always_eat":true,"eat_seconds":0.8,"effects":[],"use_remainder":"minecraft:bowl","use_remainder_count":1}
+        }}}))
+        .unwrap();
+        let (item, _) = facts.item("test:food").unwrap();
+        assert_eq!(item["template"], "minecraft:apple");
+        assert_eq!(
+            item["food"],
+            json!({"nutrition":7,"saturation":3.5,"can_always_eat":true,"consume_seconds":0.8,"effects":[]})
+        );
+        assert_eq!(item["use_remainder"], "minecraft:bowl");
+        assert_eq!(item["crafting_remainder"], "minecraft:bowl");
+        let food = facts
+            .items
+            .get_mut("test:food")
+            .unwrap()
+            .food
+            .as_mut()
+            .unwrap();
+        food["effects"] = json!([{ "id":"minecraft:hunger", "duration":600, "amplifier":0,
+            "probability":0.3, "ambient":false, "visible":true, "show_icon":true }]);
+        let (food_item, _) = facts.item("test:food").unwrap();
+        assert_eq!(food_item["food"]["effects"][0]["id"], "minecraft:hunger");
+        let food = facts
+            .items
+            .get_mut("test:food")
+            .unwrap()
+            .food
+            .as_mut()
+            .unwrap();
+        food["effects"][0]["show_icon"] = json!(false);
+        let (food_item, _) = facts.item("test:food").unwrap();
+        assert_eq!(food_item["food"]["effects"][0]["show_icon"], false);
+        let food = facts
+            .items
+            .get_mut("test:food")
+            .unwrap()
+            .food
+            .as_mut()
+            .unwrap();
+        food["effects"] = json!([{ "id":"minecraft:speed" }]);
+        assert!(facts.item("test:food").is_err());
+        facts
+            .items
+            .get_mut("test:food")
+            .unwrap()
+            .food
+            .as_mut()
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .remove("effects");
+        assert!(facts.item("test:food").is_err());
+    }
+
+    #[test]
+    fn farmersdelight_nourishment_is_preserved_as_a_namespaced_effect() {
+        let mut facts: Facts = serde_json::from_value(json!({"blocks":{}, "items":{"farmersdelight:cooked_rice":{
+            "class":"vectorwing.farmersdelight.common.item.ConsumableItem", "max_stack_size":16, "rarity":"common",
+            "crafting_remainder":"minecraft:bowl",
+            "food":{"nutrition":6,"saturation":4.8,"can_always_eat":false,"eat_seconds":1.6,
+            "effects":[{"id":"farmersdelight:nourishment","duration":600,"amplifier":0,
+            "probability":1.0,"ambient":false,"visible":false,"show_icon":false}]}
+        }}})).unwrap();
+        let (food, differences) = facts.item("farmersdelight:cooked_rice").unwrap();
+        assert!(differences.is_empty());
+        assert_eq!(food["use_remainder"], "minecraft:bowl");
+        assert_eq!(food["crafting_remainder"], "minecraft:bowl");
+        assert_eq!(
+            food["food"]["effects"],
+            json!([{"id":"farmersdelight:nourishment","duration":600,"amplifier":0,
+                "probability":1.0,"ambient":false,"visible":false,"show_icon":false}])
+        );
+        facts
+            .items
+            .get_mut("farmersdelight:cooked_rice")
+            .unwrap()
+            .food
+            .as_mut()
+            .unwrap()["effects"][0]["id"] = json!("othermod:nourishment");
+        facts
+            .items
+            .get_mut("farmersdelight:cooked_rice")
+            .unwrap()
+            .class = "net.minecraft.world.item.Item".into();
+        assert_eq!(
+            facts.item("farmersdelight:cooked_rice").unwrap_err(),
+            "custom food effect is not supported"
+        );
+    }
+
+    #[test]
+    fn nourishment_import_is_limited_to_black_box_consumable_group() {
+        let facts: Facts = serde_json::from_value(json!({"blocks":{}, "items":{
+            "farmersdelight:bone_broth": {
+                "class":"vectorwing.farmersdelight.common.item.DrinkableItem", "max_stack_size":16, "rarity":"common",
+                "food":{"nutrition":6,"saturation":3.6,"can_always_eat":false,"eat_seconds":1.6,
+                "effects":[{"id":"farmersdelight:nourishment","duration":1200,"amplifier":0,
+                "probability":1.0,"ambient":false,"visible":false,"show_icon":false}]}
+            },
+            "farmersdelight:unknown_food": {
+                "class":"vectorwing.farmersdelight.common.item.ConsumableItem", "max_stack_size":16, "rarity":"common",
+                "food":{"nutrition":6,"saturation":3.6,"can_always_eat":false,"eat_seconds":1.6,
+                "effects":[{"id":"farmersdelight:nourishment","duration":1200,"amplifier":0,
+                "probability":1.0,"ambient":false,"visible":false,"show_icon":false}]}
+            }
+        }})).unwrap();
+        assert_eq!(
+            facts.item("farmersdelight:bone_broth").unwrap_err(),
+            "food with custom item behavior"
+        );
+        assert_eq!(
+            facts.item("farmersdelight:unknown_food").unwrap_err(),
+            "food with custom item behavior"
+        );
+    }
+
+    #[test]
+    fn vanilla_effect_import_keeps_observed_flags_and_use_remainders() {
+        let facts: Facts = serde_json::from_value(json!({"blocks":{}, "items":{
+            "farmersdelight:apple_pie_slice": {
+                "class":"vectorwing.farmersdelight.common.item.ConsumableItem", "max_stack_size":16, "rarity":"common",
+                "food":{"nutrition":3,"saturation":1.8,"can_always_eat":false,"eat_seconds":0.8,
+                "effects":[{"id":"minecraft:speed","duration":600,"amplifier":0,
+                "probability":1.0,"ambient":false,"visible":false,"show_icon":false}]}
+            },
+            "farmersdelight:glow_berry_custard": {
+                "class":"vectorwing.farmersdelight.common.item.ConsumableItem", "max_stack_size":16, "rarity":"common",
+                "food":{"nutrition":6,"saturation":3.6,"can_always_eat":true,"eat_seconds":1.6,
+                "effects":[{"id":"minecraft:glowing","duration":100,"amplifier":0,
+                "probability":1.0,"ambient":false,"visible":true,"show_icon":true}]}
+            },
+            "farmersdelight:nether_salad": {
+                "class":"vectorwing.farmersdelight.common.item.ConsumableItem", "max_stack_size":16, "rarity":"common",
+                "food":{"nutrition":6,"saturation":3.6,"can_always_eat":false,"eat_seconds":1.6,
+                "effects":[{"id":"minecraft:nausea","duration":240,"amplifier":0,
+                "probability":0.3,"ambient":false,"visible":true,"show_icon":true}]}
+            }
+        }})).unwrap();
+        let (slice, differences) = facts.item("farmersdelight:apple_pie_slice").unwrap();
+        assert!(differences.is_empty());
+        assert!(slice.get("use_remainder").is_none());
+        assert_eq!(slice["food"]["effects"][0]["show_icon"], false);
+        let (custard, _) = facts.item("farmersdelight:glow_berry_custard").unwrap();
+        assert_eq!(custard["use_remainder"], "minecraft:glass_bottle");
+        assert_eq!(custard["food"]["effects"][0]["visible"], true);
+        let (salad, _) = facts.item("farmersdelight:nether_salad").unwrap();
+        assert_eq!(salad["use_remainder"], "minecraft:bowl");
+        assert_eq!(salad["food"]["effects"][0]["probability"], 0.3);
+    }
+
+    #[test]
+    fn remaining_farmer_food_import_uses_consumed_values_and_exact_ids() {
+        let facts: Facts = serde_json::from_value(json!({"blocks":{}, "items":{
+            "farmersdelight:apple_cider": {
+                "class":"vectorwing.farmersdelight.common.item.DrinkableItem", "max_stack_size":16, "rarity":"common",
+                "crafting_remainder":"minecraft:glass_bottle",
+                "food":{"nutrition":0,"saturation":0.0,"can_always_eat":true,"eat_seconds":1.6,
+                "effects":[{"id":"minecraft:absorption","duration":1200,"amplifier":0,"probability":1.0,"ambient":false,"visible":true,"show_icon":true}]}
+            },
+            "farmersdelight:bone_broth": {
+                "class":"vectorwing.farmersdelight.common.item.DrinkableItem", "max_stack_size":16, "rarity":"common",
+                "crafting_remainder":"minecraft:bowl",
+                "food":{"nutrition":8,"saturation":11.2,"can_always_eat":false,"eat_seconds":1.6,
+                "effects":[{"id":"farmersdelight:nourishment","duration":1200,"amplifier":0,"probability":1.0,"ambient":false,"visible":false,"show_icon":false}]}
+            },
+            "farmersdelight:dog_food": {
+                "class":"vectorwing.farmersdelight.common.item.DogFoodItem", "max_stack_size":16, "rarity":"common",
+                "crafting_remainder":"minecraft:bowl",
+                "food":{"nutrition":4,"saturation":1.6,"can_always_eat":false,"eat_seconds":1.6,"effects":[]}
+            },
+            "farmersdelight:melon_popsicle": {
+                "class":"vectorwing.farmersdelight.common.item.PopsicleItem", "max_stack_size":64, "rarity":"common",
+                "food":{"nutrition":3,"saturation":1.2,"can_always_eat":true,"eat_seconds":0.8,"effects":[]}
+            },
+            "farmersdelight:tomato_sauce": {
+                "class":"vectorwing.farmersdelight.common.item.ConsumableItem", "max_stack_size":64, "rarity":"common",
+                "crafting_remainder":"minecraft:bowl",
+                "food":{"nutrition":4,"saturation":3.2,"can_always_eat":false,"eat_seconds":1.6,"effects":[]}
+            }
+        }})).unwrap();
+        for (id, nutrition, saturation, remainder) in [
+            (
+                "farmersdelight:apple_cider",
+                4,
+                0.0,
+                Some("minecraft:glass_bottle"),
+            ),
+            (
+                "farmersdelight:bone_broth",
+                12,
+                11.2,
+                Some("minecraft:bowl"),
+            ),
+            ("farmersdelight:dog_food", 4, 1.6, Some("minecraft:bowl")),
+            ("farmersdelight:melon_popsicle", 7, 1.2, None),
+            (
+                "farmersdelight:tomato_sauce",
+                8,
+                3.2,
+                Some("minecraft:bowl"),
+            ),
+        ] {
+            let (decl, differences) = facts.item(id).unwrap();
+            assert!(differences.is_empty(), "{id}: {differences:?}");
+            assert_eq!(decl["food"]["nutrition"], nutrition, "{id}");
+            assert_eq!(decl["food"]["saturation"], saturation, "{id}");
+            assert_eq!(
+                decl.get("use_remainder").and_then(Value::as_str),
+                remainder,
+                "{id}"
+            );
+        }
+        assert_eq!(
+            facts.item("farmersdelight:unknown_food").unwrap_err(),
+            "not in the oracle"
+        );
     }
 
     #[test]
