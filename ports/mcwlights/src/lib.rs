@@ -158,13 +158,7 @@ impl Mod for McwLights {
         {
             let target = format!("mcwlights:{color}_paper_lamp");
             if server::set_block(&event.dimension, pos, &target).is_ok() {
-                server::play_sound(
-                    &event.dimension,
-                    pos,
-                    "minecraft:item.dye.use",
-                    1.0,
-                    1.2,
-                );
+                server::play_sound(&event.dimension, pos, "minecraft:item.dye.use", 1.0, 1.2);
                 return EventOutcome::Consume;
             }
         }
@@ -187,3 +181,38 @@ impl Mod for McwLights {
 }
 
 horizon_mod_sdk::export_mod!(McwLights);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_toggle_lit() {
+        assert_eq!(
+            toggle_lit("mcwlights:garden_light[lit=true]"),
+            Some("mcwlights:garden_light[lit=false]".to_string())
+        );
+        assert_eq!(
+            toggle_lit("mcwlights:garden_light[lit=false]"),
+            Some("mcwlights:garden_light[lit=true]".to_string())
+        );
+        assert_eq!(toggle_lit("mcwlights:iron_chandelier"), None);
+    }
+
+    #[test]
+    fn test_dye_color() {
+        assert_eq!(dye_color("minecraft:red_dye"), Some("red"));
+        assert_eq!(dye_color("minecraft:cyan_dye"), Some("cyan"));
+        assert_eq!(dye_color("minecraft:light_blue_dye"), Some("light_blue"));
+        assert_eq!(dye_color("minecraft:iron_ingot"), None);
+    }
+
+    #[test]
+    fn test_path_of() {
+        assert_eq!(
+            path_of("mcwlights:red_paper_lamp[lit=true]"),
+            "red_paper_lamp"
+        );
+        assert_eq!(path_of("mcwlights:bell_wall_lantern"), "bell_wall_lantern");
+    }
+}

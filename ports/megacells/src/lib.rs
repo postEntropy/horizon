@@ -7,11 +7,12 @@ mod items;
 use horizon_mod_sdk::{
     BlockAction, BlockEntityType, BlockEvent, EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod,
     Registration, chat,
+    item_transfer::{self, Face},
     ui::{self, ScreenSpec, Widget, WidgetKind},
 };
 
 /// `(size, bytes)`; 1k = 1,024 bytes in AE2's units.
-const SIZES: [(&str, u64); 5] = [
+pub const SIZES: [(&str, u64); 5] = [
     ("1m", 1_048_576),
     ("4m", 4_194_304),
     ("16m", 16_777_216),
@@ -19,7 +20,7 @@ const SIZES: [(&str, u64); 5] = [
     ("256m", 268_435_456),
 ];
 
-const KINDS: [(&str, &str); 7] = [
+pub const KINDS: [(&str, &str); 7] = [
     ("item", "Item"),
     ("fluid", "Fluid"),
     ("chemical", "Chemical"),
@@ -29,9 +30,9 @@ const KINDS: [(&str, &str); 7] = [
     ("source", "Source"),
 ];
 
-const ENERGY_CAPACITY: u64 = 67_108_864;
+pub const ENERGY_CAPACITY: u64 = 67_108_864;
 
-fn path_of(value: &str) -> &str {
+pub fn path_of(value: &str) -> &str {
     value.split([':', '[']).nth(1).unwrap_or(value)
 }
 
@@ -63,9 +64,9 @@ fn label(id: u32, y: i32, text: String) -> Widget {
     }
 }
 
-fn pattern_screen(title: &str) -> ScreenSpec {
+pub fn pattern_screen(title: &str) -> ScreenSpec {
     let mut widgets: Vec<Widget> = (0..9)
-        .map(|index| slot(index, 8 + index as i32 * 18, 18, ""))
+        .map(|index| slot(index, 8 + (index as i32) * 18, 18, ""))
         .collect();
     widgets.push(label(9, 42, "Patterns and their inputs.".into()));
     ScreenSpec {
@@ -77,7 +78,7 @@ fn pattern_screen(title: &str) -> ScreenSpec {
     }
 }
 
-fn cpu_screen(title: &str, storage: u64) -> ScreenSpec {
+pub fn cpu_screen(title: &str, storage: u64) -> ScreenSpec {
     ScreenSpec {
         id: "screen:megacells:cpu".into(),
         title: title.into(),
@@ -102,7 +103,7 @@ fn cpu_screen(title: &str, storage: u64) -> ScreenSpec {
     }
 }
 
-fn energy_screen() -> ScreenSpec {
+pub fn energy_screen() -> ScreenSpec {
     ScreenSpec {
         id: "screen:megacells:energy".into(),
         title: "MEGA Energy Cell".into(),
@@ -126,9 +127,7 @@ fn energy_screen() -> ScreenSpec {
     }
 }
 
-struct MegaCells;
-
-fn cell_of(path: &str) -> Option<(String, u64)> {
+pub fn cell_of(path: &str) -> Option<(String, u64)> {
     let (_, size) = SIZES
         .iter()
         .find(|(size, _)| path.ends_with(&format!("_{size}")))?;
@@ -142,20 +141,68 @@ fn cell_of(path: &str) -> Option<(String, u64)> {
     Some((format!("{kind} {name}"), *size))
 }
 
+pub struct MegaCells;
+
 impl Mod for MegaCells {
     fn init() -> Result<(Self, Registration), String> {
         Ok((MegaCells, Registration::new().command("megacells")))
     }
 
     fn block_entity_types(&mut self) -> Vec<BlockEntityType> {
-        items::BLOCK_ENTITIES
-            .iter()
-            .map(|b| BlockEntityType {
-                block: (*b).into(),
-                slots: 4,
+        let mut types = vec![
+            BlockEntityType {
+                block: "megacells:mega_interface".into(),
+                slots: 18,
+                ticks: false,
+            },
+            BlockEntityType {
+                block: "megacells:mega_pattern_provider".into(),
+                slots: 18,
+                ticks: false,
+            },
+            BlockEntityType {
+                block: "megacells:mega_energy_cell".into(),
+                slots: 0,
                 ticks: true,
-            })
-            .collect()
+            },
+            BlockEntityType {
+                block: "megacells:mega_crafting_unit".into(),
+                slots: 0,
+                ticks: false,
+            },
+            BlockEntityType {
+                block: "megacells:mega_crafting_accelerator".into(),
+                slots: 0,
+                ticks: false,
+            },
+        ];
+
+        for (size, _) in SIZES {
+            types.push(BlockEntityType {
+                block: format!("megacells:{size}_crafting_storage"),
+                slots: 0,
+                ticks: false,
+            });
+        }
+
+        types
+    }
+
+    fn create_block_entity(&mut self, handle: u32, block: &str, _saved: &[u8]) {
+        if block.contains("interface") || block.contains("pattern_provider") {
+            for slot in 0..18 {
+                for face in [
+                    Face::Up,
+                    Face::Down,
+                    Face::North,
+                    Face::South,
+                    Face::East,
+                    Face::West,
+                ] {
+                    let _ = item_transfer::set_slot_access(handle, slot, face, true, true);
+                }
+            }
+        }
     }
 
     fn logic_hooks(&mut self) -> LogicHooks {
@@ -235,26 +282,20 @@ impl Mod for MegaCells {
             return EventOutcome::Pass;
         }
         let path = path_of(&event.item);
+
         if let Some((name, bytes)) = cell_of(path) {
-            chat::show(&format!("💾 {name} cell: {bytes} bytes."));
+            chat::show(&format!(
+                "💾 MEGA {name}: capacity {bytes} bytes (AE2 storage unit)."
+            ));
             return EventOutcome::Consume;
         }
-        let message = match path {
-            "bulk_item_cell" => "💾 Bulk item cell: stores one item in enormous quantity.",
-            "compression_card" => {
-                "🃏 Compression card: auto-compresses ores and ingots into blocks."
-            }
-            "decompression_module" => "🃏 Decompression module: splits blocks back into items.",
-            "greater_energy_card" => {
-                "🃏 Greater energy card: feeds the network's energy into cells."
-            }
-            "cell_dock" => "🔌 Cell dock: keeps up to five storage cells on the network.",
-            "accumulation_processor" => "🔧 Accumulation processor: MEGA's advanced circuit.",
-            "portable_cell_workbench" => "🧰 Portable cell workbench: partitions a cell on the go.",
-            _ => return EventOutcome::Pass,
-        };
-        chat::show(message);
-        EventOutcome::Consume
+
+        if path == "bulk_item_cell" {
+            chat::show("📦 Bulk Item Cell: single-type infinite capacity item storage.");
+            return EventOutcome::Consume;
+        }
+
+        EventOutcome::Pass
     }
 
     fn command(&mut self, name: &str, _args: &str) -> Result<Option<String>, String> {
@@ -262,15 +303,40 @@ impl Mod for MegaCells {
             return Err(format!("Unknown command /{name}"));
         }
         Ok(Some(format!(
-            "MEGA Cells: sizes {}; kinds {}; energy cell {ENERGY_CAPACITY} AE.",
-            SIZES
-                .iter()
-                .map(|(size, bytes)| format!("{size} ({bytes} B)"))
-                .collect::<Vec<_>>()
-                .join(", "),
-            KINDS.map(|(_, name)| name).join(", ")
+            "MEGA Cells: 5 cell sizes (1M to 256M) across 7 data kinds ({} total storage cell variants).",
+            SIZES.len() * KINDS.len()
         )))
     }
 }
 
 horizon_mod_sdk::export_mod!(MegaCells);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sizes_bytes() {
+        assert_eq!(SIZES[0].1, 1_048_576);
+        assert_eq!(SIZES[4].1, 268_435_456);
+    }
+
+    #[test]
+    fn test_cell_detection() {
+        let (desc, bytes) = cell_of("item_storage_cell_1m").unwrap();
+        assert_eq!(desc, "Item Storage");
+        assert_eq!(bytes, 1_048_576);
+
+        let (desc_port, bytes_port) = cell_of("portable_fluid_cell_64m").unwrap();
+        assert_eq!(desc_port, "Fluid Portable");
+        assert_eq!(bytes_port, 67_108_864);
+    }
+
+    #[test]
+    fn test_screens() {
+        let cpu = cpu_screen("Storage", 1_048_576);
+        assert_eq!(cpu.id, "screen:megacells:cpu");
+        let energy = energy_screen();
+        assert_eq!(energy.id, "screen:megacells:energy");
+    }
+}

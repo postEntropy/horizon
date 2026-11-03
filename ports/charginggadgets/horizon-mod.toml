@@ -1,0 +1,6 @@
+id = "charginggadgets"
+name = "Charging Gadgets"
+version = "0.1.0"
+api = "0.4"
+side = "both"
+capabilities = ["registries", "block-entities", "item-transfer", "item-data", "ui"]

@@ -17,4 +17,5 @@ pub const BLOCKS: &[&str] = &[
 
 pub const BLOCK_ENTITIES: &[&str] = &[
     "dimstorage:dimensional_chest",
+    "dimstorage:dimensional_tank",
 ];

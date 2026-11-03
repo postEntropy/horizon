@@ -5,7 +5,7 @@
 //! can check an item before adding it.
 use horizon_mod_sdk::{Mod, Registration, inventory};
 
-const FUELS: &[(&str, u32)] = &[
+pub const FUELS: &[(&str, u32)] = &[
     ("minecraft:coal", 1600),
     ("minecraft:charcoal", 1600),
     ("minecraft:coal_block", 16000),
@@ -28,21 +28,12 @@ const FUELS: &[(&str, u32)] = &[
     ("minecraft:dried_kelp_block", 4001),
 ];
 
-const WOODS: [&str; 11] = [
-    "oak",
-    "spruce",
-    "birch",
-    "jungle",
-    "acacia",
-    "dark_oak",
-    "mangrove",
-    "cherry",
-    "bamboo",
-    "crimson",
-    "warped",
+pub const WOODS: [&str; 11] = [
+    "oak", "spruce", "birch", "jungle", "acacia", "dark_oak", "mangrove", "cherry", "bamboo",
+    "crimson", "warped",
 ];
 
-fn is_wood(path: &str) -> bool {
+pub fn is_wood(path: &str) -> bool {
     WOODS
         .iter()
         .any(|wood| path.starts_with(wood) && path.as_bytes().get(wood.len()) == Some(&b'_'))
@@ -50,7 +41,7 @@ fn is_wood(path: &str) -> bool {
 }
 
 /// Ticks `id` burns for, as a furnace counts them (200 ticks per item smelted).
-fn burn_time(id: &str) -> Option<u32> {
+pub fn burn_time(id: &str) -> Option<u32> {
     if let Some((_, ticks)) = FUELS.iter().find(|(fuel, _)| *fuel == id) {
         return Some(*ticks);
     }
@@ -77,7 +68,7 @@ fn burn_time(id: &str) -> Option<u32> {
     None
 }
 
-fn describe(id: &str) -> String {
+pub fn describe(id: &str) -> String {
     match burn_time(id) {
         Some(ticks) => format!(
             "🔥 {id} burns for {ticks} ticks ({:.1} items smelted).",
@@ -87,7 +78,7 @@ fn describe(id: &str) -> String {
     }
 }
 
-struct FuelGoesHere;
+pub struct FuelGoesHere;
 
 impl Mod for FuelGoesHere {
     fn init() -> Result<(Self, Registration), String> {
@@ -127,3 +118,42 @@ impl Mod for FuelGoesHere {
 }
 
 horizon_mod_sdk::export_mod!(FuelGoesHere);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_standard_fuels() {
+        assert_eq!(burn_time("minecraft:coal"), Some(1600));
+        assert_eq!(burn_time("minecraft:coal_block"), Some(16000));
+        assert_eq!(burn_time("minecraft:lava_bucket"), Some(20000));
+        assert_eq!(burn_time("minecraft:stick"), Some(100));
+        assert_eq!(burn_time("minecraft:stone"), None);
+    }
+
+    #[test]
+    fn test_wood_fuels() {
+        assert_eq!(burn_time("minecraft:oak_planks"), Some(300));
+        assert_eq!(burn_time("minecraft:spruce_slab"), Some(150));
+        assert_eq!(burn_time("minecraft:birch_boat"), Some(1200));
+        assert_eq!(burn_time("minecraft:jungle_sapling"), Some(100));
+    }
+
+    #[test]
+    fn test_describe_fuel() {
+        let desc = describe("minecraft:coal");
+        assert!(desc.contains("burns for 1600 ticks"));
+        assert!(desc.contains("8.0 items smelted"));
+
+        let non_fuel = describe("minecraft:dirt");
+        assert!(non_fuel.contains("is not a fuel"));
+    }
+
+    #[test]
+    fn test_command_list() {
+        let mut mod_inst = FuelGoesHere;
+        let res = mod_inst.command("fuel", "list").unwrap();
+        assert!(res.unwrap().contains("minecraft:coal"));
+    }
+}

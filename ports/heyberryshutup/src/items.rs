@@ -1,14 +1,8 @@
-//! The items, blocks and block entities this port answers to, extracted from mod data.
+//! The items and blocks monitored by Hey Berry SHUT UP.
 #![allow(dead_code)]
 
-pub const ITEMS: &[&str] = &[
-    "heyberryshutup:item_sample",
-];
+pub const ITEMS: &[&str] = &["minecraft:sweet_berries"];
 
-pub const BLOCKS: &[&str] = &[
-    "heyberryshutup:block_sample",
-];
+pub const BLOCKS: &[&str] = &["minecraft:sweet_berry_bush"];
 
-pub const BLOCK_ENTITIES: &[&str] = &[
-    "heyberryshutup:block_sample",
-];
+pub const BLOCK_ENTITIES: &[&str] = &[];

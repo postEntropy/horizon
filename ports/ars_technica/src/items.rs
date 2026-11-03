@@ -74,4 +74,6 @@ pub const BLOCKS: &[&str] = &[
 
 pub const BLOCK_ENTITIES: &[&str] = &[
     "ars_technica:precise_relay",
+    "ars_technica:source_motor",
+    "ars_technica:transmutation_turret",
 ];

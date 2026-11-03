@@ -5,10 +5,11 @@
 mod items;
 use horizon_mod_sdk::{
     BlockAction, BlockEntityType, BlockEvent, EventOutcome, LogicHooks, Mod, Registration, chat,
+    item_transfer::{self, Face},
     ui::{self, ScreenSpec, Widget, WidgetKind},
 };
 
-const WOODS: [&str; 20] = [
+pub const WOODS: [&str; 20] = [
     "acacia",
     "birch",
     "cherry",
@@ -32,7 +33,7 @@ const WOODS: [&str; 20] = [
 ];
 
 /// `(family, slots)`: 0 for a piece that only describes itself.
-const FAMILIES: [(&str, u32); 31] = [
+pub const FAMILIES: [(&str, u32); 31] = [
     ("bookshelf", 27),
     ("bookshelf_cupboard", 27),
     ("bookshelf_drawer", 1),
@@ -66,7 +67,7 @@ const FAMILIES: [(&str, u32); 31] = [
     ("wardrobe", 27),
 ];
 
-const COLORS: [&str; 16] = [
+pub const COLORS: [&str; 16] = [
     "white",
     "orange",
     "magenta",
@@ -85,12 +86,12 @@ const COLORS: [&str; 16] = [
     "black",
 ];
 
-fn path_of(state: &str) -> &str {
+pub fn path_of(state: &str) -> &str {
     let id = state.split('[').next().unwrap_or(state);
     id.split(':').nth(1).unwrap_or(id)
 }
 
-fn family_of(path: &str) -> Option<(&'static str, u32)> {
+pub fn family_of(path: &str) -> Option<(&'static str, u32)> {
     FAMILIES
         .iter()
         .copied()
@@ -98,7 +99,7 @@ fn family_of(path: &str) -> Option<(&'static str, u32)> {
         .max_by_key(|(family, _)| family.len())
 }
 
-fn title(family: &str) -> String {
+pub fn title(family: &str) -> String {
     family
         .split('_')
         .map(|word| {
@@ -112,7 +113,7 @@ fn title(family: &str) -> String {
         .join(" ")
 }
 
-fn storage_screen(family: &str, slots: u32) -> ScreenSpec {
+pub fn storage_screen(family: &str, slots: u32) -> ScreenSpec {
     let rows = slots.div_ceil(9);
     let widgets = (0..slots)
         .map(|index| Widget {
@@ -136,7 +137,7 @@ fn storage_screen(family: &str, slots: u32) -> ScreenSpec {
     }
 }
 
-struct McwFurnitures;
+pub struct McwFurnitures;
 
 impl Mod for McwFurnitures {
     fn init() -> Result<(Self, Registration), String> {
@@ -144,14 +145,37 @@ impl Mod for McwFurnitures {
     }
 
     fn block_entity_types(&mut self) -> Vec<BlockEntityType> {
-        items::BLOCK_ENTITIES
-            .iter()
-            .map(|b| BlockEntityType {
-                block: (*b).into(),
-                slots: 4,
-                ticks: true,
-            })
-            .collect()
+        let mut types = Vec::new();
+        for wood in WOODS {
+            for (family, slots) in FAMILIES {
+                if slots > 0 {
+                    types.push(BlockEntityType {
+                        block: format!("mcwfurnitures:{wood}_{family}"),
+                        slots,
+                        ticks: false,
+                    });
+                }
+            }
+        }
+        types
+    }
+
+    fn create_block_entity(&mut self, handle: u32, block: &str, _saved: &[u8]) {
+        let path = path_of(block);
+        if let Some((_, slots)) = family_of(path) {
+            for slot in 0..slots {
+                for face in [
+                    Face::Up,
+                    Face::Down,
+                    Face::North,
+                    Face::South,
+                    Face::East,
+                    Face::West,
+                ] {
+                    let _ = item_transfer::set_slot_access(handle, slot, face, true, true);
+                }
+            }
+        }
     }
 
     fn logic_hooks(&mut self) -> LogicHooks {
@@ -227,3 +251,28 @@ impl Mod for McwFurnitures {
 }
 
 horizon_mod_sdk::export_mod!(McwFurnitures);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_family_and_slots() {
+        assert_eq!(family_of("oak_wardrobe"), Some(("wardrobe", 27)));
+        assert_eq!(family_of("birch_bookshelf"), Some(("bookshelf", 27)));
+        assert_eq!(family_of("spruce_chair"), Some(("chair", 0)));
+        assert_eq!(
+            family_of("cherry_double_wardrobe"),
+            Some(("double_wardrobe", 54))
+        );
+        assert_eq!(family_of("dark_oak_drawer"), Some(("drawer", 1)));
+    }
+
+    #[test]
+    fn test_storage_screen_widgets() {
+        let screen = storage_screen("wardrobe", 27);
+        assert_eq!(screen.id, "screen:mcwfurnitures:storage");
+        assert_eq!(screen.title, "Wardrobe");
+        assert_eq!(screen.widgets.len(), 27);
+    }
+}

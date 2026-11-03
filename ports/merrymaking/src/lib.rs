@@ -1,31 +1,23 @@
 //! Mama's MerryMaking: wreath doors that open, gifts, and Christmas trees.
 //!
 //! The festive blocks are carried; this port gives them their interactions —
-//! wreath doors and picket gates swing open, presents hand out a treat, and
-//! the Christmas tree items plant a decorated tree.
+//! wreath doors and picket gates swing open, presents hand out treats, and
+//! the Christmas tree items plant a decorated tree with a star topper.
+
 use horizon_mod_sdk::{
     BlockAction, BlockEvent, EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod, Registration,
     chat,
     server::{self, BlockPos},
 };
 
-const WOODS: [&str; 11] = [
-    "oak",
-    "spruce",
-    "birch",
-    "jungle",
-    "acacia",
-    "dark_oak",
-    "cherry",
-    "bamboo",
-    "mangrove",
-    "crimson",
-    "warped",
+pub const WOODS: [&str; 11] = [
+    "oak", "spruce", "birch", "jungle", "acacia", "dark_oak", "cherry", "bamboo", "mangrove",
+    "crimson", "warped",
 ];
 
-const PINES: [&str; 3] = ["pine", "aged_pine", "exposed_pine"];
+pub const PINES: [&str; 3] = ["pine", "aged_pine", "exposed_pine"];
 
-const DOOR_KINDS: [&str; 6] = [
+pub const DOOR_KINDS: [&str; 6] = [
     "wreath_door",
     "lit_wreath_door",
     "wreath_multi_door",
@@ -34,7 +26,7 @@ const DOOR_KINDS: [&str; 6] = [
     "wreath_lights_white_door",
 ];
 
-const IRON_DOORS: [&str; 5] = [
+pub const IRON_DOORS: [&str; 5] = [
     "iron_wreath_door",
     "iron_lit_wreath_door",
     "iron_lit_wreath_multi_door",
@@ -42,7 +34,7 @@ const IRON_DOORS: [&str; 5] = [
     "iron_wreath_lights_white_door",
 ];
 
-const GATE_KINDS: [&str; 5] = [
+pub const GATE_KINDS: [&str; 5] = [
     "wreath_fence_gate",
     "wreath_multi_fence_gate",
     "wreath_lights_fence_gate",
@@ -50,7 +42,7 @@ const GATE_KINDS: [&str; 5] = [
     "picket_fence_gate",
 ];
 
-const SPECIAL_BLOCKS: [&str; 8] = [
+pub const SPECIAL_BLOCKS: [&str; 8] = [
     "present",
     "stocking",
     "chalice",
@@ -61,13 +53,23 @@ const SPECIAL_BLOCKS: [&str; 8] = [
     "star_topper",
 ];
 
-const TREES: [&str; 3] = ["christmas_tree", "white_christmas_tree", "snowy_christmas_tree"];
+pub const TREES: [&str; 3] = [
+    "christmas_tree",
+    "white_christmas_tree",
+    "snowy_christmas_tree",
+];
 
-const TREATS: [(&str, &str); 13] = [
-    ("egg_nog", "🥛 Warm egg nog — regeneration and full bellies."),
+pub const TREATS: [(&str, &str); 13] = [
+    (
+        "egg_nog",
+        "🥛 Warm egg nog — regeneration and full bellies.",
+    ),
     ("hot_cocoa", "☕ Hot cocoa warms you to the bone."),
     ("peppermint_cocoa", "🍫 Peppermint cocoa: minty and warm."),
-    ("gingerbread_cookie", "🍪 A gingerbread cookie, crisp and spiced."),
+    (
+        "gingerbread_cookie",
+        "🍪 A gingerbread cookie, crisp and spiced.",
+    ),
     ("fudge", "🍬 Rich fudge — a little too sweet."),
     ("candy_cane", "🍬 A candy cane, minty and striped."),
     ("latke", "🥔 A hot latke, fried golden."),
@@ -79,12 +81,12 @@ const TREATS: [(&str, &str); 13] = [
     ("gelt", "🪙 Chocolate gelt — the holiday bonus."),
 ];
 
-fn path_of(state: &str) -> &str {
+pub fn path_of(state: &str) -> &str {
     let id = state.split('[').next().unwrap_or(state);
     id.split(':').nth(1).unwrap_or(id)
 }
 
-fn toggle_open(state: &str) -> Option<(String, bool)> {
+pub fn toggle_open(state: &str) -> Option<(String, bool)> {
     if state.contains("open=true") {
         Some((state.replace("open=true", "open=false"), false))
     } else if state.contains("open=false") {
@@ -94,15 +96,88 @@ fn toggle_open(state: &str) -> Option<(String, bool)> {
     }
 }
 
-fn block_id(state: &str) -> &str {
+pub fn block_id(state: &str) -> &str {
     state.split('[').next().unwrap_or(state)
 }
 
-struct MerryMaking;
+pub struct MerryMaking {
+    pub present_counter: usize,
+}
+
+impl MerryMaking {
+    pub fn new() -> Self {
+        Self { present_counter: 0 }
+    }
+
+    pub fn next_present_treat(&mut self) -> (&'static str, &'static str) {
+        let treat = TREATS[self.present_counter % TREATS.len()];
+        self.present_counter = (self.present_counter + 1) % TREATS.len();
+        treat
+    }
+
+    pub fn plant_tree(&self, path: &str, event: ItemEvent) -> EventOutcome {
+        let snow = path.contains("snowy");
+        let trunk = if snow {
+            [
+                "merrymaking:small_spruce_bottom",
+                "merrymaking:small_spruce_middle",
+                "merrymaking:small_spruce_top",
+            ]
+        } else {
+            [
+                "merrymaking:christmas_tree_block",
+                "merrymaking:christmas_tree_block",
+                "merrymaking:christmas_tree_block",
+            ]
+        };
+
+        let base_y = event.y + 1;
+        let mut placed = 0;
+        for (index, block) in trunk.iter().enumerate() {
+            let pos = BlockPos {
+                x: event.x,
+                y: base_y + index as i32,
+                z: event.z,
+            };
+            let free = server::get_block(&event.dimension, pos)
+                .is_some_and(|state| state.starts_with("minecraft:air"));
+            if !free {
+                break;
+            }
+            if server::set_block(&event.dimension, pos, block).is_ok() {
+                placed += 1;
+            }
+        }
+
+        if placed == 0 {
+            chat::show("🌲 There is no room for the tree here.");
+            return EventOutcome::Consume;
+        }
+
+        let top = BlockPos {
+            x: event.x,
+            y: base_y + placed,
+            z: event.z,
+        };
+        let _ = server::set_block(&event.dimension, top, "merrymaking:star_topper");
+        server::play_sound(
+            &event.dimension,
+            top,
+            "minecraft:block.note_block.bell",
+            1.0,
+            1.4,
+        );
+        chat::show("🌲 Merry Christmas! A decorated tree grows before you.");
+        EventOutcome::Consume
+    }
+}
 
 impl Mod for MerryMaking {
     fn init() -> Result<(Self, Registration), String> {
-        Ok((MerryMaking, Registration::new()))
+        Ok((
+            MerryMaking::new(),
+            Registration::new().command("merrymaking"),
+        ))
     }
 
     fn logic_hooks(&mut self) -> LogicHooks {
@@ -168,12 +243,13 @@ impl Mod for MerryMaking {
         }
 
         if path == "present" {
-            chat::show("🎁 A present! There's a candy cane inside.");
+            let (treat_id, treat_msg) = self.next_present_treat();
+            chat::show(&format!("🎁 A present! {treat_msg}"));
             server::spawn_drop(
                 &event.dimension,
                 pos,
                 &server::ItemDrop {
-                    id: "merrymaking:candy_cane".into(),
+                    id: format!("merrymaking:{treat_id}"),
                     count: 1,
                 },
             );
@@ -181,7 +257,7 @@ impl Mod for MerryMaking {
         }
 
         if path == "stocking" {
-            chat::show("🧦 The stocking is stuffed with treats.");
+            chat::show("🧦 The stocking is stuffed with holiday treats.");
             return EventOutcome::Consume;
         }
 
@@ -209,64 +285,69 @@ impl Mod for MerryMaking {
 
         EventOutcome::Pass
     }
-}
 
-impl MerryMaking {
-    fn plant_tree(&self, path: &str, event: ItemEvent) -> EventOutcome {
-        let snow = path.contains("snowy");
-        let trunk = if snow {
-            [
-                "merrymaking:small_spruce_bottom",
-                "merrymaking:small_spruce_middle",
-                "merrymaking:small_spruce_top",
-            ]
-        } else {
-            [
-                "merrymaking:christmas_tree_block",
-                "merrymaking:christmas_tree_block",
-                "merrymaking:christmas_tree_block",
-            ]
-        };
-
-        let base_y = event.y + 1;
-        let mut placed = 0;
-        for (index, block) in trunk.iter().enumerate() {
-            let pos = BlockPos {
-                x: event.x,
-                y: base_y + index as i32,
-                z: event.z,
-            };
-            let free = server::get_block(&event.dimension, pos)
-                .is_some_and(|state| state.starts_with("minecraft:air"));
-            if !free {
-                break;
-            }
-            if server::set_block(&event.dimension, pos, block).is_ok() {
-                placed += 1;
-            }
+    fn command(&mut self, name: &str, args: &str) -> Result<Option<String>, String> {
+        if name != "merrymaking" {
+            return Err(format!("Unknown command /{name}"));
         }
-
-        if placed == 0 {
-            chat::show("🌲 There is no room for the tree here.");
-            return EventOutcome::Consume;
+        match args.trim() {
+            "treats" => {
+                let list = TREATS.iter().map(|(id, _)| *id).collect::<Vec<_>>().join(", ");
+                Ok(Some(format!("Mama's MerryMaking treats ({}): {}", TREATS.len(), list)))
+            }
+            "trees" => Ok(Some(format!("Christmas trees: {}", TREES.join(", ")))),
+            _ => Ok(Some(
+                "Mama's MerryMaking: presents give treats, wreath doors swing open, and trees plant festive firs!"
+                    .into(),
+            )),
         }
-
-        let top = BlockPos {
-            x: event.x,
-            y: base_y + placed,
-            z: event.z,
-        };
-        let _ = server::set_block(&event.dimension, top, "merrymaking:star_topper");
-        server::play_sound(
-            &event.dimension,
-            top,
-            "minecraft:block.note_block.bell",
-            1.0,
-            1.4,
-        );
-        chat::show("🌲 Merry Christmas! A decorated tree grows before you.");
-        EventOutcome::Consume
     }
 }
 
 horizon_mod_sdk::export_mod!(MerryMaking);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_toggle_open() {
+        let closed = "merrymaking:oak_wreath_door[facing=north,half=lower,open=false]";
+        let (toggled, is_open) = toggle_open(closed).expect("should toggle");
+        assert!(is_open);
+        assert!(toggled.contains("open=true"));
+
+        let (toggled2, is_open2) = toggle_open(&toggled).expect("should toggle back");
+        assert!(!is_open2);
+        assert!(toggled2.contains("open=false"));
+    }
+
+    #[test]
+    fn test_path_and_block_id() {
+        assert_eq!(
+            path_of("merrymaking:oak_wreath_door[open=true]"),
+            "oak_wreath_door"
+        );
+        assert_eq!(
+            block_id("merrymaking:present[facing=south]"),
+            "merrymaking:present"
+        );
+    }
+
+    #[test]
+    fn test_present_treat_rotation() {
+        let mut mm = MerryMaking::new();
+        let (t1, _) = mm.next_present_treat();
+        assert_eq!(t1, "egg_nog");
+        let (t2, _) = mm.next_present_treat();
+        assert_eq!(t2, "hot_cocoa");
+    }
+
+    #[test]
+    fn test_trees_and_treats_lists() {
+        assert_eq!(TREES.len(), 3);
+        assert_eq!(TREATS.len(), 13);
+        assert!(TREATS.iter().any(|(id, _)| *id == "candy_cane"));
+        assert!(TREATS.iter().any(|(id, _)| *id == "gingerbread_cookie"));
+    }
+}

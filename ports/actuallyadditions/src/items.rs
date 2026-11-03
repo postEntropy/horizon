@@ -405,4 +405,18 @@ pub const BLOCKS: &[&str] = &[
 
 pub const BLOCK_ENTITIES: &[&str] = &[
     "actuallyadditions:atomic_reconstructor",
+    "actuallyadditions:coal_generator",
+    "actuallyadditions:crusher",
+    "actuallyadditions:crusher_double",
+    "actuallyadditions:canola_press",
+    "actuallyadditions:empowerer",
+    "actuallyadditions:display_stand",
+    "actuallyadditions:bio_reactor",
+    "actuallyadditions:battery_box",
+    "actuallyadditions:dropper",
+    "actuallyadditions:breaker",
+    "actuallyadditions:farmer",
+    "actuallyadditions:feeder",
+    "actuallyadditions:vertical_digger",
+    "actuallyadditions:xp_solidifier",
 ];

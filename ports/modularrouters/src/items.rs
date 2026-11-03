@@ -72,6 +72,4 @@ pub const BLOCKS: &[&str] = &[
     "modularrouters:template_frame",
 ];
 
-pub const BLOCK_ENTITIES: &[&str] = &[
-    "modularrouters:modular_router",
-];
+pub const BLOCK_ENTITIES: &[&str] = &["modularrouters:modular_router"];

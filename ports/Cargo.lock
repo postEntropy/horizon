@@ -31,6 +31,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "advancedperipherals-port"
+version = "0.1.0"
+dependencies = [
+ "horizon-mod-sdk",
+]
+
+[[package]]
 name = "ae2"
 version = "0.1.0"
 dependencies = [
@@ -351,6 +358,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bwncr"
+version = "3.20.4"
+dependencies = [
+ "horizon-mod-sdk",
+]
+
+[[package]]
 name = "cabletiers-port"
 version = "0.1.0"
 dependencies = [
@@ -442,6 +456,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "crashutilities"
+version = "9.0.4"
+dependencies = [
+ "horizon-mod-sdk",
+]
+
+[[package]]
 name = "create"
 version = "0.1.0"
 dependencies = [
@@ -516,6 +537,8 @@ name = "dimstorage-port"
 version = "0.1.0"
 dependencies = [
  "horizon-mod-sdk",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -607,6 +630,8 @@ name = "enderstorage-port"
 version = "0.1.0"
 dependencies = [
  "horizon-mod-sdk",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -889,6 +914,13 @@ dependencies = [
 
 [[package]]
 name = "immersiveengineering_port"
+version = "0.1.0"
+dependencies = [
+ "horizon-mod-sdk",
+]
+
+[[package]]
+name = "incontrol-port"
 version = "0.1.0"
 dependencies = [
  "horizon-mod-sdk",
@@ -1344,6 +1376,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "novillagerdm-port"
+version = "6.0.0"
+dependencies = [
+ "horizon-mod-sdk",
+]
+
+[[package]]
 name = "occultism-port"
 version = "0.1.0"
 dependencies = [
@@ -1622,6 +1661,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
+ "serde_derive",
 ]
 
 [[package]]
@@ -1736,6 +1776,13 @@ dependencies = [
 
 [[package]]
 name = "stevescarts_port"
+version = "0.1.0"
+dependencies = [
+ "horizon-mod-sdk",
+]
+
+[[package]]
+name = "storagedelight"
 version = "0.1.0"
 dependencies = [
  "horizon-mod-sdk",

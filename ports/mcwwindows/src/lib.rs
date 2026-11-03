@@ -1,8 +1,8 @@
 //! Macaw's Windows: shutters and blinds that open and close, plus the hammer
 //! and key that reshape and lock window blocks.
 use horizon_mod_sdk::{
-    BlockAction, BlockEvent, EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod,
-    Registration, chat,
+    BlockAction, BlockEvent, EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod, Registration,
+    chat,
     server::{self, BlockPos},
 };
 
@@ -92,9 +92,7 @@ impl Mod for McwWindows {
         for block in BLOCKS {
             hooks = hooks.block(&format!("mcwwindows:{block}"));
         }
-        hooks
-            .item("mcwwindows:hammer")
-            .item("mcwwindows:key")
+        hooks.item("mcwwindows:hammer").item("mcwwindows:key")
     }
 
     fn on_block(&mut self, event: BlockEvent) -> EventOutcome {
@@ -143,3 +141,36 @@ impl Mod for McwWindows {
 }
 
 horizon_mod_sdk::export_mod!(McwWindows);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_toggle_open() {
+        assert_eq!(
+            toggle_open("mcwwindows:oak_shutter[open=false]"),
+            Some(("mcwwindows:oak_shutter[open=true]".to_string(), true))
+        );
+        assert_eq!(
+            toggle_open("mcwwindows:birch_louvered_shutter[open=true]"),
+            Some((
+                "mcwwindows:birch_louvered_shutter[open=false]".to_string(),
+                false
+            ))
+        );
+        assert_eq!(toggle_open("mcwwindows:oak_curtain_rod"), None);
+    }
+
+    #[test]
+    fn test_path_of() {
+        assert_eq!(
+            path_of("mcwwindows:spruce_shutter[open=true]"),
+            "spruce_shutter"
+        );
+        assert_eq!(
+            path_of("mcwwindows:white_mosaic_glass_pane"),
+            "white_mosaic_glass_pane"
+        );
+    }
+}

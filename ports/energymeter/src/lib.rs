@@ -233,3 +233,49 @@ fn read_at(key: &str) -> Option<(u64, u64)> {
 }
 
 horizon_mod_sdk::export_mod!(EnergyMeter);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_position_format_and_parse() {
+        let pos = position("minecraft:overworld", 100, 64, -200);
+        assert_eq!(pos, "minecraft:overworld:100,64,-200");
+    }
+
+    #[test]
+    fn test_reading_rate_and_total() {
+        let mut reading = Reading {
+            stored: 10_000,
+            capacity: 100_000,
+            total: 0,
+            rate: 0,
+        };
+
+        // Simulate reading increasing by 2,000 FE over 20 ticks
+        let new_stored = 12_000;
+        let delta = new_stored - reading.stored;
+        reading.rate = delta / TICKS_PER_READ;
+        reading.total += delta;
+        reading.stored = new_stored;
+
+        assert_eq!(reading.rate, 100); // 2000 / 20 = 100 FE/t
+        assert_eq!(reading.total, 2_000);
+    }
+
+    #[test]
+    fn test_meter_screen() {
+        let reading = Reading {
+            stored: 50_000,
+            capacity: 100_000,
+            total: 500_000,
+            rate: 250,
+        };
+        let screen = meter_screen(reading);
+        assert_eq!(screen.id, METER_SCREEN);
+        assert_eq!(screen.widgets.len(), 5);
+        assert_eq!(screen.widgets[0].value, 50_000);
+        assert_eq!(screen.widgets[0].max_value, 100_000);
+    }
+}

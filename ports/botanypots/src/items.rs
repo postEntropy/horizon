@@ -373,6 +373,4 @@ pub const BLOCKS: &[&str] = &[
     "botanypots:yellow_terracotta_waxed_botany_pot",
 ];
 
-pub const BLOCK_ENTITIES: &[&str] = &[
-    "botanypots:black_concrete_botany_pot",
-];
+pub const BLOCK_ENTITIES: &[&str] = BLOCKS;

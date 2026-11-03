@@ -21,6 +21,4 @@ pub const BLOCKS: &[&str] = &[
     "treetap:wooden_sap_collector",
 ];
 
-pub const BLOCK_ENTITIES: &[&str] = &[
-    "treetap:ceramic_sap_collector",
-];
+pub const BLOCK_ENTITIES: &[&str] = BLOCKS;

@@ -8,18 +8,19 @@ use std::collections::HashSet;
 
 use horizon_mod_sdk::{
     BlockAction, BlockEntityType, BlockEvent, EventOutcome, LogicHooks, Mod, Registration, chat,
+    item_transfer::{self, Face},
     ui::{self, ScreenSpec, Widget, WidgetKind},
 };
 
-const CHEST_SLOTS: u32 = 27;
-const SCREEN: &str = "screen:lootr:loot";
+pub const CHEST_SLOTS: u32 = 27;
+pub const SCREEN: &str = "screen:lootr:loot";
 
-fn path_of(state: &str) -> &str {
+pub fn path_of(state: &str) -> &str {
     let id = state.split('[').next().unwrap_or(state);
     id.split(':').nth(1).unwrap_or(id)
 }
 
-fn loot_screen(title: &str, slots: u32) -> ScreenSpec {
+pub fn loot_screen(title: &str, slots: u32) -> ScreenSpec {
     let rows = slots.div_ceil(9);
     let widgets = (0..slots)
         .map(|index| Widget {
@@ -43,11 +44,11 @@ fn loot_screen(title: &str, slots: u32) -> ScreenSpec {
     }
 }
 
-struct Lootr {
+pub struct Lootr {
     /// `<player>@<dimension>:x,y,z` for every container a player has opened.
-    looted: HashSet<String>,
+    pub looted: HashSet<String>,
     /// Containers this world has handed out, for `/lootr`.
-    containers: HashSet<String>,
+    pub containers: HashSet<String>,
 }
 
 impl Mod for Lootr {
@@ -62,30 +63,64 @@ impl Mod for Lootr {
     }
 
     fn block_entity_types(&mut self) -> Vec<BlockEntityType> {
-        items::BLOCK_ENTITIES
-            .iter()
-            .map(|b| BlockEntityType {
-                block: (*b).into(),
-                slots: 4,
-                ticks: true,
-            })
-            .collect()
+        vec![
+            BlockEntityType {
+                block: "lootr:lootr_chest".into(),
+                slots: CHEST_SLOTS,
+                ticks: false,
+            },
+            BlockEntityType {
+                block: "lootr:lootr_barrel".into(),
+                slots: CHEST_SLOTS,
+                ticks: false,
+            },
+            BlockEntityType {
+                block: "lootr:lootr_trapped_chest".into(),
+                slots: CHEST_SLOTS,
+                ticks: false,
+            },
+            BlockEntityType {
+                block: "lootr:lootr_shulker".into(),
+                slots: CHEST_SLOTS,
+                ticks: false,
+            },
+            BlockEntityType {
+                block: "lootr:lootr_inventory".into(),
+                slots: CHEST_SLOTS,
+                ticks: false,
+            },
+            BlockEntityType {
+                block: "lootr:decorated_pot".into(),
+                slots: 1,
+                ticks: false,
+            },
+        ]
+    }
+
+    fn create_block_entity(&mut self, handle: u32, block: &str, _saved: &[u8]) {
+        let slots = if block.contains("decorated_pot") {
+            1
+        } else {
+            CHEST_SLOTS
+        };
+        for slot in 0..slots {
+            for face in [
+                Face::Up,
+                Face::Down,
+                Face::North,
+                Face::South,
+                Face::East,
+                Face::West,
+            ] {
+                let _ = item_transfer::set_slot_access(handle, slot, face, true, true);
+            }
+        }
     }
 
     fn logic_hooks(&mut self) -> LogicHooks {
         let mut hooks = LogicHooks::new();
-        for block in [
-            "lootr_chest",
-            "lootr_barrel",
-            "lootr_trapped_chest",
-            "lootr_shulker",
-            "decorated_pot",
-            "suspicious_sand",
-            "suspicious_gravel",
-            "trophy",
-            "lootr_inventory",
-        ] {
-            hooks = hooks.block(&format!("lootr:{block}"));
+        for block in items::BLOCKS {
+            hooks = hooks.block(block);
         }
         hooks
     }
@@ -162,3 +197,43 @@ impl Mod for Lootr {
 }
 
 horizon_mod_sdk::export_mod!(Lootr);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_looting_per_player() {
+        let mut lootr = Lootr {
+            looted: HashSet::new(),
+            containers: HashSet::new(),
+        };
+
+        let container_place = "minecraft:overworld:100,50,-100";
+        let player1 = "Steve";
+        let player2 = "Alex";
+
+        // Player 1 opens container
+        let key1 = format!("{player1}@{container_place}");
+        assert!(lootr.looted.insert(key1.clone()));
+        lootr.containers.insert(container_place.to_string());
+
+        // Player 1 tries to open container again -> already looted
+        assert!(!lootr.looted.insert(key1));
+
+        // Player 2 opens container -> allowed (gets own copy)
+        let key2 = format!("{player2}@{container_place}");
+        assert!(lootr.looted.insert(key2));
+
+        assert_eq!(lootr.containers.len(), 1);
+        assert_eq!(lootr.looted.len(), 2);
+    }
+
+    #[test]
+    fn test_loot_screen_spec() {
+        let screen = loot_screen("Loot Chest", CHEST_SLOTS);
+        assert_eq!(screen.id, SCREEN);
+        assert_eq!(screen.title, "Loot Chest");
+        assert_eq!(screen.widgets.len(), CHEST_SLOTS as usize);
+    }
+}

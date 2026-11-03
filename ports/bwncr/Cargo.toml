@@ -1,0 +1,10 @@
+[package]
+name = "bwncr"
+version = "3.20.4"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+horizon-mod-sdk = { path = "/home/leonardo/Documents/horizon-fork/crates/horizon-mod-sdk" }

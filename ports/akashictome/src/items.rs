@@ -1,15 +1,12 @@
-//! The items, blocks and block entities this port answers to, extracted from mod data.
+//! The ids this port answers to, taken from the mod's carried data.
 #![allow(dead_code)]
 
-pub const ITEMS: &[&str] = &[
-    "akashictome:attachment",
-    "akashictome:tome",
-];
+/// The mod's only item; the guides it stores belong to other mods.
+pub const TOME: &str = "akashictome:tome";
 
-pub const BLOCKS: &[&str] = &[
-    "akashictome:block_sample",
-];
+pub const ITEMS: &[&str] = &[TOME];
 
-pub const BLOCK_ENTITIES: &[&str] = &[
-    "akashictome:block_sample",
-];
+/// The mod registers no blocks.
+pub const BLOCKS: &[&str] = &[];
+
+pub const BLOCK_ENTITIES: &[&str] = &[];

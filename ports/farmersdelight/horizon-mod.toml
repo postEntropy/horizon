@@ -1,0 +1,7 @@
+id = "farmersdelight"
+name = "Farmer's Delight"
+version = "0.1.0"
+api = "0.6"
+side = "both"
+contributes = ["create", "createaddition"]
+capabilities = ["registries", "block-entities", "item-transfer", "machine-slot-limits", "recipes", "world-read", "server", "ui", "chat", "status-effects"]

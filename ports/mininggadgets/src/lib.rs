@@ -5,6 +5,8 @@ mod items;
 use horizon_mod_sdk::{
     BlockAction, BlockEntityType, BlockEvent, EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod,
     Registration, chat,
+    capabilities::EnergyView,
+    item_data,
     ui::{self, ScreenSpec, Widget, WidgetKind},
 };
 
@@ -63,6 +65,16 @@ fn path_of(value: &str) -> &str {
 
 impl Mod for MiningGadgets {
     fn init() -> Result<(Self, Registration), String> {
+        let energy = EnergyView {
+            stored: 0,
+            capacity: 1_000_000,
+            max_receive: 1_000_000,
+            max_extract: 1_000_000,
+        };
+        for (gadget, _) in GADGETS {
+            let id = format!("mininggadgets:{gadget}");
+            let _ = item_data::register_energy_item(&id, energy);
+        }
         Ok((MiningGadgets, Registration::new().command("mininggadgets")))
     }
 

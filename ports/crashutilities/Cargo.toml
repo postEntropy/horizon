@@ -1,0 +1,10 @@
+[package]
+name = "crashutilities"
+version = "9.0.4"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+horizon-mod-sdk = { path = "../../crates/horizon-mod-sdk" }

@@ -368,6 +368,4 @@ pub const BLOCKS: &[&str] = &[
     "farmersdelight:yellow_wall_hanging_canvas_sign",
 ];
 
-pub const BLOCK_ENTITIES: &[&str] = &[
-    "farmersdelight:acacia_cabinet",
-];
+pub const BLOCK_ENTITIES: &[&str] = &["farmersdelight:acacia_cabinet"];

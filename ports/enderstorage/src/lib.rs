@@ -64,25 +64,13 @@ pub struct TankFrequency {
     pub amount_mb: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BlockStateRecord {
     pub channels: [u8; 3],
     pub is_private: bool,
     pub owner: Option<String>,
     pub pending_channel_idx: usize,
     pub is_tank: bool,
-}
-
-impl Default for BlockStateRecord {
-    fn default() -> Self {
-        Self {
-            channels: [0, 0, 0], // white, white, white
-            is_private: false,
-            owner: None,
-            pending_channel_idx: 0,
-            is_tank: false,
-        }
-    }
 }
 
 pub struct EnderStorage {
@@ -247,19 +235,19 @@ pub fn interact_tank_fluid(
             tank.amount_mb += BUCKET_MB;
             return Some(("minecraft:bucket", "lava"));
         }
-    } else if held_item == "minecraft:bucket" || held_item == "bucket" {
-        if tank.amount_mb >= BUCKET_MB {
-            tank.amount_mb -= BUCKET_MB;
-            let result_item = if tank.fluid == "minecraft:lava" {
-                "minecraft:lava_bucket"
-            } else {
-                "minecraft:water_bucket"
-            };
-            if tank.amount_mb == 0 {
-                tank.fluid.clear();
-            }
-            return Some((result_item, "extracted"));
+    } else if (held_item == "minecraft:bucket" || held_item == "bucket")
+        && tank.amount_mb >= BUCKET_MB
+    {
+        tank.amount_mb -= BUCKET_MB;
+        let result_item = if tank.fluid == "minecraft:lava" {
+            "minecraft:lava_bucket"
+        } else {
+            "minecraft:water_bucket"
+        };
+        if tank.amount_mb == 0 {
+            tank.fluid.clear();
         }
+        return Some((result_item, "extracted"));
     }
     None
 }

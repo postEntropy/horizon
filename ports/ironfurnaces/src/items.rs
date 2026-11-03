@@ -64,6 +64,4 @@ pub const BLOCKS: &[&str] = &[
     "ironfurnaces:vibranium_furnace",
 ];
 
-pub const BLOCK_ENTITIES: &[&str] = &[
-    "ironfurnaces:allthemodium_furnace",
-];
+pub const BLOCK_ENTITIES: &[&str] = BLOCKS;

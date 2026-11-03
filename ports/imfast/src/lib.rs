@@ -8,16 +8,34 @@ use horizon_mod_sdk::{
     keys::{self, KeyBinding},
 };
 
-const BOOST_KEY: &str = "imfast_boost";
+pub const BOOST_KEY: &str = "imfast_boost";
 
-struct ImFast {
-    last_multiplier: f64,
+pub fn calculate_step(yaw_degrees: f32, speed: f64) -> (f64, f64) {
+    let step = 0.02 * speed;
+    let yaw = (yaw_degrees as f64).to_radians();
+    let dx = -yaw.sin() * step;
+    let dz = yaw.cos() * step;
+    (dx, dz)
+}
+
+pub fn clamp_multiplier(val: f64) -> f64 {
+    val.clamp(0.5, 20.0)
+}
+
+pub struct ImFast {
+    pub last_multiplier: f64,
+}
+
+impl Default for ImFast {
+    fn default() -> Self {
+        Self {
+            last_multiplier: 3.0,
+        }
+    }
 }
 
 fn multiplier() -> f64 {
-    config::get_float("boost")
-        .unwrap_or(3.0)
-        .clamp(0.5, 20.0)
+    config::get_float("boost").unwrap_or(3.0).clamp(0.5, 20.0)
 }
 
 impl Mod for ImFast {
@@ -43,11 +61,7 @@ impl Mod for ImFast {
             return;
         };
         let speed = multiplier();
-        // 0.02 blocks per tick is walking pace; the multiplier lifts the cap.
-        let step = 0.02 * speed;
-        let yaw = (player.yaw as f64).to_radians();
-        let dx = -yaw.sin() * step;
-        let dz = yaw.cos() * step;
+        let (dx, dz) = calculate_step(player.yaw, speed);
         let _ = dimensions::teleport(
             "Player",
             &player.dimension,
@@ -66,7 +80,7 @@ impl Mod for ImFast {
             let Ok(value) = arg.parse::<f64>() else {
                 return Err("Usage: /imfast [multiplier]".into());
             };
-            let value = value.clamp(0.5, 20.0);
+            let value = clamp_multiplier(value);
             if let Err(error) = config::set_float("boost", value) {
                 return Err(format!("Cannot set boost: {error}"));
             }
@@ -82,3 +96,28 @@ impl Mod for ImFast {
 }
 
 horizon_mod_sdk::export_mod!(ImFast);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_step_vector_calculation() {
+        // Yaw 0 (facing south in MC): sin(0)=0, cos(0)=1 -> dx=0, dz=step
+        let (dx, dz) = calculate_step(0.0, 5.0);
+        assert!((dx - 0.0).abs() < 1e-5);
+        assert!((dz - 0.1).abs() < 1e-5);
+
+        // Yaw 180 (facing north): sin(pi)=0, cos(pi)=-1 -> dx=0, dz=-step
+        let (dx, dz) = calculate_step(180.0, 5.0);
+        assert!((dx - 0.0).abs() < 1e-5);
+        assert!((dz - -0.1).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_multiplier_clamping() {
+        assert_eq!(clamp_multiplier(0.1), 0.5);
+        assert_eq!(clamp_multiplier(5.0), 5.0);
+        assert_eq!(clamp_multiplier(100.0), 20.0);
+    }
+}

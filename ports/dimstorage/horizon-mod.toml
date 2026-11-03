@@ -1,0 +1,6 @@
+id = "dimstorage"
+name = "DimStorage"
+version = "9.1.1"
+api = "0.4"
+side = "both"
+capabilities = ["registries", "block-entities", "ui", "chat", "item-transfer"]
