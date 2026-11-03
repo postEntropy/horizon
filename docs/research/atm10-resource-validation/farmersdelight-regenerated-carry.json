@@ -1,0 +1,26 @@
+{
+  "status": "partial",
+  "scope": "actual import pipeline with original oracle facts; scratch-only regeneration and client loader",
+  "full_regeneration_loaded_recipes": 4,
+  "original_item_declarations_with_pipeline_generated_tags_loaded_recipes": 28,
+  "missing_food_items": 76,
+  "missing_block_items": 4,
+  "pipeline_convention_tags": 36,
+  "sha256": {
+    ".local/atm10-resource-validation/farmer-regenerated-recipes.json": "92bce79298e9409f5350dd487f6984e97912e7ce9dffc4c19b7a135d1f5fd291",
+    ".local/atm10-resource-validation/farmer-regenerated-tags-only-recipes.json": "cb06b4bc44b8d4812589f409797d40f0739649fff5db6d389ceb5b22866b97c2"
+  },
+  "remaining": [
+    "implement food item template metadata",
+    "regenerate complete carry and validate actual recipes/gameplay"
+  ],
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10
+}

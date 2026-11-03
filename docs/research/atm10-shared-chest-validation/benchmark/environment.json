@@ -1,0 +1,26 @@
+{
+  "baseline_guest_source_commit": "ac0a35ede47c92ec440dd13554cb3ad0061995d1",
+  "comparison": "same current host and SDK; original guest source versus shared-inventory guest; sequential before/after pairs",
+  "cpu": "AMD Ryzen 5 4600G",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "profile": "release",
+  "warmup_ticks": 10,
+  "samples": 200,
+  "concurrent_builds_or_tests": false,
+  "memory_scope": "Linux wait4 ru_maxrss in KiB; whole process including componentization/JIT/create/ticks, not steady inventory memory",
+  "guest_sha256": {
+    "dimstorage_baseline_port": "d2f05da103712688c7d2ea9cf7b148f33646ffd95125982f60c5964920687c3a",
+    "dimstorage_port": "ef92f82de5d62b87759be63f6a1c9bbfbd274c0e4ee55c6d818a442057f235dc",
+    "enderstorage_baseline_port": "134dd482d400098bb4ca0ebfc52e4015e30eb9972343b019a19306e49d74cffc",
+    "enderstorage_port": "1e90aa20f68f686b79ed90cacb37c5b534a5411e1825644e2ebb1892af0f8b75"
+  },
+  "host_sha256": "ab5797aee68a3e6ea858f49d547fda09f958094ed2f07cd813501ea33d12093b"
+}

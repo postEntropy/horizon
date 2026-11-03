@@ -1,0 +1,43 @@
+{
+  "scope": "Farmer cooking recipe graph continuation; not a performance benchmark or complete port",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "cargo_build_jobs": 6,
+  "rayon_num_threads": 6,
+  "java_active_processors": 6,
+  "head": "87ecd28446d68a03c756174ae2c4a985a03bbee7",
+  "sha256": {
+    "ports/farmersdelight/src/lib.rs": "a67c23710a9764cd347730f754b5f5b4d8e90d74ef22d063cae31708cf0a9a07",
+    "ports/farmersdelight/src/cooking_items.rs": "d7c8be858224936134f0da2b100382a6e8a88c7d830368aa116b5f51acbfe42e",
+    "ports/farmersdelight/horizon-mod.toml": "fce8b4fd35a17cb5cbb657fb7f35f678b0d9a7119f1258fa7869c000c5e0441f",
+    "ports/target/wasm32-unknown-unknown/release/farmersdelight_port.wasm": "0ce7bcaade637d593392cc7e5580d4eacd33acffef8994ada961b2cde21c1625",
+    "crates/horizon-mod-sdk/wit/horizon.wit": "91a9888fcff8c4feb8e33adde08a076a8d78888b02d44651ef878b37fe1cb128",
+    "crates/horizon-mods/examples/farmer_pot_probe.rs": "19a8cf8d2bf7b888472798dc7f73397f13d89bf1d7fedce23912a3bbeca03c3d",
+    "mods/horizon/src/neoforge-oracle/java/dev/horizonlab/neoforge/MachineTrace.java": "8fdd7e2b50dcc8bf93499e1a77f90a6a91d14c810474861473c4effa333d0cdf",
+    "tools/test_farmer_original.py": "9da04c2ba69afebbd08de8f9d0faa528531d8c032ed8ad85be92b4557d98efe7"
+  },
+  "validation": {
+    "port_native": "4 passed",
+    "runtime_full": "55 passed, 1 ignored",
+    "clippy": "port all targets; runtime library and farmer probe passed",
+    "component": "passed; interim layout",
+    "original_black_box": "6 scenarios passed",
+    "client_loader": "14 with isolated installed carry; 28 with scratch observed convention tags",
+    "client_menus": "9 passed",
+    "game": "Cooked Rice fixture passed in-frame and server-thread; not full mod parity"
+  },
+  "remaining": [
+    "recipe-specific container metadata and ingredient remainders",
+    "carry convention tags and food templates",
+    "remaining mod features and automation faces",
+    "task 4 other cases",
+    "task 5 profiling and final validation"
+  ]
+}

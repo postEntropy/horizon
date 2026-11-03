@@ -1,0 +1,89 @@
+Horizon: content root ready for 1 mod(s) in 1.4s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-nzf8te1a/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.15s (36649 block states)
+Horizon: discovered 4561 model files in 0.00s, parsed in 0.02s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.06s (1420 blocks)
+Horizon: bound 36630 model states / 8354 variants in 0.10s, resolved models in 0.00s, baked models and loaded sprites in 0.11s
+Horizon: model-state catalog prepared in 0.22s
+Horizon: blockstate binding and model baking took 0.29s
+Horizon: finalized 1492 sprite layers in 0.05s (asset render stage 0.36s)
+Horizon: gameplay facts read 0.05s, validated 0.17s, decoded 0.16s, projected 36649 states in 0.06s
+load assets: 2.32s
+Horizon: asset load stage took 0.66s
+load facts: 2.32s
+Horizon: facts, biomes and environment stage took 0.47s
+load biomes+env: 2.32s
+load pack tables: 2.64s
+Horizon: pack tables stage took 0.33s
+load collision+motion: 2.82s
+Horizon: collision and motion stage took 0.17s
+Horizon: mob metadata loaded in 0.02s
+load items: 2.90s
+Horizon: cooking-pot recipe farmersdelight:cooking/baked_cod_stew has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/beef_stew has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/beetroot_soup has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/bone_broth has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/chicken_soup has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/fried_rice has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/glow_berry_custard has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/noodle_soup has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/onion_soup has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/rabbit_stew has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/ratatouille has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/stuffed_pumpkin_block has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/vegetable_noodles has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/vegetable_soup has unsupported or unresolved ingredients/result
+Horizon: resources loaded in 2.9s; 36649 block states, 1886 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.10s
+Horizon: providers and block-entity render tables loaded in 0.18s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.02s
+Horizon: mob types loaded in 0.06s
+Horizon: player model setup took 0.09s
+Horizon: behaviours, mob types and player models loaded in 0.18s
+Horizon: no sound: this build has no sound output (built without the `audio` feature)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.04s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-nzf8te1a/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.05s
+Horizon: game CPU resources ready in 0.06s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: live features ready in 722.42208ms
+[15:46:12] [Server thread/INFO]: Player44596[/127.0.0.1:0] logged in with entity id 2 at (0.5, 99.0, 2.5)
+[15:46:12] [Server thread/INFO]: System chat: Player44596 joined the game
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 5000 ms
+[chat] The game is frozen
+[15:46:12] [Server thread/INFO]: System chat: [Player44596: Stepping 50 tick(s)]
+[chat] Stepping 50 tick(s)
+[15:46:16] [Server thread/INFO]: System chat: [Player44596: Replaced 1 slot(s) at 0, 100, 0 with [Bowl]]
+[chat] Replaced 1 slot(s) at 0, 100, 0 with [Bowl]
+[15:46:16] [Server thread/INFO]: System chat: [Player44596: Replaced 1 slot(s) at 0, 100, 0 with [Stone]]
+[chat] Replaced 1 slot(s) at 0, 100, 0 with [Stone]
+[15:46:16] [Server thread/INFO]: System chat: [Player44596: Stepping 100 tick(s)]
+[chat] Stepping 100 tick(s)
+[15:46:22] [Server thread/INFO]: System chat: [Player44596: Replaced 1 slot(s) at 0, 100, 0 with [Air]]
+[chat] Replaced 1 slot(s) at 0, 100, 0 with [Air]
+[15:46:22] [Server thread/INFO]: System chat: [Player44596: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+[15:46:23] [Server thread/INFO]: System chat: [Player44596: Stepping 30 tick(s)]
+[chat] Stepping 30 tick(s)
+[15:46:26] [Server thread/INFO]: System chat: [Player44596: Replaced 1 slot(s) at 0, 100, 0 with [Cooked Rice]]
+[chat] Replaced 1 slot(s) at 0, 100, 0 with [Cooked Rice]
+[15:46:26] [Server thread/INFO]: System chat: [Player44596: Replaced 1 slot(s) at 0, 100, 0 with [Rice]]
+[chat] Replaced 1 slot(s) at 0, 100, 0 with [Rice]
+[15:46:26] [Server thread/INFO]: System chat: [Player44596: Stepping 110 tick(s)]
+[chat] Stepping 110 tick(s)

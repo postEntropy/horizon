@@ -1,0 +1,19 @@
+{
+  "phase": "after",
+  "mod": "dimstorage",
+  "count": 1000,
+  "peak_rss_kib": 27192,
+  "wall_seconds": 0.6320678800000223,
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "host_sha256": "af54a2e31e0347c67891660e191c6ac87eb69c2e45edc1531aad5b276604541e",
+  "core_sha256": "1cc7faf9a16c09cbb44d3f7fa16eb62bf8239212da0deb7af684ba94051e6676",
+  "manifest_sha256": "5d12a1a9258f22dd5971e0958820d21bb0fe208d670d6c4ab5ac762c51b5df65"
+}

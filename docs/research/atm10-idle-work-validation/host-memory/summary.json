@@ -1,0 +1,295 @@
+{
+  "scope": "whole process peak RSS including componentize/JIT/create; explicit chest views; not game loop",
+  "samples": 200,
+  "warmup": 10,
+  "results": [
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 1,
+      "peak_rss_kib": 22856,
+      "wall_seconds": 0.23226339200004986,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "ab5797aee68a3e6ea858f49d547fda09f958094ed2f07cd813501ea33d12093b",
+      "core_sha256": "ef92f82de5d62b87759be63f6a1c9bbfbd274c0e4ee55c6d818a442057f235dc",
+      "manifest_sha256": "5d12a1a9258f22dd5971e0958820d21bb0fe208d670d6c4ab5ac762c51b5df65",
+      "tick": {
+        "max_us": 9.01,
+        "p50_us": 5.588,
+        "p95_us": 5.867
+      }
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 1,
+      "peak_rss_kib": 22548,
+      "wall_seconds": 0.23397837300001356,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "af54a2e31e0347c67891660e191c6ac87eb69c2e45edc1531aad5b276604541e",
+      "core_sha256": "1cc7faf9a16c09cbb44d3f7fa16eb62bf8239212da0deb7af684ba94051e6676",
+      "manifest_sha256": "5d12a1a9258f22dd5971e0958820d21bb0fe208d670d6c4ab5ac762c51b5df65",
+      "tick": {
+        "max_us": 20.813,
+        "p50_us": 5.6579999999999995,
+        "p95_us": 6.146
+      }
+    },
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 100,
+      "peak_rss_kib": 22444,
+      "wall_seconds": 0.26725249599996914,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "ab5797aee68a3e6ea858f49d547fda09f958094ed2f07cd813501ea33d12093b",
+      "core_sha256": "ef92f82de5d62b87759be63f6a1c9bbfbd274c0e4ee55c6d818a442057f235dc",
+      "manifest_sha256": "5d12a1a9258f22dd5971e0958820d21bb0fe208d670d6c4ab5ac762c51b5df65",
+      "tick": {
+        "max_us": 179.00699999999998,
+        "p50_us": 152.187,
+        "p95_us": 169.64700000000002
+      }
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 100,
+      "peak_rss_kib": 27184,
+      "wall_seconds": 0.28501503300003606,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "af54a2e31e0347c67891660e191c6ac87eb69c2e45edc1531aad5b276604541e",
+      "core_sha256": "1cc7faf9a16c09cbb44d3f7fa16eb62bf8239212da0deb7af684ba94051e6676",
+      "manifest_sha256": "5d12a1a9258f22dd5971e0958820d21bb0fe208d670d6c4ab5ac762c51b5df65",
+      "tick": {
+        "max_us": 256.391,
+        "p50_us": 161.127,
+        "p95_us": 240.327
+      }
+    },
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 1000,
+      "peak_rss_kib": 35136,
+      "wall_seconds": 0.6974722490000431,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "ab5797aee68a3e6ea858f49d547fda09f958094ed2f07cd813501ea33d12093b",
+      "core_sha256": "ef92f82de5d62b87759be63f6a1c9bbfbd274c0e4ee55c6d818a442057f235dc",
+      "manifest_sha256": "5d12a1a9258f22dd5971e0958820d21bb0fe208d670d6c4ab5ac762c51b5df65",
+      "tick": {
+        "max_us": 2318.489,
+        "p50_us": 1930.375,
+        "p95_us": 2183.554
+      }
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 1000,
+      "peak_rss_kib": 27192,
+      "wall_seconds": 0.6320678800000223,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "af54a2e31e0347c67891660e191c6ac87eb69c2e45edc1531aad5b276604541e",
+      "core_sha256": "1cc7faf9a16c09cbb44d3f7fa16eb62bf8239212da0deb7af684ba94051e6676",
+      "manifest_sha256": "5d12a1a9258f22dd5971e0958820d21bb0fe208d670d6c4ab5ac762c51b5df65",
+      "tick": {
+        "max_us": 2215.751,
+        "p50_us": 1786.6399999999999,
+        "p95_us": 2011.1819999999998
+      }
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 1,
+      "peak_rss_kib": 27192,
+      "wall_seconds": 0.23128489499993066,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "ab5797aee68a3e6ea858f49d547fda09f958094ed2f07cd813501ea33d12093b",
+      "core_sha256": "1e90aa20f68f686b79ed90cacb37c5b534a5411e1825644e2ebb1892af0f8b75",
+      "manifest_sha256": "9429a13c08bc34e04f2f07338a7356faeec558ca2d1c4097a2e557b17a8a9539",
+      "tick": {
+        "max_us": 18.648,
+        "p50_us": 2.794,
+        "p95_us": 2.934
+      }
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 1,
+      "peak_rss_kib": 27192,
+      "wall_seconds": 0.23545420899995406,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "af54a2e31e0347c67891660e191c6ac87eb69c2e45edc1531aad5b276604541e",
+      "core_sha256": "1e90aa20f68f686b79ed90cacb37c5b534a5411e1825644e2ebb1892af0f8b75",
+      "manifest_sha256": "9429a13c08bc34e04f2f07338a7356faeec558ca2d1c4097a2e557b17a8a9539",
+      "tick": {
+        "max_us": 16.692,
+        "p50_us": 2.793,
+        "p95_us": 2.934
+      }
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 100,
+      "peak_rss_kib": 27192,
+      "wall_seconds": 0.2628238509998937,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "ab5797aee68a3e6ea858f49d547fda09f958094ed2f07cd813501ea33d12093b",
+      "core_sha256": "1e90aa20f68f686b79ed90cacb37c5b534a5411e1825644e2ebb1892af0f8b75",
+      "manifest_sha256": "9429a13c08bc34e04f2f07338a7356faeec558ca2d1c4097a2e557b17a8a9539",
+      "tick": {
+        "max_us": 188.85399999999998,
+        "p50_us": 125.158,
+        "p95_us": 150.51
+      }
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 100,
+      "peak_rss_kib": 27192,
+      "wall_seconds": 0.25847657700001037,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "af54a2e31e0347c67891660e191c6ac87eb69c2e45edc1531aad5b276604541e",
+      "core_sha256": "1e90aa20f68f686b79ed90cacb37c5b534a5411e1825644e2ebb1892af0f8b75",
+      "manifest_sha256": "9429a13c08bc34e04f2f07338a7356faeec558ca2d1c4097a2e557b17a8a9539",
+      "tick": {
+        "max_us": 168.87900000000002,
+        "p50_us": 129.209,
+        "p95_us": 156.44699999999997
+      }
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 1000,
+      "peak_rss_kib": 27196,
+      "wall_seconds": 0.6049104800000578,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "ab5797aee68a3e6ea858f49d547fda09f958094ed2f07cd813501ea33d12093b",
+      "core_sha256": "1e90aa20f68f686b79ed90cacb37c5b534a5411e1825644e2ebb1892af0f8b75",
+      "manifest_sha256": "9429a13c08bc34e04f2f07338a7356faeec558ca2d1c4097a2e557b17a8a9539",
+      "tick": {
+        "max_us": 2906.842,
+        "p50_us": 1561.4669999999999,
+        "p95_us": 2156.175
+      }
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 1000,
+      "peak_rss_kib": 27196,
+      "wall_seconds": 0.5633874019999894,
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "nice": 10,
+      "host_sha256": "af54a2e31e0347c67891660e191c6ac87eb69c2e45edc1531aad5b276604541e",
+      "core_sha256": "1e90aa20f68f686b79ed90cacb37c5b534a5411e1825644e2ebb1892af0f8b75",
+      "manifest_sha256": "9429a13c08bc34e04f2f07338a7356faeec558ca2d1c4097a2e557b17a8a9539",
+      "tick": {
+        "max_us": 1809.688,
+        "p50_us": 1444.621,
+        "p95_us": 1608.471
+      }
+    }
+  ]
+}

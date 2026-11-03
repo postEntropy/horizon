@@ -1,0 +1,40 @@
+{
+  "status": "passed",
+  "scope": "real game; isolated Farmer carry and cooked-rice recipe, not complete mod parity",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "checks": [
+        "cold and unlit do not cook",
+        "real campfire cooks",
+        "mid-progress disk reopen",
+        "cooking stores meals without container",
+        "blocked served output preserves bowls",
+        "hopper extracts served food but not reservoir",
+        "full reservoir preserves ingredients",
+        "64 stored meal survives disk reopen",
+        "player pickup and shift-click refuse reservoir",
+        "serving without heat respects observed stack limit",
+        "player can take served output"
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "checks": [
+        "cold and unlit do not cook",
+        "real campfire cooks",
+        "mid-progress disk reopen",
+        "cooking stores meals without container",
+        "blocked served output preserves bowls",
+        "hopper extracts served food but not reservoir",
+        "full reservoir preserves ingredients",
+        "64 stored meal survives disk reopen",
+        "player pickup and shift-click refuse reservoir",
+        "serving without heat respects observed stack limit",
+        "player can take served output"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+Horizon: content root ready for 1 mod(s) in 1.4s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-65je4wda/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.14s (36649 block states)
+Horizon: discovered 4561 model files in 0.00s, parsed in 0.01s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.05s (1420 blocks)
+Horizon: bound 36630 model states / 8354 variants in 0.10s, resolved models in 0.00s, baked models and loaded sprites in 0.10s
+Horizon: model-state catalog prepared in 0.21s
+Horizon: blockstate binding and model baking took 0.27s
+Horizon: finalized 1492 sprite layers in 0.04s (asset render stage 0.33s)
+Horizon: gameplay facts read 0.02s, validated 0.16s, decoded 0.14s, projected 36649 states in 0.06s
+load assets: 2.14s
+Horizon: asset load stage took 0.57s
+load facts: 2.14s
+Horizon: facts, biomes and environment stage took 0.40s
+load biomes+env: 2.14s
+load pack tables: 2.43s
+Horizon: pack tables stage took 0.29s
+load collision+motion: 2.59s
+Horizon: collision and motion stage took 0.16s
+Horizon: mob metadata loaded in 0.02s
+load items: 2.67s
+Horizon: cooking-pot recipe farmersdelight:cooking/baked_cod_stew has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/beef_stew has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/beetroot_soup has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/bone_broth has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/chicken_soup has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/fried_rice has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/glow_berry_custard has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/noodle_soup has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/onion_soup has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/rabbit_stew has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/ratatouille has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/stuffed_pumpkin_block has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/vegetable_noodles has unsupported or unresolved ingredients/result
+Horizon: cooking-pot recipe farmersdelight:cooking/vegetable_soup has unsupported or unresolved ingredients/result
+Horizon: resources loaded in 2.7s; 36649 block states, 1886 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.09s
+Horizon: providers and block-entity render tables loaded in 0.17s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.02s
+Horizon: mob types loaded in 0.05s
+Horizon: player model setup took 0.09s
+Horizon: behaviours, mob types and player models loaded in 0.17s
+Horizon: no sound: this build has no sound output (built without the `audio` feature)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.04s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-65je4wda/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.05s
+Horizon: game CPU resources ready in 0.06s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: live features ready in 728.035417ms
+[15:48:00] [Server thread/INFO]: Player98813[/127.0.0.1:0] logged in with entity id 2 at (0.5, 99.0, 2.5)
+[15:48:00] [Server thread/INFO]: System chat: Player98813 joined the game
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 4637 ms
+[chat] The game is frozen
+[15:48:00] [Server thread/INFO]: System chat: [Player98813: Teleported Player98813 to 0.500000, 101.000000, 2.500000]
+[chat] Teleported Player98813 to 0.500000, 101.000000, 2.500000
+[15:48:01] [Server thread/INFO]: System chat: [Player98813: Replaced 1 slot(s) at 0, 100, 0 with [Bowl]]
+[chat] Replaced 1 slot(s) at 0, 100, 0 with [Bowl]
+[15:48:01] [Server thread/INFO]: System chat: [Player98813: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+[15:48:02] [Server thread/INFO]: System chat: [Player98813: Teleported Player98813 to 0.500000, 101.000000, 2.500000]
+[chat] Teleported Player98813 to 0.500000, 101.000000, 2.500000

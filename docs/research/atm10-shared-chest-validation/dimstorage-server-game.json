@@ -1,0 +1,19 @@
+{
+  "block": "dimstorage:dimensional_chest",
+  "results": [
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "checks": [
+        "immediate insertion across endpoints",
+        "last item and two real hoppers",
+        "partial and full hopper extraction",
+        "idle does not restore items",
+        "last endpoint removed then world reopened",
+        "loaded endpoints survive world reopen"
+      ],
+      "diamond_total": 18,
+      "gold_in_canonical_channel": 11
+    }
+  ]
+}

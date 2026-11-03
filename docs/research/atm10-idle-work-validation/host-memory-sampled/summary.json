@@ -1,0 +1,603 @@
+{
+  "scope": "host + WASM; explicit empty chest views; not game loop",
+  "memory_method": "/proc/PID/status VmHWM sampled every 1 ms; may miss final <1 ms; includes JIT/create",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "samples": 200,
+  "warmup": 10,
+  "sha256": {
+    ".local/atm10-idle-work-validation/before/dimstorage_port.wasm": "ef92f82de5d62b87759be63f6a1c9bbfbd274c0e4ee55c6d818a442057f235dc",
+    ".local/atm10-idle-work-validation/before/enderstorage_port.wasm": "1e90aa20f68f686b79ed90cacb37c5b534a5411e1825644e2ebb1892af0f8b75",
+    ".local/atm10-idle-work-validation/before/port_tick_bench": "ab5797aee68a3e6ea858f49d547fda09f958094ed2f07cd813501ea33d12093b",
+    "ports/dimstorage/horizon-mod.toml": "5d12a1a9258f22dd5971e0958820d21bb0fe208d670d6c4ab5ac762c51b5df65",
+    "ports/enderstorage/horizon-mod.toml": "9429a13c08bc34e04f2f07338a7356faeec558ca2d1c4097a2e557b17a8a9539",
+    "ports/target/wasm32-unknown-unknown/release/dimstorage_port.wasm": "1cc7faf9a16c09cbb44d3f7fa16eb62bf8239212da0deb7af684ba94051e6676",
+    "ports/target/wasm32-unknown-unknown/release/enderstorage_port.wasm": "1e90aa20f68f686b79ed90cacb37c5b534a5411e1825644e2ebb1892af0f8b75",
+    "target/release/examples/port_tick_bench": "af54a2e31e0347c67891660e191c6ac87eb69c2e45edc1531aad5b276604541e"
+  },
+  "results": [
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 1,
+      "repeat": 0,
+      "peak_rss_kib": 22568,
+      "wall_seconds": 0.2321667859999934,
+      "tick": {
+        "max_us": 22.35,
+        "p50_us": 5.657,
+        "p95_us": 6.146
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 1,
+      "repeat": 0,
+      "peak_rss_kib": 22904,
+      "wall_seconds": 0.23697501599997395,
+      "tick": {
+        "max_us": 39.74,
+        "p50_us": 5.657,
+        "p95_us": 6.146
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 1,
+      "repeat": 1,
+      "peak_rss_kib": 22416,
+      "wall_seconds": 0.23785042199995132,
+      "tick": {
+        "max_us": 24.165,
+        "p50_us": 5.657,
+        "p95_us": 6.216
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 1,
+      "repeat": 1,
+      "peak_rss_kib": 22856,
+      "wall_seconds": 0.23734888300009516,
+      "tick": {
+        "max_us": 23.886000000000003,
+        "p50_us": 5.727,
+        "p95_us": 6.216
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 1,
+      "repeat": 2,
+      "peak_rss_kib": 23056,
+      "wall_seconds": 0.23493659500002195,
+      "tick": {
+        "max_us": 19.137,
+        "p50_us": 5.657,
+        "p95_us": 5.797
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 1,
+      "repeat": 2,
+      "peak_rss_kib": 22516,
+      "wall_seconds": 0.23403360299994347,
+      "tick": {
+        "max_us": 21.372,
+        "p50_us": 5.657,
+        "p95_us": 6.286
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 100,
+      "repeat": 0,
+      "peak_rss_kib": 22368,
+      "wall_seconds": 0.26647121100006643,
+      "tick": {
+        "max_us": 198.98100000000002,
+        "p50_us": 149.323,
+        "p95_us": 165.59699999999998
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 100,
+      "repeat": 0,
+      "peak_rss_kib": 22404,
+      "wall_seconds": 0.2708251860000246,
+      "tick": {
+        "max_us": 223.49499999999998,
+        "p50_us": 155.19,
+        "p95_us": 207.432
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 100,
+      "repeat": 1,
+      "peak_rss_kib": 21864,
+      "wall_seconds": 0.2752187620000086,
+      "tick": {
+        "max_us": 240.537,
+        "p50_us": 154.491,
+        "p95_us": 198.283
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 100,
+      "repeat": 1,
+      "peak_rss_kib": 22692,
+      "wall_seconds": 0.2696943679999322,
+      "tick": {
+        "max_us": 184.733,
+        "p50_us": 152.187,
+        "p95_us": 164.06
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 100,
+      "repeat": 2,
+      "peak_rss_kib": 22572,
+      "wall_seconds": 0.2815539580000177,
+      "tick": {
+        "max_us": 208.689,
+        "p50_us": 150.72,
+        "p95_us": 179.216
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 100,
+      "repeat": 2,
+      "peak_rss_kib": 22524,
+      "wall_seconds": 0.2860321120000435,
+      "tick": {
+        "max_us": 192.695,
+        "p50_us": 154.98000000000002,
+        "p95_us": 174.047
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 1000,
+      "repeat": 0,
+      "peak_rss_kib": 35016,
+      "wall_seconds": 0.7368771539998988,
+      "tick": {
+        "max_us": 3160.02,
+        "p50_us": 2052.9480000000003,
+        "p95_us": 2507.063
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 1000,
+      "repeat": 0,
+      "peak_rss_kib": 21772,
+      "wall_seconds": 0.6579197510000085,
+      "tick": {
+        "max_us": 2562.7279999999996,
+        "p50_us": 1772.251,
+        "p95_us": 2300.3289999999997
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 1000,
+      "repeat": 1,
+      "peak_rss_kib": 22636,
+      "wall_seconds": 0.6767061689999991,
+      "tick": {
+        "max_us": 2881.837,
+        "p50_us": 1746.828,
+        "p95_us": 2525.571
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 1000,
+      "repeat": 1,
+      "peak_rss_kib": 35172,
+      "wall_seconds": 0.7236834029999955,
+      "tick": {
+        "max_us": 3324.431,
+        "p50_us": 1884.289,
+        "p95_us": 2699.621
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "dimstorage",
+      "count": 1000,
+      "repeat": 2,
+      "peak_rss_kib": 35072,
+      "wall_seconds": 0.6978928859999769,
+      "tick": {
+        "max_us": 2424.732,
+        "p50_us": 1913.5529999999999,
+        "p95_us": 2223.795
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "dimstorage",
+      "count": 1000,
+      "repeat": 2,
+      "peak_rss_kib": 22832,
+      "wall_seconds": 0.6320655419999639,
+      "tick": {
+        "max_us": 2571.612,
+        "p50_us": 1757.384,
+        "p95_us": 2177.419
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/dimstorage_port.wasm",
+      "manifest": "ports/dimstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 1,
+      "repeat": 0,
+      "peak_rss_kib": 22876,
+      "wall_seconds": 0.22807394299991302,
+      "tick": {
+        "max_us": 20.953,
+        "p50_us": 2.445,
+        "p95_us": 2.934
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 1,
+      "repeat": 0,
+      "peak_rss_kib": 22404,
+      "wall_seconds": 0.25150990100007675,
+      "tick": {
+        "max_us": 3.8419999999999996,
+        "p50_us": 2.794,
+        "p95_us": 3.3529999999999998
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 1,
+      "repeat": 1,
+      "peak_rss_kib": 22196,
+      "wall_seconds": 0.2373302699999158,
+      "tick": {
+        "max_us": 2.934,
+        "p50_us": 2.794,
+        "p95_us": 2.9330000000000003
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 1,
+      "repeat": 1,
+      "peak_rss_kib": 22900,
+      "wall_seconds": 0.22851981099995555,
+      "tick": {
+        "max_us": 3.2830000000000004,
+        "p50_us": 2.724,
+        "p95_us": 2.9330000000000003
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 1,
+      "repeat": 2,
+      "peak_rss_kib": 22512,
+      "wall_seconds": 0.23404640100000051,
+      "tick": {
+        "max_us": 18.369,
+        "p50_us": 2.863,
+        "p95_us": 3.352
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 1,
+      "repeat": 2,
+      "peak_rss_kib": 22808,
+      "wall_seconds": 0.23386634599989975,
+      "tick": {
+        "max_us": 17.041,
+        "p50_us": 2.794,
+        "p95_us": 2.934
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 100,
+      "repeat": 0,
+      "peak_rss_kib": 22768,
+      "wall_seconds": 0.2551511369999844,
+      "tick": {
+        "max_us": 158.263,
+        "p50_us": 125.57700000000001,
+        "p95_us": 138.987
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 100,
+      "repeat": 0,
+      "peak_rss_kib": 22476,
+      "wall_seconds": 0.2654382099999566,
+      "tick": {
+        "max_us": 172.372,
+        "p50_us": 131.93300000000002,
+        "p95_us": 145.413
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 100,
+      "repeat": 1,
+      "peak_rss_kib": 22248,
+      "wall_seconds": 0.26161313000000064,
+      "tick": {
+        "max_us": 167.971,
+        "p50_us": 129.558,
+        "p95_us": 146.879
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 100,
+      "repeat": 1,
+      "peak_rss_kib": 21476,
+      "wall_seconds": 0.27282261699997434,
+      "tick": {
+        "max_us": 180.96200000000002,
+        "p50_us": 126.904,
+        "p95_us": 151.629
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 100,
+      "repeat": 2,
+      "peak_rss_kib": 22536,
+      "wall_seconds": 0.2712304020000147,
+      "tick": {
+        "max_us": 196.189,
+        "p50_us": 127.39399999999999,
+        "p95_us": 180.753
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 100,
+      "repeat": 2,
+      "peak_rss_kib": 22912,
+      "wall_seconds": 0.26848886300001595,
+      "tick": {
+        "max_us": 200.44799999999998,
+        "p50_us": 130.326,
+        "p95_us": 156.937
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 1000,
+      "repeat": 0,
+      "peak_rss_kib": 22756,
+      "wall_seconds": 0.5506935169998997,
+      "tick": {
+        "max_us": 1881.075,
+        "p50_us": 1435.688,
+        "p95_us": 1686.0049999999999
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 1000,
+      "repeat": 0,
+      "peak_rss_kib": 22452,
+      "wall_seconds": 0.574361123000017,
+      "tick": {
+        "max_us": 1943.445,
+        "p50_us": 1513.0049999999999,
+        "p95_us": 1820.102
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 1000,
+      "repeat": 1,
+      "peak_rss_kib": 22940,
+      "wall_seconds": 0.5866946500000267,
+      "tick": {
+        "max_us": 2126.363,
+        "p50_us": 1528.789,
+        "p95_us": 1988.3539999999998
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 1000,
+      "repeat": 1,
+      "peak_rss_kib": 22112,
+      "wall_seconds": 0.5666500390000238,
+      "tick": {
+        "max_us": 1866.827,
+        "p50_us": 1477.315,
+        "p95_us": 1724.069
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "before",
+      "mod": "enderstorage",
+      "count": 1000,
+      "repeat": 2,
+      "peak_rss_kib": 22476,
+      "wall_seconds": 0.5776712829999724,
+      "tick": {
+        "max_us": 2375.632,
+        "p50_us": 1459.575,
+        "p95_us": 2089.765
+      },
+      "host": ".local/atm10-idle-work-validation/before/port_tick_bench",
+      "core": ".local/atm10-idle-work-validation/before/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    },
+    {
+      "phase": "after",
+      "mod": "enderstorage",
+      "count": 1000,
+      "repeat": 2,
+      "peak_rss_kib": 22724,
+      "wall_seconds": 0.5683286879999514,
+      "tick": {
+        "max_us": 2022.088,
+        "p50_us": 1459.784,
+        "p95_us": 1734.685
+      },
+      "host": "target/release/examples/port_tick_bench",
+      "core": "ports/target/wasm32-unknown-unknown/release/enderstorage_port.wasm",
+      "manifest": "ports/enderstorage/horizon-mod.toml"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"active_states":[[11,{"cooldown":2,"energy":100,"simulated_total_moved":625664}]],"inactive_changed":0,"loaded":1,"max_us":0.251,"mod":"cabletiers","operating":true,"p50_us":0.030546874999999998,"p95_us":0.0381875,"received_handles":1,"samples":200,"scope":"native guest Rust tick only; not WASM or real game inventory transfers","ticks_per_batch":64,"warmup_batches":10}

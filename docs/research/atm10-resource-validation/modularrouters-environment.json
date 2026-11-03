@@ -1,0 +1,48 @@
+{
+  "scope": "Actual modularrouters WASM + game; adjacent Mk1 puller/sender; test_machine observer/sided machine/alias fixtures",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "game_profile": "fast; no-default-features; mods,horizon-mods/pack",
+  "sha256": {
+    "target/fast/horizon-client": "6bdee64afa2a68833af15f4ebe8948c20af51734dc53f47166257b2f4b071521",
+    "target/fast/horizon-ctl": "55acfb37d024cb4bfb1cfd8e591ea75a56760db774f04c7135ec519e6d29aa84",
+    ".local/atm10-resource-validation/modularrouters.hmod": "1297526122dcdf160b8d391d5a338c56d19222de4877d5c49b8a0f471da370c1",
+    ".local/atm10-resource-validation/router-reader.hmod": "75da2915be71ec2541eb00ba8100246388ba5166af468930548cc1b4b7bbda99",
+    "ports/target/wasm32-unknown-unknown/release/modularrouters_port.wasm": "a703a622dceda655e263694ad078d84d50a479c7d828a909f21acd2386de8807",
+    "ports/modularrouters/src/lib.rs": "d9173ce790776eab4d359d4754db13f5e0df1bc86730ce2b3d332fb8062a805d",
+    "crates/horizon-mods/src/runtime.rs": "9fdfd5d698ac88f58914f4ec8ada2e83bc6ebe09e61ec7bd8577c8b3f05eff94",
+    "crates/horizon-client/src/game/machines.rs": "63120cc8e2d1f21dc9969c18e5f23cb6c031a564b1372f7ccfc77ea46ff1b6d4",
+    "crates/horizon-client/src/game/mods.rs": "30a1282fd92bee6814743a83d4d4c5a2d5444c8ce9ac60d1afe6a194f5b204e9",
+    "crates/horizon-mod-sdk/wit/horizon.wit": "c4624f0ab62069e9c7f39c58d8cf40903b8c25981ebb6a6ea534f95c92d22fb3",
+    "tools/test_router_port.py": "cb25007763280b073d68a93a05c10f9bbcebfd3ea6ab05bd549ac747c63e48e1",
+    "tools/mod_port_game_fixture.py": "c2704c78a7bb614ca284c39c2c3f2849f3baad6418b96b71abce9a6667c57103",
+    "crates/horizon-mods/tests/machine/src/lib.rs": "948962b89805955098449f061e84cd87b490f45a265152e4e2d3f63c0d57c810",
+    "crates/horizon-mods/tests/sandbox.rs": "961bcf290ee3e50186c0d472e5337f043b5c585874cd1fc60d09e408d6b13350",
+    "crates/horizon-client/src/shared_inventory.rs": "54db671f7edf5fc7eff649950147a03e5b2e67fa1df682d0f5f22970f0db3bdd"
+  },
+  "reader_packaging": "test-machine sandbox hmod with shared_router barrel template added. The measured reader archive also contains a duplicate smelter.json definition identical in parsed content (minecraft:furnace). Both are fixture-owned; no installed pack was written.",
+  "tests": {
+    "runtime_full_suite": {
+      "passed": 52,
+      "ignored": 1,
+      "command": "cargo test -p horizon-mods --features runtime,pack -- --test-threads=6"
+    },
+    "shared_inventory_tests": {
+      "passed": 4
+    },
+    "router_native_tests": {
+      "passed": 2
+    },
+    "rustfmt": "touched Rust files passed",
+    "clippy": "client bin, runtime/SDK all-targets, and router WASM passed",
+    "public_tree": "passed"
+  },
+  "performance": "not measured; step wall time is not a tick benchmark"
+}

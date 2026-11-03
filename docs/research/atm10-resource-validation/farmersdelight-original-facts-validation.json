@@ -1,0 +1,39 @@
+{
+  "status": "passed",
+  "scope": "original mod running on isolated NeoForge server; default item properties through vanilla public API; no Java mod sources read",
+  "raw_facts": ".local/atm10-resource-validation/farmer-container-facts.json",
+  "raw_sha256": "557cef4d4745f509623f9e179d9f142e903e83efcb347effe43c3789caec1844",
+  "jar_sha256": "139ad7696462c89c03eea463f805abffa552526c5dadaadae221dd9624cb197c",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "observations": {
+    "beef_stew": {
+      "max_stack_size": 16,
+      "crafting_remainder": "minecraft:bowl"
+    },
+    "apple_cider": {
+      "crafting_remainder": "minecraft:glass_bottle"
+    },
+    "hot_cocoa": {
+      "crafting_remainder": "minecraft:glass_bottle"
+    },
+    "cabbage_rolls": {
+      "crafting_remainder": null
+    },
+    "tomato_sauce": {
+      "crafting_remainder": "minecraft:bowl"
+    }
+  },
+  "remaining": [
+    "apply verified item/container facts to port",
+    "integrate resource recipe graph and serving",
+    "validate both game modes"
+  ]
+}

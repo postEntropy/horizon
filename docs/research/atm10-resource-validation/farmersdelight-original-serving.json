@@ -1,0 +1,105 @@
+{
+  "status": "passed",
+  "scope": "original mod black-box machine ticks through vanilla APIs",
+  "jar_sha256": "139ad7696462c89c03eea463f805abffa552526c5dadaadae221dd9624cb197c",
+  "raw_sha256": "b568a307aaae64e9842a8d57134693e101e12e8670afb105f822d257331713c5",
+  "raw_path": ".local/atm10-resource-validation/farmer-serving-trace.json",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "oracle_wall_seconds": 17.206711447001,
+  "final_slots": {
+    "store": {
+      "6": [
+        "farmersdelight:cooked_rice",
+        2
+      ]
+    },
+    "serve": {
+      "8": [
+        "farmersdelight:cooked_rice",
+        2
+      ]
+    },
+    "blocked_output": {
+      "6": [
+        "farmersdelight:cooked_rice",
+        2
+      ],
+      "7": [
+        "minecraft:bowl",
+        2
+      ],
+      "8": [
+        "minecraft:diamond",
+        64
+      ]
+    },
+    "full_meal": {
+      "0": [
+        "farmersdelight:rice",
+        2
+      ],
+      "6": [
+        "farmersdelight:cooked_rice",
+        64
+      ]
+    },
+    "unlit": {
+      "0": [
+        "farmersdelight:rice",
+        2
+      ]
+    },
+    "conductor": {
+      "6": [
+        "farmersdelight:cooked_rice",
+        2
+      ]
+    },
+    "serve_stored": {
+      "6": [
+        "farmersdelight:cooked_rice",
+        16
+      ],
+      "7": [
+        "minecraft:bowl",
+        16
+      ],
+      "8": [
+        "farmersdelight:cooked_rice",
+        16
+      ]
+    },
+    "serve_partial": {
+      "6": [
+        "farmersdelight:cooked_rice",
+        31
+      ],
+      "7": [
+        "minecraft:bowl",
+        31
+      ],
+      "8": [
+        "farmersdelight:cooked_rice",
+        16
+      ]
+    },
+    "serve_without_container": {
+      "8": [
+        "farmersdelight:dumplings",
+        64
+      ]
+    }
+  },
+  "remaining": [
+    "implement and compare Horizon meal storage/serving",
+    "full game validation"
+  ]
+}

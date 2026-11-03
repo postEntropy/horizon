@@ -1,0 +1,31 @@
+{
+  "status": "partial",
+  "scope": "fresh scratch carry with original oracle food facts and actual client recipe loader",
+  "declared_items": 48,
+  "excluded_items": 46,
+  "excluded_reasons": {
+    "food with custom item behavior": 39,
+    "a block item without a block": 4,
+    "food effects need complete effect support": 3
+  },
+  "loaded_cooking_recipes": 5,
+  "baseline_declared_items": 14,
+  "baseline_cooking_recipes": 4,
+  "new_observed_vanilla_food_items": 34,
+  "recipe_result_sha256": "cbbc8535e5d30565650f35f2e5ff0ec941e9f7d234b17ae16806cb10858d4730",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "remaining": [
+    "food effects and custom item classes",
+    "actual food consumption in both modes",
+    "custom Nourishment effect",
+    "complete regeneration and 28 original recipes"
+  ]
+}

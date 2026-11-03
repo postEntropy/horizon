@@ -1,0 +1,1 @@
+{"active_states":[[11,{"running":false,"source_buffer":0}]],"inactive_changed":0,"loaded":100,"max_us":0.201,"mod":"ars_technica","operating":false,"p50_us":0.191,"p95_us":0.201,"received_handles":1,"samples":200,"scope":"native guest Rust tick only; not WASM or real game inventory transfers","warmup":10}

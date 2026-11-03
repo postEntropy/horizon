@@ -1,0 +1,22 @@
+{
+  "automation_lock_checks": "all 27 slots, all faces: default, lock, locked load, unlock, other endpoint isolation",
+  "block": "dimstorage:dimensional_chest",
+  "checks": [
+    "partial extraction",
+    "full extraction",
+    "same-tick endpoint operations in reversed order",
+    "cross-dimension channel",
+    "frequency change",
+    "private owner isolation",
+    "endpoint unload",
+    "save without endpoints",
+    "reopen WASM and restore in reversed order"
+  ],
+  "component": "real WASM",
+  "remaining_validation": [
+    "explicit capability-setter transfers across aliases"
+  ],
+  "scope": "game hopper/persistence validation is recorded separately; this fixture does not measure game throughput",
+  "status": "passed",
+  "storage": "game canonical inventory"
+}

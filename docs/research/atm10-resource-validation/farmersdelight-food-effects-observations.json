@@ -1,0 +1,34 @@
+{
+  "scope": "original FOOD component effect descriptors through vanilla public APIs; custom item subclass behavior not covered",
+  "raw_path": ".local/atm10-resource-validation/farmer-food-effects-facts.json",
+  "raw_sha256": "916e3cbdd3f0d2bb4dfc62aec3da6e49159f21b069e225cde48b60758b89d9e8",
+  "food_count": 77,
+  "effect_occurrences": {
+    "minecraft:absorption": 1,
+    "minecraft:hunger": 3,
+    "minecraft:speed": 5,
+    "minecraft:glowing": 1,
+    "minecraft:regeneration": 2,
+    "minecraft:nausea": 1,
+    "farmersdelight:nourishment": 26
+  },
+  "probabilities": [
+    0.3,
+    1.0
+  ],
+  "remaining": [
+    "typed food item declarations",
+    "custom effect implementation where absent",
+    "custom item consumption behavior",
+    "actual consumption parity in both modes"
+  ],
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10
+}

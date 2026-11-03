@@ -1,0 +1,13 @@
+{
+  "block": "enderstorage:ender_chest",
+  "count": 1000,
+  "idle": {
+    "max_us": 1809.688,
+    "p50_us": 1444.621,
+    "p95_us": 1608.471
+  },
+  "scenario": "empty inventories; 10 warmup ticks; host + WASM; no ItemFacts",
+  "slot_after_extraction": null,
+  "status": "Running",
+  "ticks": 200
+}

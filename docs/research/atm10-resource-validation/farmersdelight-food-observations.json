@@ -1,0 +1,27 @@
+{
+  "scope": "original Farmer black-box default FOOD properties, vanilla public API only",
+  "raw_path": ".local/atm10-resource-validation/farmer-food-facts.json",
+  "raw_sha256": "a6976fc0e0a9a1e1b3126f1af9263fc9bf256574f6ce375824b7c0e83f674a8a",
+  "food_count": 77,
+  "eat_seconds_histogram": {
+    "1.6": 54,
+    "0.8": 22,
+    "2.4": 1
+  },
+  "foods_with_effects": 39,
+  "can_always_eat": 3,
+  "remaining": [
+    "typed food declaration API",
+    "effect properties and custom subclass behavior",
+    "actual consumption validation in both modes"
+  ],
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10
+}

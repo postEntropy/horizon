@@ -1,0 +1,22 @@
+{
+  "block": "enderstorage:ender_chest",
+  "checks": [
+    "partial extraction",
+    "full extraction",
+    "same-tick endpoint operations in reversed order",
+    "cross-dimension channel",
+    "frequency change",
+    "private owner isolation",
+    "endpoint unload",
+    "save without endpoints",
+    "reopen WASM and restore in reversed order"
+  ],
+  "component": "real WASM",
+  "remaining_validation": [
+    "in-frame hoppers and persistence",
+    "integrated-server hoppers and persistence",
+    "capability transfers across aliases"
+  ],
+  "status": "passed",
+  "storage": "game canonical inventory"
+}

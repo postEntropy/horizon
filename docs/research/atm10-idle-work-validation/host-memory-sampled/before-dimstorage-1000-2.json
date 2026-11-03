@@ -1,0 +1,13 @@
+{
+  "block": "dimstorage:dimensional_chest",
+  "count": 1000,
+  "idle": {
+    "max_us": 2424.732,
+    "p50_us": 1913.5529999999999,
+    "p95_us": 2223.795
+  },
+  "scenario": "empty inventories; 10 warmup ticks; host + WASM; no ItemFacts",
+  "slot_after_extraction": null,
+  "status": "Running",
+  "ticks": 200
+}

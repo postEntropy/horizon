@@ -1,0 +1,33 @@
+{
+  "scope": "actual game; test battery provider; not certification of other tool mods",
+  "results": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "battery_count": 1,
+      "stored_fe": 2500,
+      "checks": [
+        "no fuel does not charge",
+        "real coal fuel",
+        "full item blocks more charge",
+        "hopper preserves charged ItemStack",
+        "no duplicate battery",
+        "world reopen preserves charge"
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "battery_count": 1,
+      "stored_fe": 2500,
+      "checks": [
+        "no fuel does not charge",
+        "real coal fuel",
+        "full item blocks more charge",
+        "hopper preserves charged ItemStack",
+        "no duplicate battery",
+        "world reopen preserves charge"
+      ]
+    }
+  ]
+}

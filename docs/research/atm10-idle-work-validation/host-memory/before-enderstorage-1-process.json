@@ -1,0 +1,19 @@
+{
+  "phase": "before",
+  "mod": "enderstorage",
+  "count": 1,
+  "peak_rss_kib": 27192,
+  "wall_seconds": 0.23128489499993066,
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "host_sha256": "ab5797aee68a3e6ea858f49d547fda09f958094ed2f07cd813501ea33d12093b",
+  "core_sha256": "1e90aa20f68f686b79ed90cacb37c5b534a5411e1825644e2ebb1892af0f8b75",
+  "manifest_sha256": "9429a13c08bc34e04f2f07338a7356faeec558ca2d1c4097a2e557b17a8a9539"
+}

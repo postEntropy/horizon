@@ -1,0 +1,18 @@
+{
+  "command": "cargo test -p horizon-client --lib --no-default-features -- --test-threads=6",
+  "result": "SIGSEGV; complete suite not yet verified",
+  "pid": 362007,
+  "crashing_test": "gfx::end_sky::tests::resident_buffer_survives_frames_and_refreshes_with_the_atlas",
+  "observed_stack": [
+    "null instruction pointer",
+    "libvulkan.so.1",
+    "vkEnumerateInstanceExtensionProperties",
+    "wgpu_hal::vulkan::Instance::init"
+  ],
+  "concurrent_thread": "gfx::arena GPU test initializing Vulkan; stack includes libGLX_nvidia.so.0 ICD negotiation",
+  "oom_evidence": "No kernel OOM entries in preceding 15 minutes; 7.1 GiB available at inspection",
+  "inference": "Vulkan loader/ICD initialization fault while GPU tests initialize concurrently; exact driver mechanism unproven",
+  "next_validation": "Run GPU tests serially without changing system configuration",
+  "core_handling": "Read coredumpctl metadata only; no core copied or system configuration changed",
+  "follow_up": "The full serial suite completed without another SIGSEGV: 1092 passed, 2 failed, 26 ignored, 622.29 s. Failures: terrain.wgsl HLSL MissingDefaultCase and model_library shared-view resolution assertion."
+}

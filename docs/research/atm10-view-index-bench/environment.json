@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-01",
+  "baseline_commit": "ac0a35ede47c92ec440dd13554cb3ad0061995d1",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "cpu": "AMD Ryzen 5 4600G with Radeon Graphics; 6 cores / 12 threads",
+  "profile": "release",
+  "warmup_ticks": 10,
+  "measured_ticks": 200,
+  "conditions": "Sequential probes; no concurrent builds/tests during measurements; same desktop session; no CPU pinning or frequency lock. Background desktop applications remain active.",
+  "guest_sha256": {
+    "dimstorage": "9a71c526881e615f84c77d9c0bf4820c705ca6ac055840ac444f207163d3b108",
+    "enderstorage": "6458e0df9a83e50f244906b36c470ffef8ed876c15ce530a92f60126ebca7971"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "scope": "Charging Gadgets component and actual game validation; test_machine battery provider, not real tool ports",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "game_profile": "fast; no-default-features; mods,horizon-mods/pack",
+  "sha256": {
+    "target/fast/horizon-client": "43fcc8d3568898075bb38f3c5ac11843bb4bd70465e36c51670e4f6badc69863",
+    "target/fast/horizon-ctl": "25fe732254ec90bce250007c1ec32500f7148d9345d5a90910dc744089f41cfa",
+    "target/fast/examples/charging_station_probe": "3e61778d88b373adae315279667fd2290f68205e60cc13c72e7834f03e1868ae",
+    "ports/target/wasm32-unknown-unknown/release/charginggadgets_port.wasm": "81fbeed58570161bdfe2f129b2f7e3a08ef1b722c2666e92e1fc39e2f5de97d5",
+    "target/mods-test/mods/horizon_mods_test_machine.hmod": "f0f74636d5721d5d8bf81b87ad2fcabeac79e58e30212591cdaf2de656f58f3a",
+    ".local/atm10-resource-validation/charger.hmod": "e0d3b3ed833c60952fd583c539d56ff40021696aff2461dfd30277c45c2b4c98",
+    ".local/atm10-resource-validation/battery.hmod": "a8856c90b07371cce9e3700fa523425fa8f730c2c56a1fc08c40136a6896fce2",
+    "ports/charginggadgets/src/lib.rs": "96af55126b67c87aa9199e63ae405f208ca490ff3d2ba8487781e9996e89e0de",
+    "crates/horizon-mod-sdk/wit/horizon.wit": "5205052a4dba04733dddc8e1933b2c533658f9af9cdcf86142e9e4340c9a9322",
+    "crates/horizon-mods/src/runtime.rs": "2e0d75828902faca1180be98b253c2fb024f12fd5a3e6c809312fd0e7f564fe5",
+    "tools/test_charging_station_port.py": "95002c0bfb1da74a7d9effb729862743e0cd8805117bbf41903bf3b0e0944229"
+  },
+  "packaging": "charger-core.hmod emitted by charging_station_probe; carried assets/data copied to scratch zip. test-machine hmod augmented with data/test_machine/horizon/item/battery.json: template minecraft:stick, max_stack_size 1. No installed pack written."
+}

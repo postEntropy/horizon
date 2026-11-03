@@ -1,0 +1,33 @@
+{
+  "status": "passed",
+  "scope": "real client resource loader, scratch-only carry; observed original convention tags supplement missing/incomplete installed tags",
+  "installed_carry_recipes_loaded": 14,
+  "observed_tag_fixture_recipes_loaded": 28,
+  "checks": [
+    "all 28 recipe ids",
+    "exact output id and count",
+    "exact loaded cooking time",
+    "all ingredient groups resolved and nonempty"
+  ],
+  "raw_files": {
+    ".local/atm10-resource-validation/farmer-loaded-recipes.json": "881f5a26fd4ef2ea241cb0c17c1347479e08fd76b1676814d9685c70f43f006c",
+    ".local/atm10-resource-validation/farmer-loaded-observed-tags.json": "98147140b635af2130068bebbaedebecd6e64b1d62eefcab3f19b03e25278f21",
+    ".local/atm10-resource-validation/farmer-container-facts.json": "557cef4d4745f509623f9e179d9f142e903e83efcb347effe43c3789caec1844"
+  },
+  "remaining": [
+    "repair or regenerate convention tag coverage in carry pipeline",
+    "typed recipe-specific container metadata",
+    "original serving semantics",
+    "real game in both modes"
+  ],
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "performance": "not measured"
+}

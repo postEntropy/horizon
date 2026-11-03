@@ -1,0 +1,1 @@
+{"active_states":[[11,{"growth_ticks":239,"output":[["minecraft:wheat",12]]}]],"inactive_changed":99,"loaded":100,"max_us":0.6482343749999999,"mod":"botanypots","operating":true,"p50_us":0.351390625,"p95_us":0.43759375,"received_handles":1,"samples":200,"scope":"native guest Rust tick only; not WASM or real game inventory transfers","ticks_per_batch":64,"warmup_batches":10}

@@ -1,0 +1,12 @@
+{
+  "command": "cargo test -p horizon-client --lib --no-default-features -- --test-threads=1",
+  "passed": 1092,
+  "failed": 2,
+  "ignored": 26,
+  "elapsed_seconds": 622.29,
+  "failures": [
+    "gfx::tests::shaders_translate_to_hlsl_for_directx_12: terrain.wgsl sprite MissingDefaultCase",
+    "model_library::tests::shared_views_preserve_resolution_errors_builtins_and_reload: library.is_err() assertion"
+  ],
+  "notes": "Suite completed serially without SIGSEGV; failures remain to investigate. No modifications to terrain.wgsl or model_library.rs were made for the shared inventory implementation."
+}

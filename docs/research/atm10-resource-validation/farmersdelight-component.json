@@ -1,0 +1,27 @@
+{
+  "checks": [
+    "full/incompatible reservoir preserves ingredients",
+    "blocked/full served output stores meals without debiting container",
+    "64 meal capacity overrides served-item limit of 16",
+    "missing/extra ingredient refuses recipe",
+    "cold and unlit source do not cook",
+    "heated and conductor cook",
+    "overlapping ingredient alternatives",
+    "exact ingredient/container debit",
+    "mid-progress save/load",
+    "host and resource publication invalidate recipe cache",
+    "loaded duration and output count",
+    "container-free result",
+    "bottle required for cider",
+    "serving without heat or ingredients",
+    "serving batch respects real output limit and available space",
+    "player and hopper reservoir policies configured"
+  ],
+  "remaining": [
+    "all 28 recipes with installed carry tags",
+    "recipe-specific container metadata and ingredient remainders",
+    "real game in both modes including menu policies"
+  ],
+  "scope": "actual WASM; synthetic resource recipes and fixture item facts; storage/serving semantics observed from original black-box fixture",
+  "status": "passed"
+}

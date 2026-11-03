@@ -1,0 +1,24 @@
+{
+  "checks": [
+    "charge equals station debit",
+    "item receive limit",
+    "partial final charge",
+    "full item",
+    "unsupported item",
+    "empty slot",
+    "stacked item refused",
+    "no fuel/energy",
+    "real fuel consumed and 120 FE delivered",
+    "mid-burn unload/reload preserves remaining generation",
+    "unrelated components preserved",
+    "save/reopen",
+    "300 FE consumed from transferred stack by another mod"
+  ],
+  "remaining": [
+    "register energy support in real tool/battery ports",
+    "full game automation and both single-player modes",
+    "verify original mod rates against public config/data"
+  ],
+  "scope": "actual Charging Gadgets WASM + separate test battery provider/consumer WASM; real ItemStack codecs and scratch disk save, not full game",
+  "status": "passed"
+}

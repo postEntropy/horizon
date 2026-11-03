@@ -1,0 +1,55 @@
+{
+  "scope": "actual WASM and real game inventories, basic adjacent puller/sender only",
+  "results": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "checks": [
+        "empty source creates nothing",
+        "two routers conserve last item",
+        "partial extraction conserves 18 items",
+        "full/incompatible buffer leaves source unchanged",
+        "pull/push execute in order",
+        "name, energy and enchantments preserved",
+        "full output retains buffer",
+        "save/reopen with blocked output",
+        "direction components persist",
+        "unsupported modules do not create/delete buffer items",
+        "foreign capability snapshot refreshed immediately",
+        "foreign sided extraction honored",
+        "same canonical inventory cannot route into itself",
+        "destination removed before application leaves source intact"
+      ],
+      "remaining": [
+        "remote/world/entity modules",
+        "filters/augments/config UI",
+        "redstone and configurable energy costs"
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "checks": [
+        "empty source creates nothing",
+        "two routers conserve last item",
+        "partial extraction conserves 18 items",
+        "full/incompatible buffer leaves source unchanged",
+        "pull/push execute in order",
+        "name, energy and enchantments preserved",
+        "full output retains buffer",
+        "save/reopen with blocked output",
+        "direction components persist",
+        "unsupported modules do not create/delete buffer items",
+        "foreign capability snapshot refreshed immediately",
+        "foreign sided extraction honored",
+        "same canonical inventory cannot route into itself",
+        "destination removed before application leaves source intact"
+      ],
+      "remaining": [
+        "remote/world/entity modules",
+        "filters/augments/config UI",
+        "redstone and configurable energy costs"
+      ]
+    }
+  ]
+}

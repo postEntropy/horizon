@@ -1,0 +1,27 @@
+{
+  "scope": "current worktree with tag supplement versus same worktree with only tag loop reverted; not a clean HEAD baseline",
+  "result": "same four failures in both variants",
+  "failures": [
+    "carry::tests::upgrades_ingredients",
+    "check::tests::content_only_works_and_code_makes_it_partly",
+    "check::tests::recipes_for_left_out_blocks_are_left_out_too",
+    "fetch::tests::copies_the_players_jars_and_lists_what_needs_a_key"
+  ],
+  "sha256": {
+    ".local/atm10-resource-validation/port-pack-suite.log": "1c4226831b6954f312de8fbe1a0d7e1fc90636d3ad30c05d52a40159bb6bbba8",
+    ".local/atm10-resource-validation/port-pack-without-tag-supplement.log": "18a9edb914ff48f60b4f8cc52311f37e02b9c257f28e0bdc2c755bb43233a6b9"
+  },
+  "remaining": [
+    "diagnose failures individually",
+    "validate real carry regeneration"
+  ],
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10
+}
