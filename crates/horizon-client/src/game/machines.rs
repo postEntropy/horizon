@@ -7,7 +7,7 @@ use super::Game;
 mod crafter;
 use horizon_client::{
     Result,
-    containers::{BlockEntity, HOPPER_SLOTS},
+    containers::{BlockEntity, HOPPER_SLOTS, is_chest_block},
     items::{ItemStack, Items},
     world::World,
 };
@@ -173,7 +173,7 @@ impl Containers<'_> {
             _ => Kind::Generic,
         };
         let size = entity.slots().len();
-        if matches!(name, "minecraft:chest" | "minecraft:trapped_chest") {
+        if is_chest_block(name) {
             let is_blocked = |p: Pos| {
                 let above = self.world.block(p.0, p.1 + 1, p.2);
                 self.behaviours.facts(above).flags

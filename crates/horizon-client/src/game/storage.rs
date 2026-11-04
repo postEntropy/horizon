@@ -2,7 +2,10 @@
 //! kept in the dropped item's `container` component) and ender chests (the
 //! player's `PlayerEnderChestContainer`, saved as `EnderItems`).
 use super::Game;
-use horizon_client::{containers::BlockEntity, items::ItemStack};
+use horizon_client::{
+    containers::{BlockEntity, is_chest_block},
+    items::ItemStack,
+};
 
 pub(super) fn is_shulker_box(name: &str) -> bool {
     name.ends_with("shulker_box")
@@ -78,10 +81,7 @@ impl Game<'_> {
     pub(super) fn chest_partner(&self, key: (i32, i32, i32)) -> Option<((i32, i32, i32), bool)> {
         let registry = self.pack.assets.registry;
         let state = registry.state(self.world.block(key.0, key.1, key.2))?;
-        if !matches!(
-            state.name.as_str(),
-            "minecraft:chest" | "minecraft:trapped_chest"
-        ) {
+        if !is_chest_block(&state.name) {
             return None;
         }
         let kind = state.properties.get("type")?.as_str();
@@ -178,15 +178,10 @@ impl Game<'_> {
         if !matches!(self.container_kind()?, BlockEntity::Chest(_)) {
             return None;
         }
-        let generic = match self.container_block().as_deref() {
-            Some(
-                "minecraft:chest"
-                | "minecraft:trapped_chest"
-                | "minecraft:barrel"
-                | "minecraft:ender_chest",
-            ) => true,
-            _ => self.open_cart_kind() == Some(super::minecarts::CartKind::Chest),
-        };
+        let container_block = self.container_block();
+        let generic = container_block.as_deref().is_some_and(|name| {
+            is_chest_block(name) || matches!(name, "minecraft:barrel" | "minecraft:ender_chest")
+        }) || self.open_cart_kind() == Some(super::minecarts::CartKind::Chest);
         generic.then(|| self.container_size() / 9)
     }
     /// The title of the open chest-like menu.

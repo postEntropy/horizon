@@ -182,7 +182,7 @@ use horizon_client::{
     chunk::{HEIGHT, MIN_Y},
     clock::FixedStep,
     collisions,
-    containers::{BlockEntity, Providers},
+    containers::{BlockEntity, Providers, is_chest_block},
     crafting::Recipes,
     creative::{Creative, Names},
     entities::{Experience, ExperienceOrb, ItemEntity},
@@ -3353,6 +3353,7 @@ impl Game<'_> {
                 "minecraft:hopper" => "inspect_hopper",
                 "minecraft:dropper" => "inspect_dropper",
                 "minecraft:dispenser" => "inspect_dispenser",
+                n if is_chest_block(n) => "open_chest",
                 n if storage::is_shulker_box(n) => "open_shulker_box",
                 _ => "",
             };

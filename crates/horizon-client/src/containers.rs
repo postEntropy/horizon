@@ -107,6 +107,14 @@ pub enum BlockEntity {
         fluids: HashMap<u32, ModFluidTank>,
     },
 }
+
+/// Whether a block uses the vanilla single/double chest container contract.
+/// Stone Chest registers additional material variants with the same inventory,
+/// block entity and menu behavior as `minecraft:chest`.
+pub fn is_chest_block(name: &str) -> bool {
+    matches!(name, "minecraft:chest" | "minecraft:trapped_chest")
+        || name.starts_with("stonechest:chest_")
+}
 /// `CrafterBlockEntity`: nine slots that can be disabled, the powered flag
 /// and the ticks left in the crafting animation.
 #[derive(Clone, Debug, Default)]
@@ -271,6 +279,7 @@ impl BlockEntity {
         }
         let size = match name {
             "minecraft:chest" | "minecraft:trapped_chest" | "minecraft:barrel" => 27,
+            n if n.starts_with("stonechest:chest_") => 27,
             n if n.ends_with("copper_chest") => 27,
             "minecraft:hopper" => HOPPER_SLOTS,
             "minecraft:dispenser" | "minecraft:dropper" => 9,
