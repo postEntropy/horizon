@@ -1,31 +1,56 @@
 {
   "game": "Horizon 26.3",
   "mod": "JAGS 1.3.3-build.16+mc1.18.2",
-  "environment": "Fresh temporary HORIZON_HOME/XDG directories; test world JagsPortProbe; dev mod loaded from carried content and component.",
-  "checks": [
+  "status": "passed",
+  "scope": "grass planting with atomic seed consumption; rejected target preserves seed; short-grass loot chance",
+  "cases": [
     {
-      "scenario": "Use JAGS grass seed on minecraft:dirt",
-      "result": "passed",
-      "observed_block": "minecraft:grass_block[snowy=false]",
-      "seeds_planted_reported": 1
+      "mode": "in-frame",
+      "status": "passed",
+      "planting": {
+        "block_after": "minecraft:grass_block",
+        "held_before": 2,
+        "held_after": 1
+      },
+      "failed_target": {
+        "block_after": "minecraft:stone",
+        "held_after": 1
+      },
+      "short_grass": {
+        "trials": 60,
+        "additional_jags_seeds": 10,
+        "observed_increments": 10,
+        "expected_chance": 0.1,
+        "sample_outputs": [
+          "Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass",
+          "Dropped 0 items from loot table minecraft:blocks/short_grass"
+        ],
+        "mod_stats": "JAGS: 1 grass seeds used; 60 grass loot checks; 60 RNG samples (last 0.0914821); 10 JAGS seeds added"
+      }
     },
     {
-      "scenario": "JAGS loot modifier while harvesting short grass",
-      "result": "passed",
-      "actions": "60 setblock/left-click repetitions against minecraft:short_grass; some attempts found the block already removed.",
-      "jags_seed_inventory_before": 2,
-      "jags_seed_inventory_after": 8,
-      "additional_jags_seeds": 6,
-      "additional_vanilla_wheat_seeds": 5,
-      "observed_hook": "VanillaHookKind::LootDrop; subject=minecraft:short_grass"
-    },
-    {
-      "scenario": "Held seed stack after planting",
-      "result": "incomplete",
-      "observed_stack_before": 2,
-      "observed_stack_after": 2,
-      "note": "The current Horizon ItemEvent API does not expose held-item consumption. The original JAGS stack-consumption behavior still needs confirmation and implementation if consumable."
+      "mode": "server-thread",
+      "status": "passed",
+      "planting": {
+        "block_after": "minecraft:grass_block",
+        "held_before": 2,
+        "held_after": 1
+      },
+      "failed_target": {
+        "block_after": "minecraft:stone",
+        "held_after": 1
+      },
+      "short_grass": {
+        "trials": 60,
+        "additional_jags_seeds": 10,
+        "observed_increments": 9,
+        "expected_chance": 0.1,
+        "sample_outputs": [
+          "Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass",
+          "Dropped 0 items from loot table minecraft:blocks/short_grass"
+        ],
+        "mod_stats": "JAGS: 2 grass seeds used; 60 grass loot checks; 60 RNG samples (last 0.0914821); 10 JAGS seeds added"
+      }
     }
-  ],
-  "known_fidelity_gap": "JAGS uses a deterministic position/tick/event hash for the 10% drop roll because the current vanilla-hooks API does not expose the world's loot RNG."
+  ]
 }

@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "command": "cargo run --manifest-path ../../Cargo.toml --bin cargo-horizon-mod -p cargo-horizon-mod -- horizon-mod build",
+  "working_directory": "ports/jags",
+  "artifact": "ports/target/horizon-mod/jags.hmod",
+  "checks": [
+    "Rust cdylib compiled for wasm32-unknown-unknown",
+    "componentized .hmod packaged with JAGS item assets and data",
+    "manifest imports satisfy declared API 0.5 capabilities"
+  ]
+}

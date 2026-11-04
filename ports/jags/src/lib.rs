@@ -1,14 +1,15 @@
 use horizon_mod_sdk::{
-    EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod, Registration, VanillaHookEvent,
-    VanillaHookKind,
     server::{self, BlockPos},
-    storage, vanilla_hooks,
+    storage, vanilla_hooks, EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod, Registration,
+    VanillaHookEvent, VanillaHookKind,
 };
 
 pub struct JagsMod {
-    tick: u64,
-    event_nonce: u64,
     seeds_planted: u64,
+    grass_loot_checks: u64,
+    grass_seeds_dropped: u64,
+    grass_loot_samples: u64,
+    last_grass_roll: f32,
 }
 
 impl Mod for JagsMod {
@@ -20,16 +21,14 @@ impl Mod for JagsMod {
         let _ = vanilla_hooks::subscribe("loot-drop");
         Ok((
             Self {
-                tick: 0,
-                event_nonce: 0,
                 seeds_planted,
+                grass_loot_checks: 0,
+                grass_seeds_dropped: 0,
+                grass_loot_samples: 0,
+                last_grass_roll: -1.0,
             },
-            Registration::new().command("jags").on_tick(),
+            Registration::new().command("jags"),
         ))
-    }
-
-    fn tick(&mut self, tick: u64) {
-        self.tick = tick;
     }
 
     fn logic_hooks(&mut self) -> LogicHooks {
@@ -72,17 +71,14 @@ impl Mod for JagsMod {
             return EventOutcome::Pass;
         }
 
-        // The carried Forge loot modifier adds one JAGS seed with a 10% chance
-        // to grass-block loot. The current hook API has no access to the
-        // world's loot RNG, so use a position/tick/event stream rather than
-        // making every grass drop deterministic for a given block position.
-        self.event_nonce = self.event_nonce.wrapping_add(1);
-        let position = (event.x as u32 as u64)
-            ^ (event.y as u32 as u64).rotate_left(21)
-            ^ (event.z as u32 as u64).rotate_left(42);
-        let roll = mix64(position ^ self.tick.rotate_left(13) ^ self.event_nonce);
-        if roll % 10 == 0 {
+        self.grass_loot_checks = self.grass_loot_checks.saturating_add(1);
+        if (0.0..1.0).contains(&event.value) {
+            self.grass_loot_samples = self.grass_loot_samples.saturating_add(1);
+            self.last_grass_roll = event.value;
+        }
+        if (0.0..0.1).contains(&event.value) {
             vanilla_hooks::add_loot_drop("jags:jags", 1);
+            self.grass_seeds_dropped = self.grass_seeds_dropped.saturating_add(1);
         }
         EventOutcome::Pass
     }
@@ -90,8 +86,12 @@ impl Mod for JagsMod {
     fn command(&mut self, _name: &str, args: &str) -> Result<Option<String>, String> {
         match args.split_whitespace().next().unwrap_or("help") {
             "stats" => Ok(Some(format!(
-                "JAGS: {} grass seeds used",
-                self.seeds_planted
+                "JAGS: {} grass seeds used; {} grass loot checks; {} RNG samples (last {}); {} JAGS seeds added",
+                self.seeds_planted,
+                self.grass_loot_checks,
+                self.grass_loot_samples,
+                self.last_grass_roll,
+                self.grass_seeds_dropped
             ))),
             _ => Err("Usage: /jags stats".into()),
         }
@@ -100,12 +100,6 @@ impl Mod for JagsMod {
 
 fn block_id(state: &str) -> &str {
     state.split('[').next().unwrap_or(state)
-}
-
-fn mix64(mut value: u64) -> u64 {
-    value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-    value ^ (value >> 31)
 }
 
 horizon_mod_sdk::export_mod!(JagsMod);

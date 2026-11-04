@@ -1,0 +1,258 @@
+Horizon: content root ready for 1 mod(s) in 2.6s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-9nu125m3/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.13s (35723 block states)
+Horizon: discovered 4192 model files in 0.01s, parsed in 0.01s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.07s (1288 blocks)
+Horizon: bound 35723 model states / 7880 variants in 0.10s, resolved models in 0.01s, baked models and loaded sprites in 0.10s
+Horizon: model-state catalog prepared in 0.21s
+Horizon: blockstate binding and model baking took 0.29s
+Horizon: finalized 1291 sprite layers in 0.04s (asset render stage 0.35s)
+Horizon: gameplay facts read 0.02s, validated 0.17s, decoded 0.15s, projected 35723 states in 0.06s
+load assets: 3.36s
+Horizon: asset load stage took 0.57s
+load facts: 3.36s
+Horizon: facts, biomes and environment stage took 0.42s
+load biomes+env: 3.36s
+load pack tables: 3.64s
+Horizon: pack tables stage took 0.28s
+load collision+motion: 3.81s
+Horizon: collision and motion stage took 0.16s
+Horizon: mob metadata loaded in 0.02s
+load items: 3.88s
+Horizon: resources loaded in 3.9s; 35723 block states, 1659 items, 67 biomes; 10 worker threads
+Horizon: items and recipes stage took 0.08s
+Horizon: providers and block-entity render tables loaded in 0.18s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.22s
+Horizon: mob types loaded in 0.06s
+Horizon: player model setup took 0.10s
+Horizon: behaviours, mob types and player models loaded in 0.38s
+Horizon: no sounds in /tmp/horizon-port-fixture-9nu125m3/.horizon-cache/mod-content/assets: they were not copied from your Minecraft install; prepare the game again in the launcher (or run horizon-prepare sounds)
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.05s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 1 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-9nu125m3/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.04s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 1 command(s) from 1 package(s)
+Horizon: live features ready in 707.382076ms
+[10:57:25] [Server thread/INFO]: Player25125[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
+[10:57:25] [Server thread/INFO]: System chat: Player25125 joined the game
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 1644 ms
+[chat] The game is frozen
+[10:57:26] [Server thread/INFO]: System chat: [Player25125: Set own game mode to Survival Mode]
+[chat] Set own game mode to Survival Mode
+[10:57:26] [Server thread/INFO]: System chat: [Player25125: Teleported Player25125 to 0.500000, 102.000000, 3.500000]
+[chat] Teleported Player25125 to 0.500000, 102.000000, 3.500000
+[10:57:26] [Server thread/INFO]: System chat: [Player25125: Changed the block at 0, 101, 3]
+[chat] Changed the block at 0, 101, 3
+[10:57:26] [Server thread/INFO]: System chat: [Player25125: Changed the block at 0, 101, 4]
+[chat] Changed the block at 0, 101, 4
+[10:57:26] [Server thread/INFO]: System chat: [Player25125: Changed the block at 0, 102, 4]
+[chat] Changed the block at 0, 102, 4
+[10:57:26] [Server thread/INFO]: System chat: [Player25125: Replaced 1 slot(s) on Player25125 with [Grass Seed]]
+[chat] Replaced 1 slot(s) on Player25125 with [Grass Seed]
+[10:57:26] [Server thread/INFO]: System chat: [Player25125: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+[10:57:27] [Server thread/INFO]: System chat: [Player25125: Changed the block at 0, 102, 4]
+[chat] Changed the block at 0, 102, 4
+[10:57:27] [Server thread/INFO]: System chat: [Player25125: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+[10:57:29] [Server thread/INFO]: System chat: [Player25125: Changed the block at 0, 102, 4]
+[chat] Changed the block at 0, 102, 4
+[10:57:29] [Server thread/INFO]: System chat: [Player25125: Changed the block at 0, 102, 4]
+[chat] Changed the block at 0, 102, 4
+[10:57:29] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:29] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:29] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:29] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:29] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:29] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:29] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:29] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:29] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:30] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:30] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:30] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:30] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:30] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:30] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:30] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:30] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:30] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:30] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:31] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:31] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:31] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:31] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:31] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:31] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:31] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:31] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:31] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:31] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:32] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:32] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:32] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:32] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:32] [Server thread/INFO]: System chat: [Player25125: Dropped 2 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 2 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:32] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:32] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:32] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:32] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:32] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:33] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:33] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:33] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Wheat Seeds] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:33] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:33] [Server thread/INFO]: System chat: [Player25125: Dropped 2 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 2 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:33] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:33] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:33] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:33] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:33] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:34] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:34] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:34] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:34] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:34] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:34] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:34] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:34] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:34] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:34] [Server thread/INFO]: System chat: [Player25125: Dropped 0 items from loot table minecraft:blocks/short_grass]
+[chat] Dropped 0 items from loot table minecraft:blocks/short_grass
+[chat] Could not set the block
+[10:57:35] [Server thread/INFO]: System chat: [Player25125: Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass]
+[chat] Dropped 1 [Grass Seed] from loot table minecraft:blocks/short_grass
+[chat] JAGS: 2 grass seeds used; 60 grass loot checks; 60 RNG samples (last 0.0914821); 10 JAGS seeds added
