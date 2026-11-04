@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " P ",
+    "ACA",
+    " S "
+  ],
+  "key": {
+    "P": { "tag": "minecraft:planks" },
+    "A": { "item": "minecraft:polished_andesite" },
+    "C": { "item": "create:cogwheel" },
+    "S": { "tag": "forge:stone" }
+  },
+  "result": { "item": "create:millstone", "count": 1 }
+}

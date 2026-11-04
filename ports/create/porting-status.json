@@ -1,0 +1,13 @@
+{
+  "complete": false,
+  "pending": [
+    "The host-received crank interaction advances the Millstone in-frame, but the server-thread machine callback does not observe an active stroke: UI opens, progress stays at zero, and gravel remains in input. A server-authoritative activation contract is still needed.",
+    "Neither mode consumes gravel or emits probabilistic outputs until machine callbacks receive vanilla Level RNG; do not substitute a per-machine pseudo-random stream.",
+    "The 100-tick stroke is a bounded interaction workaround, not verified native hand-crank timing. General Create kinetic graph behavior is not implemented; this slice recognizes only the StoneBlock Ponder's hand-crank/cogwheel/Millstone arrangement.",
+    "Recipe source currently registers only the StoneBlock gravel milling recipe and three quest crafting recipes; remaining Create recipes, blocks, kinetics and automation are outside this Session 01 slice."
+  ],
+  "evidence": [
+    "harness/build-validation.json",
+    "harness/gameplay-validation.json"
+  ]
+}

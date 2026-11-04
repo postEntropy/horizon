@@ -1,0 +1,43 @@
+{
+  "game": "Horizon 26.3",
+  "mod": "Create 0.5.1.f from the StoneBlock 3 import",
+  "status": "partial; in-frame crank progress passed, server-thread progress failed, and chance outputs remain blocked on Level RNG",
+  "scope": "Quest #5 Millstone and the registered StoneBlock gravel milling recipe; results distinguish in-frame and authoritative server-thread behavior.",
+  "recipe": {
+    "id": "create:stoneblock/gravel",
+    "kind": "create:milling",
+    "input": "#forge:gravel x1",
+    "ticks": 100,
+    "outputs": [
+      "minecraft:coal*1@0.35",
+      "minecraft:raw_iron*1@0.35",
+      "create:raw_zinc*1@0.2",
+      "minecraft:sand*1@0.4"
+    ]
+  },
+  "crank_stroke": "One 100-tick stroke starts on the host-received crank use event; press duration was not compared with Create's native hand-crank timing.",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "kinetic_chain": "hand crank facing up → cogwheel axis y → Millstone west face",
+      "progress": "greater than 0 of 100 ticks",
+      "gravel_remained_in_input": true,
+      "evidence_log": "gameplay-validation-in-frame-0.log"
+    },
+    {
+      "mode": "server-thread",
+      "status": "failed",
+      "kinetic_chain": "Millstone UI opened; crank event did not advance authoritative processing",
+      "progress": 0,
+      "gravel_remained_in_input": true,
+      "evidence_log": "gameplay-validation-server-thread-0.log"
+    }
+  ],
+  "known_gaps": [
+    "The server-thread machine callback does not observe an active crank stroke after the host-received block-use event; a server-authoritative activation contract is needed.",
+    "Neither mode consumes gravel or rolls the four output chances because machine callbacks do not yet receive vanilla Level RNG.",
+    "The bounded 100-tick crank stroke is not verified against Create's native hand-crank activation duration, stress or rotation behavior.",
+    "General Create kinetic graph behavior and recipes outside this StoneBlock quest slice are not implemented."
+  ]
+}

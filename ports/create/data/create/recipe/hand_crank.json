@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " R ",
+    "PPP",
+    "  A"
+  ],
+  "key": {
+    "R": { "item": "ftbsbc:stone_rod" },
+    "P": { "tag": "minecraft:planks" },
+    "A": { "item": "minecraft:polished_andesite" }
+  },
+  "result": { "item": "create:hand_crank", "count": 1 }
+}

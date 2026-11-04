@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "BBB",
+    "BAB",
+    "BBB"
+  ],
+  "key": {
+    "B": { "tag": "minecraft:wooden_buttons" },
+    "A": { "item": "minecraft:polished_andesite" }
+  },
+  "result": { "item": "create:cogwheel", "count": 1 }
+}

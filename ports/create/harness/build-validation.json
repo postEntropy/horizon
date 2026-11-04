@@ -1,0 +1,22 @@
+{
+  "status": "passed",
+  "component": "Create 0.5.1.f+stoneblock3",
+  "checks": [
+    "cargo check --manifest-path ports/Cargo.toml -p create",
+    "cargo test --manifest-path ports/Cargo.toml -p create (1 unit test)",
+    "cargo-horizon-mod horizon-mod build --release"
+  ],
+  "recipe_contract": {
+    "id": "create:stoneblock/gravel",
+    "kind": "create:milling",
+    "input": "#forge:gravel x1",
+    "ticks": 100,
+    "outputs": [
+      "minecraft:coal*1@0.35",
+      "minecraft:raw_iron*1@0.35",
+      "create:raw_zinc*1@0.2",
+      "minecraft:sand*1@0.4"
+    ]
+  },
+  "caveat": "The component does not emit chance outputs until a host-authoritative Level RNG is exposed."
+}

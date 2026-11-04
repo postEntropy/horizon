@@ -1,0 +1,9 @@
+id = "create"
+name = "Create"
+version = "0.5.1.f+stoneblock3"
+description = "Create's first StoneBlock millstone path with a manually driven kinetic chain."
+authors = ["simibubi"]
+api = "0.4"
+side = "both"
+capabilities = ["registries", "block-entities", "item-transfer", "game-read", "chat", "recipes", "ui"]
+ported-from = "Create 0.5.1.f; MIT"
