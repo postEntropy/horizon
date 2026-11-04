@@ -1,8 +1,8 @@
 //! AllTheTweaks: ATM Star components, trophies, and dimension anchors.
 mod items;
 use horizon_mod_sdk::{
-    BlockAction, BlockEvent, EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod, Registration,
-    chat, game,
+    BlockAction, BlockEvent, EventOutcome, ItemEvent, LogicHooks, Mod, Registration,
+    chat,
     server::{self, BlockPos},
     ui::{self, ScreenSpec, Widget, WidgetKind},
 };
@@ -101,30 +101,10 @@ impl Mod for AllTheTweaks {
         hooks
     }
 
-    fn on_item(&mut self, event: ItemEvent) -> EventOutcome {
-        if event.item.contains("withers_compass")
-            && (event.action == ItemAction::UseInAir || event.action == ItemAction::UseOnBlock)
-        {
-            if let Some(player) = game::get_player() {
-                // Target coordinates for Nether Fortress / Wither depths
-                let dist = calculate_wither_direction(player.x, player.z, 0, 0);
-                chat::show(&format!(
-                    "🧭 Withers Compass: Nether anomaly detected at [0, 64, 0] · Distance: {:.0}m",
-                    dist
-                ));
-            } else {
-                chat::show("🧭 Nether Star compass aligns to the depths of the Nether...");
-            }
-            return EventOutcome::Consume;
-        }
-
-        if event.item.contains("atm_star") {
-            chat::show(
-                "✨ The All The Mods Star radiates infinite celestial energy! Creative power unlocked.",
-            );
-            return EventOutcome::Consume;
-        }
-
+    fn on_item(&mut self, _event: ItemEvent) -> EventOutcome {
+        // The original item-use oracle returned PASS for ATM Star, Greg Star,
+        // and Withers Compass in air. Their real right-click interactions
+        // (including target blocks/entities) remain unobserved.
         EventOutcome::Pass
     }
 

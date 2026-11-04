@@ -1,0 +1,56 @@
+{
+  "status": "passed",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "scope": "three original-observed item-use-in-air PASS cases; stack preserved",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "cases": [
+        {
+          "item": "allthetweaks:atm_star",
+          "count_before": 1,
+          "count_after": 1
+        },
+        {
+          "item": "allthetweaks:greg_star",
+          "count_before": 1,
+          "count_after": 1
+        },
+        {
+          "item": "allthetweaks:withers_compass",
+          "count_before": 1,
+          "count_after": 1
+        }
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "cases": [
+        {
+          "item": "allthetweaks:atm_star",
+          "count_before": 1,
+          "count_after": 1
+        },
+        {
+          "item": "allthetweaks:greg_star",
+          "count_before": 1,
+          "count_after": 1
+        },
+        {
+          "item": "allthetweaks:withers_compass",
+          "count_before": 1,
+          "count_after": 1
+        }
+      ]
+    }
+  ]
+}
