@@ -20,6 +20,14 @@ interface log {
 
 /// Capability `game-read`: the local player, world clock, and use-button state.
 interface game {
+    /// Authenticated sender for the mod command currently being dispatched.
+    /// None outside a player command (for example, server console commands).
+    record command-player {
+        /// Stable UUID string, including hyphens.
+        id: string,
+        /// Authenticated profile name.
+        name: string,
+    }
     record player {
         /// Feet position, in blocks.
         x: f64,
@@ -44,6 +52,10 @@ interface game {
     }
     /// None on the title screen.
     get-player: func() -> option<player>;
+    /// Present only while handling a command entered by a player. This is
+    /// independent of the local camera/player snapshot, so server guests get
+    /// their own identity.
+    get-command-player: func() -> option<command-player>;
     /// None on the title screen.
     get-clock: func() -> option<clock>;
     /// Whether the local player's use button (normally right mouse) is held.
@@ -185,6 +197,13 @@ interface machine {
         y: s32,
         z: s32,
     }
+    /// One loaded block entity owned by this mod at a cardinally adjacent
+    /// position. The handle remains valid only when it is also lent to the
+    /// current block-entities callback.
+    record adjacent-block-entity {
+        face: face,
+        handle: u32,
+    }
     /// An item and how many. Read or write its non-default components with `item-data`.
     record item-stack {
         /// `minecraft:coal`, `<mod>:<path>`, ...
@@ -250,6 +269,11 @@ interface machine {
     bind-shared-inventory: func(handle: u32, channel: string) -> bool;
     /// The loaded block entity's dimension and world position.
     get-position: func(handle: u32) -> option<block-entity-position>;
+    /// Other loaded block entities of this mod immediately adjacent to this
+    /// one, with the face from this block toward its neighbor. This lets a mod
+    /// build its own physical networks without guessing positions or reading
+    /// the local player's world snapshot.
+    get-adjacent-block-entities: func(handle: u32) -> list<adjacent-block-entity>;
     /// Reads a game-side rule value attached to this world's mod runtime.
     get-world-rule: func(name: string) -> option<string>;
     /// Sets a namespaced rule value for coordination between this mod's machines.
@@ -406,6 +430,9 @@ interface server {
     get-block: func(dimension: string, pos: block-pos) -> option<string>;
     /// Replaces the block at `pos` in `dimension` with `state`.
     set-block: func(dimension: string, pos: block-pos, state: string) -> result<_, string>;
+    /// Draws from the active level RNG during this mod's random-tick callback.
+    /// Returns none outside that callback or when `bound` is not positive.
+    random-int: func(bound: s32) -> option<s32>;
     /// During the active `use-on-block` callback, queues one atomic attempt to replace the expected block and consume one item from that event's active hand. Creative players keep their stack. Returns false outside that callback or if a request was already queued. The host validates the player, hand, item, block, and replacement after the callback; true means queued, not applied.
     replace-block-and-consume-active-item: func(dimension: string, pos: block-pos, expected-block: string, replacement: string) -> bool;
     /// Schedules a block tick for `block` at `pos` after `delay` ticks.
@@ -871,7 +898,7 @@ interface logic {
         y: s32,
         /// Z coordinate.
         z: s32,
-        /// Numeric value associated with the event (damage amount, XP, base enchantment level, next age stage, explosion radius or tree/spread attempt count).
+        /// Numeric value associated with the event (damage amount, XP, base enchantment level, next age stage, explosion radius or tree/spread attempt count). For `loot-drop`, this is one float from the active loot RNG after vanilla drops are generated, or -1 when that source has no exposed RNG.
         value: f32,
         /// Secondary context (damage source, item id for enchantment-level, block interaction and fire flag for explosions, attacker/tool id).
         context: string,

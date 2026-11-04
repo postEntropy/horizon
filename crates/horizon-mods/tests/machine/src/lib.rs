@@ -482,6 +482,19 @@ impl Mod for Machines {
                     machine::set_player_slot_access(handle, slot, insert, extract).to_string(),
                 ))
             }
+            arg if arg.starts_with("adjacent ") => {
+                let handle = arg
+                    .split_whitespace()
+                    .nth(1)
+                    .ok_or_else(|| "adjacent HANDLE".to_owned())?
+                    .parse::<u32>()
+                    .map_err(|e| e.to_string())?;
+                machine::set_world_rule("test_machine:adjacent_target", &handle.to_string())?;
+                Ok(None)
+            }
+            "adjacent_result" => Ok(Some(
+                machine::get_world_rule("test_machine:adjacent_result").unwrap_or_default(),
+            )),
 
             "atomic_items" => {
                 machine::set_world_rule("test_machine:atomic_items", "true")?;
@@ -1402,6 +1415,27 @@ impl Mod for Machines {
             }
         }
         for &h in handles {
+            let target_handle = h.to_string();
+            if machine::get_world_rule("test_machine:adjacent_target").as_deref()
+                == Some(target_handle.as_str())
+            {
+                let neighbors = machine::get_adjacent_block_entities(h)
+                    .into_iter()
+                    .map(|neighbor| {
+                        let face = match neighbor.face {
+                            machine::Face::Down => "down",
+                            machine::Face::Up => "up",
+                            machine::Face::North => "north",
+                            machine::Face::South => "south",
+                            machine::Face::West => "west",
+                            machine::Face::East => "east",
+                        };
+                        format!("{face}={}", neighbor.handle)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let _ = machine::set_world_rule("test_machine:adjacent_result", &neighbors);
+            }
             if machine::get_world_rule("test_machine:atomic_items").as_deref() == Some("true") {
                 let input = machine::SlotStack {
                     slot: 0,

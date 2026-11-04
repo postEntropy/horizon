@@ -18,7 +18,7 @@ id = "test_guest"
 name = "Test Guest"
 version = "0.1.0"
 api = "0.1"
-capabilities = ["chat", "storage"]
+capabilities = ["game-read", "chat", "storage"]
 "#;
 
 const MACHINE_MANIFEST: &str = r#"
@@ -284,6 +284,35 @@ fn coords_hud_draws_and_answers() {
     };
     assert_eq!(mods.drain(), [hidden]);
     assert!(!mods.command("gamemode creative"));
+}
+
+#[test]
+fn command_player_identity_is_scoped_to_authenticated_dispatch() {
+    let mut mods = load("horizon_mods_test_guest.hmod");
+    assert_eq!(mods.entries()[0].status, Status::Running);
+    assert!(mods.commands().any(|name| name == "identity_probe"));
+    let identity = horizon_mods::CommandPlayer {
+        id: "12345678-1234-5678-9abc-def012345678".into(),
+        name: "Guest".into(),
+    };
+    assert!(mods.command_as("identity_probe", Some(identity)));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "12345678-1234-5678-9abc-def012345678 Guest".into(),
+            error: false,
+        }]
+    );
+    // A command dispatched without a player identity (such as server console)
+    // cannot observe the previous player's context.
+    assert!(mods.command("identity_probe"));
+    assert_eq!(
+        mods.drain(),
+        [Output::Feedback {
+            text: "no-player".into(),
+            error: false,
+        }]
+    );
 }
 
 #[test]
@@ -1519,6 +1548,42 @@ fn block_entities_see_only_their_own() {
     assert_eq!(views[1].fluids[&0].amount, 30);
     assert!(views[1].changed);
     assert_eq!(mods.entries()[0].status, Status::Running);
+}
+
+#[test]
+fn machine_api_reports_only_cardinal_same_dimension_neighbors_in_face_order() {
+    let mut mods = machines();
+    let create = |mods: &mut Mods, dimension: &str, x, y, z| {
+        mods.create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some((dimension.into(), x, y, z)),
+        )
+        .unwrap()
+        .0
+    };
+    let center = create(&mut mods, "minecraft:overworld", 0, 64, 0);
+    let east = create(&mut mods, "minecraft:overworld", 1, 64, 0);
+    let up = create(&mut mods, "minecraft:overworld", 0, 65, 0);
+    let north = create(&mut mods, "minecraft:overworld", 0, 64, -1);
+    let diagonal = create(&mut mods, "minecraft:overworld", 1, 65, 0);
+    let other_dimension = create(&mut mods, "minecraft:the_nether", -1, 64, 0);
+
+    assert!(mods.command(&format!("machine_api adjacent {center}")));
+    let mut views = [
+        smelter(center, None),
+        smelter(east, None),
+        smelter(up, None),
+        smelter(north, None),
+        smelter(diagonal, None),
+        smelter(other_dimension, None),
+    ];
+    mods.tick_block_entities(&mut views);
+    assert!(mods.command("machine_api adjacent_result"));
+    assert!(mods.drain().contains(&Output::Feedback {
+        text: format!("up={up},north={north},east={east}"),
+        error: false,
+    }));
 }
 
 #[test]

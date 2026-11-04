@@ -473,12 +473,13 @@ impl Game<'_> {
     pub(super) fn cmd_loot(&mut self, id: &str, ctx: &Context) -> R<i32> {
         // The drops.
         let source_pos = self.source_position().map(|v| v.floor() as i32);
-        let (drops, table, hook_subject, hook_pos, hook_context): (
+        let (drops, table, hook_subject, hook_pos, hook_context, loot_random): (
             Vec<ItemStack>,
             Option<String>,
             String,
             [i32; 3],
             String,
+            Option<f32>,
         ) = match id {
             "loot.loot" | "loot.fish" => {
                 let Some(Arg::Resource(table)) = ctx.get("loot_table").cloned() else {
@@ -499,6 +500,7 @@ impl Game<'_> {
                         "minecraft:inline_loot_table".into(),
                         source_pos,
                         id.to_owned(),
+                        None,
                     )
                 } else {
                     if !self.res.items().has_loot_table(&table) {
@@ -524,7 +526,7 @@ impl Game<'_> {
                             &mut self.world.random,
                         ),
                     };
-                    (drops, None, table, source_pos, id.to_owned())
+                    (drops, None, table, source_pos, id.to_owned(), None)
                 }
             }
             "loot.kill" => {
@@ -561,7 +563,7 @@ impl Game<'_> {
                         &mut self.world.random,
                     ),
                 };
-                (drops, Some(table.clone()), ty, source_pos, table)
+                (drops, Some(table.clone()), ty, source_pos, table, None)
             }
             _ => {
                 // loot mine
@@ -575,27 +577,40 @@ impl Game<'_> {
                 let tool = self
                     .tool_stack(ctx)?
                     .map(|stack| self.effective_loot_tool(&stack));
-                let drops = match self.res.items().loot_sequence(&table) {
+                let grass_name = name.rsplit(':').next();
+                let is_grass = matches!(grass_name, Some("grass" | "short_grass"));
+                let (drops, loot_random) = match self.res.items().loot_sequence(&table) {
                     Some(seq) => {
                         let random = self.rand_sequences.get(&seq, self.level.seed);
-                        self.res.items().block_drops(
+                        let drops = self.res.items().block_drops(
                             self.pack.assets.registry,
                             state,
                             tool.as_ref(),
                             random,
-                        )
+                        );
+                        (drops, is_grass.then(|| random.next_float()))
                     }
-                    None => self.res.items().block_drops(
-                        self.pack.assets.registry,
-                        state,
-                        tool.as_ref(),
-                        &mut self.world.random,
-                    ),
+                    None => {
+                        let random = &mut self.world.random;
+                        let drops = self.res.items().block_drops(
+                            self.pack.assets.registry,
+                            state,
+                            tool.as_ref(),
+                            random,
+                        );
+                        (drops, is_grass.then(|| random.next_float()))
+                    }
                 };
-                (drops, Some(table.clone()), name, p, table)
+                (drops, Some(table.clone()), name, p, table, loot_random)
             }
         };
-        let drops = self.mod_loot_table_drops(&hook_subject, hook_pos, &hook_context, drops);
+        let drops = self.mod_loot_table_drops_with_random(
+            &hook_subject,
+            hook_pos,
+            &hook_context,
+            drops,
+            loot_random,
+        );
         let drops: Vec<ItemStack> = drops.into_iter().filter(|d| d.count > 0).collect();
         // Where they go.
         let mut used: Vec<ItemStack> = Vec::new();

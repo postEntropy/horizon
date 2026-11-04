@@ -61,6 +61,9 @@ class Fixture:
         argv = [str(self.args.bin_dir / 'horizon-client'), '--resources', str(self.args.resources),
                 '--world', 'PortFixture', '--test-terrain', '--creative', '--render-distance', '2',
                 '--offscreen', '--width', '320', '--height', '240', '--control-socket', str(self.socket)]
+        seed = getattr(self.args, 'seed', None)
+        if seed is not None:
+            argv += ['--seed', str(seed)]
         for mod in self.mods:
             argv += ['--dev-mod', str(mod)]
         if self.mode == 'in-frame':

@@ -706,6 +706,19 @@ impl<'a> Plan<'a> {
         if let Some(v) = p.random_ticks {
             row.set("random_ticks", J::Bool(v));
         }
+        if let Some(damage) = &p.step_damage {
+            row.set(
+                "step_damage",
+                J::Obj(vec![
+                    ("damage_type".into(), J::Str(damage.damage_type.clone())),
+                    ("amount".into(), J::f64(damage.amount as f64)),
+                    (
+                        "suppressed_by_sneak".into(),
+                        J::Bool(damage.suppressed_by_sneak),
+                    ),
+                ]),
+            );
+        }
         if let Some(v) = p.map_color {
             let col = if v == 0 { 0 } else { MAP_COLORS[v as usize] };
             row.set("map_color", J::Num(col.into()));

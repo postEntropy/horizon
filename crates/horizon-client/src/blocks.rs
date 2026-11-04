@@ -6,6 +6,7 @@ use horizon_world::{
     level::{Behaviours, GameplayStateSource},
     registry::{BlockRegistry, BlockStateId},
 };
+use serde::Deserialize;
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -20,6 +21,14 @@ pub enum RenderShape {
     Model,
     Invisible,
     Animated,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StepDamage {
+    pub damage_type: String,
+    pub amount: f32,
+    pub suppressed_by_sneak: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fluid {
@@ -50,6 +59,7 @@ pub struct StateFacts {
     pub requires_tool: bool,
     pub replaceable: bool,
     pub random_ticks: bool,
+    pub step_damage: Option<StepDamage>,
     pub block_entity: bool,
     pub render_shape: RenderShape,
     pub full_collision: bool,
@@ -224,6 +234,13 @@ pub struct BlockFacts {
     pub air: BlockStateId,
 }
 impl BlockFacts {
+    pub fn iter(&self) -> impl Iterator<Item = (BlockStateId, &StateFacts)> {
+        self.states
+            .iter()
+            .enumerate()
+            .map(|(i, state)| (BlockStateId(i as u32), state))
+    }
+
     pub fn load(root: &Path, registry: &BlockRegistry) -> Result<Self> {
         let behaviours: Value = serde_json::from_reader(BufReader::new(File::open(
             root.join("block-behaviours.json"),
@@ -401,6 +418,7 @@ impl BlockFacts {
                 requires_tool: entry.requires_tool,
                 replaceable: entry.replaceable,
                 random_ticks: entry.random_ticks,
+                step_damage: entry.step_damage.clone(),
                 block_entity: entry.block_entity,
                 render_shape: match entry.render_shape.as_deref() {
                     Some("INVISIBLE") => RenderShape::Invisible,

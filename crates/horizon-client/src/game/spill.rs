@@ -321,19 +321,23 @@ impl GameLevel<'_> {
             self.pending.record_saved(at, &tag);
         }
         let dynamic = self.pending.dynamic(at);
-        let drops = match self.items.block_loot_sequence(self.registry, state) {
+        let grass_name = self.facts.get(state).name.rsplit(':').next();
+        let is_grass_drop = matches!(grass_name, Some("grass" | "short_grass"));
+        let (drops, loot_random) = match self.items.block_loot_sequence(self.registry, state) {
             Some(sequence) => {
                 let random = self.rand_sequences.get(&sequence, self.seed);
-                self.items
-                    .block_drops_with(self.registry, state, None, &dynamic, random)
+                let drops =
+                    self.items
+                        .block_drops_with(self.registry, state, None, &dynamic, random);
+                (drops, is_grass_drop.then(|| random.next_float()))
             }
-            None => self.items.block_drops_with(
-                self.registry,
-                state,
-                None,
-                &dynamic,
-                &mut self.world.random,
-            ),
+            None => {
+                let random = &mut self.world.random;
+                let drops =
+                    self.items
+                        .block_drops_with(self.registry, state, None, &dynamic, random);
+                (drops, is_grass_drop.then(|| random.next_float()))
+            }
         };
         let drops = if self.mods.has_loot_drop_hook() {
             let dimension = match self.dimension {
@@ -342,13 +346,14 @@ impl GameLevel<'_> {
                 super::LevelDimension::End => "minecraft:the_end",
             };
             let subject = self.facts.get(state).name.as_ref();
-            let (outcome, extra) = self.mods.loot_drop_hook(
+            let (outcome, extra) = self.mods.loot_drop_hook_with_random(
                 self.items,
                 dimension,
                 subject,
                 at,
                 drops.len() as f32,
                 "minecraft:block_drops",
+                loot_random,
             );
             super::mods::apply_loot_drop_result(outcome, drops, extra)
         } else {

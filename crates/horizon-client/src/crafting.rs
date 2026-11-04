@@ -1317,6 +1317,212 @@ fn resource_tags(root: &Path, kind: MachineResourceKind) -> HashMap<String, Vec<
     }
     expanded
 }
+
+/// Thermal's machine JSON uses `ingredient`/`ingredients`, `result(s)`, and
+/// optional fluid objects rather than Minecraft's vanilla machine schema.
+fn thermal_machine_recipe(
+    id: &str,
+    kind: &str,
+    value: &Value,
+    items: &Items,
+    fluid_tags: &HashMap<String, Vec<String>>,
+) -> Option<MachineRecipe> {
+    if !matches!(
+        kind,
+        "thermal:crystallizer"
+            | "thermal:pulverizer"
+            | "thermal:furnace"
+            | "thermal:press"
+            | "thermal:smelter"
+            | "thermal:crucible"
+            | "thermal:chiller"
+            | "thermal:insolator"
+    ) {
+        return None;
+    }
+    let mut inputs = Vec::new();
+    let mut input_tank = 0u32;
+    let ingredients = value
+        .get("ingredients")
+        .and_then(Value::as_array)
+        .cloned()
+        .or_else(|| value.get("ingredient").cloned().map(|input| vec![input]))?;
+    for input in ingredients {
+        let fluid = input
+            .get("fluid")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .or_else(|| {
+                input
+                    .get("fluid_tag")
+                    .and_then(Value::as_str)
+                    .map(|tag| format!("#{tag}"))
+            });
+        if let Some(fluid) = fluid {
+            let accepted = if let Some(tag) = fluid.strip_prefix('#') {
+                fluid_tags.get(tag).cloned().unwrap_or_default()
+            } else {
+                vec![fluid]
+            };
+            if accepted.is_empty() {
+                return None;
+            }
+            inputs.push(MachineInput::Resource {
+                kind: MachineResourceKind::Fluid,
+                tank: input_tank,
+                accepted,
+                amount: input
+                    .get("amount")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(1)
+                    .clamp(1, u32::MAX as u64) as u32,
+            });
+            input_tank = input_tank.saturating_add(1);
+            continue;
+        }
+        let ingredient_value = input.get("value").unwrap_or(&input);
+        let Some(ingredient) = Ingredient::parse(ingredient_value, items) else {
+            return None;
+        };
+        inputs.push(MachineInput::Item {
+            ingredient,
+            count: input
+                .get("count")
+                .and_then(Value::as_u64)
+                .unwrap_or(1)
+                .clamp(1, u32::MAX as u64) as u32,
+        });
+    }
+
+    let raw_outputs = value.get("results").or_else(|| value.get("result"))?;
+    let outputs: Vec<&Value> = raw_outputs
+        .as_array()
+        .map(|outputs| outputs.iter().collect())
+        .unwrap_or_else(|| vec![raw_outputs]);
+    let mut parsed_outputs = Vec::new();
+    let mut output_tank = 0u32;
+    for output in outputs {
+        if let Some(fluid) = output
+            .get("fluid")
+            .and_then(Value::as_str)
+            .or_else(|| output.get("fluid_tag").and_then(Value::as_str))
+        {
+            parsed_outputs.push(MachineOutput::Resource {
+                kind: MachineResourceKind::Fluid,
+                tank: output_tank,
+                id: fluid.strip_prefix('#').unwrap_or(fluid).to_owned(),
+                amount: output
+                    .get("amount")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(1)
+                    .clamp(1, u32::MAX as u64) as u32,
+            });
+            output_tank = output_tank.saturating_add(1);
+            continue;
+        }
+        let Some(item) = output
+            .get("item")
+            .and_then(Value::as_str)
+            .or_else(|| output.get("id").and_then(Value::as_str))
+        else {
+            return None;
+        };
+        let count = output
+            .get("count")
+            .and_then(Value::as_u64)
+            .unwrap_or(1)
+            .clamp(1, u32::MAX as u64) as u32;
+        let chance = output
+            .get("chance")
+            .and_then(Value::as_f64)
+            .unwrap_or(1.0)
+            .max(0.0);
+        let guaranteed = chance.floor().min(u32::MAX as f64) as u32;
+        if guaranteed > 0 {
+            parsed_outputs.push(MachineOutput::Item(ItemStack::new(
+                item,
+                count.saturating_mul(guaranteed),
+            )));
+        }
+        let fractional = (chance - f64::from(guaranteed)) as f32;
+        if fractional > 0.0 {
+            parsed_outputs.push(MachineOutput::ItemWithChance {
+                stack: ItemStack::new(item, count),
+                chance: fractional,
+            });
+        }
+    }
+    if inputs.is_empty() || parsed_outputs.is_empty() {
+        return None;
+    }
+    // `energy_mod` is a multiplier against Thermal's configured machine
+    // baseline. The baseline is not in the carried JSON, so don't invent one.
+    let energy = value.get("energy").and_then(Value::as_u64).unwrap_or(0);
+    Some(MachineRecipe {
+        id: id.to_owned(),
+        kind: kind.to_owned(),
+        inputs,
+        outputs: parsed_outputs,
+        ticks: 0,
+        energy,
+    })
+}
+
+fn create_milling_recipe(id: &str, value: &Value, items: &Items) -> Option<MachineRecipe> {
+    let ingredients = value.get("ingredients")?.as_array()?;
+    let inputs = ingredients
+        .iter()
+        .map(|input| {
+            Some(MachineInput::Item {
+                ingredient: Ingredient::parse(input, items)?,
+                count: input
+                    .get("count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(1)
+                    .clamp(1, u32::MAX as u64) as u32,
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let outputs = value.get("results")?.as_array()?;
+    let outputs = outputs
+        .iter()
+        .map(|output| {
+            let item = output
+                .get("id")
+                .and_then(Value::as_str)
+                .or_else(|| output.get("item").and_then(Value::as_str))?;
+            let stack = ItemStack::new(
+                item,
+                output
+                    .get("count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(1)
+                    .clamp(1, u32::MAX as u64) as u32,
+            );
+            let chance = output.get("chance").and_then(Value::as_f64).unwrap_or(1.0) as f32;
+            Some(if chance < 1.0 {
+                MachineOutput::ItemWithChance { stack, chance }
+            } else {
+                MachineOutput::Item(stack)
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    if inputs.is_empty() || outputs.is_empty() {
+        return None;
+    }
+    Some(MachineRecipe {
+        id: id.to_owned(),
+        kind: "create:milling".into(),
+        inputs,
+        outputs,
+        ticks: value
+            .get("processing_time")
+            .and_then(Value::as_u64)
+            .unwrap_or(100)
+            .clamp(1, u32::MAX as u64) as u32,
+        energy: 0,
+    })
+}
 pub struct Recipes {
     pub crafting: Vec<(String, Recipe)>,
     pub cooking: Vec<Cooking>,
@@ -1612,7 +1818,23 @@ impl Recipes {
                         energy: 0,
                     });
                 }
-            } else if rtype == "create:crushing" || rtype == "thermal:crystallizer" {
+            } else if rtype.starts_with("thermal:") {
+                if let Some(recipe) = thermal_machine_recipe(&name, rtype, &v, items, &fluid_tags) {
+                    machine.push(recipe);
+                }
+            } else if rtype == "create:milling" {
+                if let Some(recipe) = create_milling_recipe(&name, &v, items)
+                    && recipe.outputs.iter().all(|output| match output {
+                        MachineOutput::Item(stack)
+                        | MachineOutput::ItemWithChance { stack, .. } => {
+                            items.items.contains_key(stack.item.as_ref())
+                        }
+                        MachineOutput::Resource { .. } => false,
+                    })
+                {
+                    machine.push(recipe);
+                }
+            } else if rtype == "create:crushing" {
                 let mut inputs = Vec::new();
                 let mut resource_tanks = HashMap::<MachineResourceKind, u32>::new();
                 for input in v["ingredients"].as_array().into_iter().flatten() {
@@ -1649,7 +1871,8 @@ impl Recipes {
                 let outputs_json = v["results"].as_array().or_else(|| v["result"].as_array());
                 let mut outputs = Vec::new();
                 for output in outputs_json.into_iter().flatten() {
-                    let Some(item) = output["item"].as_str() else {
+                    let Some(item) = output["item"].as_str().or_else(|| output["id"].as_str())
+                    else {
                         continue;
                     };
                     if !items.items.contains_key(item) {
@@ -1670,14 +1893,10 @@ impl Recipes {
                         kind: rtype.to_owned(),
                         inputs,
                         outputs,
-                        ticks: if rtype == "create:crushing" {
-                            v["processingTime"]
-                                .as_u64()
-                                .or_else(|| v["processing_time"].as_u64())
-                                .unwrap_or(100) as u32
-                        } else {
-                            0
-                        },
+                        ticks: v["processingTime"]
+                            .as_u64()
+                            .or_else(|| v["processing_time"].as_u64())
+                            .unwrap_or(100) as u32,
                         energy: v["energy"].as_u64().unwrap_or(0),
                     });
                 }
@@ -2357,6 +2576,144 @@ impl Recipes {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn create_milling_parses_processing_time_and_chanced_result_ids() {
+        use serde_json::json;
+        use std::collections::{HashMap, HashSet};
+
+        let items = crate::items::Items::for_tests(HashMap::from([(
+            "forge:gravel".into(),
+            HashSet::from(["minecraft:gravel".into()]),
+        )]));
+        let milling = json!({
+            "type":"create:milling",
+            "ingredients":[{"tag":"forge:gravel"}],
+            "processing_time":100,
+            "results":[
+                {"id":"minecraft:coal", "chance":0.35},
+                {"id":"minecraft:raw_iron", "chance":0.35},
+                {"id":"create:raw_zinc", "chance":0.2},
+                {"id":"minecraft:sand", "chance":0.4}
+            ]
+        });
+        let parsed =
+            super::create_milling_recipe("ftbstoneblock:milling/gravel", &milling, &items).unwrap();
+        assert_eq!(parsed.kind, "create:milling");
+        assert_eq!(parsed.ticks, 100);
+        assert_eq!(parsed.inputs.len(), 1);
+        assert!(matches!(
+            &parsed.inputs[0],
+            super::MachineInput::Item { ingredient, count: 1 }
+                if ingredient.1 == ["minecraft:gravel"]
+        ));
+        let expected = [
+            ("minecraft:coal", 0.35),
+            ("minecraft:raw_iron", 0.35),
+            ("create:raw_zinc", 0.2),
+            ("minecraft:sand", 0.4),
+        ];
+        assert_eq!(parsed.outputs.len(), expected.len());
+        for (output, (item, chance)) in parsed.outputs.iter().zip(expected) {
+            assert!(matches!(
+                output,
+                super::MachineOutput::ItemWithChance { stack, chance: actual }
+                    if stack.item.as_ref() == item && stack.count == 1 && (*actual - chance).abs() < 0.0001
+            ));
+        }
+    }
+
+    #[test]
+    fn thermal_smelter_and_crucible_recipes_parse_item_and_fluid_resources() {
+        use serde_json::json;
+        use std::collections::{HashMap, HashSet};
+
+        let items = crate::items::Items::for_tests(HashMap::from([
+            (
+                "forge:ingots/copper".into(),
+                HashSet::from(["minecraft:copper_ingot".into()]),
+            ),
+            (
+                "forge:ingots/tin".into(),
+                HashSet::from(["thermal:tin_ingot".into()]),
+            ),
+        ]));
+        let smelter = json!({
+            "type": "thermal:smelter",
+            "ingredients": [
+                {"value": [{"tag":"forge:ingots/copper"}], "count": 3},
+                {"value": [{"tag":"forge:ingots/tin"}], "count": 1}
+            ],
+            "result": [{"item":"thermal:bronze_ingot", "count":4}],
+            "energy": 6400
+        });
+        let parsed = super::thermal_machine_recipe(
+            "thermal:smelter_alloy_bronze",
+            "thermal:smelter",
+            &smelter,
+            &items,
+            &HashMap::new(),
+        )
+        .unwrap();
+        assert_eq!(parsed.energy, 6400);
+        assert_eq!(parsed.inputs.len(), 2);
+        match &parsed.inputs[0] {
+            super::MachineInput::Item { ingredient, count } => {
+                assert_eq!(*count, 3);
+                assert_eq!(ingredient.1, ["minecraft:copper_ingot"]);
+            }
+            _ => panic!("expected the copper ingredient"),
+        }
+        assert!(matches!(
+            &parsed.outputs[0],
+            super::MachineOutput::Item(stack)
+                if stack.item.as_ref() == "thermal:bronze_ingot" && stack.count == 4
+        ));
+
+        let default_energy = json!({
+            "type":"thermal:pulverizer",
+            "ingredient":{"tag":"forge:ingots/copper"},
+            "result":[{"item":"thermal:copper_dust"}],
+            "energy_mod":0.5
+        });
+        let parsed = super::thermal_machine_recipe(
+            "thermal:pulverizer_copper_ingot_to_dust",
+            "thermal:pulverizer",
+            &default_energy,
+            &items,
+            &HashMap::new(),
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.energy, 0,
+            "unresolved Thermal baseline must not be guessed"
+        );
+
+        let crucible = json!({
+            "type":"thermal:crucible",
+            "ingredient":{"item":"minecraft:cobblestone"},
+            "result":[{"fluid":"minecraft:lava", "amount":1000}],
+            "energy":200000
+        });
+        let parsed = super::thermal_machine_recipe(
+            "thermal:crucible_cobblestone_to_lava",
+            "thermal:crucible",
+            &crucible,
+            &items,
+            &HashMap::new(),
+        )
+        .unwrap();
+        assert!(matches!(
+            &parsed.inputs[0],
+            super::MachineInput::Item { ingredient, .. }
+                if ingredient.1 == ["minecraft:cobblestone"]
+        ));
+        assert!(matches!(
+            &parsed.outputs[0],
+            super::MachineOutput::Resource { id, amount, .. }
+                if id == "minecraft:lava" && *amount == 1000
+        ));
+    }
+
     #[test]
     fn pot_ingredients_expand_unions_and_exclusions_without_ignoring_predicates() {
         use serde_json::json;

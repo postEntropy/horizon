@@ -3,7 +3,7 @@
 //! capability `storage` on a fixed key, `/save_key <key> <text>` exercises
 //! it on an arbitrary key (for the quota and key-count limits); `tick` and
 //! `frame` do nothing, to measure the cost of a call.
-use horizon_mod_sdk::{Mod, Registration, chat, storage};
+use horizon_mod_sdk::{Mod, Registration, chat, game, storage};
 
 struct Guest {
     ticks: u64,
@@ -11,11 +11,20 @@ struct Guest {
 
 impl Mod for Guest {
     fn init() -> Result<(Self, Registration), String> {
-        let hooks = ["spin", "panic", "grow", "hello", "save", "load", "save_key"]
-            .into_iter()
-            .fold(Registration::new(), Registration::command)
-            .on_tick()
-            .on_frame();
+        let hooks = [
+            "spin",
+            "panic",
+            "grow",
+            "hello",
+            "save",
+            "load",
+            "save_key",
+            "identity_probe",
+        ]
+        .into_iter()
+        .fold(Registration::new(), Registration::command)
+        .on_tick()
+        .on_frame();
         Ok((Guest { ticks: 0 }, hooks))
     }
     fn tick(&mut self, _tick: u64) {
@@ -23,6 +32,10 @@ impl Mod for Guest {
     }
     fn command(&mut self, name: &str, args: &str) -> Result<Option<String>, String> {
         match name {
+            "identity_probe" => Ok(Some(
+                game::get_command_player()
+                    .map_or_else(|| "no-player".into(), |p| format!("{} {}", p.id, p.name)),
+            )),
             "spin" => {
                 let mut n = 0u64;
                 while std::hint::black_box(n) != u64::MAX {

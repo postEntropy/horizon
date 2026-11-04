@@ -78,6 +78,15 @@ Access: capability `game-read`.
 
 Capability `game-read`: the local player, world clock, and use-button state.
 
+### record `command-player`
+
+Authenticated sender for the mod command currently being dispatched. None outside a player command (for example, server console commands).
+
+| Field | Type | |
+| --- | --- | --- |
+| `id` | `string` | Stable UUID string, including hyphens. |
+| `name` | `string` | Authenticated profile name. |
+
 ### record `player`
 
 | Field | Type | |
@@ -101,6 +110,7 @@ Capability `game-read`: the local player, world clock, and use-button state.
 | Function | Signature | What it does |
 | --- | --- | --- |
 | `get-player` | `func() -> option<player>` | None on the title screen. |
+| `get-command-player` | `func() -> option<command-player>` | Present only while handling a command entered by a player. This is independent of the local camera/player snapshot, so server guests get their own identity. |
 | `get-clock` | `func() -> option<clock>` | None on the title screen. |
 | `is-use-button-down` | `func() -> bool` | Whether the local player's use button (normally right mouse) is held. Toggle-use settings count as held until toggled off. |
 
@@ -261,6 +271,15 @@ Capability `block-entities` (API 0.4): what the code of a mod's block entities m
 | `y` | `s32` |  |
 | `z` | `s32` |  |
 
+### record `adjacent-block-entity`
+
+One loaded block entity owned by this mod at a cardinally adjacent position. The handle remains valid only when it is also lent to the current block-entities callback.
+
+| Field | Type | |
+| --- | --- | --- |
+| `face` | `face` |  |
+| `handle` | `u32` |  |
+
 ### record `item-stack`
 
 An item and how many. Read or write its non-default components with `item-data`.
@@ -317,6 +336,7 @@ A smithing result computed from the active data pack, including the output's opa
 | `insert-slot` | `func(handle: u32, slot: u32, stack: item-stack) -> bool` | Atomically adds the whole default-component stack to an empty or matching slot. It will not merge into a slot with custom components, since this record does not carry components. Returns false without changing the slot if it is full, contains another item, has custom components, the item is unknown, or the handle/slot is invalid. Use `max-stack-size` to decide whether a larger result should be split. |
 | `bind-shared-inventory` | `func(handle: u32, channel: string) -> bool` | Aliases this owned block entity's inventory to a host-owned channel. Channels are scoped to this mod and world, survive endpoint unload, and share real inventory operations (not tick snapshots). Call on create and whenever the frequency/owner changes, outside a machine tick. Empty or oversized channel names and mismatched slot counts are refused. Rebinding never transfers the previous channel's contents into the new channel. |
 | `get-position` | `func(handle: u32) -> option<block-entity-position>` | The loaded block entity's dimension and world position. |
+| `get-adjacent-block-entities` | `func(handle: u32) -> list<adjacent-block-entity>` | Other loaded block entities of this mod immediately adjacent to this one, with the face from this block toward its neighbor. This lets a mod build its own physical networks without guessing positions or reading the local player's world snapshot. |
 | `get-world-rule` | `func(name: string) -> option<string>` | Reads a game-side rule value attached to this world's mod runtime. |
 | `set-world-rule` | `func(name: string, value: string) -> result<_, string>` | Sets a namespaced rule value for coordination between this mod's machines. |
 | `get-property` | `func(handle: u32, name: string) -> option<string>` | A property of the block entity's block state (`lit` -> `true`). |
@@ -392,6 +412,7 @@ Capability `server` (API 0.3): server-side world queries and mutations during bl
 | --- | --- | --- |
 | `get-block` | `func(dimension: string, pos: block-pos) -> option<string>` | Block state string at `pos` in `dimension`, or none if unloaded. |
 | `set-block` | `func(dimension: string, pos: block-pos, state: string) -> result<_, string>` | Replaces the block at `pos` in `dimension` with `state`. |
+| `random-int` | `func(bound: s32) -> option<s32>` | Draws from the active level RNG during this mod's random-tick callback. Returns none outside that callback or when `bound` is not positive. |
 | `replace-block-and-consume-active-item` | `func(dimension: string, pos: block-pos, expected-block: string, replacement: string) -> bool` | During the active `use-on-block` callback, queues one atomic attempt to replace the expected block and consume one item from that event's active hand. Creative players keep their stack. Returns false outside that callback or if a request was already queued. The host validates the player, hand, item, block, and replacement after the callback; true means queued, not applied. |
 | `schedule-tick` | `func(dimension: string, pos: block-pos, block: string, delay: u32)` | Schedules a block tick for `block` at `pos` after `delay` ticks. |
 | `schedule-random-tick` | `func(dimension: string, pos: block-pos, block: string, delay: u32)` | Schedules a vanilla random tick for `block` at `pos` after `delay` ticks. |
@@ -819,7 +840,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `x` | `s32` | X coordinate. |
 | `y` | `s32` | Y coordinate. |
 | `z` | `s32` | Z coordinate. |
-| `value` | `f32` | Numeric value associated with the event (damage amount, XP, base enchantment level, next age stage, explosion radius or tree/spread attempt count). |
+| `value` | `f32` | Numeric value associated with the event (damage amount, XP, base enchantment level, next age stage, explosion radius or tree/spread attempt count). For `loot-drop`, this is one float from the active loot RNG after vanilla drops are generated, or -1 when that source has no exposed RNG. |
 | `context` | `string` | Secondary context (damage source, item id for enchantment-level, block interaction and fire flag for explosions, attacker/tool id). |
 
 ### record `logic-hooks`

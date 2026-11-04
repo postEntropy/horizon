@@ -299,6 +299,15 @@ pub trait LevelAccess {
     ) -> f32 {
         1.0
     }
+    /// Runs an inline callback for a randomly ticked mod block. Returned
+    /// state changes are applied before the tick loop visits another block.
+    fn mod_random_tick(
+        &mut self,
+        _pos: BlockPos,
+        _state: BlockStateId,
+    ) -> Vec<(BlockPos, BlockStateId)> {
+        Vec::new()
+    }
     /// Storage write (`LevelChunkSection.setBlockState`). Returns the previous
     /// state, or None when nothing could be stored (unloaded chunk).
     fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId>;

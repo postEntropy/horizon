@@ -1,5 +1,6 @@
 //! Loading and calling mods with wasmtime's component model.
 use crate::manifest::{Capability, ConfigSchema, ConfigValue, Manifest, Package};
+use horizon_core::random::{LegacyRandom, RandomSource};
 use horizon_world::nbt::{Limits as NbtLimits, Tag as NbtTag, read_network};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -40,7 +41,7 @@ mod logic_bindings {
     });
 }
 pub use bindings::horizon::mods::{
-    game::{Clock, Player},
+    game::{Clock, CommandPlayer, Player},
     hud::{Corner, Line},
     status_effects::ActiveEffect,
 };
@@ -645,7 +646,14 @@ struct State {
     id: String,
     owned_namespaces: Vec<String>,
     snapshot: Arc<Snapshot>,
+    /// Authenticated player for the command callback currently in progress.
+    /// Set only around command dispatch; never inferred from the local snapshot.
+    command_player: Option<CommandPlayer>,
     shared: Arc<Mutex<SharedWorld>>,
+    /// Present only while this mod handles a random-tick callback. The host
+    /// draws from a clone of the active level stream and copies it back after
+    /// the callback, so arbitrary bounded draws preserve vanilla order.
+    active_random: Option<Arc<Mutex<LegacyRandom>>>,
     out: Vec<Output>,
     registered_effects: HashSet<String>,
     effect_context: Vec<ActiveEffect>,
@@ -1062,7 +1070,9 @@ impl Mods {
             id: m.id.clone(),
             owned_namespaces: m.owned_namespaces().map(str::to_owned).collect(),
             snapshot,
+            command_player: None,
             shared,
+            active_random: None,
             out: Vec::new(),
             registered_effects: HashSet::new(),
             effect_context: Vec::new(),
@@ -1650,6 +1660,61 @@ impl Mods {
         outcome
     }
 
+    /// Runs a block callback with access to the active level RNG. This is
+    /// intended for inline random-tick dispatch: set-block actions produced
+    /// by the callback are returned for application before simulation resumes,
+    /// while its other outputs remain queued for the normal game drain.
+    pub fn block_event_with_random(
+        &mut self,
+        event: BlockEvent,
+        face: String,
+        sneaking: bool,
+        random: &mut LegacyRandom,
+    ) -> (EventOutcome, Vec<ServerAction>) {
+        if event.action != BlockAction::RandomTick {
+            return (
+                self.block_event_with_context(event, face, sneaking),
+                Vec::new(),
+            );
+        }
+        let block_id = event
+            .state
+            .split_once('[')
+            .map_or(event.state.as_str(), |(id, _)| id);
+        let Some(i) = self.entries.iter().position(|e| {
+            e.run
+                .as_ref()
+                .is_some_and(|r| r.logic.blocks.iter().any(|b| b == block_id))
+        }) else {
+            return (EventOutcome::Pass, Vec::new());
+        };
+
+        let out_start = self.out.len();
+        let active_random = Arc::new(Mutex::new(random.clone()));
+        if let Some(run) = self.entries[i].run.as_mut() {
+            run.store.data_mut().active_random = Some(active_random.clone());
+        }
+        let outcome = self.block_event_with_context(event, face, sneaking);
+        if let Ok(updated) = active_random.lock() {
+            *random = updated.clone();
+        }
+        if let Some(run) = self.entries[i].run.as_mut() {
+            run.store.data_mut().active_random = None;
+        }
+
+        let generated = self.out.split_off(out_start);
+        let mut immediate = Vec::new();
+        for output in generated {
+            match output {
+                Output::Server(action @ ServerAction::SetBlock { .. }) => {
+                    immediate.push(action);
+                }
+                other => self.out.push(other),
+            }
+        }
+        (outcome, immediate)
+    }
+
     /// Dispatches an item callback (API 0.3) to the mod that registered the item.
     pub fn item_event(&mut self, event: ItemEvent) -> EventOutcome {
         let Some(i) = self.entries.iter().position(|e| {
@@ -1798,13 +1863,22 @@ impl Mods {
     /// Runs `line` (without its slash) if a mod owns its command; false
     /// when none does.
     pub fn command(&mut self, line: &str) -> bool {
+        self.command_as(line, None)
+    }
+    /// Runs a mod command with the authenticated player identity, when one
+    /// exists. The context is visible only for the duration of this callback.
+    pub fn command_as(&mut self, line: &str, player: Option<CommandPlayer>) -> bool {
         let (name, args) = line.split_once(' ').unwrap_or((line, ""));
         let Some(i) = self.command_owner(name) else {
             return false;
         };
         let result = self.call(i, FUEL_EVENT, |m, s| {
+            s.data_mut().command_player = player;
             m.events.horizon_mods_events().call_command(s, name, args)
         });
+        if let Some(run) = self.entries[i].run.as_mut() {
+            run.store.data_mut().command_player = None;
+        }
         match result {
             Some(Ok(Some(text))) => self.out.push(Output::Feedback { text, error: false }),
             Some(Err(text)) => self.out.push(Output::Feedback { text, error: true }),
@@ -2924,6 +2998,28 @@ fn valid_recipe_selector(selector: &str) -> bool {
     valid_recipe_id(selector)
 }
 
+fn valid_recipe_output(output: &str) -> bool {
+    let (selector, amount) = output
+        .rsplit_once('*')
+        .map_or((output, "1"), |(id, amount)| (id, amount));
+    let (count, chance) = amount
+        .split_once('@')
+        .map_or((amount, None), |(count, chance)| (count, Some(chance)));
+    if count.parse::<u32>().map_or(true, |count| count == 0) {
+        return false;
+    }
+    if let Some(chance) = chance {
+        if selector.starts_with('@')
+            || chance.parse::<f32>().map_or(true, |chance| {
+                !chance.is_finite() || !(0.0..=1.0).contains(&chance)
+            })
+        {
+            return false;
+        }
+    }
+    valid_recipe_selector(selector)
+}
+
 fn validate_recipe_entry(entry: &RecipeEntry) -> Result<usize, String> {
     if !valid_recipe_id(&entry.id) {
         return Err(format!("invalid recipe id {:?}", entry.id));
@@ -2951,15 +3047,7 @@ fn validate_recipe_entry(entry: &RecipeEntry) -> Result<usize, String> {
         }
     }
     for output in &entry.outputs {
-        let (selector, count) = output
-            .rsplit_once('*')
-            .map_or((output.as_str(), Some(1)), |(id, n)| {
-                (id, n.parse::<u32>().ok())
-            });
-        if output.len() > MAX_RECIPE_ID_BYTES
-            || !valid_recipe_selector(selector)
-            || count.is_none_or(|n| n == 0)
-        {
+        if output.len() > MAX_RECIPE_ID_BYTES || !valid_recipe_output(output) {
             return Err(format!("invalid recipe output {output:?}"));
         }
         bytes += output.len() + 8;
@@ -3073,6 +3161,9 @@ impl mod_log::Host for State {
 impl game::Host for State {
     fn get_player(&mut self) -> Option<Player> {
         self.snapshot.player.clone()
+    }
+    fn get_command_player(&mut self) -> Option<CommandPlayer> {
+        self.command_player.clone()
     }
     fn get_clock(&mut self) -> Option<Clock> {
         self.snapshot.clock
@@ -3667,6 +3758,55 @@ impl machine::Host for State {
         };
         self.machine_profile_finished(MachineCallProfile::GET_POSITION, started);
         result
+    }
+    fn get_adjacent_block_entities(&mut self, handle: u32) -> Vec<machine::AdjacentBlockEntity> {
+        // Only return peers that are part of this same block-entity loan. The
+        // position cache also contains non-ticking or unloaded records between
+        // lifecycle callbacks, but their handles must not escape into Wasm.
+        let Some((dimension, x, y, z)) = self.positions.get(&handle).cloned() else {
+            return Vec::new();
+        };
+        if !self.view_indices.contains_key(&handle) {
+            return Vec::new();
+        }
+        let mut adjacent = self
+            .positions
+            .iter()
+            .filter_map(|(&neighbor, (other_dimension, nx, ny, nz))| {
+                if neighbor == handle
+                    || other_dimension != &dimension
+                    || !self.view_indices.contains_key(&neighbor)
+                {
+                    return None;
+                }
+                let face = match (
+                    i64::from(*nx) - i64::from(x),
+                    i64::from(*ny) - i64::from(y),
+                    i64::from(*nz) - i64::from(z),
+                ) {
+                    (0, 0, -1) => machine::Face::North,
+                    (0, 0, 1) => machine::Face::South,
+                    (0, -1, 0) => machine::Face::Down,
+                    (0, 1, 0) => machine::Face::Up,
+                    (-1, 0, 0) => machine::Face::West,
+                    (1, 0, 0) => machine::Face::East,
+                    _ => return None,
+                };
+                Some(machine::AdjacentBlockEntity {
+                    face,
+                    handle: neighbor,
+                })
+            })
+            .collect::<Vec<_>>();
+        adjacent.sort_by_key(|neighbor| match neighbor.face {
+            machine::Face::Down => 0,
+            machine::Face::Up => 1,
+            machine::Face::North => 2,
+            machine::Face::South => 3,
+            machine::Face::West => 4,
+            machine::Face::East => 5,
+        });
+        adjacent
     }
     fn get_world_rule(&mut self, name: String) -> Option<String> {
         self.shared.lock().ok()?.rules.get(&name).cloned()
@@ -4345,6 +4485,17 @@ impl config::Host for State {
 impl server::Host for State {
     fn get_block_face(&mut self) -> Option<String> {
         self.active_block_face.clone()
+    }
+    fn random_int(&mut self, bound: i32) -> Option<i32> {
+        if bound <= 0 {
+            return None;
+        }
+        self.active_random
+            .as_ref()?
+            .lock()
+            .ok()?
+            .next_int_bound(bound)
+            .ok()
     }
     fn replace_block_and_consume_active_item(
         &mut self,
@@ -5636,6 +5787,36 @@ mod recipe_validation_tests {
             .outputs
             .push("@chemical/1000/minecraft:oxygen*250".into());
         assert!(validate_recipe_entry(&recipe).is_ok());
+    }
+
+    #[test]
+    fn accepts_bounded_chance_item_outputs() {
+        let mut recipe = recipe();
+        recipe.outputs = vec![
+            "minecraft:coal*1@0.35".into(),
+            "minecraft:raw_iron*1@0.35".into(),
+            "create:raw_zinc*1@0.2".into(),
+            "minecraft:sand*1@0.4".into(),
+        ];
+        assert!(validate_recipe_entry(&recipe).is_ok());
+    }
+
+    #[test]
+    fn rejects_invalid_chance_outputs_and_chance_resources() {
+        for output in [
+            "minecraft:coal*1@not-a-number",
+            "minecraft:coal*1@NaN",
+            "minecraft:coal*1@-0.1",
+            "minecraft:coal*1@1.1",
+            "@fluid/0/minecraft:water*250@0.5",
+        ] {
+            let mut recipe = recipe();
+            recipe.outputs = vec![output.into()];
+            assert!(
+                validate_recipe_entry(&recipe).is_err(),
+                "unexpectedly accepted {output}"
+            );
+        }
     }
 
     #[test]

@@ -165,6 +165,7 @@ object!(Entry<'a> {
     requires_tool: bool = false => value(flag),
     replaceable: bool = false => value(flag),
     random_ticks: bool = false => value(flag),
+    step_damage: Option<super::StepDamage> = None => typed,
     block_entity: bool = false => value(flag),
     liquid: bool = false => value(flag),
     ignited_by_lava: bool = false => value(flag),

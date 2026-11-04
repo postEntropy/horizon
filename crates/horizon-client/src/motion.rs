@@ -54,6 +54,7 @@ pub struct MotionResources {
     pub landing: BlockLandingRegistry,
     pub health: crate::health::HealthResources,
     pub fluids: FluidResources,
+    step_damage: std::collections::HashMap<u32, crate::blocks::StepDamage>,
 }
 impl MotionResources {
     /// [`Self::load_with_facts`] with the block facts decoded here.
@@ -88,6 +89,10 @@ impl MotionResources {
         if !built.missing.is_empty() {
             return Err("unresolved motion block tags".into());
         }
+        let step_damage = facts
+            .iter()
+            .filter_map(|(id, state)| state.step_damage.clone().map(|damage| (id.0, damage)))
+            .collect();
         let tag = |name: &str| -> Result<BTreeSet<String>> {
             Ok(built
                 .tags
@@ -101,6 +106,7 @@ impl MotionResources {
             landing: crate::landing::load(root, &properties)?,
             health: crate::health::HealthResources::load(root)?,
             fluids: FluidResources::new(assets, facts)?,
+            step_damage,
             attributes,
             blocks: properties.bind(&MovementTags {
                 fences: tag("minecraft:fences")?,
@@ -1112,17 +1118,31 @@ impl MotionWorld<'_, '_, '_> {
         if self.player.spectator {
             return Ok(());
         }
-        // Block.stepOn for the block under an entity on the ground:
-        // MagmaBlock's hot floor hurts unless it steps carefully (sneaks).
+        // Block.stepOn for the block under an entity on the ground. Vanilla
+        // MagmaBlock is a built-in case; content blocks can declare the same
+        // behavior through `step_damage` in their gameplay facts.
         if self.player.ground.on_ground {
             let on = self.legacy_on_position()?;
-            let magma = self
+            let state = self.block(on);
+            let name = self
                 .assets
                 .registry
-                .state(self.block(on))
-                .is_some_and(|s| s.name == "minecraft:magma_block");
-            if magma && !self.player.shift_key_down {
-                self.environment_hurt("minecraft:hot_floor", 1.0)?;
+                .state(state)
+                .map(|state| state.name.as_str());
+            let custom = self.resources.step_damage.get(&state.0);
+            let (damage_type, amount, suppressed_by_sneak) = if let Some(damage) = custom {
+                (
+                    damage.damage_type.as_str(),
+                    damage.amount,
+                    damage.suppressed_by_sneak,
+                )
+            } else if name == Some("minecraft:magma_block") {
+                ("minecraft:hot_floor", 1.0, true)
+            } else {
+                ("", 0.0, false)
+            };
+            if amount > 0.0 && !(suppressed_by_sneak && self.player.shift_key_down) {
+                self.environment_hurt(damage_type, amount)?;
             }
         }
         let mut visited = std::collections::HashSet::new();

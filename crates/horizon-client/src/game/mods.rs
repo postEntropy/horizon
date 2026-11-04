@@ -312,7 +312,7 @@ fn apply_mod_mob_goals(mods: &Mods, mob: &mut horizon_client::mobs::Mob) {
 }
 
 #[cfg(feature = "mods")]
-fn mod_block_state(text: &str) -> Option<horizon_world::chunk::BlockState> {
+pub(super) fn mod_block_state(text: &str) -> Option<horizon_world::chunk::BlockState> {
     let (name, properties) = match text.split_once('[') {
         Some((name, rest)) if rest.ends_with(']') => (name, &rest[..rest.len() - 1]),
         Some(_) => return None,
@@ -597,6 +597,28 @@ struct FusionReactorInfo {
     controller: [i32; 3],
 }
 impl ModsState {
+    #[cfg(feature = "mods")]
+    pub(super) fn has_block_hook(&self, block: &str) -> bool {
+        self.mods.has_block_hook(block)
+    }
+    #[cfg(feature = "mods")]
+    pub(super) fn random_tick_block_event(
+        &mut self,
+        event: horizon_mods::BlockEvent,
+        neighbors: &[(i32, i32, i32, String)],
+        random: &mut horizon_core::random::LegacyRandom,
+    ) -> Vec<horizon_mods::ServerAction> {
+        if !self.mods.is_running() {
+            return Vec::new();
+        }
+        for (x, y, z, state) in neighbors {
+            self.mods
+                .set_world_block(&event.dimension, *x, *y, *z, state);
+        }
+        self.mods
+            .block_event_with_random(event, String::new(), false, random)
+            .1
+    }
     pub(super) fn has_loot_drop_hook(&self) -> bool {
         #[cfg(feature = "mods")]
         {
@@ -747,9 +769,23 @@ impl ModsState {
         dimension: &str,
         subject: &str,
         position: [i32; 3],
-        value: f32,
+        _value: f32,
         context: &str,
     ) -> (ModHookOutcome, Vec<ModItemDrop>) {
+        self.loot_drop_hook_with_random(items, dimension, subject, position, _value, context, None)
+    }
+
+    pub(super) fn loot_drop_hook_with_random(
+        &mut self,
+        items: &Items,
+        dimension: &str,
+        subject: &str,
+        position: [i32; 3],
+        value: f32,
+        context: &str,
+        loot_random: Option<f32>,
+    ) -> (ModHookOutcome, Vec<ModItemDrop>) {
+        let _ = value;
         #[cfg(feature = "mods")]
         {
             if !self.has_loot_drop_hook() {
@@ -762,7 +798,7 @@ impl ModsState {
                 x: position[0],
                 y: position[1],
                 z: position[2],
-                value,
+                value: loot_random.unwrap_or(-1.0),
                 context: context.to_owned(),
             });
             let outcome = match outcome {
@@ -793,7 +829,15 @@ impl ModsState {
         }
         #[cfg(not(feature = "mods"))]
         {
-            let _ = (items, dimension, subject, position, value, context);
+            let _ = (
+                items,
+                dimension,
+                subject,
+                position,
+                value,
+                context,
+                loot_random,
+            );
             (ModHookOutcome::Pass, Vec::new())
         }
     }
@@ -1072,7 +1116,23 @@ impl Game<'_> {
         context: &str,
         vanilla: Vec<ItemStack>,
     ) -> Vec<ItemStack> {
-        let (outcome, extra) = self.mod_loot_drop(subject, position, vanilla.len() as f32, context);
+        self.mod_loot_table_drops_with_random(subject, position, context, vanilla, None)
+    }
+    pub(super) fn mod_loot_table_drops_with_random(
+        &mut self,
+        subject: &str,
+        position: [i32; 3],
+        context: &str,
+        vanilla: Vec<ItemStack>,
+        loot_random: Option<f32>,
+    ) -> Vec<ItemStack> {
+        let (outcome, extra) = self.mod_loot_drop_with_random(
+            subject,
+            position,
+            vanilla.len() as f32,
+            context,
+            loot_random,
+        );
         apply_loot_drop_result(outcome, vanilla, extra)
     }
 }
@@ -1272,6 +1332,16 @@ impl Game<'_> {
         _position: [i32; 3],
         _value: f32,
         _context: &str,
+    ) -> (ModHookOutcome, Vec<ModItemDrop>) {
+        (ModHookOutcome::Pass, Vec::new())
+    }
+    pub(super) fn mod_loot_drop_with_random(
+        &mut self,
+        _subject: &str,
+        _position: [i32; 3],
+        _value: f32,
+        _context: &str,
+        _loot_random: Option<f32>,
     ) -> (ModHookOutcome, Vec<ModItemDrop>) {
         (ModHookOutcome::Pass, Vec::new())
     }
@@ -2111,31 +2181,9 @@ impl Game<'_> {
     }
 
     pub(super) fn dispatch_mod_random_tick_events(&mut self) {
-        const MAX_HOOKS_PER_DRAIN: usize = 65_536;
-        let mut events = std::mem::take(&mut self.block_ticks.random_block_ticks);
-        if events.len() > MAX_HOOKS_PER_DRAIN {
-            log::warn!(
-                "Horizon: limiting mod random-tick callbacks to {MAX_HOOKS_PER_DRAIN} ({} sampled blocks)",
-                events.len()
-            );
-            events.truncate(MAX_HOOKS_PER_DRAIN);
-        }
-        for pos in events {
-            let block = self
-                .res
-                .facts()
-                .get(self.world.block(pos.x, pos.y, pos.z))
-                .name
-                .to_string();
-            if self.mod_has_block_hook(&block) {
-                let _ = self.mod_block_event_actor(
-                    [pos.x, pos.y, pos.z],
-                    BlockAction::RandomTick,
-                    String::new(),
-                    String::new(),
-                );
-            }
-        }
+        // Mod random ticks run inline in Sim::random_tick_at so their RNG
+        // draws and block mutations stay in vanilla tick order.
+        self.block_ticks.random_block_ticks.clear();
     }
 
     pub(super) fn mod_entity_inside(&mut self, pos: [i32; 3], actor: String) {
@@ -3622,7 +3670,18 @@ impl Game<'_> {
         }
         // The command may follow a teleport, inventory edit or block change in the same tick.
         self.refresh_mod_context();
-        if !self.mods.mods.command(command) {
+        let command_player = if self.console_broadcast.is_some() {
+            None
+        } else {
+            Some(horizon_mods::CommandPlayer {
+                id: self.lan_acting_uuid.map_or_else(
+                    || self.player_uuid_string(),
+                    horizon_protocol::crypto::uuid_string,
+                ),
+                name: self.acting_player_name().to_owned(),
+            })
+        };
+        if !self.mods.mods.command_as(command, command_player) {
             return false;
         }
         self.show_mod_output();
@@ -3786,6 +3845,24 @@ impl Game<'_> {
             position,
             value,
             context,
+        )
+    }
+    pub(super) fn mod_loot_drop_with_random(
+        &mut self,
+        subject: &str,
+        position: [i32; 3],
+        value: f32,
+        context: &str,
+        loot_random: Option<f32>,
+    ) -> (ModHookOutcome, Vec<ModItemDrop>) {
+        self.mods.loot_drop_hook_with_random(
+            self.res.items(),
+            self.dim.id(),
+            subject,
+            position,
+            value,
+            context,
+            loot_random,
         )
     }
     /// A right-click on a mod-owned block. `true` means the mod handled it.

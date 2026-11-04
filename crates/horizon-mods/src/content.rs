@@ -136,10 +136,22 @@ pub struct BlockProperties {
     pub friction: Option<f32>,
     /// Whether the block participates in the world's random tick selection.
     pub random_ticks: Option<bool>,
+    /// Damage applied while a living entity stands on this block.
+    pub step_damage: Option<StepDamage>,
     /// A `MapColor` id, 0 to 61.
     pub map_color: Option<u8>,
     /// A vanilla block whose sounds this block uses.
     pub sounds: Option<String>,
+}
+
+/// Data-driven `Block.stepOn` damage shared by content blocks.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct StepDamage {
+    pub damage_type: String,
+    pub amount: f32,
+    #[serde(default)]
+    pub suppressed_by_sneak: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -610,6 +622,16 @@ fn check_block(file: &BlockFile) -> Result<(), String> {
     }
     if p.sounds.as_deref().is_some_and(|s| !vanilla_id(s)) {
         return Err("sounds names a vanilla block (minecraft:...)".into());
+    }
+    if p.step_damage.as_ref().is_some_and(|damage| {
+        damage.damage_type.is_empty()
+            || !damage.damage_type.contains(':')
+            || !damage.amount.is_finite()
+            || damage.amount < 0.0
+    }) {
+        return Err(
+            "step_damage requires a namespaced damage_type and finite nonnegative amount".into(),
+        );
     }
     Ok(())
 }
