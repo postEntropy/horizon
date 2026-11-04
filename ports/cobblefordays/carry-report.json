@@ -1,0 +1,39 @@
+{
+  "copied": 32,
+  "namespaces": [],
+  "outside": [],
+  "unreadable": {},
+  "recipes_upgraded": 0,
+  "loot_tables_upgraded": 0,
+  "advancements_upgraded": 0,
+  "loot_tables_added": 0,
+  "worldgen": 0,
+  "recipes_kept": [],
+  "recipes_unregistered": [],
+  "item_definitions_added": 5,
+  "oracle": false,
+  "blocks": {
+    "tier_1": "minecraft:stone",
+    "tier_2": "minecraft:stone",
+    "tier_3": "minecraft:stone",
+    "tier_4": "minecraft:stone",
+    "tier_5": "minecraft:stone"
+  },
+  "differences": {},
+  "blocks_unknown": {},
+  "items": 0,
+  "items_unknown": {},
+  "convention_tags": 0,
+  "worldgen_types": {
+    "mapped": 0,
+    "block_states": 0,
+    "unsupported": {},
+    "rules_lost": {},
+    "processors_dropped": {},
+    "processors_carried": {},
+    "rule_tests_carried": {},
+    "added_to": {},
+    "modifiers_left": {}
+  },
+  "convention_biome_tags": 0
+}

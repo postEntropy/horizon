@@ -1,0 +1,19 @@
+{
+  "complete": false,
+  "pending": [
+    "Visually inspect all five carried block and item models in Horizon."
+  ],
+  "verified": [
+    {
+      "feature": "Five Cobble For Days generator tiers",
+      "evidence": "harness/gameplay-validation.json; all five block entity tiers generate cobblestone at the configured cadence, save/reopen preserves stored output, a bottom hopper extracts Tier 1 output, and Tier 5 pushes into an inventory above in both in-frame and server-thread modes."
+    },
+    {
+      "feature": "Recipes, templates and loot resources",
+      "evidence": "harness/gameplay-validation.json; all five recipes were crafted on a 3x3 grid and the recipe IDs register in both modes. The harness records template, blockstate, item-model and loot-table coverage."
+    }
+  ],
+  "sources": [
+    "Cobble For Days 1.5.1 instance JAR: Config$Server constructor and Config$Server$Tier bytecode define interval [40,20,10,5,1], count [1,1,1,1,1], capacity [64,128,256,512,1024], and auto-push true for all tiers."
+  ]
+}

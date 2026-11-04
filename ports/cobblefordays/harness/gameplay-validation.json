@@ -1,0 +1,127 @@
+{
+  "status": "passed",
+  "content": {
+    "status": "passed",
+    "generator_blocks": 5,
+    "machine_templates": 5,
+    "recipes": 5,
+    "loot_tables": 5,
+    "blockstates": 5,
+    "item_models": 5,
+    "unbundled_binary_assets": 0
+  },
+  "source": "Modrinth CobbleForDays description documents five tiers, buffered count/max, interval and push config; imported carry data supplies tier recipes and resources.",
+  "original_defaults_from_instance_jar_config_bytecode": {
+    "interval_ticks": [
+      40,
+      20,
+      10,
+      5,
+      1
+    ],
+    "count_per_update": [
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "buffer_capacity": [
+      64,
+      128,
+      256,
+      512,
+      1024
+    ],
+    "automatic_push": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "source": "CobbleForDays 1.5.1 Config$Server constructor defaults and Config$Server$Tier mapping, inspected from the imported instance JAR."
+  },
+  "scope": [
+    "five tier block entity registrations",
+    "timed cobblestone output and interval boundaries",
+    "all five carried crafting recipes on a 3x3 grid",
+    "buffer persistence across save/reopen",
+    "bottom hopper extraction",
+    "automatic push to adjacent inventory above"
+  ],
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "registered_recipe_ids": [
+        "minecraft:cobblefordays_tier_1",
+        "minecraft:cobblefordays_tier_2",
+        "minecraft:cobblefordays_tier_3",
+        "minecraft:cobblefordays_tier_4",
+        "minecraft:cobblefordays_tier_5"
+      ],
+      "crafted_tiers": [
+        "cobblefordays:tier_1",
+        "cobblefordays:tier_2",
+        "cobblefordays:tier_3",
+        "cobblefordays:tier_4",
+        "cobblefordays:tier_5"
+      ],
+      "tier_counts_after_40_ticks": [
+        1,
+        2,
+        4,
+        8,
+        40
+      ],
+      "counts_after_save_reopen": [
+        1,
+        2,
+        4,
+        8,
+        40
+      ],
+      "tier1_output_pulled_by_bottom_hopper": 1,
+      "tier5_auto_pushed_to_inventory_above": 5,
+      "tier5_remaining_in_buffer": 0
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "registered_recipe_ids": [
+        "minecraft:cobblefordays_tier_1",
+        "minecraft:cobblefordays_tier_2",
+        "minecraft:cobblefordays_tier_3",
+        "minecraft:cobblefordays_tier_4",
+        "minecraft:cobblefordays_tier_5"
+      ],
+      "crafted_tiers": [
+        "cobblefordays:tier_1",
+        "cobblefordays:tier_2",
+        "cobblefordays:tier_3",
+        "cobblefordays:tier_4",
+        "cobblefordays:tier_5"
+      ],
+      "tier_counts_after_40_ticks": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "counts_after_save_reopen": [
+        1,
+        2,
+        4,
+        9
+      ],
+      "tier1_output_pulled_by_bottom_hopper": 1,
+      "tier5_auto_pushed_to_inventory_above": 5,
+      "tier5_remaining_in_buffer": 0
+    }
+  ],
+  "known_gaps": [
+    "Rendering reuses the imported JSON model references and vanilla textures; custom mod image files are absent from the imported carry.",
+    "Per-tier settings are mapped to Horizon config keys rather than Forge server config file syntax."
+  ]
+}
