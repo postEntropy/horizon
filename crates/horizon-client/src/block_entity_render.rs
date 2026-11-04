@@ -363,6 +363,74 @@ fn classify(name: &str, prop: &dyn Fn(&str) -> Option<String>) -> Kind {
         };
     }
     let unwaxed = name.strip_prefix("waxed_").unwrap_or(name);
+    // StoneChest's block-entity textures are namespaced mod assets, while vanilla
+    // chest geometry and single/left/right handling are shared.
+    for (block, texture, left, right) in [
+        (
+            "stonechest:chest_andesite",
+            "stonechest/entity/chest/andesite",
+            "stonechest/entity/chest/andesite_left",
+            "stonechest/entity/chest/andesite_right",
+        ),
+        (
+            "stonechest:chest_calcite",
+            "stonechest/entity/chest/calcite",
+            "stonechest/entity/chest/calcite_left",
+            "stonechest/entity/chest/calcite_right",
+        ),
+        (
+            "stonechest:chest_cobbled_deepslate",
+            "stonechest/entity/chest/cobbled_deepslate",
+            "stonechest/entity/chest/cobbled_deepslate_left",
+            "stonechest/entity/chest/cobbled_deepslate_right",
+        ),
+        (
+            "stonechest:chest_cobblestone",
+            "stonechest/entity/chest/cobblestone",
+            "stonechest/entity/chest/cobblestone_left",
+            "stonechest/entity/chest/cobblestone_right",
+        ),
+        (
+            "stonechest:chest_deepslate",
+            "stonechest/entity/chest/deepslate",
+            "stonechest/entity/chest/deepslate_left",
+            "stonechest/entity/chest/deepslate_right",
+        ),
+        (
+            "stonechest:chest_diorite",
+            "stonechest/entity/chest/diorite",
+            "stonechest/entity/chest/diorite_left",
+            "stonechest/entity/chest/diorite_right",
+        ),
+        (
+            "stonechest:chest_granite",
+            "stonechest/entity/chest/granite",
+            "stonechest/entity/chest/granite_left",
+            "stonechest/entity/chest/granite_right",
+        ),
+        (
+            "stonechest:chest_prismarine",
+            "stonechest/entity/chest/prismarine",
+            "stonechest/entity/chest/prismarine_left",
+            "stonechest/entity/chest/prismarine_right",
+        ),
+        (
+            "stonechest:chest_stone",
+            "stonechest/entity/chest/stone",
+            "stonechest/entity/chest/stone_left",
+            "stonechest/entity/chest/stone_right",
+        ),
+        (
+            "stonechest:chest_tuff",
+            "stonechest/entity/chest/tuff",
+            "stonechest/entity/chest/tuff_left",
+            "stonechest/entity/chest/tuff_right",
+        ),
+    ] {
+        if name == block {
+            return chest(texture, left, right);
+        }
+    }
     match unwaxed {
         "chest" => {
             return chest(
@@ -2029,6 +2097,26 @@ mod tests {
                 ..
             }
         ));
+        for (variant, texture) in [
+            ("andesite", "andesite"),
+            ("calcite", "calcite"),
+            ("cobbled_deepslate", "cobbled_deepslate"),
+            ("cobblestone", "cobblestone"),
+            ("deepslate", "deepslate"),
+            ("diorite", "diorite"),
+            ("granite", "granite"),
+            ("prismarine", "prismarine"),
+            ("stone", "stone"),
+            ("tuff", "tuff"),
+        ] {
+            let id = format!("stonechest:chest_{variant}");
+            let kind = classify(&id, &props(&[("facing", "south"), ("type", "left")]));
+            let expected = format!("stonechest/entity/chest/{texture}_left");
+            assert!(
+                matches!(kind, Kind::Chest { part: ChestPart::Left, texture: got, .. }
+                if got == expected)
+            );
+        }
         assert!(matches!(
             classify("minecraft:lectern", &props(&[("has_book", "false")])),
             Kind::None

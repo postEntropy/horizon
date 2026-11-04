@@ -5,7 +5,9 @@
   "part_items": 10,
   "recipes": 20,
   "loot_tables": 10,
+  "stone_chest_entity_textures": 30,
+  "asset_notice": "ASSET-NOTICES.md",
   "capacity_slots": 27,
   "capacity_source": "Horizon vanilla chest host behavior; no configurable capacity in port manifest",
-  "binary_assets_in_repository": 0
+  "binary_assets_in_repository": 30
 }

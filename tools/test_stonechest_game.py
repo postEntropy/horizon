@@ -47,9 +47,12 @@ def validate_content():
 
     assert len(list((MOD / 'data/stonechest/recipes').glob('*.json'))) == 20
     assert len(list((MOD / 'data/stonechest/loot_tables/blocks').glob('*.json'))) == 10
-    assert len(list(MOD.rglob('*.png'))) == 0, 'third-party binary assets must stay out of the repo'
+    chest_textures = list((MOD / 'assets/stonechest/textures/entity/chest').glob('*.png'))
+    assert len(chest_textures) == 30, len(chest_textures)
+    assert (MOD / 'ASSET-NOTICES.md').is_file(), 'carried textures need an attribution/license notice'
     return {'status': 'passed', 'blocks': 10, 'block_items': 10,
-            'part_items': 10, 'recipes': 20, 'loot_tables': 10}
+            'part_items': 10, 'recipes': 20, 'loot_tables': 10,
+            'stone_chest_entity_textures': len(chest_textures), 'asset_notice': 'ASSET-NOTICES.md'}
 
 
 def run_game(args, mode):
@@ -140,7 +143,9 @@ def main():
         'status': 'passed', **content,
         'capacity_slots': 27,
         'capacity_source': 'Horizon vanilla chest host behavior; no configurable capacity in port manifest',
-        'binary_assets_in_repository': 0,
+        'binary_assets_in_repository': 30,
+        'stone_chest_entity_textures': 30,
+        'asset_notice': 'ASSET-NOTICES.md',
     }, indent=2) + '\n')
     (MOD / 'harness/gameplay-validation.json').write_text(json.dumps(evidence, indent=2) + '\n')
     print('Stone Chest recipe, variants, storage and save/reopen passed in both game modes')

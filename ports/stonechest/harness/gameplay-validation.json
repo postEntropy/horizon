@@ -6,7 +6,9 @@
     "block_items": 10,
     "part_items": 10,
     "recipes": 20,
-    "loot_tables": 10
+    "loot_tables": 10,
+    "stone_chest_entity_textures": 30,
+    "asset_notice": "ASSET-NOTICES.md"
   },
   "cases": [
     {

@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "variant": "stone",
+  "modes": ["in-frame", "server-thread"],
+  "checks": [
+    "package contains all 30 imported normal/left/right chest textures",
+    "placed chest rendered with its StoneChest stone material in a screenshot",
+    "screenshot inspected in both game modes"
+  ],
+  "screenshots": "Captured to temporary fixture storage and visually inspected; not retained in the repository."
+}

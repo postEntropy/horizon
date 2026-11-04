@@ -24,14 +24,22 @@ const VARIANTS: [&str; 10] = [
     "tuff",
 ];
 
-fn collect(root: &Path, dir: &Path, out: &mut Vec<(String, Vec<u8>)>) -> std::io::Result<()> {
+fn collect(
+    root: &Path,
+    dir: &Path,
+    include_binary: bool,
+    out: &mut Vec<(String, Vec<u8>)>,
+) -> std::io::Result<()> {
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
         if entry.file_type()?.is_dir() {
-            collect(root, &path, out)?;
+            collect(root, &path, include_binary, out)?;
         } else if entry.file_type()?.is_file()
-            && path.extension().is_some_and(|extension| extension == "json")
+            && (include_binary
+                || path
+                    .extension()
+                    .is_some_and(|extension| extension == "json"))
         {
             let name = path
                 .strip_prefix(root)
@@ -49,7 +57,7 @@ fn content_files(root: &Path) -> Result<Vec<(String, Vec<u8>)>, Box<dyn Error>> 
     for prefix in ["assets", "data"] {
         let dir = root.join(prefix);
         if dir.exists() {
-            collect(root, &dir, &mut files)?;
+            collect(root, &dir, prefix == "assets", &mut files)?;
         }
     }
     files.sort_by(|a, b| a.0.cmp(&b.0));
@@ -82,9 +90,15 @@ fn build(output: &Path) -> Result<(), Box<dyn Error>> {
         .iter()
         .filter(|item| item.id.starts_with("stonechest:part_"))
         .count();
-    if chest_count != VARIANTS.len() || part_count != VARIANTS.len() {
+    let texture_count = files
+        .iter()
+        .filter(|(name, _)| {
+            name.starts_with("assets/stonechest/textures/entity/chest/") && name.ends_with(".png")
+        })
+        .count();
+    if chest_count != VARIANTS.len() || part_count != VARIANTS.len() || texture_count != 30 {
         return Err(format!(
-            "package declares {chest_count} chest blocks and {part_count} parts, expected ten each"
+            "package has {chest_count} chest blocks, {part_count} parts and {texture_count} chest textures; expected ten, ten and thirty"
         )
         .into());
     }
@@ -138,8 +152,7 @@ mod tests {
             )));
             assert_eq!(loot["pools"][0]["entries"][0]["name"], id, "{id}");
             assert_eq!(
-                loot["pools"][0]["entries"][0]["functions"][0]["function"],
-                "minecraft:copy_name",
+                loot["pools"][0]["entries"][0]["functions"][0]["function"], "minecraft:copy_name",
                 "{id} preserves a custom chest name when dropped"
             );
         }
@@ -149,9 +162,8 @@ mod tests {
     fn every_part_has_a_vanilla_item_template_and_crafting_recipe() {
         for variant in VARIANTS {
             let id = format!("stonechest:part_{variant}");
-            let item = json(root().join(format!(
-                "data/stonechest/horizon/item/part_{variant}.json"
-            )));
+            let item =
+                json(root().join(format!("data/stonechest/horizon/item/part_{variant}.json")));
             assert_eq!(item["template"], "minecraft:stick", "{id}");
 
             let recipe = json(root().join(format!("data/stonechest/recipes/part_{variant}.json")));
