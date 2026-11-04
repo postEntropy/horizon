@@ -1,0 +1,13 @@
+{
+  "source_reused_from": "ATM10 FTBTeams port in the local imported pack",
+  "source_copied_to": "port/src/lib.rs",
+  "cargo_check": "passed",
+  "component_build": "passed",
+  "component_written_to": "carry/mod.wasm",
+  "gameplay_validation": "not run",
+  "known_missing": [
+    "per-player identity and membership/invites",
+    "multiplayer validation",
+    "alliances and claims"
+  ]
+}

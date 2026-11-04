@@ -1,0 +1,11 @@
+{
+  "complete": false,
+  "pending": [
+    "Implement player-aware team membership and invitations.",
+    "Validate party behavior in multiplayer.",
+    "Implement alliances and claims required for full FTB Teams parity."
+  ],
+  "evidence": [
+    "harness/build-validation.json"
+  ]
+}
