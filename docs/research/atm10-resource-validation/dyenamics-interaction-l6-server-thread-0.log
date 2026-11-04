@@ -1,0 +1,80 @@
+Horizon: content root ready for 1 mod(s) in 5.2s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-t4xcqeex/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.16s (36749 block states)
+Horizon: discovered 4859 model files in 0.01s, parsed in 0.02s (total 0.03s)
+Horizon: parsed model resources in 0.03s
+Horizon: decoded model-state table in 0.04s (1558 blocks)
+Horizon: block models incomplete (No such file or directory (os error 2)); using the missing model
+Horizon: missing block model minecraft:block/bed: No such file or directory (os error 2)
+Horizon: bound 36749 model states / 8421 variants in 0.13s, resolved models in 0.01s, baked models and loaded sprites in 0.11s
+Horizon: model-state catalog prepared in 0.25s
+Horizon: blockstate binding and model baking took 0.30s
+Horizon: finalized 1471 sprite layers in 0.04s (asset render stage 0.37s)
+Horizon: gameplay facts read 0.03s, validated 0.18s, decoded 0.15s, projected 36749 states in 0.07s
+load assets: 5.99s
+Horizon: asset load stage took 0.62s
+load facts: 5.99s
+Horizon: facts, biomes and environment stage took 0.44s
+load biomes+env: 5.99s
+load pack tables: 6.30s
+Horizon: pack tables stage took 0.31s
+load collision+motion: 6.49s
+Horizon: collision and motion stage took 0.19s
+Horizon: mob metadata loaded in 0.02s
+load items: 6.58s
+Horizon: resources loaded in 6.6s; 36749 block states, 1946 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.10s
+Horizon: providers and block-entity render tables loaded in 0.20s
+Horizon: music, ambience and dimension tables loaded in 0.01s
+Horizon: behaviour tables loaded in 0.25s
+Horizon: mob types loaded in 0.07s
+Horizon: player model setup took 0.10s
+Horizon: behaviours, mob types and player models loaded in 0.42s
+Horizon: no sounds in /tmp/horizon-port-fixture-t4xcqeex/.horizon-cache/mod-content/assets: they were not copied from your Minecraft install; prepare the game again in the launcher (or run horizon-prepare sounds)
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.05s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 1 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-t4xcqeex/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.05s
+Horizon: game CPU resources ready in 0.06s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 1 command(s) from 1 package(s)
+Horizon: live features ready in 854.928909ms
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 7630 ms
+[13:34:11] [Server thread/INFO]: Player00535[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
+[13:34:11] [Server thread/INFO]: System chat: Player00535 joined the game
+[chat] The game is frozen
+[13:34:11] [Server thread/INFO]: System chat: [Player00535: Teleported Player00535 to 0.500000, 102.000000, 1.500000]
+[chat] Teleported Player00535 to 0.500000, 102.000000, 1.500000
+[13:34:12] [Server thread/INFO]: System chat: [Player00535: Replaced 1 slot(s) on Player00535 with [Amber Dye]]
+[chat] Replaced 1 slot(s) on Player00535 with [Amber Dye]
+[chat] [Player00535] DYENAMICS_TARGET_PRESENT
+[chat] [Player00535] DYENAMICS_TARGET_PRESENT
+[13:34:12] [Server thread/INFO]: System chat: [Player00535: Replaced 1 slot(s) on Player00535 with [Aquamarine Dye]]
+[chat] Replaced 1 slot(s) on Player00535 with [Aquamarine Dye]
+[chat] [Player00535] DYENAMICS_TARGET_PRESENT
+[chat] [Player00535] DYENAMICS_TARGET_PRESENT
+[13:34:12] [Server thread/INFO]: System chat: [Player00535: Replaced 1 slot(s) on Player00535 with [Aquamarine Dye]]
+[chat] Replaced 1 slot(s) on Player00535 with [Aquamarine Dye]
+[chat] [Player00535] DYENAMICS_TARGET_PRESENT
+[chat] [Player00535] DYENAMICS_TARGET_PRESENT
+[13:34:12] [Server thread/INFO]: System chat: [Player00535: Replaced 1 slot(s) on Player00535 with [Amber Dye]]
+[chat] Replaced 1 slot(s) on Player00535 with [Amber Dye]
+[chat] [Player00535] DYENAMICS_TARGET_PRESENT
+[chat] [Player00535] DYENAMICS_TARGET_PRESENT
+[13:34:13] [Server thread/INFO]: System chat: [Player00535: Replaced 1 slot(s) on Player00535 with [Blue Dye]]
+[chat] Replaced 1 slot(s) on Player00535 with [Blue Dye]
+[chat] [Player00535] DYENAMICS_TARGET_PRESENT
+[chat] [Player00535] DYENAMICS_TARGET_PRESENT

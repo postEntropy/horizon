@@ -1,0 +1,106 @@
+{
+  "status": "passed",
+  "scope": "five original-observed item-on-block PASS cases: unchanged target and unconsumed item",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "cases": [
+        {
+          "case": "vanilla_wool",
+          "block": "minecraft:white_wool",
+          "item": "dyenamics:amber_dye",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "dyenamics_wool",
+          "block": "dyenamics:amber_wool",
+          "item": "dyenamics:aquamarine_dye",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "dyenamics_glass",
+          "block": "dyenamics:amber_stained_glass",
+          "item": "dyenamics:aquamarine_dye",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "non_color_block",
+          "block": "minecraft:stone",
+          "item": "dyenamics:amber_dye",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "vanilla_dye_control",
+          "block": "minecraft:white_wool",
+          "item": "minecraft:blue_dye",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        }
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "cases": [
+        {
+          "case": "vanilla_wool",
+          "block": "minecraft:white_wool",
+          "item": "dyenamics:amber_dye",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "dyenamics_wool",
+          "block": "dyenamics:amber_wool",
+          "item": "dyenamics:aquamarine_dye",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "dyenamics_glass",
+          "block": "dyenamics:amber_stained_glass",
+          "item": "dyenamics:aquamarine_dye",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "non_color_block",
+          "block": "minecraft:stone",
+          "item": "dyenamics:amber_dye",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "vanilla_dye_control",
+          "block": "minecraft:white_wool",
+          "item": "minecraft:blue_dye",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        }
+      ]
+    }
+  ]
+}

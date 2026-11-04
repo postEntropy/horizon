@@ -1,0 +1,180 @@
+{
+  "date": "2026-11-03",
+  "mod": "dyenamics 1.21.1-3.5.0",
+  "scope": "Only the demonstrated item-on-block right-click cases; mod remains partial",
+  "original": {
+    "jar": "user ATM10 instance original JAR; read-only symlink used for oracle",
+    "jar_sha256": "06e5af2f5f636e35f34710987b21e34a186986c703fc0d352838fd6ef4ba9729",
+    "export_counts": {
+      "blocks": 1330,
+      "items": 252,
+      "recipes": 255
+    },
+    "method": "For each target, execute BlockState.useItemOn followed by the public ItemStack.useOn fallback when block result does not consume the action.",
+    "cases": [
+      {
+        "name": "vanilla-wool-with-amber-dye",
+        "block_state": "Block{minecraft:white_wool}",
+        "block_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+        "item_use_fallback": "PASS",
+        "held_item": "dyenamics:amber_dye",
+        "held_count": 1
+      },
+      {
+        "name": "amber-wool-with-aquamarine-dye",
+        "block_state": "Block{dyenamics:amber_wool}",
+        "block_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+        "item_use_fallback": "PASS",
+        "held_item": "dyenamics:aquamarine_dye",
+        "held_count": 1
+      },
+      {
+        "name": "amber-glass-with-aquamarine-dye",
+        "block_state": "Block{dyenamics:amber_stained_glass}",
+        "block_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+        "item_use_fallback": "PASS",
+        "held_item": "dyenamics:aquamarine_dye",
+        "held_count": 1
+      },
+      {
+        "name": "stone-with-amber-dye",
+        "block_state": "Block{minecraft:stone}",
+        "block_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+        "item_use_fallback": "PASS",
+        "held_item": "dyenamics:amber_dye",
+        "held_count": 1
+      },
+      {
+        "name": "vanilla-wool-with-vanilla-blue-dye",
+        "block_state": "Block{minecraft:white_wool}",
+        "block_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+        "item_use_fallback": "PASS",
+        "held_item": "minecraft:blue_dye",
+        "held_count": 1
+      }
+    ]
+  },
+  "fixture_change": "MachineTrace can hold a spawned ItemEntity stationary, matching the LiveMachineTrace support; the interaction trace also records ItemStack.useOn fallback so a block PASS is not mistaken for the entire click.",
+  "horizon_change": "Removed the unobserved dye-use chat and block-recolor handler. The port now passes the five observed clicks through unchanged.",
+  "horizon_validation": {
+    "status": "passed",
+    "scope": "five original-observed item-on-block PASS cases: unchanged target and unconsumed item",
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "cases": [
+      {
+        "mode": "in-frame",
+        "status": "passed",
+        "cases": [
+          {
+            "case": "vanilla_wool",
+            "block": "minecraft:white_wool",
+            "item": "dyenamics:amber_dye",
+            "block_unchanged": true,
+            "item_count_before": 1,
+            "item_count_after": 1
+          },
+          {
+            "case": "dyenamics_wool",
+            "block": "dyenamics:amber_wool",
+            "item": "dyenamics:aquamarine_dye",
+            "block_unchanged": true,
+            "item_count_before": 1,
+            "item_count_after": 1
+          },
+          {
+            "case": "dyenamics_glass",
+            "block": "dyenamics:amber_stained_glass",
+            "item": "dyenamics:aquamarine_dye",
+            "block_unchanged": true,
+            "item_count_before": 1,
+            "item_count_after": 1
+          },
+          {
+            "case": "non_color_block",
+            "block": "minecraft:stone",
+            "item": "dyenamics:amber_dye",
+            "block_unchanged": true,
+            "item_count_before": 1,
+            "item_count_after": 1
+          },
+          {
+            "case": "vanilla_dye_control",
+            "block": "minecraft:white_wool",
+            "item": "minecraft:blue_dye",
+            "block_unchanged": true,
+            "item_count_before": 1,
+            "item_count_after": 1
+          }
+        ]
+      },
+      {
+        "mode": "server-thread",
+        "status": "passed",
+        "cases": [
+          {
+            "case": "vanilla_wool",
+            "block": "minecraft:white_wool",
+            "item": "dyenamics:amber_dye",
+            "block_unchanged": true,
+            "item_count_before": 1,
+            "item_count_after": 1
+          },
+          {
+            "case": "dyenamics_wool",
+            "block": "dyenamics:amber_wool",
+            "item": "dyenamics:aquamarine_dye",
+            "block_unchanged": true,
+            "item_count_before": 1,
+            "item_count_after": 1
+          },
+          {
+            "case": "dyenamics_glass",
+            "block": "dyenamics:amber_stained_glass",
+            "item": "dyenamics:aquamarine_dye",
+            "block_unchanged": true,
+            "item_count_before": 1,
+            "item_count_after": 1
+          },
+          {
+            "case": "non_color_block",
+            "block": "minecraft:stone",
+            "item": "dyenamics:amber_dye",
+            "block_unchanged": true,
+            "item_count_before": 1,
+            "item_count_after": 1
+          },
+          {
+            "case": "vanilla_dye_control",
+            "block": "minecraft:white_wool",
+            "item": "minecraft:blue_dye",
+            "block_unchanged": true,
+            "item_count_before": 1,
+            "item_count_after": 1
+          }
+        ]
+      }
+    ]
+  },
+  "checks": {
+    "native_tests": "3 passed",
+    "clippy": "passed with -D warnings",
+    "rustfmt": "passed",
+    "wasm_package": "cargo horizon-mod build --release passed"
+  },
+  "limits": [
+    "Only vanilla white wool, amber wool, amber stained glass, stone, and a vanilla blue-dye control were tested.",
+    "Only amber and aquamarine Dyenamics dyes were tested.",
+    "Use-in-air, other 17 colors, and the remaining 9 colored-block families remain unobserved.",
+    "Do not mark Dyenamics complete."
+  ],
+  "raw_oracle": ".local/atm10-resource-validation/dyenamics-original-interaction-full.json",
+  "facts": ".local/atm10-resource-validation/dyenamics-original-facts.json",
+  "game_evidence": "dyenamics-interaction-l6.json"
+}

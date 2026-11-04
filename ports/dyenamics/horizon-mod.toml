@@ -1,0 +1,7 @@
+id = "dyenamics"
+name = "Dyenamics"
+version = "1.21.1-3.5.0"
+api = "0.3"
+side = "both"
+capabilities = ["registries", "server", "chat"]
+contributes = ["thermal"]

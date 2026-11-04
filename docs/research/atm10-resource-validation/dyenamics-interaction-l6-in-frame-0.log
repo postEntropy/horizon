@@ -1,0 +1,49 @@
+Horizon: content root ready for 1 mod(s) in 5.5s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-eqwg0ts4/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.15s (36749 block states)
+Horizon: discovered 4859 model files in 0.01s, parsed in 0.02s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.05s (1558 blocks)
+Horizon: block models incomplete (No such file or directory (os error 2)); using the missing model
+Horizon: missing block model minecraft:block/bed: No such file or directory (os error 2)
+Horizon: bound 36749 model states / 8421 variants in 0.10s, resolved models in 0.01s, baked models and loaded sprites in 0.10s
+Horizon: model-state catalog prepared in 0.21s
+Horizon: blockstate binding and model baking took 0.27s
+Horizon: finalized 1471 sprite layers in 0.04s (asset render stage 0.34s)
+Horizon: gameplay facts read 0.02s, validated 0.17s, decoded 0.15s, projected 36749 states in 0.06s
+load assets: 6.26s
+Horizon: asset load stage took 0.59s
+load facts: 6.26s
+Horizon: facts, biomes and environment stage took 0.42s
+load biomes+env: 6.26s
+load pack tables: 6.56s
+Horizon: pack tables stage took 0.30s
+load collision+motion: 6.75s
+Horizon: collision and motion stage took 0.18s
+Horizon: mob metadata loaded in 0.02s
+load items: 6.83s
+Horizon: resources loaded in 6.9s; 36749 block states, 1946 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.10s
+Horizon: providers and block-entity render tables loaded in 0.19s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.23s
+Horizon: mob types loaded in 0.07s
+Horizon: player model setup took 0.09s
+Horizon: behaviours, mob types and player models loaded in 0.39s
+Horizon: no sounds in /tmp/horizon-port-fixture-eqwg0ts4/.horizon-cache/mod-content/assets: they were not copied from your Minecraft install; prepare the game again in the launcher (or run horizon-prepare sounds)
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.05s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 1 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-eqwg0ts4/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 2867 ms
+Horizon: live features ready in 743.961895ms
