@@ -1,0 +1,97 @@
+{
+  "scope": "actual WASM and real game inventories, basic adjacent puller/sender only",
+  "results": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "checks": [
+        "empty source creates nothing",
+        "two routers conserve last item",
+        "partial extraction conserves 18 items",
+        "full/incompatible buffer leaves source unchanged",
+        "pull/push execute in order",
+        "name, energy and enchantments preserved",
+        "full output retains buffer",
+        "save/reopen with blocked output",
+        "direction components persist",
+        "unsupported modules do not create/delete buffer items",
+        "foreign capability snapshot refreshed immediately",
+        "foreign sided extraction honored",
+        "cross-mod guest-to-guest transfer conserves stack and custom name",
+        "same canonical inventory cannot route into itself",
+        "destination removed before application leaves source intact"
+      ],
+      "runtime_measurement": {
+        "whole_fixture_wall_s": 47.1,
+        "game_memory_started_mib": {
+          "vmhwm": 1001.14,
+          "vmrss": 810.68
+        },
+        "cross_mod_transfer_wall_s_including_one_controlled_tick_and_queries": 1.108,
+        "cross_mod_transfer_memory_before_mib": {
+          "vmhwm": 851.34,
+          "vmrss": 774.52
+        },
+        "cross_mod_transfer_memory_after_mib": {
+          "vmhwm": 851.34,
+          "vmrss": 774.52
+        },
+        "limitation": "single run per mode; wall time includes command/control overhead and one stepped game tick; cross-transfer RSS snapshots are from the same process, but game_memory_started_mib belongs to the pre-save/reopen process; snapshots are not an isolated operation cost"
+      },
+      "remaining": [
+        "remote/world/entity modules",
+        "filters/augments/config UI",
+        "redstone and configurable energy costs"
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "checks": [
+        "empty source creates nothing",
+        "two routers conserve last item",
+        "partial extraction conserves 18 items",
+        "full/incompatible buffer leaves source unchanged",
+        "pull/push execute in order",
+        "name, energy and enchantments preserved",
+        "full output retains buffer",
+        "save/reopen with blocked output",
+        "direction components persist",
+        "unsupported modules do not create/delete buffer items",
+        "foreign capability snapshot refreshed immediately",
+        "foreign sided extraction honored",
+        "cross-mod guest-to-guest transfer conserves stack and custom name",
+        "same canonical inventory cannot route into itself",
+        "destination removed before application leaves source intact"
+      ],
+      "runtime_measurement": {
+        "whole_fixture_wall_s": 55.267,
+        "game_memory_started_mib": {
+          "vmhwm": 1139.43,
+          "vmrss": 981.24
+        },
+        "cross_mod_transfer_wall_s_including_one_controlled_tick_and_queries": 1.4,
+        "cross_mod_transfer_memory_before_mib": {
+          "vmhwm": 1095.68,
+          "vmrss": 974.12
+        },
+        "cross_mod_transfer_memory_after_mib": {
+          "vmhwm": 1095.68,
+          "vmrss": 974.12
+        },
+        "limitation": "single run per mode; wall time includes command/control overhead and one stepped game tick; cross-transfer RSS snapshots are from the same process, but game_memory_started_mib belongs to the pre-save/reopen process; snapshots are not an isolated operation cost"
+      },
+      "remaining": [
+        "remote/world/entity modules",
+        "filters/augments/config UI",
+        "redstone and configurable energy costs"
+      ],
+      "fixture_adjustments": {
+        "test_peer_default_slots": 0,
+        "test_peer_cross_mod_fixture_slots": 1,
+        "legacy_hmods_overwritten": false,
+        "notes": "Final run used current WIT components in isolated hmod copies; preserved carry assets and original local hmods."
+      }
+    }
+  ]
+}

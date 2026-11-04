@@ -1,0 +1,49 @@
+{
+  "one_variable": "clear 1000 container.0 inputs and advance one tick before shutdown",
+  "results": [
+    {
+      "run": 1,
+      "cleanup_before_exit": false,
+      "scenario": "1/100/1000 crushers, iron ore in all 1000 inputs, 40 ticks at final size",
+      "prepared_machine_count": 1000,
+      "input_count": 1000,
+      "profile_lines_1000": 29,
+      "quit_attempted": true,
+      "returncode": 0,
+      "clean_exit": true
+    },
+    {
+      "run": 2,
+      "cleanup_before_exit": true,
+      "scenario": "1/100/1000 crushers, iron ore in all 1000 inputs, 40 ticks at final size",
+      "prepared_machine_count": 1000,
+      "input_count": 1000,
+      "profile_lines_1000": 28,
+      "quit_attempted": true,
+      "returncode": 0,
+      "clean_exit": true
+    },
+    {
+      "run": 3,
+      "cleanup_before_exit": true,
+      "scenario": "1/100/1000 crushers, iron ore in all 1000 inputs, 40 ticks at final size",
+      "prepared_machine_count": 1000,
+      "input_count": 1000,
+      "profile_lines_1000": 29,
+      "quit_attempted": true,
+      "returncode": 0,
+      "clean_exit": true
+    },
+    {
+      "run": 4,
+      "cleanup_before_exit": false,
+      "scenario": "1/100/1000 crushers, iron ore in all 1000 inputs, 40 ticks at final size",
+      "prepared_machine_count": 1000,
+      "input_count": 1000,
+      "profile_lines_1000": 29,
+      "quit_attempted": true,
+      "returncode": 0,
+      "clean_exit": true
+    }
+  ]
+}

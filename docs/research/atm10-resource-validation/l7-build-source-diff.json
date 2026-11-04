@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-03",
+  "comparison": {
+    "profile": "Actually Additions active crusher, 1/100/1000, before and after reverse-position index",
+    "active_hmod_sha256": "dbd456bac7de7e835baab864016ef60721cfd385f64f23d222f2c62dbc802f93",
+    "in_frame_binary_sha256": {
+      "before": "cc8c91660c7bccb454fe72d079c039592a7ed9d0168b99d1f7a732ff84c5d7fc",
+      "after": "13d7de8d69a7c88640ddc6ec2362a55a5682d2b147285c1106d6dd9f0efa38c9"
+    },
+    "server_thread_binary_sha256": {
+      "after": "13d7de8d69a7c88640ddc6ec2362a55a5682d2b147285c1106d6dd9f0efa38c9",
+      "before": null
+    }
+  },
+  "source_delta_recorded_for_the_comparison": [
+    {
+      "file": "crates/horizon-mods/src/runtime.rs",
+      "change": "State gains machine_position_owners: HashMap<String, usize>; initialize it empty; on handle creation, format dimension:x,y,z and increment its reference count; on handle removal, decrement and remove the key at zero; replace owns_machine_position's scan over positions.values() and per-entry format! with machine_position_owners.contains_key(pos).",
+      "lookup_expression_before": "self.positions.values().any(|(dimension, x, y, z)| pos == format!(\"{dimension}:{x},{y},{z}\"))",
+      "lookup_expression_after": "self.machine_position_owners.contains_key(pos)",
+      "index_lifecycle_before": "No reverse index; ownership membership scanned positions on every call.",
+      "index_lifecycle_after": "On create: key = format!(\"{dimension}:{x},{y},{z}\"); retain_machine_position_owner(&mut state.machine_position_owners, key). On removal: release_machine_position_owner(&mut state.machine_position_owners, &pos).",
+      "helpers": "retain_machine_position_owner increments; release_machine_position_owner is a no-op for absent keys and removes a key only when its count reaches zero."
+    }
+  ],
+  "profile_instrumentation": "HORIZON_MOD_TICK_PROFILE and HORIZON_MOD_MACHINE_PROFILE instrumentation was already present in both profile variants; the actualadditions guest hmod SHA is identical.",
+  "provenance_limit": "The previous source tree and build manifest were not preserved, and the server-thread baseline binary hash is missing. The source delta is a description of the intended optimization only; it is not an exact diff between builds and does not independently prove other build inputs were identical.",
+  "profile_repeated": false,
+  "memory_conclusion": "RSS attribution remains inconclusive; no profile was repeated for this documentation update."
+}

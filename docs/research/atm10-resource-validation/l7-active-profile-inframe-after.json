@@ -1,0 +1,495 @@
+{
+  "scenario": "Actually Additions crusher with iron ore and 10,000 FE per machine; 41 active ticks total, 40 profiled at fixed count",
+  "profile_environment": [
+    "HORIZON_MOD_TICK_PROFILE=1",
+    "HORIZON_MOD_MACHINE_PROFILE=1"
+  ],
+  "runs": [
+    {
+      "machines": 1,
+      "ticks_profiled": 40,
+      "machine_import_profiled_ticks": 40,
+      "dispatch_profiled_ticks": 40,
+      "tick_stats": {
+        "create_ns": {
+          "p50_ns": 1212.0,
+          "p95_ns": 1823,
+          "max_ns": 2125
+        },
+        "view_copy_ns": {
+          "p50_ns": 8356.0,
+          "p95_ns": 11452,
+          "max_ns": 19237
+        },
+        "capability_ns": {
+          "p50_ns": 1933.5,
+          "p95_ns": 2615,
+          "max_ns": 3427
+        },
+        "callback_ns": {
+          "p50_ns": 77407.0,
+          "p95_ns": 95491,
+          "max_ns": 96603
+        },
+        "serialize_ns": {
+          "p50_ns": 3411.5,
+          "p95_ns": 4439,
+          "max_ns": 4980
+        },
+        "total_ns": {
+          "p50_ns": 107193.0,
+          "p95_ns": 133313,
+          "max_ns": 142831
+        }
+      },
+      "host_import_stats": {
+        "get_position_calls": {
+          "p50_ns": 1.0,
+          "p95_ns": 1,
+          "max_ns": 1
+        },
+        "get_position_ns": {
+          "p50_ns": 145.5,
+          "p95_ns": 371,
+          "max_ns": 491
+        },
+        "get_slot_calls": {
+          "p50_ns": 1.0,
+          "p95_ns": 1,
+          "max_ns": 1
+        },
+        "get_slot_ns": {
+          "p50_ns": 370.5,
+          "p95_ns": 521,
+          "max_ns": 631
+        },
+        "get_energy_calls": {
+          "p50_ns": 1.0,
+          "p95_ns": 1,
+          "max_ns": 1
+        },
+        "get_energy_ns": {
+          "p50_ns": 130.0,
+          "p95_ns": 321,
+          "max_ns": 350
+        },
+        "set_energy_calls": {
+          "p50_ns": 1.0,
+          "p95_ns": 1,
+          "max_ns": 1
+        },
+        "set_energy_ns": {
+          "p50_ns": 666.5,
+          "p95_ns": 1173,
+          "max_ns": 1353
+        },
+        "process_items_calls": {
+          "p50_ns": 1.0,
+          "p95_ns": 1,
+          "max_ns": 1
+        },
+        "process_items_ns": {
+          "p50_ns": 1648.0,
+          "p95_ns": 2165,
+          "max_ns": 2174
+        }
+      },
+      "dispatch_stats": {
+        "seed_ns": {
+          "p50_ns": 6482.0,
+          "p95_ns": 9508,
+          "max_ns": 9579
+        },
+        "grouping_ns": {
+          "p50_ns": 1462.0,
+          "p95_ns": 1784,
+          "max_ns": 2294
+        },
+        "guest_ns": {
+          "p50_ns": 30843.5,
+          "p95_ns": 39194,
+          "max_ns": 40227
+        },
+        "return_views_ns": {
+          "p50_ns": 1017.0,
+          "p95_ns": 1372,
+          "max_ns": 1613
+        },
+        "sync_ns": {
+          "p50_ns": 1242.5,
+          "p95_ns": 1713,
+          "max_ns": 2525
+        },
+        "total_ns": {
+          "p50_ns": 65514.5,
+          "p95_ns": 80283,
+          "max_ns": 80883
+        }
+      },
+      "sample_machine_after_42_active_ticks": {
+        "data": "0, 100, 0 has the following block data: {mod_slots: 3, components: {}, mod_data: [B; -88b, 32b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 41b, 0b, 0b, 0b], x: 0, mod_block: \"actuallyadditions:crusher\", y: 100, Items: [{count: 1, Slot: 0b, id: \"minecraft:iron_ore\"}], z: 0, id: \"horizon:mod_block_entity\", horizon_energy: {max_receive: \"100\", stored: \"8360\", max_extract: \"0\", capacity: \"60000\"}}",
+        "slots": [
+          {
+            "count": 1,
+            "item": "minecraft:iron_ore"
+          },
+          null,
+          null
+        ]
+      },
+      "memory_mib_after_profile": {
+        "vmhwm": 1074.21,
+        "vmrss": 988.26
+      },
+      "host_import_profile_first_tick": {
+        "mod": "actuallyadditions",
+        "machines": 1,
+        "get_position_calls": 1,
+        "get_position_ns": 150,
+        "get_slot_calls": 1,
+        "get_slot_ns": 441,
+        "get_energy_calls": 1,
+        "get_energy_ns": 140,
+        "set_energy_calls": 1,
+        "set_energy_ns": 1092,
+        "process_items_calls": 1,
+        "process_items_ns": 1804
+      },
+      "mode": "in-frame",
+      "memory_by_count_mib": {
+        "started": {
+          "vmhwm": 1074.21,
+          "vmrss": 983.59
+        },
+        "1": {
+          "vmhwm": 1074.21,
+          "vmrss": 988.26
+        }
+      }
+    },
+    {
+      "machines": 100,
+      "ticks_profiled": 40,
+      "machine_import_profiled_ticks": 40,
+      "dispatch_profiled_ticks": 40,
+      "tick_stats": {
+        "create_ns": {
+          "p50_ns": 19511.0,
+          "p95_ns": 29210,
+          "max_ns": 37351
+        },
+        "view_copy_ns": {
+          "p50_ns": 167459.0,
+          "p95_ns": 240602,
+          "max_ns": 295753
+        },
+        "capability_ns": {
+          "p50_ns": 50798.5,
+          "p95_ns": 65416,
+          "max_ns": 76654
+        },
+        "callback_ns": {
+          "p50_ns": 460548.5,
+          "p95_ns": 920376,
+          "max_ns": 988374
+        },
+        "serialize_ns": {
+          "p50_ns": 48847.5,
+          "p95_ns": 110037,
+          "max_ns": 117312
+        },
+        "total_ns": {
+          "p50_ns": 974428.0,
+          "p95_ns": 1580207,
+          "max_ns": 2051290
+        }
+      },
+      "host_import_stats": {
+        "get_position_calls": {
+          "p50_ns": 100.0,
+          "p95_ns": 100,
+          "max_ns": 100
+        },
+        "get_position_ns": {
+          "p50_ns": 5592.0,
+          "p95_ns": 11219,
+          "max_ns": 11550
+        },
+        "get_slot_calls": {
+          "p50_ns": 100.0,
+          "p95_ns": 100,
+          "max_ns": 100
+        },
+        "get_slot_ns": {
+          "p50_ns": 6643.5,
+          "p95_ns": 11196,
+          "max_ns": 12931
+        },
+        "get_energy_calls": {
+          "p50_ns": 100.0,
+          "p95_ns": 100,
+          "max_ns": 100
+        },
+        "get_energy_ns": {
+          "p50_ns": 6363.0,
+          "p95_ns": 11128,
+          "max_ns": 13939
+        },
+        "set_energy_calls": {
+          "p50_ns": 100.0,
+          "p95_ns": 100,
+          "max_ns": 100
+        },
+        "set_energy_ns": {
+          "p50_ns": 16280.5,
+          "p95_ns": 30983,
+          "max_ns": 31131
+        },
+        "process_items_calls": {
+          "p50_ns": 100.0,
+          "p95_ns": 100,
+          "max_ns": 100
+        },
+        "process_items_ns": {
+          "p50_ns": 26971.5,
+          "p95_ns": 47599,
+          "max_ns": 51091
+        }
+      },
+      "dispatch_stats": {
+        "seed_ns": {
+          "p50_ns": 116481.0,
+          "p95_ns": 188167,
+          "max_ns": 209347
+        },
+        "grouping_ns": {
+          "p50_ns": 7734.5,
+          "p95_ns": 9678,
+          "max_ns": 12233
+        },
+        "guest_ns": {
+          "p50_ns": 273062.5,
+          "p95_ns": 480422,
+          "max_ns": 596511
+        },
+        "return_views_ns": {
+          "p50_ns": 3752.0,
+          "p95_ns": 16592,
+          "max_ns": 41690
+        },
+        "sync_ns": {
+          "p50_ns": 30047.0,
+          "p95_ns": 88137,
+          "max_ns": 130788
+        },
+        "total_ns": {
+          "p50_ns": 447293.0,
+          "p95_ns": 905327,
+          "max_ns": 976803
+        }
+      },
+      "sample_machine_after_42_active_ticks": {
+        "data": "0, 100, 0 has the following block data: {mod_slots: 3, components: {}, mod_data: [B; -88b, 32b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 41b, 0b, 0b, 0b], x: 0, mod_block: \"actuallyadditions:crusher\", y: 100, Items: [{count: 1, Slot: 0b, id: \"minecraft:iron_ore\"}], z: 0, id: \"horizon:mod_block_entity\", horizon_energy: {max_receive: \"100\", stored: \"8360\", max_extract: \"0\", capacity: \"60000\"}}",
+        "slots": [
+          {
+            "count": 1,
+            "item": "minecraft:iron_ore"
+          },
+          null,
+          null
+        ]
+      },
+      "memory_mib_after_profile": {
+        "vmhwm": 1079.85,
+        "vmrss": 996.15
+      },
+      "host_import_profile_first_tick": {
+        "mod": "actuallyadditions",
+        "machines": 100,
+        "get_position_calls": 100,
+        "get_position_ns": 5253,
+        "get_slot_calls": 100,
+        "get_slot_ns": 5839,
+        "get_energy_calls": 100,
+        "get_energy_ns": 5987,
+        "set_energy_calls": 100,
+        "set_energy_ns": 18914,
+        "process_items_calls": 100,
+        "process_items_ns": 24831
+      },
+      "mode": "in-frame",
+      "memory_by_count_mib": {
+        "started": {
+          "vmhwm": 1079.85,
+          "vmrss": 991.63
+        },
+        "100": {
+          "vmhwm": 1079.85,
+          "vmrss": 996.15
+        }
+      }
+    },
+    {
+      "machines": 1000,
+      "ticks_profiled": 40,
+      "machine_import_profiled_ticks": 40,
+      "dispatch_profiled_ticks": 40,
+      "tick_stats": {
+        "create_ns": {
+          "p50_ns": 281590.5,
+          "p95_ns": 522456,
+          "max_ns": 584148
+        },
+        "view_copy_ns": {
+          "p50_ns": 1840080.5,
+          "p95_ns": 3067601,
+          "max_ns": 3137835
+        },
+        "capability_ns": {
+          "p50_ns": 530500.0,
+          "p95_ns": 885455,
+          "max_ns": 924324
+        },
+        "callback_ns": {
+          "p50_ns": 4675446.5,
+          "p95_ns": 8260224,
+          "max_ns": 8398266
+        },
+        "serialize_ns": {
+          "p50_ns": 596268.0,
+          "p95_ns": 846656,
+          "max_ns": 930329
+        },
+        "total_ns": {
+          "p50_ns": 11115729.0,
+          "p95_ns": 17298122,
+          "max_ns": 17999824
+        }
+      },
+      "host_import_stats": {
+        "get_position_calls": {
+          "p50_ns": 1000.0,
+          "p95_ns": 1000,
+          "max_ns": 1000
+        },
+        "get_position_ns": {
+          "p50_ns": 91768.0,
+          "p95_ns": 193327,
+          "max_ns": 203807
+        },
+        "get_slot_calls": {
+          "p50_ns": 1000.0,
+          "p95_ns": 1000,
+          "max_ns": 1000
+        },
+        "get_slot_ns": {
+          "p50_ns": 111020.5,
+          "p95_ns": 195797,
+          "max_ns": 320522
+        },
+        "get_energy_calls": {
+          "p50_ns": 1000.0,
+          "p95_ns": 1000,
+          "max_ns": 1000
+        },
+        "get_energy_ns": {
+          "p50_ns": 81528.5,
+          "p95_ns": 167118,
+          "max_ns": 184292
+        },
+        "set_energy_calls": {
+          "p50_ns": 1000.0,
+          "p95_ns": 1000,
+          "max_ns": 1000
+        },
+        "set_energy_ns": {
+          "p50_ns": 211090.5,
+          "p95_ns": 262204,
+          "max_ns": 292273
+        },
+        "process_items_calls": {
+          "p50_ns": 1000.0,
+          "p95_ns": 1000,
+          "max_ns": 1000
+        },
+        "process_items_ns": {
+          "p50_ns": 299474.5,
+          "p95_ns": 400546,
+          "max_ns": 455208
+        }
+      },
+      "dispatch_stats": {
+        "seed_ns": {
+          "p50_ns": 1352910.5,
+          "p95_ns": 2857929,
+          "max_ns": 3362337
+        },
+        "grouping_ns": {
+          "p50_ns": 59748.5,
+          "p95_ns": 179440,
+          "max_ns": 202884
+        },
+        "guest_ns": {
+          "p50_ns": 2626415.5,
+          "p95_ns": 3950051,
+          "max_ns": 4193392
+        },
+        "return_views_ns": {
+          "p50_ns": 19562.0,
+          "p95_ns": 31480,
+          "max_ns": 32361
+        },
+        "sync_ns": {
+          "p50_ns": 490345.0,
+          "p95_ns": 948569,
+          "max_ns": 951724
+        },
+        "total_ns": {
+          "p50_ns": 4656815.5,
+          "p95_ns": 8235777,
+          "max_ns": 8374080
+        }
+      },
+      "sample_machine_after_42_active_ticks": {
+        "data": "0, 100, 0 has the following block data: {mod_slots: 3, components: {}, mod_data: [B; -88b, 32b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 41b, 0b, 0b, 0b], x: 0, mod_block: \"actuallyadditions:crusher\", y: 100, Items: [{count: 1, Slot: 0b, id: \"minecraft:iron_ore\"}], z: 0, id: \"horizon:mod_block_entity\", horizon_energy: {max_receive: \"100\", stored: \"8360\", max_extract: \"0\", capacity: \"60000\"}}",
+        "slots": [
+          {
+            "count": 1,
+            "item": "minecraft:iron_ore"
+          },
+          null,
+          null
+        ]
+      },
+      "memory_mib_after_profile": {
+        "vmhwm": 1075.05,
+        "vmrss": 994.13
+      },
+      "host_import_profile_first_tick": {
+        "mod": "actuallyadditions",
+        "machines": 1000,
+        "get_position_calls": 1000,
+        "get_position_ns": 71832,
+        "get_slot_calls": 1000,
+        "get_slot_ns": 69223,
+        "get_energy_calls": 1000,
+        "get_energy_ns": 73995,
+        "set_energy_calls": 1000,
+        "set_energy_ns": 206800,
+        "process_items_calls": 1000,
+        "process_items_ns": 245324
+      },
+      "mode": "in-frame",
+      "memory_by_count_mib": {
+        "started": {
+          "vmhwm": 1075.05,
+          "vmrss": 985.08
+        },
+        "1000": {
+          "vmhwm": 1075.05,
+          "vmrss": 994.13
+        }
+      }
+    }
+  ]
+}

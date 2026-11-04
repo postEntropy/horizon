@@ -1,0 +1,96 @@
+{
+  "date": "2026-11-03",
+  "command": "taskset -c 0-5 nice -n 10 python3 tools/test_router_port.py --hmod .local/atm10-resource-validation/modularrouters-l7-current.hmod --reader .local/atm10-resource-validation/router-reader-l7-current.hmod --peer .local/atm10-resource-validation/test-peer-one-slot-l7.hmod --bin-dir target/fast --resources .local/horizon-client/26.3 --mode both --out docs/research/atm10-resource-validation/l7-cross-mod-transfer-save-reopen.json",
+  "limits": "CPU affinity 0-5, nice 10; Fixture used temporary game/launcher/XDG homes. No profile was run.",
+  "scope": "actual WASM and real game inventories, basic adjacent puller/sender only",
+  "results": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "checks": [
+        "empty source creates nothing",
+        "two routers conserve last item",
+        "partial extraction conserves 18 items",
+        "full/incompatible buffer leaves source unchanged",
+        "pull/push execute in order",
+        "name, energy and enchantments preserved",
+        "full output retains buffer",
+        "save/reopen with blocked output",
+        "direction components persist",
+        "unsupported modules do not create/delete buffer items",
+        "foreign capability snapshot refreshed immediately",
+        "foreign sided extraction honored",
+        "cross-mod guest-to-guest transfer conserves stack, custom name, energy, enchantment and custom data",
+        "cross-mod transferred stack survives save/reopen exactly once with all components",
+        "same canonical inventory cannot route into itself",
+        "destination removed before application leaves source intact"
+      ],
+      "runtime_measurement": {
+        "whole_fixture_wall_s": 51.191,
+        "game_memory_started_mib": {
+          "vmhwm": 1001.0,
+          "vmrss": 804.11
+        },
+        "cross_mod_transfer_wall_s_including_one_controlled_tick_and_queries": 1.108,
+        "cross_mod_transfer_memory_before_mib": {
+          "vmhwm": 849.32,
+          "vmrss": 772.22
+        },
+        "cross_mod_transfer_memory_after_mib": {
+          "vmhwm": 849.32,
+          "vmrss": 772.22
+        },
+        "limitation": "single run per mode; wall time includes command/control overhead and one stepped game tick; cross-transfer RSS snapshots are from the same process, but game_memory_started_mib belongs to the pre-save/reopen process; snapshots are not an isolated operation cost"
+      },
+      "remaining": [
+        "remote/world/entity modules",
+        "filters/augments/config UI",
+        "redstone and configurable energy costs"
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "checks": [
+        "empty source creates nothing",
+        "two routers conserve last item",
+        "partial extraction conserves 18 items",
+        "full/incompatible buffer leaves source unchanged",
+        "pull/push execute in order",
+        "name, energy and enchantments preserved",
+        "full output retains buffer",
+        "save/reopen with blocked output",
+        "direction components persist",
+        "unsupported modules do not create/delete buffer items",
+        "foreign capability snapshot refreshed immediately",
+        "foreign sided extraction honored",
+        "cross-mod guest-to-guest transfer conserves stack, custom name, energy, enchantment and custom data",
+        "cross-mod transferred stack survives save/reopen exactly once with all components",
+        "same canonical inventory cannot route into itself",
+        "destination removed before application leaves source intact"
+      ],
+      "runtime_measurement": {
+        "whole_fixture_wall_s": 60.513,
+        "game_memory_started_mib": {
+          "vmhwm": 1152.4,
+          "vmrss": 995.27
+        },
+        "cross_mod_transfer_wall_s_including_one_controlled_tick_and_queries": 1.4,
+        "cross_mod_transfer_memory_before_mib": {
+          "vmhwm": 967.47,
+          "vmrss": 814.0
+        },
+        "cross_mod_transfer_memory_after_mib": {
+          "vmhwm": 967.47,
+          "vmrss": 814.0
+        },
+        "limitation": "single run per mode; wall time includes command/control overhead and one stepped game tick; cross-transfer RSS snapshots are from the same process, but game_memory_started_mib belongs to the pre-save/reopen process; snapshots are not an isolated operation cost"
+      },
+      "remaining": [
+        "remote/world/entity modules",
+        "filters/augments/config UI",
+        "redstone and configurable energy costs"
+      ]
+    }
+  ]
+}

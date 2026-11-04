@@ -1,0 +1,508 @@
+{
+  "scenario": "Actually Additions crusher; empty vs input present without FE",
+  "samples_per_case": 40,
+  "cases": [
+    {
+      "mode": "in-frame",
+      "measurements": [
+        {
+          "machines": 1,
+          "state": "idle",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1075.33,
+            "vmrss": 1000.06
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 1037.0,
+              "p95_ns": 1493,
+              "max_ns": 1634
+            },
+            "view_copy_ns": {
+              "p50_ns": 5600.5,
+              "p95_ns": 8817,
+              "max_ns": 421880
+            },
+            "capability_ns": {
+              "p50_ns": 1943.0,
+              "p95_ns": 2474,
+              "max_ns": 7825
+            },
+            "callback_ns": {
+              "p50_ns": 35657.5,
+              "p95_ns": 49724,
+              "max_ns": 94700
+            },
+            "serialize_ns": {
+              "p50_ns": 3376.5,
+              "p95_ns": 4268,
+              "max_ns": 4479
+            },
+            "total_ns": {
+              "p50_ns": 53541.5,
+              "p95_ns": 67899,
+              "max_ns": 542319
+            }
+          }
+        },
+        {
+          "machines": 1,
+          "state": "input-present-no-energy",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1075.33,
+            "vmrss": 1000.19
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 1002.0,
+              "p95_ns": 1903,
+              "max_ns": 2655
+            },
+            "view_copy_ns": {
+              "p50_ns": 7960.0,
+              "p95_ns": 10560,
+              "max_ns": 15981
+            },
+            "capability_ns": {
+              "p50_ns": 2003.5,
+              "p95_ns": 3076,
+              "max_ns": 4980
+            },
+            "callback_ns": {
+              "p50_ns": 41037.5,
+              "p95_ns": 57970,
+              "max_ns": 71876
+            },
+            "serialize_ns": {
+              "p50_ns": 3201.0,
+              "p95_ns": 4418,
+              "max_ns": 4970
+            },
+            "total_ns": {
+              "p50_ns": 60674.5,
+              "p95_ns": 82416,
+              "max_ns": 110349
+            }
+          }
+        },
+        {
+          "machines": 100,
+          "state": "idle",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1075.33,
+            "vmrss": 1001.82
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 20454.5,
+              "p95_ns": 41422,
+              "max_ns": 52889
+            },
+            "view_copy_ns": {
+              "p50_ns": 150305.0,
+              "p95_ns": 290803,
+              "max_ns": 345605
+            },
+            "capability_ns": {
+              "p50_ns": 42514.5,
+              "p95_ns": 84580,
+              "max_ns": 108041
+            },
+            "callback_ns": {
+              "p50_ns": 285516.5,
+              "p95_ns": 423703,
+              "max_ns": 552547
+            },
+            "serialize_ns": {
+              "p50_ns": 50821.0,
+              "p95_ns": 75702,
+              "max_ns": 254900
+            },
+            "total_ns": {
+              "p50_ns": 673061.0,
+              "p95_ns": 1227056,
+              "max_ns": 1295567
+            }
+          }
+        },
+        {
+          "machines": 100,
+          "state": "input-present-no-energy",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1075.33,
+            "vmrss": 1001.82
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 20239.5,
+              "p95_ns": 36859,
+              "max_ns": 54938
+            },
+            "view_copy_ns": {
+              "p50_ns": 185558.5,
+              "p95_ns": 324498,
+              "max_ns": 386654
+            },
+            "capability_ns": {
+              "p50_ns": 44227.0,
+              "p95_ns": 75212,
+              "max_ns": 85464
+            },
+            "callback_ns": {
+              "p50_ns": 414070.0,
+              "p95_ns": 671494,
+              "max_ns": 1217358
+            },
+            "serialize_ns": {
+              "p50_ns": 47091.0,
+              "p95_ns": 83642,
+              "max_ns": 94772
+            },
+            "total_ns": {
+              "p50_ns": 849992.0,
+              "p95_ns": 1500695,
+              "max_ns": 1812306
+            }
+          }
+        },
+        {
+          "machines": 1000,
+          "state": "idle",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1075.33,
+            "vmrss": 1006.5
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 243092.5,
+              "p95_ns": 324233,
+              "max_ns": 341392
+            },
+            "view_copy_ns": {
+              "p50_ns": 1408376.5,
+              "p95_ns": 1743351,
+              "max_ns": 1865971
+            },
+            "capability_ns": {
+              "p50_ns": 423426.0,
+              "p95_ns": 521542,
+              "max_ns": 665248
+            },
+            "callback_ns": {
+              "p50_ns": 2814537.5,
+              "p95_ns": 3791189,
+              "max_ns": 4450660
+            },
+            "serialize_ns": {
+              "p50_ns": 529237.5,
+              "p95_ns": 754238,
+              "max_ns": 845663
+            },
+            "total_ns": {
+              "p50_ns": 7070393.0,
+              "p95_ns": 8363530,
+              "max_ns": 8405520
+            }
+          }
+        },
+        {
+          "machines": 1000,
+          "state": "input-present-no-energy",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1075.33,
+            "vmrss": 1006.5
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 235178.0,
+              "p95_ns": 506789,
+              "max_ns": 586938
+            },
+            "view_copy_ns": {
+              "p50_ns": 1885549.0,
+              "p95_ns": 3385668,
+              "max_ns": 4049408
+            },
+            "capability_ns": {
+              "p50_ns": 471716.0,
+              "p95_ns": 776764,
+              "max_ns": 790785
+            },
+            "callback_ns": {
+              "p50_ns": 4455043.5,
+              "p95_ns": 6087263,
+              "max_ns": 6272575
+            },
+            "serialize_ns": {
+              "p50_ns": 543787.0,
+              "p95_ns": 656833,
+              "max_ns": 788997
+            },
+            "total_ns": {
+              "p50_ns": 9456071.5,
+              "p95_ns": 12443427,
+              "max_ns": 12803520
+            }
+          }
+        }
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "measurements": [
+        {
+          "machines": 1,
+          "state": "idle",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1316.35,
+            "vmrss": 1181.27
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 1092.0,
+              "p95_ns": 2214,
+              "max_ns": 2736
+            },
+            "view_copy_ns": {
+              "p50_ns": 4248.0,
+              "p95_ns": 9087,
+              "max_ns": 488596
+            },
+            "capability_ns": {
+              "p50_ns": 2019.0,
+              "p95_ns": 3597,
+              "max_ns": 4539
+            },
+            "callback_ns": {
+              "p50_ns": 38152.0,
+              "p95_ns": 71716,
+              "max_ns": 87516
+            },
+            "serialize_ns": {
+              "p50_ns": 3647.0,
+              "p95_ns": 4919,
+              "max_ns": 5541
+            },
+            "total_ns": {
+              "p50_ns": 55320.0,
+              "p95_ns": 105690,
+              "max_ns": 607071
+            }
+          }
+        },
+        {
+          "machines": 1,
+          "state": "input-present-no-energy",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1316.35,
+            "vmrss": 1181.39
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 1062.0,
+              "p95_ns": 2935,
+              "max_ns": 3296
+            },
+            "view_copy_ns": {
+              "p50_ns": 6352.0,
+              "p95_ns": 10269,
+              "max_ns": 14257
+            },
+            "capability_ns": {
+              "p50_ns": 1954.0,
+              "p95_ns": 3306,
+              "max_ns": 3968
+            },
+            "callback_ns": {
+              "p50_ns": 41684.0,
+              "p95_ns": 56117,
+              "max_ns": 102665
+            },
+            "serialize_ns": {
+              "p50_ns": 3281.0,
+              "p95_ns": 4429,
+              "max_ns": 4739
+            },
+            "total_ns": {
+              "p50_ns": 59803.0,
+              "p95_ns": 83419,
+              "max_ns": 143102
+            }
+          }
+        },
+        {
+          "machines": 100,
+          "state": "idle",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1316.35,
+            "vmrss": 1182.99
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 21503.0,
+              "p95_ns": 63048,
+              "max_ns": 462163
+            },
+            "view_copy_ns": {
+              "p50_ns": 133086.5,
+              "p95_ns": 264036,
+              "max_ns": 274888
+            },
+            "capability_ns": {
+              "p50_ns": 42721.5,
+              "p95_ns": 68771,
+              "max_ns": 79878
+            },
+            "callback_ns": {
+              "p50_ns": 286954.5,
+              "p95_ns": 495630,
+              "max_ns": 521770
+            },
+            "serialize_ns": {
+              "p50_ns": 45509.0,
+              "p95_ns": 101232,
+              "max_ns": 131618
+            },
+            "total_ns": {
+              "p50_ns": 648289.0,
+              "p95_ns": 1236495,
+              "max_ns": 1590026
+            }
+          }
+        },
+        {
+          "machines": 100,
+          "state": "input-present-no-energy",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1316.35,
+            "vmrss": 1182.99
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 20885.5,
+              "p95_ns": 24707,
+              "max_ns": 27447
+            },
+            "view_copy_ns": {
+              "p50_ns": 173466.5,
+              "p95_ns": 221059,
+              "max_ns": 232803
+            },
+            "capability_ns": {
+              "p50_ns": 43233.0,
+              "p95_ns": 56516,
+              "max_ns": 57916
+            },
+            "callback_ns": {
+              "p50_ns": 403019.5,
+              "p95_ns": 475602,
+              "max_ns": 487675
+            },
+            "serialize_ns": {
+              "p50_ns": 44604.5,
+              "p95_ns": 55867,
+              "max_ns": 57995
+            },
+            "total_ns": {
+              "p50_ns": 814490.0,
+              "p95_ns": 933430,
+              "max_ns": 967164
+            }
+          }
+        },
+        {
+          "machines": 1000,
+          "state": "idle",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1316.35,
+            "vmrss": 1191.11
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 239621.5,
+              "p95_ns": 465815,
+              "max_ns": 735552
+            },
+            "view_copy_ns": {
+              "p50_ns": 1406428.5,
+              "p95_ns": 2345278,
+              "max_ns": 3961494
+            },
+            "capability_ns": {
+              "p50_ns": 420120.5,
+              "p95_ns": 621974,
+              "max_ns": 830289
+            },
+            "callback_ns": {
+              "p50_ns": 2519262.5,
+              "p95_ns": 3045114,
+              "max_ns": 3837667
+            },
+            "serialize_ns": {
+              "p50_ns": 473877.5,
+              "p95_ns": 646919,
+              "max_ns": 746473
+            },
+            "total_ns": {
+              "p50_ns": 6440403.0,
+              "p95_ns": 9031887,
+              "max_ns": 11459812
+            }
+          }
+        },
+        {
+          "machines": 1000,
+          "state": "input-present-no-energy",
+          "sample_count": 40,
+          "memory_mib": {
+            "vmhwm": 1316.35,
+            "vmrss": 1201.8
+          },
+          "stats": {
+            "create_ns": {
+              "p50_ns": 307492.0,
+              "p95_ns": 574655,
+              "max_ns": 608391
+            },
+            "view_copy_ns": {
+              "p50_ns": 2114207.5,
+              "p95_ns": 2496177,
+              "max_ns": 2515653
+            },
+            "capability_ns": {
+              "p50_ns": 516926.0,
+              "p95_ns": 696125,
+              "max_ns": 720808
+            },
+            "callback_ns": {
+              "p50_ns": 4685275.0,
+              "p95_ns": 6771971,
+              "max_ns": 7153865
+            },
+            "serialize_ns": {
+              "p50_ns": 531284.0,
+              "p95_ns": 759339,
+              "max_ns": 816316
+            },
+            "total_ns": {
+              "p50_ns": 10021198.5,
+              "p95_ns": 12608730,
+              "max_ns": 12640080
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-03",
+  "scenario": "1, 100, then 1,000 crushers; one iron ore input without FE on one machine; 40 ticks at final size; shutdown without clearing input",
+  "mode": "server-thread",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "rayon_threads": "6",
+  "status": "clean-shutdown",
+  "profile_1000_lines": 29
+}

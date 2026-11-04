@@ -1,0 +1,206 @@
+{
+  "date": "2026-11-03",
+  "status": "active crusher callback bottleneck reduced by measured constant-time ownership index; SIGABRT remains separate and unresolved",
+  "scenario": {
+    "mod": "Actually Additions crusher",
+    "machines": 1000,
+    "per_machine": "one minecraft:iron_ore and 10,000 FE; actively processing on each profiled tick",
+    "profiled_ticks": {
+      "before": 33,
+      "after": 40
+    },
+    "modes": "server-thread for timing; in-frame and server-thread for gameplay conservation/save-load checks",
+    "limits": "CPU affinity 0-5, CARGO_BUILD_JOBS=6, Rayon=6; fresh temporary game/launcher/XDG homes"
+  },
+  "measured_p50_ns": {
+    "before": {
+      "tick_total": 97451890,
+      "callback": 91289012,
+      "set_energy_buffer_host_import": 85913224,
+      "dispatch_guest": 89055958,
+      "process_items_host_import": 342629
+    },
+    "after": {
+      "tick_total": 10889089.5,
+      "callback": 4619475.0,
+      "set_energy_buffer_host_import": 211892.5,
+      "dispatch_guest": 2637051.0,
+      "process_items_host_import": 294542.5
+    },
+    "interpretation": "Before has 33 exact-count 1,000-machine samples; after has 40. Instrumented timings are host-stage totals, not standalone microbenchmarks."
+  },
+  "cause_and_change": {
+    "cause": "Each set_energy_buffer host callback checked owns_machine_position by scanning every registered machine position; 1,000 callbacks each scanned 1,000 positions per tick.",
+    "change": "Added a reverse HashMap from namespaced dimension/coordinate key to owner count. Creation increments the owner count; removal decrements/removes it; membership lookup is now expected O(1). Reference counts preserve correctness if multiple handles share a position.",
+    "retained_cache": "Kept the separate property cache. Its memory attribution remains inconclusive and no RSS matrix was repeated."
+  },
+  "correctness": {
+    "status": "passed",
+    "scope": "active crusher conversion, blocked output, energy and save/load; ownership index after break/recreate",
+    "cases": [
+      {
+        "mode": "in-frame",
+        "status": "passed",
+        "checks": [
+          {
+            "stage": "after-100-active-ticks",
+            "successful_recipe": {
+              "slots": [
+                {
+                  "count": 1,
+                  "item": "minecraft:iron_ore"
+                },
+                {
+                  "count": 2,
+                  "item": "minecraft:raw_iron"
+                },
+                null
+              ],
+              "stored_fe": 6000
+            },
+            "blocked_output": {
+              "slots": [
+                {
+                  "count": 1,
+                  "item": "minecraft:iron_ore"
+                },
+                {
+                  "count": 1,
+                  "item": "minecraft:dirt"
+                },
+                null
+              ],
+              "stored_fe": 10000
+            }
+          },
+          {
+            "stage": "after-save-load",
+            "successful_recipe": {
+              "slots": [
+                {
+                  "count": 1,
+                  "item": "minecraft:iron_ore"
+                },
+                {
+                  "count": 2,
+                  "item": "minecraft:raw_iron"
+                },
+                null
+              ],
+              "stored_fe": 5920,
+              "startup_ticks_observed": 2
+            },
+            "blocked_output": {
+              "slots": [
+                {
+                  "count": 1,
+                  "item": "minecraft:iron_ore"
+                },
+                {
+                  "count": 1,
+                  "item": "minecraft:dirt"
+                },
+                null
+              ],
+              "stored_fe": 10000
+            }
+          },
+          {
+            "stage": "remove-recreate",
+            "energy_before_write": 0,
+            "energy_after_write": 500
+          }
+        ]
+      },
+      {
+        "mode": "server-thread",
+        "status": "passed",
+        "checks": [
+          {
+            "stage": "after-100-active-ticks",
+            "successful_recipe": {
+              "slots": [
+                {
+                  "count": 1,
+                  "item": "minecraft:iron_ore"
+                },
+                {
+                  "count": 2,
+                  "item": "minecraft:raw_iron"
+                },
+                null
+              ],
+              "stored_fe": 6000
+            },
+            "blocked_output": {
+              "slots": [
+                {
+                  "count": 1,
+                  "item": "minecraft:iron_ore"
+                },
+                {
+                  "count": 1,
+                  "item": "minecraft:dirt"
+                },
+                null
+              ],
+              "stored_fe": 10000
+            }
+          },
+          {
+            "stage": "after-save-load",
+            "successful_recipe": {
+              "slots": [
+                {
+                  "count": 1,
+                  "item": "minecraft:iron_ore"
+                },
+                {
+                  "count": 2,
+                  "item": "minecraft:raw_iron"
+                },
+                null
+              ],
+              "stored_fe": 5720,
+              "startup_ticks_observed": 7
+            },
+            "blocked_output": {
+              "slots": [
+                {
+                  "count": 1,
+                  "item": "minecraft:iron_ore"
+                },
+                {
+                  "count": 1,
+                  "item": "minecraft:dirt"
+                },
+                null
+              ],
+              "stored_fe": 10000
+            }
+          },
+          {
+            "stage": "remove-recreate",
+            "energy_before_write": 0,
+            "energy_after_write": 500
+          }
+        ]
+      }
+    ]
+  },
+  "unit_test": "machine_position_owner_tests passed: no owner, duplicate references, decrement, final release, idempotent stale removal.",
+  "artifacts": [
+    "l7-active-profile-before.json",
+    "l7-active-profile-after.json",
+    "actuallyadditions-active-crusher-game.json",
+    "l7-active-profile-before-1-server-thread-0.log",
+    "l7-active-profile-before-100-server-thread-0.log",
+    "l7-active-profile-before-1000-server-thread-0.log",
+    "l7-active-profile-after-1-server-thread-0.log",
+    "l7-active-profile-after-100-server-thread-0.log",
+    "l7-active-profile-after-1000-server-thread-0.log"
+  ],
+  "binary_sha256": "13d7de8d69a7c88640ddc6ec2362a55a5682d2b147285c1106d6dd9f0efa38c9",
+  "active_hmod_sha256": "dbd456bac7de7e835baab864016ef60721cfd385f64f23d222f2c62dbc802f93",
+  "pending": "Historical SIGABRT teardown cause remains unknown and separate. No crash was reproduced by the active-crusher functional tests."
+}

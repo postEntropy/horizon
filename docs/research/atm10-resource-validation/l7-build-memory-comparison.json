@@ -1,0 +1,66 @@
+{
+  "date": "2026-11-03",
+  "status": "controlled RSS difference reproduced approximately; cause not localized",
+  "comparison": {
+    "before_build_sha256": "91a66ed6e63c17f695fcba118cf413e764dee7074f91633e4176b32c0fec9768",
+    "after_build_sha256": "f3ae04f1b0f3de5a872e8c16bc4f9589cfa18a0f887f9db76aade7e39f5a39a3",
+    "only_source_difference": "property-value cache: baseline recomputes valid block-property values during every block-entity view; after build caches by block/property id",
+    "profile": "fast with mods; server-thread; taskset CPUs 0-5; nice 10; RAYON_NUM_THREADS=6",
+    "scenario": "same hmod, resources and fresh temporary homes; 1, 100, then 1,000 idle Actually Additions crushers; 40 ticks per state; 40 profile samples at 1,000; eight RSS reads 2s apart",
+    "before": {
+      "sessions": 2,
+      "rss_mib": [
+        1182.68,
+        1193.8
+      ],
+      "rss_median_mib": 1188.24,
+      "rss_range_mib": [
+        1182.68,
+        1193.8
+      ],
+      "vmhwm_mib": [
+        1320.34,
+        1316.54
+      ],
+      "vmhwm_median_mib": 1318.44,
+      "vmhwm_range_mib": [
+        1316.54,
+        1320.34
+      ],
+      "all_40_profile_samples_at_1000": true,
+      "clean_teardown": true
+    },
+    "after": {
+      "sessions": 2,
+      "rss_mib": [
+        1197.79,
+        1194.77
+      ],
+      "rss_median_mib": 1196.28,
+      "rss_range_mib": [
+        1194.77,
+        1197.79
+      ],
+      "vmhwm_mib": [
+        1344.34,
+        1322.83
+      ],
+      "vmhwm_median_mib": 1333.585,
+      "vmhwm_range_mib": [
+        1322.83,
+        1344.34
+      ],
+      "all_40_profile_samples_at_1000": true,
+      "clean_teardown": true
+    },
+    "rss_delta_after_minus_before_mib": 8.04,
+    "vmhwm_delta_after_minus_before_mib": 15.14
+  },
+  "interpretation": "Median RSS is +8.04 MiB with the cache across two sessions per build, close to the earlier +8.58 MiB observation. Within-build ranges are separated by only 0.97 MiB and are based on two sessions; this confirms an approximate build-associated difference but does not establish a leak or identify its allocation source. Both builds completed teardown cleanly in all four sessions.",
+  "artifacts": [
+    "l7-memory-before.json",
+    "l7-memory-before-repeat.json",
+    "l7-memory-after.json",
+    "l7-memory-after-repeat.json"
+  ]
+}

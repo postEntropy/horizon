@@ -217,15 +217,126 @@ marcado como completamente portado.
 A fixture [charginggadgets-mininggadget-game.json](atm10-resource-validation/charginggadgets-mininggadget-game.json)
 passou em in-frame e servidor integrado. O Mining Gadget original tem capacidade
 de 1.000.000 FE segundo a observação por capability pública registrada em
-`mininggadgets-energy-original.json`. Com carvão, a estação transferiu 3.160 FE
-em 80 ticks e 3.960 FE em 100 ticks. Após remover a estação, mover o mesmo item
-para um baú, salvar e reabrir, os 3.960 FE foram preservados nos dois modos.
-Sem combustível, a carga ficou em zero.
+`mininggadgets-energy-original.json`. A fixture anterior usava os slots na ordem
+errada e registrou só o comportamento da port antiga. Após corrigir os índices,
+carvão transfere 20.000 FE em 32 ticks; o valor permaneceu em 20.000 aos 80 e
+100 ticks. Em ambos os modos, 20.000 FE armazenados com a saída bloqueada foram
+entregues a um Mining Gadget inserido depois; salvar/reabrir preservou os mesmos
+20.000 FE.
 
 Esse caso valida a ligação da estação a um Mining Gadget real e a persistência
-do componente. Não valida os upgrades de bateria, taxas/configuração original
-da estação ou todos os três modelos de gadget. O processamento ativo ainda não
-tem medição de tempo/memória.
+do componente e reproduz a taxa original observada para carvão. Os upgrades de
+bateria não foram observados. O processamento ativo ainda não tem medição de
+tempo/memória.
+
+### L5 — checkpoint de observação e correção da Charging Station (2026-11-03)
+
+O traço direto inicial ficou inerte porque chamava o ticker sem avançar o tempo.
+Uma fixture nova agora recebe `ServerTickEvent.Post` e mantém o bloco em chunk
+forçado no servidor temporário. O controle `minecraft:furnace` cozinhou ferro em
+220 ticks, confirmando que a fixture observou ticks reais.
+
+A [observação original](atm10-resource-validation/charginggadgets-original-station.json)
+estabelece slot 0 como combustível, slot 1 como item carregado, buffer de
+1.000.000 FE, e 625 FE por tick: carvão e carvão vegetal duram 32 ticks e
+produzem 20.000 FE; blaze rod, 48 ticks/30.000 FE; balde de lava, 400
+ticks/250.000 FE com balde restante; bloco de carvão, 320 ticks/200.000 FE.
+Mining Gadget Simple, normal e Fancy receberam 20.000 FE de um carvão cada. A
+saída bloqueada por pedra reteve 20.000 FE e o item recebeu essa energia após
+ser inserido. Sem combustível na ordem correta dos slots, o item permaneceu
+com zero. A capacidade do gadget de 1.000.000 FE foi confirmada separadamente
+pela capability pública.
+
+A port foi alinhada aos slots, taxa, duração observada e buffer; o buffer cheio
+pausa a queima. Passaram 3 testes unitários do port, Clippy focado, o probe
+WASM com save/reopen e transferências, e fixtures de jogo nos dois caminhos:
+bateria limitada com funil/save-load e Mining Gadget real com saída bloqueada,
+liberação e reabertura. O formato de toda a workspace tem diffs antigos em
+outros ports; os arquivos Rust alterados passaram no rustfmt focado e
+`git diff --check`.
+
+**L5 continua em curso:** faltam os módulos de mundo/remotos de Modular Routers
+e representar as capacidades das combinações de upgrades de bateria do Mining
+Gadget. Nenhum mod foi marcado como completo.
+
+### L5 — Modular Routers: Vacuum transacional (2026-11-03)
+
+O black-box original de Modular Routers 13.2.7 exportou 2 blocos, 52 itens e
+57 receitas. Com o índice real de menu corrigido (buffer = slot de menu 36;
+primeiro módulo = 37), o Vacuum recolheu um `minecraft:diamond` dropado para o
+buffer no tick 20, sem upgrade ou energia; a entidade deixou de existir e o
+buffer passou a conter exatamente um diamante. A
+[evidência L5](atm10-resource-validation/modularrouters-world-modules-l5.json)
+registra essa observação e separa os testes inconclusivos de Breaker/Dropper:
+ambos dependem de direção configurada no GUI do módulo, que a fixture black-box
+não reproduziu. Não trato esses resultados como falha nem como paridade.
+
+Com a decisão aprovada para operações autoritativas, adicionei a chamada WIT
+`machine.request-item-pickup` e seu resultado confirmado ao runtime. O servidor
+revalida handle/chunk, usa o `ItemStack` completo do drop vanilla, insere no
+slot real e só então reduz/remove a entidade. Se a inserção falha, buffer e
+entidade ficam intactos. O Vacuum do port consome o resultado antes de retirar
+o pedido pendente. A operação é transitória: descarregar/remover o bloco
+invalida o handle e os pedidos ainda pendentes.
+
+O black-box adicional usou drops estacionários depois do aquecimento do router.
+Nos quatro eixos, centros até 6,5 blocos coletaram e 6,625/6,75 não; diagonal
+com offset 6,5 em dois eixos (distância euclidiana ≈9,19) coletou, enquanto
+6,625/6,75 por eixo não. O padrão corresponde à caixa do bloco do router
+inflada por seis, com faces que apenas tocam a caixa do item excluídas. Dois
+drops simultâneos mostraram que vence o primeiro item da consulta do mundo,
+mesmo sendo mais distante; inverter a ordem de criação inverteu o vencedor.
+Os traces estão apenas no staging `.local/atm10-resource-validation/`.
+
+O Horizon validou alcance, exclusão de borda, ambos os sentidos da prioridade,
+buffer incompatível, retry, componentes, save/reopen e descarregamento forçado
+de chunk nos caminhos `in-frame` e `server-thread`. Com o buffer cheio, o drop
+sai do conjunto de entidades carregadas quando o jogador se afasta e retorna
+após o chunk recarregar; liberar o slot então o coleta uma única vez. O
+[checkpoint transacional](atm10-resource-validation/modularrouters-vacuum-transaction-l5.json)
+e o harness `tools/test_router_vacuum.py` registram os casos. O `cargo build`
+focado do cliente com `--features mods` passou; a validação de jogo usou no
+máximo 6 CPUs.
+
+Vacuum permanece parcial: ainda faltam filtros de elegibilidade para outras
+classes de item e uma amostra maior de candidatos, além de outras faces/cantos.
+Breaker e Dropper seguem pendentes até traces com direção configurada; remoto
+segue pendente até traces conclusivos de destino, alcance e bloqueio. Nenhum mod
+foi marcado completo.
+
+### L5 — Mining Gadgets: capacidade de bateria por stack (2026-11-03)
+
+Observei Mining Gadgets 1.18.8 no original por seu menu público da Modification
+Table, sem consultar código ou classes do mod. O gadget recebe o primeiro
+upgrade de bateria que o jogador transfere por shift-click. Battery 1, 2 e 3
+definem, respectivamente, capacidades de **2.000.000, 5.000.000 e 10.000.000
+FE** nos modelos Simple, normal e Fancy. O componente guarda tier, capacidade e
+`upgrade_data`; a capability FE pública reporta o mesmo limite. Os três casos
+registraram 1 FE armazenado depois de instalar o upgrade.
+
+Testei os dois sentidos de cada par, as seis ordens de 1/2/3 e níveis repetidos.
+Só o primeiro upgrade é instalado; os seguintes ficam no inventário e os
+limites não se somam. Os 24 cenários, hashes, componentes e limites estão em
+[evidência das baterias](atm10-resource-validation/mininggadgets-battery-upgrades-l5.json);
+os traces brutos permanecem em staging `.local/atm10-resource-validation/`.
+
+O contrato aprovado foi implementado no SDK/WIT e runtime: apenas o dono do item
+registra um componente namespaced de capacidade; o host lê cada stack, usa
+1.000.000 FE como fallback e recusa tipos/valores inválidos sem mutar a energia.
+`set-slot-energy-capacity` altera a capacidade durante o tick do servidor sem
+sobrescrever carga ou outros componentes. O port Mining Gadgets registra os três
+gadgets e aplica a primeira bateria elegível na Modification Table; as baterias
+seguintes permanecem nos slots. Capacidades 2M/5M/10M e 1 FE inicial seguem as
+observações originais.
+
+Validação registrada: os testes de fallback e sandbox do runtime passaram; os 24 cenários (9 simples,
+6 pares ordenados, 6 permutações completas e 3 duplicatas) passaram em ambos os
+modos de jogo. A prova de carregamento, saída bloqueada e save/load
+também cobre o gadget com bateria 3. Resultados completos:
+[matriz de baterias no Horizon](atm10-resource-validation/mininggadgets-battery-game.json)
+e [carregamento/persistência](atm10-resource-validation/charginggadgets-mininggadget-game.json).
+O mod continua incompleto quanto a outros upgrades e à lógica de mineração.
+Breaker, Dropper e remoto permanecem pendentes até traces conclusivos.
 
 ## L6 — checkpoint Modern Dynamics: pendente por contrato de rede
 
@@ -1011,7 +1122,7 @@ marcado como mod completo. Seguir L5.
 | --- | --- | --- |
 | 3 — trabalho ocioso | Ativos versus carregados; operações por tick; remoção/descarregamento; produção por tick; antes/depois em 1/100/1.000 entidades | Concluída no escopo da tarefa; resultados na rodada 3 |
 | 4 — simulação e conservação | Por mod: sucesso, saída bloqueada, recursos insuficientes e save/load; tempo com processamento real, não callback vazio | Em execução; checkpoints Charging Gadgets e Modular Routers acima |
-| 5 — loop do jogo | Construção/cópia de views, serialização por entidade, reconciliação de capabilities, tempo total por tick e memória; ativo/ocioso nos dois modos single-player | Parcial: cache de propriedades medido; RSS server-thread +8,58 MiB sem causa confirmada; callback de 1.000 máquinas ainda >50 ms/tick |
+| 5 — loop do jogo | Construção/cópia de views, serialização por entidade, reconciliação de capabilities, tempo total por tick e memória; ativo/ocioso nos dois modos single-player | Parcial: ativo antes/depois e ocioso após índice medidos nos dois modos; dirty tracking não justificado (serialização ~5–8% do tick e sem contrato dirty do guest); memória ativa sem repetição; transferências entre mods e trap/reload testados nos escopos abaixo; crash e atribuição RSS pendentes |
 
 ## Condições para as próximas execuções
 
@@ -1090,6 +1201,83 @@ inferir o ciclo de produção, recipientes, sazonalidade ou loot. O port atual
 mantém seiva/timers internos sem consultar árvore ou transferir para recipiente;
 Tree Tap fica pendente, sem simulação declarada como válida.
 
+## L6 — checkpoint Cooking for Blockheads: trace do forno ainda não observável
+
+Tentei observar o forno original 21.1.24, em NeoForge 21.1.259, com cenários
+ocioso, carne+carvão, saída bloqueada e entrada não cozinhável. O harness de
+máquinas não encontrou um `Container`; ao pedir o menu público, o bloco também
+não expôs `getMenuProvider`. Nenhum resultado de cozimento foi produzido, então
+não inferi tempo, combustível, saída nem comportamento de bloqueio. O limite é
+do caminho de observação existente; a trace precisa dirigir a interação pública
+real do jogador. [checkpoint e erros do probe](atm10-resource-validation/cookingforblockheads-machine-probe-l6.json).
+Cooking for Blockheads permanece pendente, sem mudança de gameplay nem status.
+
+## L6 — checkpoint Macaw's Windows: shutter de carvalho observado e validado
+
+No original Macaw's Windows 2.4.2, o shutter de carvalho fechado abriu com mão
+vazia, hammer e key; os três usos retornaram SUCCESS, mantiveram o item e
+alternaram novamente para fechado no estado aberto. No Horizon, o callback de
+item consumia hammer/key antes do callback do bloco. Ajustei esses dois itens
+para PASS, permitindo ao handler do shutter realizar o toggle.
+Os três caminhos abriram e fecharam nos modos in-frame e servidor integrado;
+hammer e key permaneceram com contagem 1. Evidências:
+[trace original e fixture de jogo](atm10-resource-validation/mcwwindows-interaction-l6.json).
+O checkpoint cobre apenas o shutter de carvalho: remodelar janelas com hammer,
+trancar/destrancar com key e os demais blocos ainda não foram observados nem
+validados. Macaw's Windows permanece parcial.
+
+## L6 — checkpoint Chisel Reborn: ação de right-click não demonstrada
+
+No original 2.0.1, o harness público exercitou `useItemOn` do chisel sobre pedra,
+`chisel:array/stone` e bedrock; também testou pedra com mão vazia. Todos os
+resultados foram `PASS_TO_DEFAULT_BLOCK_INTERACTION`, sem mudança do bloco ou da
+pilha. Isso delimita o right-click testado, mas não mostra a ação principal se
+ela usa ataque, menu ou outro caminho. Não alterei nem validei gameplay do port;
+Chisel fica pendente até observar o gesto real. [trace e limite](atm10-resource-validation/chisel-interaction-l6.json).
+
+## L6 — checkpoint MerryMaking: gatilho do presente ainda inconclusivo
+
+No original 1.21.1-17, os probes via `useWithoutItem` e `useItemOn` (stick,
+gingerbread cookie e diamond) retornaram PASS ou
+`PASS_TO_DEFAULT_BLOCK_INTERACTION`; não houve drop nem alteração de estado
+nessas chamadas do harness. Isso não identifica a interação real do jogador que
+aciona presentes. Nenhuma regra de drop, consumo ou cooldown foi inferida e o
+port não foi alterado. Presentes e stocking continuam pendentes até haver trace
+de jogador. [probes e limite](atm10-resource-validation/merrymaking-interaction-l6.json).
+
+## L6 — checkpoint Macaw's Lights: quatro interações medidas reproduzidas (2026-11-03)
+
+No original 1.1.5, `useWithoutItem` em garden_light com `lit=false` e `lit=true`
+retornou PASS sem alteração. Em white_paper_lamp, `useItemOn` com red dye e
+stick retornou CONSUME; a lâmpada continuou branca e a pilha permaneceu com
+contagem 1. Ajustei o port para esses dois eventos exatos: retorna Consume sem
+escrever no mundo ou inventário; os demais eventos passam sem efeito. Validei os
+quatro casos em in-frame e servidor integrado e testei o resultado do callback.
+A trace original usa FakePlayer; não prova outros itens, cores, luzes ou UI real,
+que permanecem parciais. [registro e limites](atm10-resource-validation/mcwlights-interaction-l6.json) ·
+[port](../../ports/mcwlights/src/lib.rs) · [fixture](../../tools/test_mcwlights_observed_game.py).
+
+## L6 — checkpoint DimStorage: inventário isolado observado; canal pendente
+
+Com DimStorage 9.1.1 e EdivadLib 3.0.0 no original, o menu público
+`DimChestMenu` abriu com 90 slots. Um diamante inserido no slot 0 continuou lá
+após três ticks e apareceu na tag salva; o baú ocioso salvou channel 1,
+`locked=false` e `rot=false`. Isso valida somente menu e persistência local do
+inventário observado. O harness atual coloca apenas um baú por cenário e não
+dirige a configuração de canal/frequência nem uma interação de jogador com um
+segundo baú. Portanto compartilhamento, transferência e extração entre baús
+continuam sem evidência; não alterei o port. [trace e limite](atm10-resource-validation/dimstorage-machine-probe-l6.json).
+
+## L6 — checkpoint Dis-Enchanting Table: falta trace de jogador com item encantado
+
+No original 5.0.2 com MonoLib 4.1.2, a mesa colocada ficou voltada para north
+e salvou `{Items:[],Progress:0}` após um tick. O block entity não expôs menu
+público pelo caminho do harness, então não houve slots, desencantamento, saída
+ou experiência observados. Para avançar é necessário dirigir o uso real do
+jogador, abrir a interface e inserir um item com componente de encantamento,
+seguindo a saída e a experiência. O inventário vazio não demonstra receita nem
+custo; não alterei o port. [probe e limite](atm10-resource-validation/disenchanting-table-menu-probe-l6.json).
+
 ## L7 — checkpoint do loop do jogo: cache de domínios; regressão RSS pendente
 
 Adicionei medição opt-in em `game/mods.rs` para tempo total, criação de
@@ -1142,6 +1330,57 @@ dirty tracking nem alterada a serialização/estado privado do guest. Um caminho
 com produção alimentada e comparação temporal antes/depois para esse caminho
 permanece pendente.
 
+### L7 — checkpoint de repetição do perfil servidor integrado (2026-11-03)
+
+Repeti o perfil `server-thread` com o mesmo hmod/cenário, 6 CPUs, nice 10,
+1/100/1.000 crushers e estados vazio/entrada sem FE. O loop de 1.000 máquinas
+completou a amostragem e a limpeza da entrada; ao encerrar o jogo, o processo
+abortou com `free(): invalid pointer` (`SIGABRT`). O core mostra o thread
+crashing em `free()` durante `Arc<Vec<Aabb>>` drop slow, chamado de uma worker
+de `Streaming::new<NoTerrain>`; outras workers estavam em `VoxelShape` drop
+glue. Isso identifica o ponto da falha, mas não a origem da corrupção.
+
+Não houve sinal de OOM (7,7 GiB disponíveis; nenhuma mensagem de OOM killer no
+kernel). A fixture usou homes temporários e removeu seu diretório de mundo ao
+terminar; nenhum dado real do jogador foi tocado. O log bruto fica no staging
+`.local/atm10-resource-validation/mod-tick-profile-server-repeat-server-thread-0.log`;
+o resumo do core está em
+[evidência da repetição](atm10-resource-validation/mod-tick-profile-repeat-crash.json).
+
+Como esta repetição introduziu um crash sem causa, parei a sequência antes de
+L8. A diferença anterior de RSS do servidor integrado (+8,58 MiB) também
+continua sem causa confirmada. Não afirmo a tarefa 5 concluída nem otimização
+completa do loop.
+
+### L7 — checkpoint de investigação do SIGABRT (2026-11-03)
+
+Examinei os cores completos e a linha do tempo. No primeiro (`79237`), o
+allocator detectou `free(): invalid pointer` numa worker ao destruir
+`Arc<Vec<Aabb>>` em `Streaming::new<NoTerrain>`; o thread principal estava
+aguardando o join das workers durante `Game` teardown. Outras workers estavam
+ociosas ou destruindo `VoxelShape`. Um segundo abort (`86935`) detectou
+`double free or corruption (out)` no thread principal ao liberar o
+`BTreeMap` de `RenderAssets`, através de `WorkerContext`/`Shared` na mesma
+destruição de `Streaming`; as workers estavam esperando em condition variables.
+Os pontos distintos de detecção não provam que essas estruturas sejam a origem
+da corrupção. OOM segue descartado pelos dados da primeira ocorrência.
+
+Reproduções isoladas passaram com 1.000 crushers criados e encerramento, 40
+ticks vazios, e entradas sem FE em 1, 10, 100, 250, 500 e 1.000 máquinas por 40
+ticks. A sequência ativa de 1.000 sem limpeza abortou uma vez. A mesma sequência
+com limpeza, tick final e instrumentação opt-in passou; a sequência exata em
+estágios 1 → 100 → 1.000, com estados vazio/entrada, limpeza e encerramento,
+também passou uma vez. Portanto a condição não foi reduzida de forma estável.
+Os logs e a matriz estão em
+[investigação do crash](atm10-resource-validation/mod-tick-profile-crash-investigation.json).
+
+Não encontrei blocos `unsafe` nos caminhos locais do loop de mods, runtime e
+port Actually Additions que inspecionei; isso não elimina dependências ou outros
+caminhos. Nenhuma alteração de código ou teste de regressão foi feita sem causa
+demonstrada. L7 e L8 permanecem pendentes. Vou avançar apenas checkpoints
+independentes da fila L5/L6; medições de perfil e a auditoria final continuam
+suspensas.
+
 ## L8 — auditoria final suspensa pela medição de memória da tarefa 5
 
 O registro confirma L1–L3 concluídos no tracker; L4 concluído para os alimentos
@@ -1153,3 +1392,494 @@ o resultado RSS acima sem causa confirmada, então esta auditoria não aprova o
 plano nem atualiza status de mods para completo. Retomar investigando memória
 servidor integrada; depois fechar as lacunas de processamento ativo e seguir os
 casos restantes de L6 antes de qualquer fechamento final.
+
+## L6 — checkpoint Actually Additions: coal generator (2026-11-03)
+
+No original fonte foi usado: apenas a trace pública da máquina. Um carvão no
+slot de combustível inicia `BurnTime=1600` no primeiro tick e não gera FE ainda;
+no segundo, o original mostra `BurnTime=1599` e 20 FE. No tick 20 havia 380 FE,
+com extração simulada limitada a 80 FE por chamada; no tick 120 havia 2.380/60.000
+FE. A capability não recebe FE e permite extração. Controle com dirt no slot não
+iniciou queima, não gerou energia e conservou o dirt após 20 ticks.
+
+O port cobre somente carvão: consome uma unidade ao começar a queima, aguarda o
+tick inicial sem geração e depois produz 20 FE/tick, mantendo o progresso de
+1.600 ticks no save do guest. A fixture WASM comparou a energia nos **120/120**
+ticks, incluindo reload no tick 80; o controle de dirt comparou **20/20** ticks.
+Os sete testes nativos do port passaram. Evidência detalhada:
+[checkpoint e traces](atm10-resource-validation/actuallyadditions-generator-l6.json).
+
+No Horizon, sessões individuais com afinidade CPU 0–5 passaram em in-frame e
+servidor integrado após 120 ticks: 2.380 FE, carvão consumido. Isso não valida
+outros combustíveis, uso em capacidade máxima, rede de saída nem as outras
+máquinas do mod. Save/reopen no jogo permanece pendente: a inspeção após a
+reabertura mostrou a energia salva mais três ticks de startup, mas o segundo
+processo abortou no teardown. A tentativa de reabertura é registrada na
+investigação L7; não foi repetida.
+
+Nota de execução: duas tentativas exploratórias anteriores deste checkpoint
+foram lançadas sem `taskset`; não são contadas como validação sob o limite de
+CPU. As sessões únicas acima foram repetidas sob CPU 0–5 e nice 10. Mantive as
+traces, os logs e os homes temporários separados; nenhum dado de jogador foi
+usado.
+
+## L7 — recorrência de SIGABRT durante validação de save/reopen (2026-11-03)
+
+O segundo processo de uma sessão in-frame que reabriu o mundo de teste abortou
+com `double free or corruption (!prev)` ao sair. O stack do core PID 202203
+aponta para `RenderAssets` sendo destruído por `Arc<RenderAssets>` via
+`WorkerContext`/`Shared`/`Streaming` no thread principal. As workers de streaming
+já haviam terminado; os threads gráficos aguardavam no driver NVIDIA, e logger,
+writer de save e control estavam estacionados. Havia 7,8 GiB disponíveis e o
+kernel não registrou OOM. A inspeção GDB não revelou símbolo de origem/locals
+úteis no frame do allocator; o core extraído foi removido, o original continua
+no systemd-coredump.
+
+Este é o terceiro core da família de corrupção no teardown, agora depois de
+save/reopen in-frame; ainda não identifica a escrita/liberação que corrompeu o
+heap e não atribui a causa ao port. A matriz anterior tinha corridas que passaram
+e uma falha em 1.000 máquinas. Não repeti o perfil nem a abertura/fechamento do
+jogo. L7 continua inconclusivo e L8 continua pendente. A medição anterior de
+RSS server-thread (+8,58 MiB) não foi repetida; portanto a variação de memória
+continua sem separação de ruído versus regressão.
+
+A afinidade não foi aplicada às duas primeiras tentativas exploratórias do jogo
+neste turno; os dados delas estão excluídos como validação. As duas sessões
+únicas finais (in-frame e servidor integrado) usaram CPUs 0–5/nice 10; ambas
+passaram sem reabrir saves e sem perfil. Ver [investigação atualizada](atm10-resource-validation/mod-tick-profile-crash-investigation.json).
+
+**Estado da auditoria após a recorrência:** esta atualização não fecha L6, L7 ou
+L8. O único novo comportamento validado é o ciclo de carvão observado do Coal
+Generator. Outros combustíveis e máquinas do Actually Additions seguem
+pendentes; save/reopen em jogo não passou como execução limpa devido ao abort no
+teardown; a medição de RSS segue sem repetição controlada.
+
+## L6 — checkpoint Akashic Tome: aceitação observada; seleção sem fixture de jogador (2026-11-03)
+
+O oráculo público carregou o JAR original `AkashicTome-1.8-30.jar` isoladamente: registrou `akashictome:tome` (stack máximo 1) e a receita `attachment`. Com FakePlayer, usar o tomo no ar retornou `CONSUME` e conservou item/quantidade (1); o menu permaneceu `InventoryMenu`. O controle `minecraft:book` retornou `PASS`, também sem alterar a pilha. Trace bruto: [fatos](atm10-resource-validation/akashictome-original-facts-l6.json) e [uso no ar](atm10-resource-validation/akashictome-original-use-l6.json).
+
+O teste comprova apenas que o gesto do tomo é aceito. FakePlayer não reproduz a seleção de guias, e o teste isolado não carrega outros mods/guias nem permite observar interação de jogador real, NBT do tomo após seleção, ciclo ou ejeção. A Mod API atual não oferece abertura de tela/menu por item nem reescrita confirmada do stack em posse. Não alterei o port nem declarei paridade; o status segue parcial. A lacuna concreta para retomar é fixture com jogador conectado, ao menos dois livros guia registrados, uso/ciclo, seleção e ejeção, observando tela e stack antes/depois.
+
+## L6 — checkpoint AllTheTweaks: PASS observado no uso no ar (2026-11-03)
+
+O oráculo público carregou `allthetweaks-1.21.1-2.12.1.jar` original e exportou 8 blocos, 21 itens e 8 receitas. FakePlayer em uso no ar retornou `PASS` para `allthetweaks:atm_star`, `greg_star` e `withers_compass`; todos mantiveram a pilha de 1 item. `minecraft:book` também retornou PASS como controle. Traces: [fatos exportados](atm10-resource-validation/allthetweaks-original-facts-l6.json) e [uso no ar](atm10-resource-validation/allthetweaks-original-use-l6.json).
+
+Removi os handlers que consumiam ATM Star/Withers Compass e mostravam mensagens sem evidência. WASM reconstruído; 3 testes nativos, Clippy (`-D warnings`) e rustfmt passaram. Fixture com o port e carry do ATM10 validou os três usos e a conservação da pilha nos caminhos in-frame e servidor integrado, afinidade CPUs 0–5/nice 10: [validação no jogo](atm10-resource-validation/allthetweaks-item-use-l6.json). O mod segue parcial: não há trace de uso em bloco/entidade, destino/efeito do Withers Compass, ativação do bloco ATM Star, estado do troféu nem contagem/progresso real dos componentes. Esses caminhos não receberam implementação demonstrada.
+
+## L6 — checkpoint Ars Elemancy: uso simples dos focos retorna PASS (2026-11-03)
+
+O export original exigiu `ars_nouveau` 5.13.3, `ars_elemental` 0.7.10.4, Curios 9.5.1 e GeckoLib 4.9.3, todos presentes na instância do ATM10; o oráculo foi executado com os cinco JARs originais, sem ler código do mod. Exportou 105 itens e 250 receitas no namespace `ars_elemancy`. Em FakePlayer, uso no ar de `tempest_focus`, `elemancer_focus` e `tempest_bangle` retornou PASS e deixou a pilha de um item inalterada; o stick vanilla também retornou PASS. [fatos](atm10-resource-validation/ars_elemancy-original-facts-l6.json) · [trace de uso](atm10-resource-validation/ars_elemancy-original-use-l6.json).
+
+Removi o handler do port que convertia uso simples do foco em attunement e `CONSUME`. WASM atualizado; 19 testes nativos, Clippy com `-D warnings` e rustfmt passaram. A fixture Horizon validou os três PASS com pilhas preservadas em in-frame e servidor integrado, CPUs 0–5/nice 10: [resultado no jogo](atm10-resource-validation/ars-elemancy-item-use-l6.json). Mod parcial: falta observar dano/equipamento de cada família, slots Curios, foco com feitiço/mana e persistência da attunement original. A API do Horizon não tem Curios nem runtime de conjuração Ars Nouveau; esses comportamentos seguem pendentes, sem inferência por descrição ou nomes de itens.
+
+## L6 — checkpoint BlueFlame: três usos de flint-and-steel comparados com vanilla (2026-11-03)
+
+O original com BlueFlame e o controle sem o JAR deram o mesmo resultado para FakePlayer usando flint-and-steel: soul sand → soul_fire, soul soil → soul_fire, netherrack → fire comum. O primeiro probe por `setBlock` mantinha fogo comum sobre soul sand, mas foi excluído como interação inconclusiva; a colocação por `ItemStack.useOn` é o trace aplicável. Traces brutos: [BlueFlame](atm10-resource-validation/blueflame-original-player-use-l6.json) e [controle vanilla](atm10-resource-validation/blueflame-vanilla-control-l6.json).
+
+Com o port/carry carregado, Horizon produziu os mesmos três estados nos dois modos, CPUs 0–5/nice 10; sem o mod, o controle in-frame também coincidiu. [validação Horizon](atm10-resource-validation/blueflame-game-l6.json) e [controle sem mod](atm10-resource-validation/blueflame-game-no-mod-control-l6.json). Um teste Rust nativo, Clippy (`-D warnings`), rustfmt e build WASM passaram. A única alteração de código foi colapsar um `if` para corrigir o Clippy existente; nenhuma regra de gameplay mudou.
+
+A amostra mostra comportamento vanilla e não distingue uma contribuição própria de BlueFlame. O mod permanece parcial; para avançar além desses casos falta trace de colocação via eventos reais do jogador e dos gatilhos de propagação/vizinhança que o port pretende cobrir. A execução real da colocação no servidor integrado passou; ainda não há prova específica do callback do port.
+
+## L6 — checkpoint BlueFlame: cenários ampliados e controle sem mod (2026-11-03)
+
+O probe original agora cobre colocação de jogador via flint-and-steel em soul sand, soul soil e netherrack. JAR BlueFlame e controle sem o JAR deram os mesmos estados: soul_fire, soul_fire, fire. A interação Horizon com o port carregado repetiu os três resultados em in-frame e servidor integrado; o controle Horizon sem mod em in-frame também coincidiu. A falsa divergência inicial no controle netherrack veio de o jogador cair fora do alcance após a primeira interação; reposicionar o jogador a cada caso removeu a falha. A medição anterior de fogo sintético por setBlock foi inconclusiva e não conta como divergência.
+
+Resultado: os comportamentos de colocação medidos estão validados no jogo, mas não identificam lógica exclusiva de BlueFlame. Nenhum desvio de gameplay foi reproduzido. O mod continua parcial até observar eventos de propagação/alteração de vizinhos que demonstrem a contribuição própria do mod. Os artefatos de trace e controle estão no checkpoint acima.
+
+## L6 — checkpoint BWNCR: falta observador de áudio no cliente (2026-11-03)
+
+O JAR original carregou no oráculo sem dependências e não registra blocos, itens ou receitas. Isso é apenas confirmação do pacote; não houve observação de gameplay. O oracle atual executa o lado servidor e não captura o evento de som emitido nem o áudio entregue ao listener, então não distingue som silenciado de som reproduzido. Não alterei nem validei o port. BWNCR permanece parcial/pendente.
+
+Lacuna concreta para retomar: fixture com cliente original conectado e captura de eventos de áudio, comparando cada alvo (Wither, Ender Dragon, lightning e Wandering Trader) com silêncio ativado/desativado e regras customizadas. [registro](atm10-resource-validation/bwncr-audio-l6.json) · [fatos do JAR](atm10-resource-validation/bwncr-original-facts-l6.json).
+
+## L6 — checkpoint Comforts: interação aceita, sono inconclusivo com FakePlayer (2026-11-03)
+
+Export do original: 33 blocos, 33 itens e 65 receitas. Com FakePlayer posicionado no bloco e horário controlado, `useWithoutItem` retornou CONSUME para hammock cyan de dia (6000) e de noite (13000), sleeping bag red à noite (13000) e red bed vanilla à noite. Em todos, FakePlayer terminou sem `isSleeping` e o horário ficou igual. Isto não prova a experiência de jogador: nem o controle vanilla dormiu no fixture, indicando que o caminho de dormir depende do jogador/servidor conectado que a fixture não reproduz. Atualizei o MachineTrace para capturar o horário e o estado de sono após uso.
+
+Não alterei o port nem aleguei paridade; Comforts permanece parcial. Falta trace original com jogador conectado de hammock até sunset, sleeping bag sem mudar spawn point, estado ocupado e bloqueios dia/noite. [trace e lacuna](atm10-resource-validation/comforts-sleep-l6.json).
+
+## L6 — checkpoint Construction Sticks: offhand observado, escrita do inventário ausente (2026-11-03)
+
+O JAR original exportou 10 itens e 35 receitas. FakePlayer usou wooden stick na face superior de uma pedra, com 64 pedras na mão secundária: o método de item retornou SUCCESS, colocou exatamente uma pedra no bloco adjacente acima e reduziu a pilha secundária para 63; a varinha permaneceu com uma unidade. Com a mão secundária vazia, retornou FAIL e não colocou bloco. [trace](atm10-resource-validation/constructionstick-original-trace-l6.json) · [registro](atm10-resource-validation/constructionstick-interaction-l6.json).
+
+Não alterei nem validei o port: a Mod API permite ler o offhand, mas não consumir autoritativamente essa pilha com seus componentes junto à colocação. O caso fica pendente até existir transação de escrita do inventário do jogador. O trace só cobre madeira, face superior e uma posição; tiers, direções, superfícies, upgrades e limites seguem sem evidência.
+
+## L6 — checkpoint Crafting on a Stick: itens aceitam uso, menu real ausente no oracle (2026-11-03)
+
+O original exportou 9 itens e 18 receitas. FakePlayer usou no ar os nove itens de estação (crafting table, loom, grindstone, cartography table, stonecutter, smithing table e três anvil variants): todos retornaram SUCCESS, preservando a pilha de um item. O controle `minecraft:stick` retornou PASS. O `containerMenu` do FakePlayer permaneceu `InventoryMenu` em todos os casos, portanto não observamos qual tela de estação abre com cliente real nem se receita/saída funcionam.
+
+O port atual mostra telas próprias sem inventário e transação de receita. Não as considero equivalentes ao original; sem a fixture conectada não há comportamento suficiente para implementar ou validar. Mod segue parcial. [traces e gap](atm10-resource-validation/crafting-on-a-stick-menus-l6.json).
+
+## L6 — checkpoint Crash Utilities: falta trace do cliente original (2026-11-03)
+
+O JAR original carregou no oracle headless sem blocos, itens ou receitas. Isso não observa a mecânica, que depende de HUD, teclas e comandos do cliente. O harness disponível é servidor-only e não captura a sobreposição, a key U/I nem a saída do `/crashutilities check`/`invsee`; por isso não fiz comparação nem alterei o port. Fica parcial/pendente.
+
+Próxima evidência necessária: cliente original isolado para registrar HUD/keybinds e as duas saídas de comando com posição, alvo, inventário e container conhecidos. [registro](atm10-resource-validation/crashutilities-client-l6.json) · [fatos](atm10-resource-validation/crashutilities-original-facts-l6.json).
+
+## L6 — checkpoint ElevatorID: export concluído; falta ativação por jogador (2026-11-03)
+
+O oracle carregou o JAR original e exportou 16 blocos, 16 itens e 32 receitas. Não houve trace de uso no jogo: a fixture FakePlayer não gera borda de tecla jump/up/down no jogador conectado nem observa teleport e som autoritativos em conjunto. Um clique no bloco não substitui esse gatilho, então não inferi o comportamento a partir do código do port. Nenhuma alteração ou validação Horizon; mod permanece parcial.
+
+Falta fixture com jogador original conectado em elevadores correspondentes para medir up/down, seleção de cor, alcance de 32 blocos, obstrução do espaço de chegada, ausência de destino e teleport após um tick. [registro](atm10-resource-validation/elevatorid-blackbox-l6.json) · [fatos](atm10-resource-validation/elevatorid-original-facts-l6.json).
+
+## L6 — checkpoint Fuel Goes Here: tag namespaced validado nos dois modos (2026-11-03)
+
+Rastreei `fuelgoeshere:forced_fuels` desde o arquivo mesclado até o comando. O
+`Items` carregava coal e charcoal, mas o parser preferia
+`Registries.by_registry["minecraft:item"].tags`, preenchido só pelo export
+vanilla. A lista auxiliar `item_tags` já continha esses IDs, mas não era usada
+quando havia a entrada autoritativa. Atualizei ambos os registros antes do parse
+e removi duplicatas. O export original lista somente coal e charcoal no tag;
+Horizon validou essa associação em in-frame e servidor integrado e rejeitou
+stick e dirt. Isso não valida duração de queima, comportamento da fornalha ou
+comandos; o mod continua parcial. [registro](atm10-resource-validation/fuelgoeshere-tag-l6.json) ·
+[jogo](atm10-resource-validation/fuelgoeshere-tag-game-l6.json) ·
+[lookup do comando](../../crates/horizon-client/src/game/chat.rs).
+
+## L6 — checkpoint heyberryshutup: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: capture player effect and damage cancellation for configurable target/entity and compare enabled/disabled. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/heyberryshutup-l6.json).
+
+## L6 — checkpoint imfast: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: connected-player key edge while moving, with collision, server authority, and config values measured. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/imfast-l6.json).
+
+## L6 — checkpoint jumpboat: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: connected-player key press with multiple boats, occupied/unoccupied state, and boundary distances. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/jumpboat-l6.json).
+
+## L6 — checkpoint measurements: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: two connected-player selections including reversed corners, large coordinates, overflow boundaries, and displayed result. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/measurements-l6.json).
+
+## L6 — checkpoint moredragoneggs: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: actual dragon egg block break/event in End with portal destination and repeated egg count. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/moredragoneggs-l6.json).
+
+## L6 — checkpoint morered: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: player placement and redwire network propagation across adjacent components; item-on-block interaction. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/morered-l6.json).
+
+## L6 — checkpoint not_enough_glyphs: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original, junto de Ars Nouveau 5.13.3, Curios 9.5.1 e GeckoLib 4.9.3, exportou 25 itens e 16 receitas no namespace do mod. O export isolado falhou porque faltava Ars Nouveau; o retry com dependências do pack passou. O probe servidor headless com FakePlayer não aplica dano a jogador conectado nem observa o estado/uso do glyph. Não alterei nem validei o port. Falta comparar dano, vida, absorção e carga antes/depois com glyph equipado e sem glyph. Mod permanece parcial; avancei para o próximo caso independente. [fatos](../../.local/atm10-resource-validation/not_enough_glyphs-original-facts-l6.json) · [registro](atm10-resource-validation/not_enough_glyphs-l6.json).
+
+## L6 — checkpoint novillagerdm: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: server-side death events for each villager death cause, including player, mob, environmental, and despawn. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/novillagerdm-l6.json).
+
+## L6 — checkpoint bibliocraft: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: place each storage block, open player menu, move items through face automation and save/reload; crafter recipe tick. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/bibliocraft-l6.json).
+
+## L6 — checkpoint cosmeticarmorreworked: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: connected client cosmetic armor slot UI, slot transfer, rendered appearance, and save/reload. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/cosmeticarmorreworked-l6.json).
+
+## L6 — checkpoint energymeter: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: adjacent source/load with changing FE over timed samples, orientation, removal and reload. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/energymeter-l6.json).
+
+## L6 — checkpoint explorerscompass: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: use compass in a world with known structure locations, absent structure, and search completion/cancellation. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/explorerscompass-l6.json).
+
+## L6 — checkpoint ironfurnaces: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: fuel/input/output matrix with real smelting, blocked output, upgrades, and save/reload. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/ironfurnaces-l6.json).
+
+## L6 — checkpoint lootr: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: two distinct player UUIDs opening same generated loot container, persistence and refill/reset timing. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/lootr-l6.json).
+
+## L6 — checkpoint mcwfurnitures: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: place candidate furniture containers, real player menu/face automation and item save/reload. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/mcwfurnitures-l6.json).
+
+## L6 — checkpoint naturescompass: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: use with known biome at controlled distances and absent-biome search; observe result, cost, cancellation. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/naturescompass-l6.json).
+
+## L6 — checkpoint pocketstorage: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: pickup eligible item with configured pocket storage, capacity/full cases, unload and save/reload. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/pocketstorage-l6.json).
+
+## L6 — checkpoint storagedelight: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: place storage, insert/extract through connected player and each face automation, persistence. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/storagedelight-l6.json).
+
+## L6 — checkpoint toolbelt: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: player equip/open belt, move tools through slots, hotkey swap and save/reload. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/toolbelt-l6.json).
+
+## L6 — checkpoint trophymanager: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original foi submetido ao export público do NeoForge (export_passed); isso registra conteúdo e dependências, mas não simula o comportamento de gameplay. O probe disponível é servidor headless com FakePlayer e não executa a interação conectada descrita neste checkpoint. Não alterei nem validei o port. Lacuna concreta: kill supported mob, capture drop/tier, place trophy, rendered state and save/reload. Mod permanece parcial; avancei para o próximo caso independente. [registro](atm10-resource-validation/trophymanager-l6.json).
+
+## L6 — checkpoint entangled: gameplay pendente por fixture específica (2026-11-03)
+
+O JAR original, carregado com SuperMartijn642 ConfigLib 1.1.8 e CoreLib 1.1.25, exportou dois blocos, dois itens e três receitas. O export isolado falhou pelas duas dependências ausentes; o retry com as versões do pack passou. Ainda falta traçar a ligação de dois endpoints por interação de jogador e transferir inventário/estado real pelo proxy. A fixture de máquina não cria nem interage com endpoints conectados. Não alterei nem validei o port; permanece parcial e avancei para o caso independente seguinte. [fatos](../../.local/atm10-resource-validation/entangled-original-facts-l6.json) · [registro](atm10-resource-validation/entangled-l6.json).
+
+## L6 — checkpoint InControl: regras padrão observadas, efeito de spawn pendente (2026-11-03)
+
+O JAR original exportou zero blocos, itens e receitas. A configuração pública `defaultconfigs/incontrol/spawn.json` da instância define `deny` quando a contagem mínima chega a 15 para zumbi, esqueleto, creeper, aranha, enderman, necromancer, cave spider, creeper variants e drowned; para morcego o limite é 5. Isto documenta configuração, não prova o resultado do evento. Não alterei nem validei o port. Falta executar o servidor original com essa configuração e observar spawn nos limites N−1/N/N+1, além de reload de regra; no Horizon falta fixture determinística do evento e reload. [registro e regras](atm10-resource-validation/incontrol-l6.json) · [configuração carregada](/home/leonardo/modpacks/Instances/All%20the%20Mods%2010%20-%20ATM10/defaultconfigs/incontrol/spawn.json).
+
+## L6 — checkpoint Dyenamics: cinco cliques observados como PASS (2026-11-03)
+
+O oracle original observou PASS, sem consumo, para corante Dyenamics em lã vanilla, lã colorida e vidro colorido, e em pedra; o controle de corante vanilla em lã também retornou PASS. Removi o handler não observado que recoloria bloco/mostrava chat. Horizon repetiu os cinco casos com bloco e pilha inalterados em in-frame e servidor integrado, CPUs 0–5/nice 10. Isso valida apenas esses cliques PASS; a recoloração e outros caminhos continuam pendentes. [trace original](atm10-resource-validation/dyenamics-original-interaction-l6.json) · [validação Horizon](atm10-resource-validation/dyenamics-interaction-l6.json).
+
+### L7 — RSS control at fixed 1,000-machine state (2026-11-03)
+
+Para separar crescimento dentro da sessão de instabilidade entre execuções, rodei
+três sessões novas do servidor integrado, cada uma com 1/100/1.000 crushers
+ociosos, 40 ticks em cada estágio. No estado final fixo de 1.000 máquinas,
+medi o RSS oito vezes, em intervalos de dois segundos. CPU 0–5/nice 10, Rayon
+6; cada sessão usou homes temporários. O RSS subiu de 1 máquina para 1.000 em
+9,55 / 9,43 / 9,61 MiB. As oito leituras finais foram idênticas em cada sessão:
+1.190,53 / 1.189,13 / 1.193,30 MiB; a faixa entre sessões foi 4,17 MiB.
+
+Este teste mede estabilidade no mesmo build e estado, mas não é uma comparação
+antes/depois entre builds idênticos. O resultado histórico de 1.000 máquinas
+continua 1.180,04 → 1.188,62 MiB (+8,58 MiB); o atual aproxima-se do valor
+posterior e a variação observada entre sessões não explica sozinha toda a
+ diferença histórica. Portanto não separa uma regressão real de diferença de
+estado/build. Sem conclusão sobre memória. Para evitar exercitar novamente o
+teardown que abortou, os processos foram encerrados com SIGKILL depois da coleta;
+nenhum crash novo ocorreu antes disso, e o experimento não resolve os três
+SIGABRTs preservados. Dados brutos em
+[amostras](../../.local/atm10-resource-validation/l7-controlled-memory.json),
+[investigação do crash](atm10-resource-validation/mod-tick-profile-crash-investigation.json)
+e [resumo do controle](atm10-resource-validation/l7-controlled-memory.json).
+L7 segue pendente.
+
+## L8 — auditoria atualizada após novos checkpoints L6/L7 (2026-11-03)
+
+A auditoria continua incompleta; nenhum mod foi declarado completo. A fila L6
+mantém um checkpoint por caso, com as três novas correções abaixo no estado mais
+recente.
+
+**Validado no jogo, no escopo registrado:** casos de alimentos e Dog Food
+marcados nos checkpoints L2–L4; 24 cenários de upgrade do Mining Gadget; coleta
+transacional do Vacuum nos limites e falhas listados; carvão no Coal Generator;
+interações delimitadas de AllTheTweaks, Ars Elemancy, BlueFlame, Chisel, Macaw's
+Lights, Macaw's Windows e Dyenamics; associação do tag Fuel Goes Here nos dois
+modos. Esses casos não certificam os mods inteiros.
+
+**Observado só no original ou no pack:** exports, IDs, receitas e configs sem
+validação Horizon continuam evidência de dados. A trace de Chisel só cobre quatro
+right-clicks; a trace de Macaw's Lights só cobre as quatro interações descritas;
+Fuel Goes Here só tem membership do tag validado e não tem burn duration observada.
+As lacunas específicas de InControl, Merrymaking, ElevatorID, Construction Sticks,
+Akashic Tome e demais mods seguem em seus registros individuais.
+
+**Pendente:** a maioria dos casos L6 segue parcial ou sem gameplay demonstrado.
+Fuel Goes Here não tem comportamento de fornalha observado; Macaw's Lights e
+Chisel ficam limitados às interações medidas. Modular Routers Breaker/Dropper
+aguardam traces com direção configurada, e remoto aguarda destino, alcance e
+bloqueio observados. A comparação isolada de L7 não reproduziu +8,04 MiB como custo do cache: três
+sessões por variante mediram crescimento normalizado de +0,83 MiB e estrutura
+menor que 1 KiB;
+callbacks ativos, trap/reload e save/load continuam sem validação completa. Os
+SIGABRTs históricos não têm origem localizada. As quatro sessões da matriz de teardown com 1.000 entradas (duas mantendo-as,
+duas limpando-as) encerraram normalmente; os SIGABRTs históricos continuam sem
+causa demonstrada. Um aborto incidental
+durante startup do fixture Fuel não se repetiu de forma consistente. As stacks
+mostram detecção, não causa.
+
+O plano não está concluído: L6 mantém lacunas, L7 continua parcial e o crash
+permanece sem correção atribuível. [auditoria L8](atm10-l8-audit-2026-11-03.json) ·
+[comparação L7](atm10-resource-validation/l7-build-memory-comparison.json) ·
+[investigação do crash](atm10-resource-validation/mod-tick-profile-crash-investigation.json).
+
+## L6 — checkpoint Fuel Goes Here: tag namespaced validado nos dois modos (2026-11-03)
+
+Rastreei `fuelgoeshere:forced_fuels` desde o arquivo mesclado até o comando. O
+`Items` carregava coal e charcoal, mas o parser preferia
+`Registries.by_registry["minecraft:item"].tags`, preenchido só pelo export
+vanilla. A lista auxiliar `item_tags` já continha os dados, porém não era usada
+quando existia a entrada `by_registry`. Atualizei o registro autoritativo antes
+do parse e removi duplicatas. No original, o export público lista somente
+`minecraft:coal` e `minecraft:charcoal` nesse tag. Horizon validou nos modos
+in-frame e servidor integrado: coal e charcoal correspondem; stick e dirt não.
+Isso valida associação do tag, não duração de queima ou aceitação por fornalha;
+Fuel Goes Here continua parcial. [registro](atm10-resource-validation/fuelgoeshere-tag-l6.json) ·
+[jogo nos dois modos](atm10-resource-validation/fuelgoeshere-tag-game-l6.json).
+
+Durante uma das inicializações dessa fixture ocorreu `SIGABRT`/`free(): invalid
+pointer` antes de carregar recursos. O core preservado mostra o allocator
+detectando a invalidez durante a liberação de vetores em `mod_content::build`;
+os demais threads estavam limitados ao worker de logging. Quatro inicializações
+idênticas subsequentes passaram pela inicialização e chegaram ao comando. Isso
+não reproduz consistentemente o abort nem localiza a corrupção; a stack não é
+tratada como causa. [evento e limites](atm10-resource-validation/fuelgoeshere-startup-crash-l6.json).
+
+
+## L7 — comparação RSS preliminar (supersedida pelo isolamento abaixo; 2026-11-03)
+
+Comparei dois builds `fast` com a mesma árvore local, hmod, recursos, cenário
+server-thread e estado: 1/100/1.000 crushers ociosos, 40 ticks em cada tamanho,
+40 linhas de perfil para o estado de 1.000 e oito leituras RSS a cada 2 s. A
+única diferença de fonte foi o cache de valores válidos de propriedades estáticas;
+ambos encerraram normalmente. Sem cache, RSS das duas sessões foi 1.182,68 e
+1.193,80 MiB (mediana 1.188,24); com cache, 1.197,79 e 1.194,77 MiB (mediana
+1.196,28), delta de +8,04 MiB. O intervalo RSS entre os builds ficou separado por apenas
+0,97 MiB; VmHWM teve delta de mediana +15,14 MiB, mas só duas sessões por build.
+Aquela comparação preliminar reproduziu aproximadamente o delta histórico +8,58 MiB,
+mas duas sessões por build não identificaram a origem nem demonstraram vazamento;
+o controle posterior abaixo não reproduziu o delta como custo atribuível ao cache. [sem cache](atm10-resource-validation/l7-memory-before.json) ·
+[sem cache, repetição](atm10-resource-validation/l7-memory-before-repeat.json) ·
+[com cache](atm10-resource-validation/l7-memory-after.json) ·
+[com cache, repetição](atm10-resource-validation/l7-memory-after-repeat.json) · [resumo comparativo](atm10-resource-validation/l7-build-memory-comparison.json).
+
+Para a condição de teardown, uma sessão isolada com 1.000 crushers e uma única
+entrada de iron ore sem FE por 40 ticks encerrou normalmente; quatro outras
+sessões de medição com 1.000 crushers ociosos também encerraram. Os históricos
+seguem mistos para 1.000 entradas e limpeza/não limpeza. Isso não reproduziu o
+SIGABRT de forma consistente nem localizou a corrupção. Um abort incidental
+anterior durante startup do fixture Fuel, antes do jogo, é documentado em
+[registro separado](atm10-resource-validation/fuelgoeshere-startup-crash-l6.json);
+os frames do allocator não foram tratados como causa. L7 continua parcial,
+pendente de novas repetições e de validação de caminhos ativos, trap/reload e
+save/load sem crash.
+
+
+## L6 — checkpoint Chisel: quatro right-clicks limitados validados (2026-11-03)
+
+No probe original, o chisel em stone, array/stone e bedrock, e mão vazia em
+stone, retornou PASS_TO_DEFAULT_BLOCK_INTERACTION; bloco e pilha não mudaram.
+O port convertia stone e array/stone em variantes sem evidência. Agora esses
+três alvos exatos passam sem mutação; o caminho com mão vazia também permanece
+inalterado. Validei os quatro casos em in-frame e servidor integrado e testei o
+callback PASS. O mod continua parcial: uso no ar, ataque, menus, outros materiais,
+padrões e modos de área não foram observados. [registro e limites](atm10-resource-validation/chisel-interaction-l6.json) ·
+[port](../../ports/chisel/src/lib.rs) · [fixture](../../tools/test_chisel_observed_game.py).
+
+O port Fuel Goes Here agora fica inerte em runtime: removi o `/fuel` e a tabela
+de burn times que não aparecem no export/trace original. O tag carregado continua
+sendo validado pelo teste de associação; qualquer semântica de fornalha aguarda
+trace original. [checkpoint](atm10-resource-validation/fuelgoeshere-tag-l6.json).
+
+
+## L7 — isolamento do cache e teardown pareado (2026-11-03)
+
+Recompilei duas variantes `fast` com profiler idêntico e a única diferença
+funcional no caminho de propriedades: recalcular os domínios por block entity ou
+armazená-los por `(bloco, propriedade)`. Fiz três sessões por variante, com o
+mesmo hmod, recursos, servidor integrado, sequência 0→1→100→1.000 crushers, 40
+ticks por estágio, remoção de todas as máquinas e mais 40 ticks. A RSS foi lida
+cinco vezes por estágio. CPU 0–5, nice 10, seis threads e homes temporários.
+
+Com cache, o crusher gerou duas entradas, capacidade de mapa 3, seis valores e
+686 B estimados para os slots/capacidades de strings e vetores; contando o
+cabeçalho inline do HashMap, cerca de 734 B. A estimativa exclui metadados do
+allocator e bytes de controle do mapa. O cache persiste após remover as máquinas.
+A mediana do crescimento RSS de 0 para 1.000 máquinas foi 13,31 MiB sem cache e
+14,14 MiB com cache (delta normalizado +0,83 MiB); após remover as máquinas, a
+RSS permaneceu próxima do estado de 1.000. Assim, o aumento anterior de +8,04 MiB
+não foi reproduzido como custo atribuível ao cache. A estrutura medida tem menos
+de 1 KiB; mantive o cache pela redução já medida no custo de montar views
+(servidor integrado, 1.000 máquinas: p50 de 382,172 ms para 2,980 ms). A retenção
+de RSS após remoção não identifica, por si só, alocação ainda viva nem vazamento.
+[resumo e limites](atm10-resource-validation/l7-cache-memory-isolation.json) ·
+[sem cache](atm10-resource-validation/l7-cache-isolation-before-repeats.json) ·
+[com cache](atm10-resource-validation/l7-cache-isolation-after-repeats.json).
+
+Para o SIGABRT, comparei duas condições alternadas: 1.000 crushers com iron ore
+nos 1.000 slots até a saída, e o mesmo caso limpando slots e avançando um tick
+antes de sair. Foram duas sessões por condição; as quatro encerraram normalmente.
+Nenhuma reproduziu o crash, então não localizei a origem e não atribuí causa às
+stacks históricas do allocator. Naquele checkpoint trap/reload e save/load geral ainda estavam pendentes; o pacote L7 abaixo validou trap/reload e um caso de save/load do crusher, sem fechar cobertura geral. [matriz A/B](atm10-resource-validation/l7-teardown-cleanup-ab.json) ·
+[investigação](atm10-resource-validation/mod-tick-profile-crash-investigation.json).
+
+
+## L7 — callback ativo do crusher otimizado por índice de propriedade (2026-11-03)
+
+Profilei processamento real em crushers Actually Additions: cada máquina recebeu
+1 iron ore e 10.000 FE antes da janela medida; os imports `process_items` e
+`set_energy_buffer` foram chamados em todas as 1.000 máquinas por tick. No
+baseline com 1.000 máquinas, callback p50 foi 91,289 ms e o import de energia
+gastou 85,913 ms por tick (33 amostras exatas). A causa medida era
+`owns_machine_position`: cada callback formatava e percorria as posições de
+todas as máquinas, resultando em ~1.000.000 verificações por tick.
+
+Adicionei um índice reverso por dimensão/coordenadas, com contagem de handles
+por posição para suportar referências repetidas; criar handle incrementa, remover
+diminui, e lookup consulta a chave diretamente. Após a mudança, o callback p50
+com 1.000 máquinas caiu para 4,619 ms e o host import de energia para 0,212 ms
+(40 amostras); o total medido do tick caiu de 97,452 para 10,889 ms. O custo de
+`process_items` foi 0,343 ms antes e 0,295 ms depois, então a evidência não
+apontou esse processamento como alvo da otimização. O tamanho desigual das
+amostras baseline/depois (33/40) limita a precisão da comparação; a queda do
+import específico e o teste funcional corroboram a causa.
+
+Em ambos os modos, 100 ticks ativos converteram 2 iron ore em 2 raw iron,
+deixando 1 iron ore; o consumo de energia foi exatamente 4.000 FE. Com saída
+bloqueada por dirt, inventário e energia ficaram intactos. Save/load preservou
+slots e energia, considerando ticks de inicialização; remover e recriar a máquina
+redefiniu energia para zero e aceitou novo valor. O teste de contagem do índice
+para handles duplicados, decremento, remoção final e remoção idempotente passou;
+o build fast e o teste de jogo passaram. O SIGABRT histórico continua pendente e
+separado: não foi reproduzido por este teste e não tem causa atribuída.
+
+[comparação e causa](atm10-resource-validation/l7-active-callback-optimization.json) ·
+[perfil antes](atm10-resource-validation/l7-active-profile-before.json) ·
+[perfil depois](atm10-resource-validation/l7-active-profile-after.json) ·
+[validação de jogo](atm10-resource-validation/actuallyadditions-active-crusher-game.json).
+
+
+## L8 — revisão final dos critérios da tarefa 5 (2026-11-03)
+
+Revisei os critérios de [tarefa 5 no handoff](atm10-luna-handoff.md#l7--medir-e-otimizar-o-loop-do-jogo-tarefa-5) contra os traces, testes e código. A tarefa permanece **parcial**.
+
+| Critério | Evidência atual | Estado e limite |
+| --- | --- | --- |
+| Construção/cópia de views, capabilities, callback, serialização e tick total | Perfis por etapa em 1/100/1.000 crushers; p50/p95/máximo; crusher ativo com ore e 10.000 FE por máquina | Medido. Índice reverso derrubou o custo de membership de posição; cache de propriedades reduziu a cópia de views ociosa. |
+| Otimização guiada por custo dominante | No perfil ativo de 1.000 máquinas, `set_energy_buffer` caiu de 85,913 ms para 0,212 ms p50; callback 91,289→4,619 ms; tick total 97,452→10,889 ms | Índice reverso validado. Baseline tem 33 amostras exatas; depois 40. O cache resolveu a busca repetida de propriedades nas views. |
+| Dirty tracking e estado privado do guest | `tick_mod_block_entities` chama `save_block_entity` para cada handle a cada tick e compara os bytes retornados depois; o estado serializado pertence ao guest WASM | Não implementados. Serialização no perfil ativo foi 0,559 ms p50 de 10,889 ms; estado ativo muda em todo tick, então não há ganho demonstrado nesse caso. Falta fixture ociosa pareada após o índice e contrato de dirty state que cubra os dados privados do guest antes de otimizar esse caminho. |
+| Ativo/ocioso nos dois modos | Perfil ativo antes/depois em in-frame e server-thread; perfil ocioso após índice em ambos. Conservação e save/load do crusher em ambos. | Perfil concluído para estas fixtures e escalas; não representa todos os mods. |
+| Memória | Cache: 3 sessões por variante; crescimento p50 13,31 MiB sem cache e 14,14 MiB com cache; estrutura 686 B (734 B com cabeçalho inline). Ativo in-frame a 1.000: RSS final 995,67 MiB antes e 994,13 MiB depois; delta intrassessão +5,35/+9,05 MiB. | Comparação ativa com uma sessão por build; não atribui causa nem demonstra ganho. +0,83 MiB normalizado do cache e +8,04 MiB histórico seguem inconclusivos; cache mantido, sem repetir matriz RSS. |
+| Transferência entre mods | Um diamante transferido entre `test_machine` e `test_peer` em ambos os modos, preservando nome, energia, encantamento e `custom_data`; origem zero, destino um. Save/reopen manteve exatamente uma cópia no destino e todos os componentes. | Validado só para esta fixture/caminho de push; não cobre módulos remotos/world/entity. [fixture atualizada](atm10-resource-validation/l7-cross-mod-transfer-save-reopen.json). |
+| Trap/reload da transferência de itens | `item_move` e `item_pickup`: pedidos pendentes revogados no trap; IDs locais reutilizados após hot reload não transferem autoridade entre instâncias. | Sandbox validado; separado da coleta de drops em jogo. Para coleta: 2 testes focados, ambos passaram. [pickup lifecycle](atm10-resource-validation/l7-item-pickup-lifecycle.json) · [resource usage anterior de item_move](atm10-resource-validation/l7-sandbox-resource-usage.json). |
+| Save/load | Crusher ativo em ambos os modos; Vacuum e a nova transferência cross-mod de stack com componentes após save/reopen. | Escopos individuais passaram; não implica persistência de todo estado privado de mods nem valida módulos remotos. |
+| SIGABRT | Traces de teardown anteriores e testes atuais sem crash | Pendente e separado: crash histórico não foi reproduzido nem explicado; frames de `free()` não identificam a origem. |
+
+O perfil ativo pós-otimização registrou, para 1.000 máquinas, p50/p95/máximo: criação 0,253/0,512/0,520 ms; cópia de views 1,771/2,576/2,681 ms; capabilities 0,526/0,751/1,024 ms; callback 4,619/7,517/8,102 ms; serialização 0,559/0,762/0,872 ms; total 10,889/14,854/14,854 ms. Dentro do callback, `seed` ficou em 1,481 ms e dispatch guest em 2,637 ms; o perfil não divide a execução dentro do guest. Por isso não há um próximo ajuste interno concreto e mensurável sustentado pelo perfil atual. Dirty tracking não foi implementado: após o índice, serialização ficou em ~0,47–0,53 ms p50 de ~6,44–7,07 ms ocioso, e o guest ainda não tem contrato claro de dirty state privado.
+
+**Pendências priorizadas:** (1) investigar o SIGABRT apenas quando houver uma reprodução que discrimine uma causa; (2) atribuição de memória permanece inconclusiva e não requer nova matriz sem hipótese isolada; (3) não implementar dirty tracking sem custo material medido e contrato de dirty state do guest; transferências cross-mod e trap/reload passaram no escopo registrado. A tarefa 5, L7 e o plano geral continuam incompletos. Evidências detalhadas em [perfil antes/depois e causa](atm10-resource-validation/l7-active-callback-optimization.json), [comparação de RSS/cache](atm10-resource-validation/l7-cache-memory-isolation.json) e [teste funcional](atm10-resource-validation/actuallyadditions-active-crusher-game.json).
+
+
+## L7 — pacote de perfis in-frame/ociosos e transferência cross-mod (2026-11-03)
+
+### Ativo in-frame antes/depois do índice reverso
+
+Repeti os mesmos counts 1/100/1.000, com crusher Actually Additions ativo (1 iron ore e 10.000 FE por máquina), mesmo hmod, recursos e comandos, 40 ticks perfilados por escala, um processo por escala/build, homes temporários, CPUs 0–5/nice 10/Rayon 6. O WASM do guest foi mantido; muda o binário host antes/depois do índice. Em cada tick observado os imports `get_slot`, `get_energy`, `set_energy_buffer` e `process_items` rodaram em todas as máquinas. Em 1.000, callback p50 caiu de 100,096 ms para 4,675 ms; tick total p50 de 107,322 ms para 11,116 ms. Perfil e código identificam a busca linear de posições como custo corrigido. A amostra final manteve 1 iron ore, progress 41 e 8.360 FE; não se esperava output antes do ciclo de 100 ticks.
+
+RSS/VmHWM foi capturada no início e no estágio final de cada processo, mas há uma sessão por build/escala: para 1.000, RSS 990,32→995,67 MiB (+5,35) antes e 985,08→994,13 MiB (+9,05) depois; VmHWM no fim 1.079,02 e 1.075,05 MiB. O RSS final diferiu 1,54 MiB, abaixo da variação de baseline entre processos. São números comparáveis do mesmo cenário, sem repetição suficiente para afirmar regressão ou ganho de memória. [resumo comparativo](atm10-resource-validation/l7-active-inframe-comparison.json) · [perfis antes/depois](atm10-resource-validation/l7-active-profile-inframe-before.json) / [depois](atm10-resource-validation/l7-active-profile-inframe-after.json).
+
+### Ocioso após o índice e decisão sobre dirty tracking
+
+Medi 40 ticks por count e estado em in-frame e server-thread, com memória em cada estágio. Para 1.000 crushers sem entrada, tick p50 foi 7,070 ms (in-frame) e 6,440 ms (server-thread); serialização privada p50 foi 0,529 e 0,474 ms, respectivamente (7,5% e 7,4% do total). Com ore mas sem energia, serialização ficou em 0,544/0,531 ms, 5,8%/5,3% do total. Callback e cópia de views custam mais que serialização. RSS ao fim do estado ocioso de 1.000 foi 1.006,50 MiB in-frame e 1.191,11 MiB server-thread; com ore sem energia, 1.006,50 e 1.201,80 MiB. Cada modo teve uma sessão, então memória é leitura de estágio, não comparação causal.
+
+Não implementei dirty tracking: os números não apontam serialização como gargalo dominante e o guest WASM não oferece um contrato explícito para sinalizar que seu estado privado mudou. O host atualmente chama `save_block_entity` por máquina a cada tick e só então compara bytes; pular essa chamada sem sinal poderia perder saves. [perfil](atm10-resource-validation/l7-idle-profile-after-index.json) · [decisão e limites](atm10-resource-validation/l7-idle-dirty-tracking-decision.json).
+
+### Transferência entre mods, trap e hot reload
+
+A fixture carregou Modular Routers, `test_machine` e `test_peer`. Um push iniciado pelo guest `test_machine` moveu exatamente um diamante nomeado para o slot da máquina do guest `test_peer`; a origem zerou, o destino recebeu um item e o custom name foi preservado. Passou em in-frame e server-thread. O slot é habilitado só no hmod isolado de teste; o peer padrão continua com zero slots para preservar o contrato dos testes de sandbox. A suíte existente também passou nos casos de item move pendente revogado no trap e request antigo não autorizado após hot reload, mesmo com reutilização do ID local. A suíte sandbox completa passou: 36 aprovados, 0 falhas, 1 ignorado (177,45 s); os dois casos específicos de trap/reload passaram em 16,32 s, pico amostrado da árvore cargo/test 147,78 MiB e maior processo 70,32 MiB.
+
+As primeiras execuções foram bloqueadas por fixtures antigas: enum WIT incompatível (4 variantes no hmod contra 5 no runtime) e ausência do template `shared_router` no pacote de teste atual. Recompilei o port Modular Routers e atualizei WASM em cópias de hmods preservando os pacotes locais antigos. A suíte sandbox também revelou que slot global no peer quebrava isolamento de slots e que um assert do guest mascarava a validação de manifesto; corrigi com slot configurável (false por padrão) e sem panic para registro estrangeiro. A rodada final passou nos dois modos e a suíte completa passou. [jogo cross-mod](atm10-resource-validation/l7-cross-mod-transfer.json) · [medição do sandbox](atm10-resource-validation/l7-sandbox-resource-usage.json).
+
+**Resultado do pacote:** transferência cross-mod e trap/reload passaram no escopo medido; dirty tracking não se justifica pelos perfis atuais e fica sem implementação. A memória permanece inconclusiva, e o SIGABRT histórico continua separado e pendente, sem causa demonstrada. O crash não foi investigado nem reexecutado neste pacote.
+
+## L7 — ciclo de vida da API de coleta e persistência cross-mod (2026-11-03)
+
+Ampliei os testes de sandbox da API `request-item-pickup` / `take-item-pickup-result`: conclusão única, rejeição de handle/slot inválidos e handle incorreto, resultado zero, remoção, trap e hot reload com reuso do ID local. Os dois testes novos passaram (17,64 s no comando focado, CPU 0–5, jobs/Rayon 6). A suíte sandbox completa passou: 38 aprovados, 0 falhas, 1 ignorado, 187,42 s de harness. [evidência](atm10-resource-validation/l7-item-pickup-lifecycle.json).
+
+Ampliei a fixture cross-mod nos dois modos: diamond nomeado com `horizon:energy=1234`, `minecraft:enchantments` (unbreaking II) e `minecraft:custom_data` (`atm10.owner=test_machine`, `sequence=17`). O stack deixou a origem, chegou uma vez ao peer com os quatro dados/componentes preservados e permaneceu exatamente uma cópia no destino após save/reopen. A fixture levou 51,191 s em in-frame e 60,513 s em server-thread; a medição pontual da transferência com tick/consultas foi 1,108/1,400 s, uma execução por modo e não é benchmark isolado. RSS ficou constante dentro de cada sessão na leitura da transferência; isso não altera a conclusão de memória inconclusiva. [relatório](atm10-resource-validation/l7-cross-mod-transfer-save-reopen.json).
+
+Documentei o diff de fonte registrado entre os builds do perfil: substituição da busca linear em `positions.values()` por membership em `machine_position_owners`, com contagem de referências mantida em criação/remoção. Os hashes before/after do perfil in-frame e o hash comum do hmod estão no registro. A árvore imutável e o manifesto de build do baseline não foram preservados; portanto, a evidência não permite reconstrução bit a bit nem verificar independemente que todos os outros inputs de build foram iguais. O baseline server-thread também não tem hash binário no relatório original. Nenhum perfil foi repetido. [diff e limite de proveniência](atm10-resource-validation/l7-build-source-diff.json).
+
+RSS permanece inconclusivo, SIGABRT permanece pendente e L7/plano geral continuam parciais.
+
+### Regressão da fixture sem peer (2026-11-03)
+
+`tools/test_router_port.py` foi executado sem `--peer`, com CPU 0–5 e homes temporários. Passou em in-frame (45,990 s) e server-thread (53,167 s); os casos cross-mod foram omitidos e os demais checks da fixture passaram. Resultado bruto: `/tmp/router-no-peer-result.json`; logs: `/tmp/router-no-peer-result-in-frame-0.log` e `/tmp/router-no-peer-result-server-thread-0.log`.

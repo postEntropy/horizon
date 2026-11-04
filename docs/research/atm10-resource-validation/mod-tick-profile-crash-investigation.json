@@ -1,0 +1,112 @@
+{
+  "date": "2026-11-03",
+  "scope": "Investigate the server-thread L7 SIGABRT before profiling again or closing L8",
+  "status": "recurrent teardown SIGABRT; origin still inconclusive; L7 and L8 pending",
+  "constraints": {
+    "cpu_affinity": "0-5",
+    "nice": 10,
+    "rayon_threads": 6,
+    "game_data": "fresh temporary HORIZON_HOME, launcher home and XDG paths for each run"
+  },
+  "preserved_crashes": [
+    {
+      "pid": 79237,
+      "time": "2026-11-03 11:17:02 -03",
+      "message": "free(): invalid pointer",
+      "thread": "horizon-worker",
+      "detection_stack": "glibc free -> Arc<Vec<horizon_core::geometry::Aabb>>::drop_slow in the Streaming::new<NoTerrain> worker; main thread was joining Streaming during Game teardown",
+      "other_threads": "worker pools were waiting or dropping VoxelShape values; graphics threads were in driver waits"
+    },
+    {
+      "pid": 86935,
+      "time": "2026-11-03 11:22:11 -03",
+      "message": "double free or corruption (out)",
+      "thread": "horizon-client main",
+      "detection_stack": "glibc free while dropping RenderAssets BTreeMap, reached from WorkerContext/Shared during Streaming teardown",
+      "other_threads": "worker pools were waiting on condition variables; graphics threads were in driver waits"
+    }
+  ],
+  "interpretation": "The two differing allocator detection sites are evidence of heap corruption during or before teardown, not proof that Aabb, RenderAssets, or Streaming caused it. No origin of the invalid write/free was identified. No unsafe blocks were found in the focused game mod/runtime/Actually Additions paths inspected; this does not rule out unsafe code in dependencies or elsewhere.",
+  "oom_check": {
+    "available_memory_gib_at_first_crash": 7.7,
+    "kernel_oom_kill_message": false
+  },
+  "isolated_reproduction_matrix": [
+    {
+      "scenario": "Create 1000 crushers with fill, no callback ticks, then shutdown",
+      "result": "clean"
+    },
+    {
+      "scenario": "1000 crushers, 40 empty ticks, then shutdown",
+      "result": "clean"
+    },
+    {
+      "scenario": "1, 10, 100, 250, 500 and 1000 crushers; iron ore present without FE for 40 ticks, then shutdown",
+      "result": "clean"
+    },
+    {
+      "scenario": "1000 active-input crushers for 40 ticks, clear all inputs, one final tick, shutdown",
+      "result": "clean",
+      "profile_instrumentation": true
+    },
+    {
+      "scenario": "1000 active-input crushers for 40 ticks, shutdown without cleanup",
+      "result": "crashed once with double free or corruption (out)"
+    },
+    {
+      "scenario": "Original staged 1->100->1000 profile sequence, 40 idle/active ticks at each size, cleanup and final tick",
+      "result": "clean once",
+      "profile_instrumentation": true
+    },
+    {
+      "scenario": "Integrated server, 1/100/1000 idle crushers, 40 ticks each; eight RSS reads at fixed 1000-crusher state; two sessions each with/without property-value cache",
+      "result": "all four sessions completed teardown cleanly; each recorded 40 profile lines for 1000 machines"
+    },
+    {
+      "scenario": "Integrated server, 1/100/1000 crushers, one iron ore input without FE on one of 1000 crushers, 40 ticks at final size; shutdown without clearing input",
+      "result": "one isolated session completed teardown cleanly; 29 1000-machine profile lines were logged"
+    },
+    {
+      "scenario": "Paired cleanup A/B: same integrated-server 1/100/1,000 crusher setup, iron ore in all 1,000 inputs, 40 ticks at 1,000; alternate two runs per condition (no cleanup vs clear all container.0 inputs and advance one tick), then shutdown",
+      "result": "all four sessions exited cleanly (2/2 no-cleanup, 2/2 cleanup); 28-29 profile lines at 1,000 machines per run",
+      "one_variable": "whether inputs are cleared and one extra tick is advanced before teardown",
+      "constraints": "taskset CPU 0-5, nice 10, six Rayon threads, fresh temporary homes per session",
+      "interpretation": "the historical teardown SIGABRT did not reproduce under either member of this pair; this does not identify or rule out the prior corrupting operation"
+    }
+  ],
+  "conclusion": "Historical SIGABRTs remain unresolved. The cache-isolation RSS series shows <1 KiB of measured cache structure for the crusher and similar within-process growth with or without it; the prior +8.04 MiB whole-build delta was not reproduced as cache-attributable. Teardown A/B trials with all 1,000 inputs present vs cleared both exited cleanly (2 runs each), so no cause was localized. Allocator detection frames remain locations, not causes.",
+  "artifacts": {
+    "original_profile_log": ".local/atm10-resource-validation/mod-tick-profile-server-repeat-server-thread-0.log",
+    "second_crash_log": ".local/atm10-resource-validation/l7-items-1000-40-server-thread-0.log",
+    "successful_staged_log": ".local/atm10-resource-validation/l7-repro-staged-server-thread-0.log",
+    "cores": "systemd-coredump PIDs 79237 and 86935; temporary extracted core copies were not retained",
+    "new_core": "systemd-coredump PID 202203; temporary extracted copy was deleted after GDB inspection",
+    "new_logs": [
+      ".local/atm10-resource-validation/actuallyadditions-generator-game-in-frame-0.log",
+      ".local/atm10-resource-validation/actuallyadditions-generator-game-in-frame-1.log"
+    ],
+    "controlled_memory_comparison": "l7-build-memory-comparison.json",
+    "one_input_teardown": "l7-teardown-one-input.json",
+    "cache_memory_isolation": "l7-cache-memory-isolation.json",
+    "cleanup_ab": "l7-teardown-cleanup-ab.json"
+  },
+  "impact": "All game runs used temporary homes; no player data was used. No source correction was made.",
+  "later_crashes": [
+    {
+      "pid": 202203,
+      "time": "2026-11-03 13:17:02 -03",
+      "signal": "SIGABRT",
+      "message": "double free or corruption (!prev)",
+      "command": "target/fast/horizon-client --resources .local/horizon-client/26.3 --world PortFixture --test-terrain --creative --render-distance 2 --offscreen --width 320 --height 240 --control-socket <temporary socket> --dev-mod actuallyadditions-generator.hmod --in-frame",
+      "scenario": "single coal-generator session: 120 ticks, 2,380 FE, quit; reopen the same temporary save, observe persisted energy plus three startup ticks, query the block and quit the second process; abort at second-process teardown",
+      "detection_stack": "glibc allocator abort while dropping RenderAssets -> Arc<RenderAssets> -> WorkerContext -> Shared -> Streaming -> Game on main thread. All horizon-worker threads had exited; graphics threads were waiting in NVIDIA driver conditions; control, save writer and logging threads were parked.",
+      "memory_check": "7.8 GiB available; no OOM evidence in kernel journal",
+      "evidence": {
+        "core": "systemd-coredump PID 202203 (retained by systemd)",
+        "first_log": ".local/atm10-resource-validation/actuallyadditions-generator-game-in-frame-0.log",
+        "second_log": ".local/atm10-resource-validation/actuallyadditions-generator-game-in-frame-1.log"
+      },
+      "limits": "This is another occurrence of the same broad teardown-corruption family, now in a re-opened in-frame save. It does not identify the corrupting write or prove the mod port caused it. The exploratory game processes were not CPU-pinned; they are excluded from constrained validation."
+    }
+  ]
+}

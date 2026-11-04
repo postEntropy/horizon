@@ -1,0 +1,53 @@
+{
+  "label": "after-repeat",
+  "mode": "server-thread",
+  "scenario": "1, 100, then 1,000 idle Actually Additions crushers; 40 server ticks at each state; eight RSS readings 2s apart at fixed 1,000-crusher state",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "nice": 10,
+  "rayon_threads": "6",
+  "binary_sha256": "f3ae04f1b0f3de5a872e8c16bc4f9589cfa18a0f887f9db76aade7e39f5a39a3",
+  "status": "passed",
+  "samples": [
+    {
+      "vmhwm": 1322.83,
+      "vmrss": 1194.77
+    },
+    {
+      "vmhwm": 1322.83,
+      "vmrss": 1194.77
+    },
+    {
+      "vmhwm": 1322.83,
+      "vmrss": 1194.77
+    },
+    {
+      "vmhwm": 1322.83,
+      "vmrss": 1194.77
+    },
+    {
+      "vmhwm": 1322.83,
+      "vmrss": 1194.77
+    },
+    {
+      "vmhwm": 1322.83,
+      "vmrss": 1194.77
+    },
+    {
+      "vmhwm": 1322.83,
+      "vmrss": 1194.77
+    },
+    {
+      "vmhwm": 1322.83,
+      "vmrss": 1194.77
+    }
+  ],
+  "profile_lines_1000": 40,
+  "teardown": "clean"
+}

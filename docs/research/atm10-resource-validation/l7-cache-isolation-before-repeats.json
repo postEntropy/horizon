@@ -1,0 +1,325 @@
+{
+  "runs": [
+    [
+      {
+        "stage": "before-machines",
+        "machines": 0,
+        "rss_mib_samples": [
+          1176.86,
+          1176.86,
+          1176.86,
+          1176.86,
+          1176.86
+        ],
+        "rss_mib_median": 1176.86,
+        "vmhwm_mib": 1333.16,
+        "cache": {
+          "active_machines_at_profile": 0,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-create",
+        "machines": 1,
+        "rss_mib_samples": [
+          1180.8,
+          1180.8,
+          1180.8,
+          1180.8,
+          1180.8
+        ],
+        "rss_mib_median": 1180.8,
+        "vmhwm_mib": 1333.16,
+        "cache": {
+          "active_machines_at_profile": 1,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-create",
+        "machines": 100,
+        "rss_mib_samples": [
+          1182.03,
+          1182.03,
+          1182.03,
+          1182.03,
+          1182.03
+        ],
+        "rss_mib_median": 1182.03,
+        "vmhwm_mib": 1333.16,
+        "cache": {
+          "active_machines_at_profile": 100,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-create",
+        "machines": 1000,
+        "rss_mib_samples": [
+          1191.28,
+          1191.28,
+          1191.28,
+          1191.28,
+          1191.28
+        ],
+        "rss_mib_median": 1191.28,
+        "vmhwm_mib": 1333.16,
+        "cache": {
+          "active_machines_at_profile": 1000,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-remove",
+        "machines": 0,
+        "rss_mib_samples": [
+          1191.56,
+          1191.56,
+          1191.56,
+          1191.56,
+          1191.56
+        ],
+        "rss_mib_median": 1191.56,
+        "vmhwm_mib": 1333.16,
+        "cache": {
+          "active_machines_at_profile": 0,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      }
+    ],
+    [
+      {
+        "stage": "before-machines",
+        "machines": 0,
+        "rss_mib_samples": [
+          1185.81,
+          1185.81,
+          1185.81,
+          1185.81,
+          1185.81
+        ],
+        "rss_mib_median": 1185.81,
+        "vmhwm_mib": 1343.13,
+        "cache": {
+          "active_machines_at_profile": 0,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-create",
+        "machines": 1,
+        "rss_mib_samples": [
+          1189.87,
+          1189.87,
+          1189.87,
+          1189.87,
+          1189.87
+        ],
+        "rss_mib_median": 1189.87,
+        "vmhwm_mib": 1343.13,
+        "cache": {
+          "active_machines_at_profile": 1,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-create",
+        "machines": 100,
+        "rss_mib_samples": [
+          1191.21,
+          1191.21,
+          1191.21,
+          1191.21,
+          1191.21
+        ],
+        "rss_mib_median": 1191.21,
+        "vmhwm_mib": 1343.13,
+        "cache": {
+          "active_machines_at_profile": 100,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-create",
+        "machines": 1000,
+        "rss_mib_samples": [
+          1195.57,
+          1195.57,
+          1195.57,
+          1195.57,
+          1195.57
+        ],
+        "rss_mib_median": 1195.57,
+        "vmhwm_mib": 1343.13,
+        "cache": {
+          "active_machines_at_profile": 1000,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-remove",
+        "machines": 0,
+        "rss_mib_samples": [
+          1195.57,
+          1195.57,
+          1195.57,
+          1195.57,
+          1195.57
+        ],
+        "rss_mib_median": 1195.57,
+        "vmhwm_mib": 1343.13,
+        "cache": {
+          "active_machines_at_profile": 0,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      }
+    ],
+    [
+      {
+        "stage": "before-machines",
+        "machines": 0,
+        "rss_mib_samples": [
+          1162.69,
+          1162.69,
+          1162.69,
+          1162.69,
+          1162.69
+        ],
+        "rss_mib_median": 1162.69,
+        "vmhwm_mib": 1304.64,
+        "cache": {
+          "active_machines_at_profile": 0,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-create",
+        "machines": 1,
+        "rss_mib_samples": [
+          1166.56,
+          1166.56,
+          1166.56,
+          1166.56,
+          1166.56
+        ],
+        "rss_mib_median": 1166.56,
+        "vmhwm_mib": 1304.64,
+        "cache": {
+          "active_machines_at_profile": 1,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-create",
+        "machines": 100,
+        "rss_mib_samples": [
+          1168.0,
+          1168.0,
+          1168.0,
+          1168.0,
+          1168.0
+        ],
+        "rss_mib_median": 1168.0,
+        "vmhwm_mib": 1304.64,
+        "cache": {
+          "active_machines_at_profile": 100,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-create",
+        "machines": 1000,
+        "rss_mib_samples": [
+          1176.0,
+          1176.0,
+          1176.0,
+          1176.0,
+          1176.0
+        ],
+        "rss_mib_median": 1176.0,
+        "vmhwm_mib": 1304.64,
+        "cache": {
+          "active_machines_at_profile": 1000,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      },
+      {
+        "stage": "after-remove",
+        "machines": 0,
+        "rss_mib_samples": [
+          1176.0,
+          1176.0,
+          1176.0,
+          1176.0,
+          1176.0
+        ],
+        "rss_mib_median": 1176.0,
+        "vmhwm_mib": 1304.64,
+        "cache": {
+          "active_machines_at_profile": 0,
+          "entries": 0,
+          "map_capacity": 0,
+          "cached_values": 0,
+          "estimated_capacity_bytes": 0,
+          "estimate_note": "HashMap entry slots plus String/Vec capacities; excludes allocator metadata and hash control bytes"
+        }
+      }
+    ]
+  ]
+}

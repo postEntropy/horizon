@@ -1,0 +1,182 @@
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:canola_seeds is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:coffee_beans is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:flax_seeds is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:rice_seeds is not registered in this mod set; ignored
+Horizon: content root ready for 1 mod(s) in 4.4s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-00sl4eu9/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.15s (39077 block states)
+Horizon: discovered 4618 model files in 0.01s, parsed in 0.02s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.06s (1413 blocks)
+Horizon: bound 39075 model states / 8394 variants in 0.11s, resolved models in 0.01s, baked models and loaded sprites in 0.11s
+Horizon: model-state catalog prepared in 0.23s
+Horizon: blockstate binding and model baking took 0.30s
+Horizon: finalized 1459 sprite layers in 0.04s (asset render stage 0.37s)
+Horizon: gameplay facts read 0.02s, validated 0.19s, decoded 0.16s, projected 39077 states in 0.06s
+load assets: 5.13s
+Horizon: asset load stage took 0.62s
+load facts: 5.13s
+Horizon: facts, biomes and environment stage took 0.44s
+load biomes+env: 5.13s
+load pack tables: 5.44s
+Horizon: pack tables stage took 0.31s
+load collision+motion: 5.63s
+Horizon: collision and motion stage took 0.18s
+Horizon: mob metadata loaded in 0.02s
+load items: 5.72s
+Horizon: resources loaded in 5.8s; 39077 block states, 1884 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.10s
+Horizon: providers and block-entity render tables loaded in 0.18s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.24s
+Horizon: mob types loaded in 0.06s
+Horizon: player model setup took 0.10s
+Horizon: behaviours, mob types and player models loaded in 0.40s
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.05s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-00sl4eu9/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 2129 ms
+Horizon: live features ready in 790.483418ms
+mod_dispatch_profile machines=0 seed_ns=3377 grouping_ns=0 guest_ns=0 return_views_ns=0 sync_ns=280 total_ns=4328
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=25498 serialize_ns=0 total_ns=34024
+mod_dispatch_profile machines=0 seed_ns=2755 grouping_ns=0 guest_ns=0 return_views_ns=0 sync_ns=280 total_ns=3566
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=21161 serialize_ns=0 total_ns=23926
+mod_dispatch_profile machines=0 seed_ns=1703 grouping_ns=0 guest_ns=0 return_views_ns=0 sync_ns=290 total_ns=2374
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=15730 serialize_ns=0 total_ns=16701
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=270 get_slot_calls=1 get_slot_ns=311 get_energy_calls=1 get_energy_ns=50 set_energy_calls=2 set_energy_ns=1212 process_items_calls=0 process_items_ns=0
+mod_dispatch_profile machines=1 seed_ns=8566 grouping_ns=2264 guest_ns=48051 return_views_ns=1222 sync_ns=1273 total_ns=92856
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=982 view_copy_ns=557618 capability_ns=491 callback_ns=104378 serialize_ns=4018 total_ns=692764
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=120 get_slot_calls=1 get_slot_ns=440 get_energy_calls=1 get_energy_ns=140 set_energy_calls=1 set_energy_ns=240 process_items_calls=1 process_items_ns=1663
+mod_dispatch_profile machines=1 seed_ns=5300 grouping_ns=1242 guest_ns=20178 return_views_ns=1012 sync_ns=1412 total_ns=50836
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=12824 view_copy_ns=6853 capability_ns=1513 callback_ns=60314 serialize_ns=3135 total_ns=98497
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=150 get_slot_calls=1 get_slot_ns=441 get_energy_calls=1 get_energy_ns=140 set_energy_calls=1 set_energy_ns=1092 process_items_calls=1 process_items_ns=1804
+mod_dispatch_profile machines=1 seed_ns=6292 grouping_ns=1262 guest_ns=30608 return_views_ns=1293 sync_ns=1272 total_ns=65895
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=962 view_copy_ns=7895 capability_ns=2254 callback_ns=77497 serialize_ns=3267 total_ns=107685
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=240 get_slot_calls=1 get_slot_ns=371 get_energy_calls=1 get_energy_ns=131 set_energy_calls=1 set_energy_ns=531 process_items_calls=1 process_items_ns=1663
+mod_dispatch_profile machines=1 seed_ns=6803 grouping_ns=1423 guest_ns=32762 return_views_ns=1613 sync_ns=2525 total_ns=75212
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=982 view_copy_ns=8526 capability_ns=2394 callback_ns=87926 serialize_ns=4980 total_ns=123524
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=140 get_slot_calls=1 get_slot_ns=401 get_energy_calls=1 get_energy_ns=140 set_energy_calls=1 set_energy_ns=731 process_items_calls=1 process_items_ns=1734
+mod_dispatch_profile machines=1 seed_ns=6522 grouping_ns=1523 guest_ns=31701 return_views_ns=1062 sync_ns=1382 total_ns=67368
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1102 view_copy_ns=8276 capability_ns=2174 callback_ns=78519 serialize_ns=3156 total_ns=108536
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=130 get_slot_calls=1 get_slot_ns=270 get_energy_calls=1 get_energy_ns=110 set_energy_calls=1 set_energy_ns=711 process_items_calls=1 process_items_ns=1914
+mod_dispatch_profile machines=1 seed_ns=6473 grouping_ns=1553 guest_ns=31680 return_views_ns=1092 sync_ns=1102 total_ns=64172
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1563 view_copy_ns=9237 capability_ns=2054 callback_ns=73499 serialize_ns=3456 total_ns=104999
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=121 get_slot_calls=1 get_slot_ns=331 get_energy_calls=1 get_energy_ns=140 set_energy_calls=1 set_energy_ns=561 process_items_calls=1 process_items_ns=2165
+mod_dispatch_profile machines=1 seed_ns=6793 grouping_ns=1573 guest_ns=32962 return_views_ns=1132 sync_ns=1233 total_ns=69282
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1293 view_copy_ns=9177 capability_ns=1934 callback_ns=81084 serialize_ns=4138 total_ns=114006
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=191 get_slot_calls=1 get_slot_ns=311 get_energy_calls=1 get_energy_ns=130 set_energy_calls=1 set_energy_ns=911 process_items_calls=1 process_items_ns=1453
+mod_dispatch_profile machines=1 seed_ns=6182 grouping_ns=1693 guest_ns=31751 return_views_ns=1002 sync_ns=1233 total_ns=67739
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1543 view_copy_ns=9228 capability_ns=2294 callback_ns=78979 serialize_ns=3387 total_ns=111782
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=120 get_slot_calls=1 get_slot_ns=391 get_energy_calls=1 get_energy_ns=130 set_energy_calls=1 set_energy_ns=741 process_items_calls=1 process_items_ns=1353
+mod_dispatch_profile machines=1 seed_ns=6633 grouping_ns=1643 guest_ns=29095 return_views_ns=852 sync_ns=1222 total_ns=61377
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1503 view_copy_ns=8697 capability_ns=1583 callback_ns=70443 serialize_ns=3577 total_ns=110510
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=140 get_slot_calls=1 get_slot_ns=411 get_energy_calls=1 get_energy_ns=211 set_energy_calls=1 set_energy_ns=572 process_items_calls=1 process_items_ns=1903
+mod_dispatch_profile machines=1 seed_ns=7304 grouping_ns=1784 guest_ns=32211 return_views_ns=992 sync_ns=1623 total_ns=68359
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1232 view_copy_ns=9388 capability_ns=1813 callback_ns=79752 serialize_ns=4348 total_ns=114066
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=140 get_slot_calls=1 get_slot_ns=521 get_energy_calls=1 get_energy_ns=120 set_energy_calls=1 set_energy_ns=1173 process_items_calls=1 process_items_ns=1573
+mod_dispatch_profile machines=1 seed_ns=5992 grouping_ns=1292 guest_ns=33804 return_views_ns=932 sync_ns=1362 total_ns=67608
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1323 view_copy_ns=8306 capability_ns=1753 callback_ns=77026 serialize_ns=3767 total_ns=108085
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=110 get_slot_calls=1 get_slot_ns=360 get_energy_calls=1 get_energy_ns=110 set_energy_calls=1 set_energy_ns=461 process_items_calls=1 process_items_ns=1473
+mod_dispatch_profile machines=1 seed_ns=6081 grouping_ns=1383 guest_ns=28965 return_views_ns=1022 sync_ns=1072 total_ns=60374
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1103 view_copy_ns=7825 capability_ns=2284 callback_ns=69852 serialize_ns=3226 total_ns=99689
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=110 get_slot_calls=1 get_slot_ns=401 get_energy_calls=1 get_energy_ns=110 set_energy_calls=1 set_energy_ns=771 process_items_calls=1 process_items_ns=1433
+mod_dispatch_profile machines=1 seed_ns=5851 grouping_ns=1734 guest_ns=29425 return_views_ns=892 sync_ns=1052 total_ns=60424
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=982 view_copy_ns=7805 capability_ns=2064 callback_ns=70213 serialize_ns=2876 total_ns=98537
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=110 get_slot_calls=1 get_slot_ns=271 get_energy_calls=1 get_energy_ns=120 set_energy_calls=1 set_energy_ns=661 process_items_calls=1 process_items_ns=1412
+mod_dispatch_profile machines=1 seed_ns=5791 grouping_ns=1483 guest_ns=28303 return_views_ns=902 sync_ns=1292 total_ns=59112
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1303 view_copy_ns=7795 capability_ns=1743 callback_ns=68540 serialize_ns=3407 total_ns=98607
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=110 get_slot_calls=1 get_slot_ns=331 get_energy_calls=1 get_energy_ns=121 set_energy_calls=1 set_energy_ns=501 process_items_calls=1 process_items_ns=1623
+mod_dispatch_profile machines=1 seed_ns=5550 grouping_ns=1382 guest_ns=30328 return_views_ns=962 sync_ns=1253 total_ns=61747
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1202 view_copy_ns=8436 capability_ns=1603 callback_ns=71084 serialize_ns=4228 total_ns=102445
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=151 get_slot_calls=1 get_slot_ns=370 get_energy_calls=1 get_energy_ns=110 set_energy_calls=1 set_energy_ns=711 process_items_calls=1 process_items_ns=1463
+mod_dispatch_profile machines=1 seed_ns=6563 grouping_ns=1253 guest_ns=29165 return_views_ns=982 sync_ns=1192 total_ns=60795
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1383 view_copy_ns=7284 capability_ns=1933 callback_ns=78138 serialize_ns=4007 total_ns=106642
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=141 get_slot_calls=1 get_slot_ns=341 get_energy_calls=1 get_energy_ns=121 set_energy_calls=1 set_energy_ns=751 process_items_calls=1 process_items_ns=1633
+mod_dispatch_profile machines=1 seed_ns=5901 grouping_ns=1453 guest_ns=30538 return_views_ns=952 sync_ns=1172 total_ns=61056
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1192 view_copy_ns=8046 capability_ns=1763 callback_ns=70493 serialize_ns=3526 total_ns=98827
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=150 get_slot_calls=1 get_slot_ns=361 get_energy_calls=1 get_energy_ns=100 set_energy_calls=1 set_energy_ns=1122 process_items_calls=1 process_items_ns=1453
+mod_dispatch_profile machines=1 seed_ns=5901 grouping_ns=1293 guest_ns=29696 return_views_ns=1072 sync_ns=1072 total_ns=62568
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1072 view_copy_ns=7604 capability_ns=1794 callback_ns=71887 serialize_ns=3767 total_ns=100330
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=221 get_slot_calls=1 get_slot_ns=341 get_energy_calls=1 get_energy_ns=180 set_energy_calls=1 set_energy_ns=511 process_items_calls=1 process_items_ns=1713
+mod_dispatch_profile machines=1 seed_ns=8206 grouping_ns=1733 guest_ns=36639 return_views_ns=992 sync_ns=1393 total_ns=74261
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1823 view_copy_ns=11402 capability_ns=3427 callback_ns=96603 serialize_ns=4088 total_ns=133313
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=140 get_slot_calls=1 get_slot_ns=431 get_energy_calls=1 get_energy_ns=141 set_energy_calls=1 set_energy_ns=731 process_items_calls=1 process_items_ns=1623
+mod_dispatch_profile machines=1 seed_ns=6442 grouping_ns=1462 guest_ns=30007 return_views_ns=992 sync_ns=1192 total_ns=65214
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1112 view_copy_ns=9007 capability_ns=2385 callback_ns=76675 serialize_ns=3346 total_ns=108276
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=140 get_slot_calls=1 get_slot_ns=401 get_energy_calls=1 get_energy_ns=140 set_energy_calls=1 set_energy_ns=571 process_items_calls=1 process_items_ns=1603
+mod_dispatch_profile machines=1 seed_ns=6482 grouping_ns=1342 guest_ns=30838 return_views_ns=1032 sync_ns=1383 total_ns=66666
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1222 view_copy_ns=8336 capability_ns=1924 callback_ns=77938 serialize_ns=3286 total_ns=107584
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=131 get_slot_calls=1 get_slot_ns=391 get_energy_calls=1 get_energy_ns=120 set_energy_calls=1 set_energy_ns=531 process_items_calls=1 process_items_ns=1703
+mod_dispatch_profile machines=1 seed_ns=6392 grouping_ns=1503 guest_ns=30197 return_views_ns=1072 sync_ns=1113 total_ns=63641
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1122 view_copy_ns=8216 capability_ns=2024 callback_ns=74161 serialize_ns=3226 total_ns=103466
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=140 get_slot_calls=1 get_slot_ns=360 get_energy_calls=1 get_energy_ns=151 set_energy_calls=1 set_energy_ns=671 process_items_calls=1 process_items_ns=1423
+mod_dispatch_profile machines=1 seed_ns=6623 grouping_ns=1443 guest_ns=30658 return_views_ns=1182 sync_ns=1223 total_ns=66186
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1142 view_copy_ns=8146 capability_ns=1723 callback_ns=77767 serialize_ns=3657 total_ns=107183
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=140 get_slot_calls=1 get_slot_ns=631 get_energy_calls=1 get_energy_ns=120 set_energy_calls=1 set_energy_ns=751 process_items_calls=1 process_items_ns=1563
+mod_dispatch_profile machines=1 seed_ns=6282 grouping_ns=1763 guest_ns=30849 return_views_ns=932 sync_ns=1252 total_ns=77497
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1102 view_copy_ns=8326 capability_ns=1933 callback_ns=89440 serialize_ns=3156 total_ns=118414
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=110 get_slot_calls=1 get_slot_ns=401 get_energy_calls=1 get_energy_ns=141 set_energy_calls=1 set_energy_ns=662 process_items_calls=1 process_items_ns=2054
+mod_dispatch_profile machines=1 seed_ns=6482 grouping_ns=1433 guest_ns=29877 return_views_ns=921 sync_ns=1192 total_ns=64482
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1172 view_copy_ns=8336 capability_ns=2024 callback_ns=75724 serialize_ns=3416 total_ns=106031
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=191 get_slot_calls=1 get_slot_ns=420 get_energy_calls=1 get_energy_ns=130 set_energy_calls=1 set_energy_ns=612 process_items_calls=1 process_items_ns=1684
+mod_dispatch_profile machines=1 seed_ns=6542 grouping_ns=1433 guest_ns=30859 return_views_ns=1372 sync_ns=1293 total_ns=66617
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1153 view_copy_ns=7625 capability_ns=1853 callback_ns=77958 serialize_ns=3346 total_ns=107093
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=170 get_slot_calls=1 get_slot_ns=321 get_energy_calls=1 get_energy_ns=130 set_energy_calls=1 set_energy_ns=1353 process_items_calls=1 process_items_ns=1753
+mod_dispatch_profile machines=1 seed_ns=9037 grouping_ns=1723 guest_ns=31951 return_views_ns=1313 sync_ns=1252 total_ns=69762
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1292 view_copy_ns=9117 capability_ns=2215 callback_ns=81224 serialize_ns=3146 total_ns=112192
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=170 get_slot_calls=1 get_slot_ns=360 get_energy_calls=1 get_energy_ns=140 set_energy_calls=1 set_energy_ns=872 process_items_calls=1 process_items_ns=1774
+mod_dispatch_profile machines=1 seed_ns=8596 grouping_ns=1493 guest_ns=33774 return_views_ns=1062 sync_ns=1483 total_ns=70754
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1303 view_copy_ns=8997 capability_ns=2575 callback_ns=81835 serialize_ns=3687 total_ns=114587
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=371 get_slot_calls=1 get_slot_ns=371 get_energy_calls=1 get_energy_ns=170 set_energy_calls=1 set_energy_ns=551 process_items_calls=1 process_items_ns=2174
+mod_dispatch_profile machines=1 seed_ns=9579 grouping_ns=1563 guest_ns=40227 return_views_ns=1182 sync_ns=1313 total_ns=76766
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=2125 view_copy_ns=11452 capability_ns=2615 callback_ns=86504 serialize_ns=4288 total_ns=126851
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=150 get_slot_calls=1 get_slot_ns=331 get_energy_calls=1 get_energy_ns=321 set_energy_calls=1 set_energy_ns=521 process_items_calls=1 process_items_ns=2144
+mod_dispatch_profile machines=1 seed_ns=9388 grouping_ns=1443 guest_ns=39194 return_views_ns=1082 sync_ns=1623 total_ns=79981
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1373 view_copy_ns=10520 capability_ns=2595 callback_ns=91954 serialize_ns=3787 total_ns=128664
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=270 get_slot_calls=1 get_slot_ns=350 get_energy_calls=1 get_energy_ns=201 set_energy_calls=1 set_energy_ns=511 process_items_calls=1 process_items_ns=1974
+mod_dispatch_profile machines=1 seed_ns=9508 grouping_ns=2294 guest_ns=39135 return_views_ns=1142 sync_ns=1704 total_ns=80283
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1623 view_copy_ns=11041 capability_ns=2475 callback_ns=90782 serialize_ns=3717 total_ns=128694
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=160 get_slot_calls=1 get_slot_ns=361 get_energy_calls=1 get_energy_ns=121 set_energy_calls=1 set_energy_ns=962 process_items_calls=1 process_items_ns=1553
+mod_dispatch_profile machines=1 seed_ns=6262 grouping_ns=1362 guest_ns=29186 return_views_ns=1212 sync_ns=1222 total_ns=61236
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1543 view_copy_ns=7665 capability_ns=1643 callback_ns=70163 serialize_ns=3236 total_ns=97244
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=140 get_slot_calls=1 get_slot_ns=431 get_energy_calls=1 get_energy_ns=140 set_energy_calls=1 set_energy_ns=481 process_items_calls=1 process_items_ns=1924
+mod_dispatch_profile machines=1 seed_ns=6593 grouping_ns=1543 guest_ns=30037 return_views_ns=1012 sync_ns=1193 total_ns=65815
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1142 view_copy_ns=7574 capability_ns=1914 callback_ns=77317 serialize_ns=3406 total_ns=106612
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=160 get_slot_calls=1 get_slot_ns=301 get_energy_calls=1 get_energy_ns=160 set_energy_calls=1 set_energy_ns=561 process_items_calls=1 process_items_ns=1873
+mod_dispatch_profile machines=1 seed_ns=8867 grouping_ns=1663 guest_ns=36058 return_views_ns=1032 sync_ns=1673 total_ns=80883
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1273 view_copy_ns=19237 capability_ns=2284 callback_ns=95491 serialize_ns=4379 total_ns=142831
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=170 get_slot_calls=1 get_slot_ns=361 get_energy_calls=1 get_energy_ns=141 set_energy_calls=1 set_energy_ns=561 process_items_calls=1 process_items_ns=1924
+mod_dispatch_profile machines=1 seed_ns=6212 grouping_ns=1433 guest_ns=30518 return_views_ns=1002 sync_ns=1273 total_ns=62769
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1173 view_copy_ns=8376 capability_ns=1763 callback_ns=73289 serialize_ns=3837 total_ns=105470
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=150 get_slot_calls=1 get_slot_ns=350 get_energy_calls=1 get_energy_ns=111 set_energy_calls=1 set_energy_ns=772 process_items_calls=1 process_items_ns=1503
+mod_dispatch_profile machines=1 seed_ns=6893 grouping_ns=1462 guest_ns=30909 return_views_ns=861 sync_ns=1092 total_ns=62809
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1403 view_copy_ns=8777 capability_ns=1853 callback_ns=72047 serialize_ns=3256 total_ns=101683
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=150 get_slot_calls=1 get_slot_ns=400 get_energy_calls=1 get_energy_ns=131 set_energy_calls=1 set_energy_ns=491 process_items_calls=1 process_items_ns=1553
+mod_dispatch_profile machines=1 seed_ns=7294 grouping_ns=1412 guest_ns=31861 return_views_ns=932 sync_ns=1343 total_ns=65214
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1132 view_copy_ns=8436 capability_ns=2064 callback_ns=74672 serialize_ns=2906 total_ns=103897
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=491 get_slot_calls=1 get_slot_ns=421 get_energy_calls=1 get_energy_ns=130 set_energy_calls=1 set_energy_ns=681 process_items_calls=1 process_items_ns=2104
+mod_dispatch_profile machines=1 seed_ns=6743 grouping_ns=1233 guest_ns=32481 return_views_ns=901 sync_ns=1713 total_ns=68520
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1402 view_copy_ns=9167 capability_ns=2215 callback_ns=79772 serialize_ns=4439 total_ns=114497
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=140 get_slot_calls=1 get_slot_ns=410 get_energy_calls=1 get_energy_ns=110 set_energy_calls=1 set_energy_ns=601 process_items_calls=1 process_items_ns=1693
+mod_dispatch_profile machines=1 seed_ns=6332 grouping_ns=1152 guest_ns=29195 return_views_ns=1012 sync_ns=1102 total_ns=60655
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1262 view_copy_ns=7424 capability_ns=1713 callback_ns=78749 serialize_ns=3146 total_ns=107203
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=90 get_slot_calls=1 get_slot_ns=411 get_energy_calls=1 get_energy_ns=130 set_energy_calls=1 set_energy_ns=621 process_items_calls=1 process_items_ns=1483
+mod_dispatch_profile machines=1 seed_ns=6271 grouping_ns=1543 guest_ns=31460 return_views_ns=942 sync_ns=1102 total_ns=63219
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1152 view_copy_ns=7274 capability_ns=1673 callback_ns=72397 serialize_ns=3036 total_ns=99188
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=151 get_slot_calls=1 get_slot_ns=260 get_energy_calls=1 get_energy_ns=350 set_energy_calls=1 set_energy_ns=811 process_items_calls=1 process_items_ns=1533
+mod_dispatch_profile machines=1 seed_ns=5721 grouping_ns=1493 guest_ns=30478 return_views_ns=1302 sync_ns=1123 total_ns=62008
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1153 view_copy_ns=9819 capability_ns=1753 callback_ns=71135 serialize_ns=3156 total_ns=101713
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=161 get_slot_calls=1 get_slot_ns=391 get_energy_calls=1 get_energy_ns=130 set_energy_calls=1 set_energy_ns=742 process_items_calls=1 process_items_ns=1463
+mod_dispatch_profile machines=1 seed_ns=5901 grouping_ns=1393 guest_ns=28934 return_views_ns=1182 sync_ns=1112 total_ns=59593
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1192 view_copy_ns=7825 capability_ns=1713 callback_ns=68981 serialize_ns=3086 total_ns=96883

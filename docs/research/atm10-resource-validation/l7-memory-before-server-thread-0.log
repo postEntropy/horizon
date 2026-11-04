@@ -1,0 +1,195 @@
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:canola_seeds is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:coffee_beans is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:flax_seeds is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:rice_seeds is not registered in this mod set; ignored
+Horizon: content root ready for 1 mod(s) in 4.2s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-71jm2090/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.15s (39077 block states)
+Horizon: discovered 4618 model files in 0.01s, parsed in 0.02s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.05s (1413 blocks)
+Horizon: bound 39075 model states / 8394 variants in 0.11s, resolved models in 0.01s, baked models and loaded sprites in 0.11s
+Horizon: model-state catalog prepared in 0.22s
+Horizon: blockstate binding and model baking took 0.29s
+Horizon: finalized 1459 sprite layers in 0.04s (asset render stage 0.35s)
+Horizon: gameplay facts read 0.02s, validated 0.17s, decoded 0.15s, projected 39077 states in 0.06s
+load assets: 5.00s
+Horizon: asset load stage took 0.60s
+load facts: 5.00s
+Horizon: facts, biomes and environment stage took 0.42s
+load biomes+env: 5.00s
+load pack tables: 5.29s
+Horizon: pack tables stage took 0.29s
+load collision+motion: 5.47s
+Horizon: collision and motion stage took 0.17s
+Horizon: mob metadata loaded in 0.02s
+load items: 5.55s
+Horizon: resources loaded in 5.6s; 39077 block states, 1884 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.10s
+Horizon: providers and block-entity render tables loaded in 0.17s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.24s
+Horizon: mob types loaded in 0.05s
+Horizon: player model setup took 0.10s
+Horizon: behaviours, mob types and player models loaded in 0.39s
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.05s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-71jm2090/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.05s
+Horizon: game CPU resources ready in 0.06s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: live features ready in 742.164245ms
+[15:00:52] [Server thread/INFO]: Player92994[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
+[15:00:52] [Server thread/INFO]: System chat: Player92994 joined the game
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=3667 serialize_ns=0 total_ns=13515
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=4128 serialize_ns=0 total_ns=10219
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=4278 serialize_ns=0 total_ns=16842
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 4803 ms
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=3146 serialize_ns=0 total_ns=5720
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=4498 serialize_ns=0 total_ns=8036
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=3377 serialize_ns=0 total_ns=6914
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=3026 serialize_ns=0 total_ns=5230
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=3917 serialize_ns=0 total_ns=7123
+[chat] The game is frozen
+[15:00:52] [Server thread/INFO]: System chat: [Player92994: Teleported Player92994 to 1.500000, 102.000000, 4.500000]
+[chat] Teleported Player92994 to 1.500000, 102.000000, 4.500000
+[15:00:52] [Server thread/INFO]: System chat: [Player92994: Stepping 40 tick(s)]
+[chat] Stepping 40 tick(s)
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1193 view_copy_ns=386593 capability_ns=581 callback_ns=67117 serialize_ns=3456 total_ns=478338
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1293 view_copy_ns=320628 capability_ns=1723 callback_ns=34566 serialize_ns=3116 total_ns=368138
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1022 view_copy_ns=293617 capability_ns=1823 callback_ns=32953 serialize_ns=3717 total_ns=338522
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1122 view_copy_ns=289469 capability_ns=1713 callback_ns=33955 serialize_ns=2896 total_ns=335035
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1042 view_copy_ns=323314 capability_ns=1913 callback_ns=35727 serialize_ns=4058 total_ns=374039
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1243 view_copy_ns=294929 capability_ns=2164 callback_ns=34386 serialize_ns=3116 total_ns=341327
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1323 view_copy_ns=316410 capability_ns=1713 callback_ns=35307 serialize_ns=3306 total_ns=364541
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1252 view_copy_ns=336839 capability_ns=2134 callback_ns=36119 serialize_ns=3527 total_ns=391362
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1022 view_copy_ns=326719 capability_ns=2054 callback_ns=34475 serialize_ns=3346 total_ns=376104
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1393 view_copy_ns=433662 capability_ns=1944 callback_ns=38774 serialize_ns=3386 total_ns=490370
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1603 view_copy_ns=683437 capability_ns=2224 callback_ns=43623 serialize_ns=3557 total_ns=747928
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1723 view_copy_ns=400600 capability_ns=1964 callback_ns=40377 serialize_ns=3537 total_ns=458800
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=932 view_copy_ns=286694 capability_ns=2154 callback_ns=32832 serialize_ns=3376 total_ns=333072
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=931 view_copy_ns=313144 capability_ns=1593 callback_ns=33814 serialize_ns=3677 total_ns=359892
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1242 view_copy_ns=337850 capability_ns=2124 callback_ns=35638 serialize_ns=3466 total_ns=387335
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1022 view_copy_ns=293296 capability_ns=1724 callback_ns=33233 serialize_ns=3106 total_ns=338903
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=892 view_copy_ns=299718 capability_ns=1573 callback_ns=33604 serialize_ns=3627 total_ns=345455
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1032 view_copy_ns=307343 capability_ns=1543 callback_ns=35578 serialize_ns=3105 total_ns=356196
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1162 view_copy_ns=306431 capability_ns=1813 callback_ns=33354 serialize_ns=3727 total_ns=353049
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1452 view_copy_ns=343943 capability_ns=1944 callback_ns=35818 serialize_ns=3316 total_ns=394829
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1103 view_copy_ns=285611 capability_ns=2074 callback_ns=34005 serialize_ns=3357 total_ns=331980
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1072 view_copy_ns=275212 capability_ns=1793 callback_ns=35167 serialize_ns=3847 total_ns=323072
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1152 view_copy_ns=283398 capability_ns=1853 callback_ns=32371 serialize_ns=3397 total_ns=327962
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=881 view_copy_ns=301272 capability_ns=1803 callback_ns=34445 serialize_ns=3046 total_ns=348370
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1483 view_copy_ns=293586 capability_ns=1974 callback_ns=34956 serialize_ns=3106 total_ns=341748
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1343 view_copy_ns=355604 capability_ns=1793 callback_ns=36308 serialize_ns=3517 total_ns=407453
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1573 view_copy_ns=321710 capability_ns=1893 callback_ns=33603 serialize_ns=3116 total_ns=368429
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1302 view_copy_ns=308786 capability_ns=2074 callback_ns=33874 serialize_ns=3206 total_ns=359111
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1162 view_copy_ns=292094 capability_ns=1954 callback_ns=34385 serialize_ns=3797 total_ns=338943
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1823 view_copy_ns=325768 capability_ns=1864 callback_ns=33974 serialize_ns=3247 total_ns=373329
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1453 view_copy_ns=330457 capability_ns=2224 callback_ns=36229 serialize_ns=3227 total_ns=383447
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1022 view_copy_ns=377887 capability_ns=1914 callback_ns=40196 serialize_ns=3557 total_ns=436047
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1313 view_copy_ns=301001 capability_ns=2014 callback_ns=35788 serialize_ns=3807 total_ns=352589
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1653 view_copy_ns=519025 capability_ns=2715 callback_ns=45005 serialize_ns=3616 total_ns=588687
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1473 view_copy_ns=359131 capability_ns=1793 callback_ns=35347 serialize_ns=3466 total_ns=410328
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1553 view_copy_ns=363089 capability_ns=1953 callback_ns=37952 serialize_ns=3457 total_ns=418022
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1102 view_copy_ns=370493 capability_ns=2004 callback_ns=36870 serialize_ns=3356 total_ns=423604
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1202 view_copy_ns=312462 capability_ns=1764 callback_ns=36148 serialize_ns=3377 total_ns=361425
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1603 view_copy_ns=332411 capability_ns=2264 callback_ns=34616 serialize_ns=3616 total_ns=380272
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1403 view_copy_ns=322432 capability_ns=2184 callback_ns=35367 serialize_ns=3557 total_ns=370483
+[15:00:56] [Server thread/INFO]: System chat: [Player92994: Stepping 40 tick(s)]
+[chat] Stepping 40 tick(s)
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=64345 view_copy_ns=19764032 capability_ns=16196 callback_ns=2091758 serialize_ns=49550 total_ns=22176159
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=68259 view_copy_ns=20052191 capability_ns=82940 callback_ns=1110376 serialize_ns=46824 total_ns=21485780
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=60779 view_copy_ns=19550820 capability_ns=81923 callback_ns=1082994 serialize_ns=44195 total_ns=20940516
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=55993 view_copy_ns=18892051 capability_ns=70622 callback_ns=1084507 serialize_ns=46886 total_ns=20275675
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=60588 view_copy_ns=19117810 capability_ns=78071 callback_ns=1102281 serialize_ns=46803 total_ns=20534215
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=52879 view_copy_ns=19167129 capability_ns=69763 callback_ns=1146425 serialize_ns=45544 total_ns=20628013
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=55740 view_copy_ns=18991424 capability_ns=68931 callback_ns=1131135 serialize_ns=46557 total_ns=20420509
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=52700 view_copy_ns=18825991 capability_ns=68942 callback_ns=1098043 serialize_ns=44987 total_ns=20224748
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=59372 view_copy_ns=19369948 capability_ns=80173 callback_ns=1077674 serialize_ns=45777 total_ns=20773329
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=63415 view_copy_ns=19344694 capability_ns=77158 callback_ns=1189525 serialize_ns=46324 total_ns=20856145
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=68319 view_copy_ns=21457041 capability_ns=93997 callback_ns=1278484 serialize_ns=47203 total_ns=23099571
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=50095 view_copy_ns=19208319 capability_ns=67211 callback_ns=1181351 serialize_ns=45195 total_ns=20692305
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=56924 view_copy_ns=19988828 capability_ns=77886 callback_ns=1126076 serialize_ns=45492 total_ns=21434803
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=76879 view_copy_ns=21785740 capability_ns=101012 callback_ns=1104906 serialize_ns=47177 total_ns=23254315
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=68795 view_copy_ns=21214976 capability_ns=90573 callback_ns=1111348 serialize_ns=49581 total_ns=22695915
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=74608 view_copy_ns=21270072 capability_ns=93232 callback_ns=1139762 serialize_ns=46248 total_ns=22778933
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=43600 view_copy_ns=18735524 capability_ns=57464 callback_ns=1103002 serialize_ns=48217 total_ns=20130338
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=49149 view_copy_ns=19168213 capability_ns=66660 callback_ns=1144360 serialize_ns=46195 total_ns=20611852
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=51333 view_copy_ns=19508368 capability_ns=67675 callback_ns=1166954 serialize_ns=45453 total_ns=20978838
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=51716 view_copy_ns=19207137 capability_ns=67953 callback_ns=1104525 serialize_ns=45976 total_ns=20632020
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=47983 view_copy_ns=18775467 capability_ns=62497 callback_ns=1175309 serialize_ns=45675 total_ns=20257030
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=51927 view_copy_ns=19541220 capability_ns=67015 callback_ns=1100397 serialize_ns=46678 total_ns=20951356
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=55896 view_copy_ns=19497376 capability_ns=73870 callback_ns=1177844 serialize_ns=46535 total_ns=20988556
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=69011 view_copy_ns=20669903 capability_ns=86276 callback_ns=1080179 serialize_ns=45878 total_ns=22083493
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=63476 view_copy_ns=19712218 capability_ns=76315 callback_ns=1103854 serialize_ns=44646 total_ns=21149241
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=61174 view_copy_ns=20075578 capability_ns=79204 callback_ns=1140172 serialize_ns=52825 total_ns=21567795
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=43661 view_copy_ns=18836819 capability_ns=57930 callback_ns=1110255 serialize_ns=47397 total_ns=20240148
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=51413 view_copy_ns=19170431 capability_ns=69626 callback_ns=1099205 serialize_ns=46451 total_ns=20595130
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=51344 view_copy_ns=18671822 capability_ns=63181 callback_ns=1139952 serialize_ns=47916 total_ns=20122544
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=58823 view_copy_ns=18890447 capability_ns=75885 callback_ns=1079477 serialize_ns=45648 total_ns=20291916
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=47911 view_copy_ns=18523709 capability_ns=65357 callback_ns=1150692 serialize_ns=45477 total_ns=19972189
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=55254 view_copy_ns=19188092 capability_ns=73762 callback_ns=1159599 serialize_ns=45636 total_ns=20667639
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=56955 view_copy_ns=19607866 capability_ns=73100 callback_ns=1063357 serialize_ns=44783 total_ns=20991122
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=57640 view_copy_ns=19779612 capability_ns=78221 callback_ns=1128881 serialize_ns=45904 total_ns=21237779
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=57681 view_copy_ns=19416552 capability_ns=72145 callback_ns=1113081 serialize_ns=45525 total_ns=20855304
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=58948 view_copy_ns=19679034 capability_ns=76981 callback_ns=1162736 serialize_ns=47731 total_ns=21177685
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=56130 view_copy_ns=20297863 capability_ns=81465 callback_ns=1096991 serialize_ns=45555 total_ns=21719573
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=80378 view_copy_ns=22058640 capability_ns=108822 callback_ns=1125845 serialize_ns=45698 total_ns=23581675
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=64530 view_copy_ns=19904592 capability_ns=87135 callback_ns=1137858 serialize_ns=45516 total_ns=21380631
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=74941 view_copy_ns=20951414 capability_ns=102594 callback_ns=1102181 serialize_ns=45090 total_ns=22420813
+[15:00:59] [Server thread/INFO]: System chat: [Player92994: Stepping 40 tick(s)]
+[chat] Stepping 40 tick(s)
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=892723 view_copy_ns=211214577 capability_ns=270542 callback_ns=184543895 serialize_ns=625994 total_ns=399389158
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=802572 view_copy_ns=201668623 capability_ns=897230 callback_ns=85511741 serialize_ns=510428 total_ns=290439525
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=773288 view_copy_ns=195690638 capability_ns=835414 callback_ns=85867265 serialize_ns=461501 total_ns=284753932
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=704768 view_copy_ns=193068456 capability_ns=790195 callback_ns=86828799 serialize_ns=473872 total_ns=283385938
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=753069 view_copy_ns=195918300 capability_ns=839715 callback_ns=86399765 serialize_ns=513191 total_ns=285689977
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=785893 view_copy_ns=198769121 capability_ns=874421 callback_ns=85422372 serialize_ns=519191 total_ns=287635979
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=711842 view_copy_ns=193999509 capability_ns=787230 callback_ns=92822065 serialize_ns=520702 total_ns=290136661
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=750795 view_copy_ns=194767221 capability_ns=852196 callback_ns=85411942 serialize_ns=520255 total_ns=283588812
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=790930 view_copy_ns=202423675 capability_ns=894197 callback_ns=87723245 serialize_ns=644090 total_ns=294080130
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=834467 view_copy_ns=203958998 capability_ns=930509 callback_ns=88096804 serialize_ns=509777 total_ns=295659105
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=840420 view_copy_ns=205144422 capability_ns=926718 callback_ns=90709769 serialize_ns=519506 total_ns=299516561
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=780056 view_copy_ns=198511767 capability_ns=889091 callback_ns=87765124 serialize_ns=606816 total_ns=290148613
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=908453 view_copy_ns=211923763 capability_ns=1044456 callback_ns=86832296 serialize_ns=548957 total_ns=302710699
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=878537 view_copy_ns=199803453 capability_ns=1022543 callback_ns=85967324 serialize_ns=527781 total_ns=289601857
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=962667 view_copy_ns=209886224 capability_ns=1123278 callback_ns=87480725 serialize_ns=600694 total_ns=301764264
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=752145 view_copy_ns=191219389 capability_ns=849308 callback_ns=85467066 serialize_ns=528683 total_ns=280162304
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=886941 view_copy_ns=203877876 capability_ns=981429 callback_ns=85870922 serialize_ns=622354 total_ns=293931508
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=793100 view_copy_ns=199799792 capability_ns=926313 callback_ns=85560564 serialize_ns=520503 total_ns=289021937
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=820894 view_copy_ns=203419525 capability_ns=931962 callback_ns=89490818 serialize_ns=527969 total_ns=296631158
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=976184 view_copy_ns=211563780 capability_ns=1134254 callback_ns=85974879 serialize_ns=502014 total_ns=301544838
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=903579 view_copy_ns=203375139 capability_ns=1033911 callback_ns=92081872 serialize_ns=502364 total_ns=299314637
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=900231 view_copy_ns=206242499 capability_ns=1010223 callback_ns=89778142 serialize_ns=552726 total_ns=299919035
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=852479 view_copy_ns=201211467 capability_ns=966748 callback_ns=94017193 serialize_ns=550321 total_ns=299095252
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=905779 view_copy_ns=206342000 capability_ns=1031973 callback_ns=87973781 serialize_ns=919566 total_ns=300157026
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=1072936 view_copy_ns=226989116 capability_ns=1251312 callback_ns=85946025 serialize_ns=545249 total_ns=317459732
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=1060322 view_copy_ns=221431684 capability_ns=1274185 callback_ns=89358236 serialize_ns=523716 total_ns=315103913
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=775018 view_copy_ns=196045071 capability_ns=865875 callback_ns=88979928 serialize_ns=544219 total_ns=288704083
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=825185 view_copy_ns=199042972 capability_ns=940191 callback_ns=88142701 serialize_ns=557825 total_ns=291028012
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=924622 view_copy_ns=206691970 capability_ns=1084158 callback_ns=88208025 serialize_ns=511554 total_ns=298832053
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=827156 view_copy_ns=199934949 capability_ns=939321 callback_ns=87704380 serialize_ns=538804 total_ns=291403093
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=870128 view_copy_ns=199208726 capability_ns=994938 callback_ns=86794764 serialize_ns=586335 total_ns=290057531
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=948355 view_copy_ns=208325765 capability_ns=1103406 callback_ns=88600278 serialize_ns=574090 total_ns=301141893
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=953516 view_copy_ns=213823237 capability_ns=1129399 callback_ns=88147570 serialize_ns=553822 total_ns=306207311
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=890840 view_copy_ns=206703149 capability_ns=1036989 callback_ns=85740395 serialize_ns=628157 total_ns=296677908
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=898626 view_copy_ns=204531244 capability_ns=1019313 callback_ns=88909545 serialize_ns=540570 total_ns=297374688
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=884995 view_copy_ns=203201183 capability_ns=1057468 callback_ns=85378328 serialize_ns=511796 total_ns=292424019
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=908924 view_copy_ns=204936960 capability_ns=1048793 callback_ns=88024747 serialize_ns=502528 total_ns=296913645
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=885096 view_copy_ns=208148027 capability_ns=1050269 callback_ns=89677011 serialize_ns=507151 total_ns=301706654
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=988426 view_copy_ns=215008202 capability_ns=1127624 callback_ns=90336101 serialize_ns=698906 total_ns=310286015
+mod_tick_profile dimension=minecraft:overworld machines=1000 create_ns=953003 view_copy_ns=213648235 capability_ns=1142060 callback_ns=87494962 serialize_ns=536390 total_ns=305265133

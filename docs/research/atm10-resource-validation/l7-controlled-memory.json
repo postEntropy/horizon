@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-03",
+  "scope": "Controlled RSS sampling at fixed 1000-machine state, without orderly game teardown",
+  "status": "current-build repeated RSS was stable; later controlled two-build comparison reproduced an approximately +8 MiB cache-build RSS difference, source still unknown",
+  "constraints": {
+    "cpu_affinity": "0-5",
+    "nice": 10,
+    "rayon_threads": 6,
+    "game_data": "fresh temporary HORIZON_HOME, launcher home, XDG_DATA_HOME and XDG_CONFIG_HOME for each session"
+  },
+  "scenario": "Three fresh integrated-server sessions; 1, 100, then 1000 idle Actually Additions crushers; 40 ticks at each stage; eight RSS samples two seconds apart at the final 1000-machine idle state",
+  "rss_mib": {
+    "one_machine_baseline": [
+      1180.98,
+      1179.7,
+      1183.69
+    ],
+    "one_thousand_machine_final_each_session": [
+      1190.53,
+      1189.13,
+      1193.3
+    ],
+    "within_session_increase": [
+      9.55,
+      9.43,
+      9.61
+    ],
+    "final_state_range_between_sessions": 4.17,
+    "repeated_final_samples_per_session": 8,
+    "within_session_final_sample_range": 0
+  },
+  "memory_source": "VmRSS/VmHWM from /proc for the running horizon-client process; RSS readings were identical across each set of eight samples",
+  "termination": "SIGKILL after measurement to avoid the previously crash-prone orderly teardown path; no crash conclusion is drawn from this termination",
+  "comparison_limit": "Two sessions per build reproduce an approximate +8.04 MiB RSS difference; both builds share scenario and all source except the property-value cache, but this does not identify an allocation leak or resolve historical SIGABRT.",
+  "crash": "No new SIGABRT occurred before forced termination. This experiment did not exercise orderly teardown and does not resolve the three preserved teardown SIGABRTs.",
+  "raw_measurements": ".local/atm10-resource-validation/l7-controlled-memory.json",
+  "game_log": ".local/atm10-resource-validation/l7-controlled-memory-server-thread-0.log",
+  "comparison_followup": "l7-build-memory-comparison.json"
+}

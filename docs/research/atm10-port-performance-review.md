@@ -68,25 +68,27 @@ também precisam de validação integrada antes de receber “100%”.
 | Mod | Custo / situação observada |
 |---|---|
 | akashictome | Tick retorna antes de ler inventário quando a tecla não foi pressionada. Biblioteca limitada; parcial: storage por mundo em vez de identidade/NBT de cada tomo. |
-| allthetweaks | Baixo, por interação; bússola aponta para `(0,0)` fixo e ATM Star só anuncia efeito. |
+| allthetweaks | Interações originais de item ainda parciais: uso no ar de ATM Star, Greg Star e Withers Compass foi observado como PASS e validado no Horizon; uso em bloco/entidade, bússola e troféu seguem sem trace. |
 | ars_elemancy | Copia inventário e cria vetor auxiliar todo tick; HUD só muda com loadout. Focos/mana explicitamente incompletos no próprio fonte. |
-| blueflame | Uma consulta de bloco por evento relevante; validar entrega dos eventos de fogo no servidor. |
+| blueflame | Trace com flint-and-steel em soul sand, soul soil e netherrack combinou com vanilla sem o mod; o evento mod-specific segue sem distinção nesses casos. Port ainda parcial. |
 | bwncr | Por evento; consulta configs/storage e grava contadores/regras. Avaliar cache e flush agrupado em tempestades de eventos. |
-| comforts | Baixo porque só toca som e mostra chat; não executa sono/passagem de tempo. |
+| comforts | O oracle com FakePlayer aceitou hammock/bag (`CONSUME`) mas não dormiu nem avançou tempo; falta trace com jogador conectado para medir sono, spawn e tempo. Horizon segue parcial. |
 | constructionstick | Trabalho limitado a 128 posições por interação; validar consumo, orientação, modos e inventário antes de medir construção real. |
-| crafting_on_a_stick | Dispatch de bancada por uso; validar cada menu em ambos os caminhos do jogo. Sem loop periódico. |
+| crafting_on_a_stick | FakePlayer observou SUCCESS e pilha intacta para os nove itens; menu real não é exposto pelo oracle. Horizon mostra telas sem inventário/receita autoritativos, então segue parcial até fixture de jogador e menus funcionais. |
 | crashutilities | HUD a cada 10 ticks; varredura 5×5 apenas no comando. Sem crescimento por máquinas. |
 | dyenamics | Uma recoloração por interação, com tentativa alternativa de estado; validar consumo de corante e propriedades. |
 | elevatorid | Teclas filtram o tick; até 96 leituras de blocos por busca de 32 posições. Consultar espaço acima só após achar elevador; atualmente aceita qualquer cor. |
+| DimStorage | A trace pública confirmou menu de 90 slots e persistência local de um diamante por três ticks. Compartilhamento exige uma interação de jogador configurando dois baús; o harness atual só coloca um baú por cenário. Sem conclusão de paridade. |
+| Dis-Enchanting Table | O bloco salva inventário vazio e progresso zero, mas não expõe menu no harness público. Falta dirigir o uso do jogador com item encantado e observar saída/experiência. Sem conclusão de paridade. |
 | fuelgoeshere | Consulta de combustível por comando; não demonstra o tooltip/automação anunciados na worklist. |
 | heyberryshutup | Predicados por evento; validar cancelamento de lentidão e dano no jogo. |
 | imfast | Teleporte e leitura de config por tick com tecla pressionada; não remove o limite da física. Validar colisão, autoridade e custo de rede. |
 | incontrol | O(R) por spawn, atualmente uma regra fixa; reload restaura defaults, não carrega regras externas. |
 | jumpboat | Consulta entidades só ao pressionar tecla; lista nearby e escolhe primeiro barco próximo, sem verificar montaria. |
-| mcwlights | Baixo por interação; recoloração/toggle fazem set_block, sem tick próprio. |
-| mcwwindows | Toggle real de shutter por uso; martelo/chave só exibem mensagem. |
+| mcwlights | Port limitado aos quatro eventos medidos: jardim PASS sem alterar `lit`; white lamp com red dye/stick retorna Consume sem mudar bloco ou pilha. Validado em ambos os caminhos locais; as demais interações permanecem parciais. |
+| mcwwindows | Observado: oak shutter abre/fecha com mão vazia, hammer ou key; o port valida esse toggle em ambos os modos. Remodelagem, lock e outros blocos seguem pendentes. |
 | measurements | Aritmética por dois cliques; sem trabalho periódico. Validar overflow em seleções grandes. |
-| merrymaking | Alterações pequenas por interação; presente gera drop em cada clique sem consumo/cooldown. |
+| merrymaking | Modelo atual tenta drop em `use` de present; probes públicos do oracle não capturaram o gatilho real. Presentes/stocking pendentes até trace de jogador. |
 | moredragoneggs | Uma ação por morte; coordenada do portal fixa, validar portal real e entrega do evento. |
 | morered | Colocação de poste por uso; mesa/redwire não implementam a rede lógica anunciada. |
 | not_enough_glyphs | Baixo por dano; contingência apenas mostra chat, sem absorver o golpe. |
@@ -118,8 +120,8 @@ também precisam de validação integrada antes de receber “100%”.
 | ars_technica | Varre mapa inteiro; estados desconectados de source/rotação/transmutação reais. |
 | botanypots | Varre mapa inteiro; create não lê solo/semente dos slots; salva só timers, não cultura/solo/output interno. |
 | cabletiers | Varre mapa inteiro; throughput interno sem transferência para inventários/capabilities de vizinhos. |
-| chisel | Número limitado de offsets por uso; leituras/set_block por posição. Validar estados, consumo e propriedades. |
-| cookingforblockheads | Lê posição + três slots por handle/tick, escreve lit todo tick; não persiste estados/remove handles e trata qualquer handle ticking como forno. |
+| chisel | Port agora passa sem mutação nos quatro right-clicks observados (stone, array/stone, bedrock e mão vazia). As ações principais, menu, materiais, padrões e modos continuam parciais. |
+| cookingforblockheads | Harness de máquina não encontrou Container nem menu público do forno; tick/receita/save ainda sem trace black-box. |
 | dimstorage | 27 leituras/handle/tick, lookup host O(N), reposição de extrações e mapas sem limpeza/persistência. |
 | disenchanting_table | Três leituras e clone de estado por handle/tick; falta save/remove; validar componentes de encantamentos, não apenas IDs. |
 | enderstorage | 27 leituras/handle/tick, canal fixo no tick e reposição de extrações; falta save/remove. |

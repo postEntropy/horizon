@@ -1,0 +1,396 @@
+{
+  "scenario": "Actually Additions crusher with iron ore and 10,000 FE per machine; active baseline captured before constant-time machine-position ownership index",
+  "profile_environment": [
+    "HORIZON_MOD_TICK_PROFILE=1",
+    "HORIZON_MOD_MACHINE_PROFILE=1"
+  ],
+  "sample_policy": "Use last 40 exact-count rows when available; baseline 1,000-machine log contained 33 exact-count rows.",
+  "source_logs": [
+    "l7-active-profile-before-1-server-thread-0.log",
+    "l7-active-profile-before-100-server-thread-0.log",
+    "l7-active-profile-before-1000-server-thread-0.log"
+  ],
+  "runs": [
+    {
+      "machines": 1,
+      "tick_stats": {
+        "create_ns": {
+          "p50_ns": 1107.5,
+          "p95_ns": 1683,
+          "max_ns": 2023
+        },
+        "view_copy_ns": {
+          "p50_ns": 6186.5,
+          "p95_ns": 9197,
+          "max_ns": 47730
+        },
+        "capability_ns": {
+          "p50_ns": 1969.0,
+          "p95_ns": 2656,
+          "max_ns": 2715
+        },
+        "callback_ns": {
+          "p50_ns": 78685.0,
+          "p95_ns": 124557,
+          "max_ns": 136780
+        },
+        "serialize_ns": {
+          "p50_ns": 3331.0,
+          "p95_ns": 3908,
+          "max_ns": 4158
+        },
+        "total_ns": {
+          "p50_ns": 106006.0,
+          "p95_ns": 153671,
+          "max_ns": 170374
+        }
+      },
+      "ticks_profiled": 40,
+      "host_import_stats": {
+        "get_position_calls": {
+          "p50_ns": 1.0,
+          "p95_ns": 1,
+          "max_ns": 1
+        },
+        "get_position_ns": {
+          "p50_ns": 150.0,
+          "p95_ns": 220,
+          "max_ns": 391
+        },
+        "get_slot_calls": {
+          "p50_ns": 1.0,
+          "p95_ns": 1,
+          "max_ns": 1
+        },
+        "get_slot_ns": {
+          "p50_ns": 321.0,
+          "p95_ns": 511,
+          "max_ns": 582
+        },
+        "get_energy_calls": {
+          "p50_ns": 1.0,
+          "p95_ns": 1,
+          "max_ns": 1
+        },
+        "get_energy_ns": {
+          "p50_ns": 150.0,
+          "p95_ns": 390,
+          "max_ns": 621
+        },
+        "set_energy_calls": {
+          "p50_ns": 1.0,
+          "p95_ns": 1,
+          "max_ns": 1
+        },
+        "set_energy_ns": {
+          "p50_ns": 882.0,
+          "p95_ns": 1283,
+          "max_ns": 1854
+        },
+        "process_items_calls": {
+          "p50_ns": 1.0,
+          "p95_ns": 1,
+          "max_ns": 1
+        },
+        "process_items_ns": {
+          "p50_ns": 1738.5,
+          "p95_ns": 2094,
+          "max_ns": 2655
+        }
+      },
+      "machine_import_profiled_ticks": 40,
+      "dispatch_stats": {
+        "seed_ns": {
+          "p50_ns": 7138.5,
+          "p95_ns": 9428,
+          "max_ns": 56146
+        },
+        "grouping_ns": {
+          "p50_ns": 1137.0,
+          "p95_ns": 2104,
+          "max_ns": 2484
+        },
+        "guest_ns": {
+          "p50_ns": 30838.5,
+          "p95_ns": 43162,
+          "max_ns": 74210
+        },
+        "return_views_ns": {
+          "p50_ns": 1097.5,
+          "p95_ns": 1723,
+          "max_ns": 1894
+        },
+        "sync_ns": {
+          "p50_ns": 1277.0,
+          "p95_ns": 1683,
+          "max_ns": 1974
+        },
+        "total_ns": {
+          "p50_ns": 66886.5,
+          "p95_ns": 112463,
+          "max_ns": 124376
+        }
+      },
+      "dispatch_profiled_ticks": 40,
+      "available_exact_count_samples": {
+        "tick": 42,
+        "calls": 42,
+        "dispatch": 42
+      }
+    },
+    {
+      "machines": 100,
+      "tick_stats": {
+        "create_ns": {
+          "p50_ns": 20605.0,
+          "p95_ns": 33242,
+          "max_ns": 33801
+        },
+        "view_copy_ns": {
+          "p50_ns": 176179.0,
+          "p95_ns": 224486,
+          "max_ns": 257049
+        },
+        "capability_ns": {
+          "p50_ns": 48421.0,
+          "p95_ns": 67331,
+          "max_ns": 74240
+        },
+        "callback_ns": {
+          "p50_ns": 1395290.5,
+          "p95_ns": 1760699,
+          "max_ns": 2210452
+        },
+        "serialize_ns": {
+          "p50_ns": 49356.5,
+          "p95_ns": 65408,
+          "max_ns": 73367
+        },
+        "total_ns": {
+          "p50_ns": 1905919.5,
+          "p95_ns": 2350919,
+          "max_ns": 2964100
+        }
+      },
+      "ticks_profiled": 40,
+      "host_import_stats": {
+        "get_position_calls": {
+          "p50_ns": 100.0,
+          "p95_ns": 100,
+          "max_ns": 100
+        },
+        "get_position_ns": {
+          "p50_ns": 7313.0,
+          "p95_ns": 12936,
+          "max_ns": 15292
+        },
+        "get_slot_calls": {
+          "p50_ns": 100.0,
+          "p95_ns": 100,
+          "max_ns": 100
+        },
+        "get_slot_ns": {
+          "p50_ns": 7636.5,
+          "p95_ns": 13377,
+          "max_ns": 16297
+        },
+        "get_energy_calls": {
+          "p50_ns": 100.0,
+          "p95_ns": 100,
+          "max_ns": 100
+        },
+        "get_energy_ns": {
+          "p50_ns": 6869.0,
+          "p95_ns": 9398,
+          "max_ns": 9419
+        },
+        "set_energy_calls": {
+          "p50_ns": 100.0,
+          "p95_ns": 100,
+          "max_ns": 100
+        },
+        "set_energy_ns": {
+          "p50_ns": 931869.0,
+          "p95_ns": 1168075,
+          "max_ns": 1474234
+        },
+        "process_items_calls": {
+          "p50_ns": 100.0,
+          "p95_ns": 100,
+          "max_ns": 100
+        },
+        "process_items_ns": {
+          "p50_ns": 31325.0,
+          "p95_ns": 45165,
+          "max_ns": 50199
+        }
+      },
+      "machine_import_profiled_ticks": 40,
+      "dispatch_stats": {
+        "seed_ns": {
+          "p50_ns": 114076.0,
+          "p95_ns": 140256,
+          "max_ns": 190482
+        },
+        "grouping_ns": {
+          "p50_ns": 7690.0,
+          "p95_ns": 9659,
+          "max_ns": 13105
+        },
+        "guest_ns": {
+          "p50_ns": 1199269.5,
+          "p95_ns": 1536473,
+          "max_ns": 1919280
+        },
+        "return_views_ns": {
+          "p50_ns": 3136.0,
+          "p95_ns": 4589,
+          "max_ns": 6032
+        },
+        "sync_ns": {
+          "p50_ns": 30758.0,
+          "p95_ns": 48983,
+          "max_ns": 51718
+        },
+        "total_ns": {
+          "p50_ns": 1384786.0,
+          "p95_ns": 1750469,
+          "max_ns": 2199411
+        }
+      },
+      "dispatch_profiled_ticks": 40,
+      "available_exact_count_samples": {
+        "tick": 42,
+        "calls": 42,
+        "dispatch": 42
+      }
+    },
+    {
+      "machines": 1000,
+      "tick_stats": {
+        "create_ns": {
+          "p50_ns": 236315,
+          "p95_ns": 376898,
+          "max_ns": 2023506
+        },
+        "view_copy_ns": {
+          "p50_ns": 1731912,
+          "p95_ns": 2025389,
+          "max_ns": 2107310
+        },
+        "capability_ns": {
+          "p50_ns": 480102,
+          "p95_ns": 621965,
+          "max_ns": 653278
+        },
+        "callback_ns": {
+          "p50_ns": 91289012,
+          "p95_ns": 104478985,
+          "max_ns": 228048017
+        },
+        "serialize_ns": {
+          "p50_ns": 553638,
+          "p95_ns": 755526,
+          "max_ns": 795403
+        },
+        "total_ns": {
+          "p50_ns": 97451890,
+          "p95_ns": 109784115,
+          "max_ns": 232796190
+        }
+      },
+      "ticks_profiled": 33,
+      "host_import_stats": {
+        "get_position_calls": {
+          "p50_ns": 1000,
+          "p95_ns": 1000,
+          "max_ns": 1000
+        },
+        "get_position_ns": {
+          "p50_ns": 313836,
+          "p95_ns": 354219,
+          "max_ns": 415156
+        },
+        "get_slot_calls": {
+          "p50_ns": 1000,
+          "p95_ns": 1000,
+          "max_ns": 1000
+        },
+        "get_slot_ns": {
+          "p50_ns": 222497,
+          "p95_ns": 249491,
+          "max_ns": 250938
+        },
+        "get_energy_calls": {
+          "p50_ns": 1000,
+          "p95_ns": 1000,
+          "max_ns": 1000
+        },
+        "get_energy_ns": {
+          "p50_ns": 157210,
+          "p95_ns": 183244,
+          "max_ns": 186447
+        },
+        "set_energy_calls": {
+          "p50_ns": 1000,
+          "p95_ns": 1000,
+          "max_ns": 2000
+        },
+        "set_energy_ns": {
+          "p50_ns": 85913224,
+          "p95_ns": 99514019,
+          "max_ns": 223111658
+        },
+        "process_items_calls": {
+          "p50_ns": 1000,
+          "p95_ns": 1000,
+          "max_ns": 1000
+        },
+        "process_items_ns": {
+          "p50_ns": 342629,
+          "p95_ns": 396530,
+          "max_ns": 415417
+        }
+      },
+      "machine_import_profiled_ticks": 33,
+      "dispatch_stats": {
+        "seed_ns": {
+          "p50_ns": 1281020,
+          "p95_ns": 1757582,
+          "max_ns": 1884113
+        },
+        "grouping_ns": {
+          "p50_ns": 56377,
+          "p95_ns": 136990,
+          "max_ns": 167738
+        },
+        "guest_ns": {
+          "p50_ns": 89055958,
+          "p95_ns": 102539378,
+          "max_ns": 226656338
+        },
+        "return_views_ns": {
+          "p50_ns": 21180,
+          "p95_ns": 24406,
+          "max_ns": 30157
+        },
+        "sync_ns": {
+          "p50_ns": 617441,
+          "p95_ns": 677144,
+          "max_ns": 692674
+        },
+        "total_ns": {
+          "p50_ns": 91273864,
+          "p95_ns": 104466451,
+          "max_ns": 228034942
+        }
+      },
+      "dispatch_profiled_ticks": 33,
+      "available_exact_count_samples": {
+        "tick": 33,
+        "calls": 33,
+        "dispatch": 33
+      }
+    }
+  ]
+}

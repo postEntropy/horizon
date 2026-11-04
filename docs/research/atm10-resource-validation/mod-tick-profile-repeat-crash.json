@@ -1,0 +1,32 @@
+{
+  "date": "2026-11-03",
+  "scope": "Repeat of the integrated-server mod tick profile to investigate the unexplained RSS delta",
+  "status": "crashed-after-measurement",
+  "command": "taskset -c 0-5 nice -n 10 python3 tools/profile_mod_tick_game.py --hmod .local/atm10-resource-validation/actuallyadditions-with-carry.hmod --out .local/atm10-resource-validation/mod-tick-profile-server-repeat.json --modes server-thread",
+  "constraints": {
+    "cpu_affinity": "0-5",
+    "nice": 10,
+    "rayon_threads": 6,
+    "game_data": "fresh temporary HORIZON_HOME, launcher home and XDG paths"
+  },
+  "scenario": "Actually Additions crusher at 1, 100 and 1000 machines; empty and iron ore present without FE; 40 tick samples per state",
+  "failure": {
+    "signal": "SIGABRT",
+    "message": "free(): invalid pointer",
+    "process": "target/fast/horizon-client",
+    "phase": "after the 1000-machine measurement and slot cleanup, during game shutdown",
+    "core_pid": 79237,
+    "backtrace_summary": "glibc free/abort; Arc<Vec<horizon_core::geometry::Aabb>>::drop_slow from a Streaming::new<NoTerrain> worker; several other workers were in VoxelShape drop glue",
+    "cause": "unknown; stack identifies the abort site and teardown structures, not the origin of memory corruption"
+  },
+  "oom_check": {
+    "available_memory_gib": 7.7,
+    "kernel_oom_kill_message": false
+  },
+  "artifacts": {
+    "raw_log_staging": ".local/atm10-resource-validation/mod-tick-profile-server-repeat-server-thread-0.log",
+    "core_extract": "temporary gdb copy was deleted after inspection; systemd-coredump retained the original core"
+  },
+  "impact": "Fixture directories were temporary and removed; no real player data was used.",
+  "next": "Stop before L8. Investigate the invalid free and repeat RSS measurements only after a cause or safe test change is identified."
+}

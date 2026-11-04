@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-03",
+  "command": "cargo test -p horizon-mods --features runtime,pack --test sandbox item_move -- --test-threads=1",
+  "limits": "taskset CPUs 0-5, nice 10, CARGO_BUILD_JOBS=6, RAYON_NUM_THREADS=6",
+  "result": {
+    "status": "passed",
+    "tests_passed": 2,
+    "test_harness_elapsed_s": 16.12,
+    "wall_elapsed_s": 16.321,
+    "peak_process_tree_rss_mib": 147.78,
+    "peak_single_process_rss_mib": 70.32
+  },
+  "scope": [
+    "item_move_intents_are_deferred_confirmed_once_and_invalidated_on_removal_or_trap",
+    "item_move_request_ids_cannot_cross_a_hot_reload_even_when_reused"
+  ],
+  "measurement_limit": "RSS sampled every 50 ms across cargo/test child processes; this is the test command tree, not a single game process or a before/after comparison.",
+  "full_sandbox_suite": {
+    "command": "cargo test -p horizon-mods --features runtime,pack --test sandbox -- --test-threads=1",
+    "status": "passed",
+    "passed": 36,
+    "failed": 0,
+    "ignored": 1,
+    "harness_elapsed_s": 177.45,
+    "memory": "not sampled for this full-suite run"
+  },
+  "resolved_fixture_failures": [
+    {
+      "symptom": "Old packaged hmods rejected at startup because their WIT event action enum had four variants while current runtime expected five.",
+      "resolution": "Rebuilt Modular Routers component and inserted it into an isolated copy of its carry hmod; rebuilt test guest packages and merged current guest WASM into a copy of reader assets."
+    },
+    {
+      "symptom": "An unconditional one-slot peer fixture broke existing tests that require peer slot 0 to be out of bounds.",
+      "resolution": "Peer reads a declared one_slot config, false by default; game transfer fixture uses a separate manifest copy with true."
+    },
+    {
+      "symptom": "The invalid-owner manifest test panicked during guest init before host block ownership validation.",
+      "resolution": "The test guest no longer asserts success for its valid capacity registration when run under a deliberately foreign owner namespace; the sandbox test now reaches and validates the intended host rejection."
+    }
+  ]
+}

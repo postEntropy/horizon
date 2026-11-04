@@ -1,0 +1,131 @@
+{
+  "date": "2026-11-03",
+  "status": "dirty tracking not justified by current measurement; no guest-private dirty-state contract exists",
+  "scope": "After reverse-position index; Actually Additions crusher, 1/100/1000, idle and one iron-ore/no-energy case, 40 ticks per state, both single-player modes.",
+  "limits": "CPU 0-5, nice 10, Rayon 6, temporary game/launcher/XDG homes; one session per mode.",
+  "measurements_1000": {
+    "in-frame": {
+      "idle": {
+        "samples": 40,
+        "memory_mib": {
+          "vmhwm": 1075.33,
+          "vmrss": 1006.5
+        },
+        "total_ns": {
+          "p50_ns": 7070393.0,
+          "p95_ns": 8363530,
+          "max_ns": 8405520
+        },
+        "serialize_ns": {
+          "p50_ns": 529237.5,
+          "p95_ns": 754238,
+          "max_ns": 845663
+        },
+        "callback_ns": {
+          "p50_ns": 2814537.5,
+          "p95_ns": 3791189,
+          "max_ns": 4450660
+        },
+        "view_copy_ns": {
+          "p50_ns": 1408376.5,
+          "p95_ns": 1743351,
+          "max_ns": 1865971
+        }
+      },
+      "input-present-no-energy": {
+        "samples": 40,
+        "memory_mib": {
+          "vmhwm": 1075.33,
+          "vmrss": 1006.5
+        },
+        "total_ns": {
+          "p50_ns": 9456071.5,
+          "p95_ns": 12443427,
+          "max_ns": 12803520
+        },
+        "serialize_ns": {
+          "p50_ns": 543787.0,
+          "p95_ns": 656833,
+          "max_ns": 788997
+        },
+        "callback_ns": {
+          "p50_ns": 4455043.5,
+          "p95_ns": 6087263,
+          "max_ns": 6272575
+        },
+        "view_copy_ns": {
+          "p50_ns": 1885549.0,
+          "p95_ns": 3385668,
+          "max_ns": 4049408
+        }
+      }
+    },
+    "server-thread": {
+      "idle": {
+        "samples": 40,
+        "memory_mib": {
+          "vmhwm": 1316.35,
+          "vmrss": 1191.11
+        },
+        "total_ns": {
+          "p50_ns": 6440403.0,
+          "p95_ns": 9031887,
+          "max_ns": 11459812
+        },
+        "serialize_ns": {
+          "p50_ns": 473877.5,
+          "p95_ns": 646919,
+          "max_ns": 746473
+        },
+        "callback_ns": {
+          "p50_ns": 2519262.5,
+          "p95_ns": 3045114,
+          "max_ns": 3837667
+        },
+        "view_copy_ns": {
+          "p50_ns": 1406428.5,
+          "p95_ns": 2345278,
+          "max_ns": 3961494
+        }
+      },
+      "input-present-no-energy": {
+        "samples": 40,
+        "memory_mib": {
+          "vmhwm": 1316.35,
+          "vmrss": 1201.8
+        },
+        "total_ns": {
+          "p50_ns": 10021198.5,
+          "p95_ns": 12608730,
+          "max_ns": 12640080
+        },
+        "serialize_ns": {
+          "p50_ns": 531284.0,
+          "p95_ns": 759339,
+          "max_ns": 816316
+        },
+        "callback_ns": {
+          "p50_ns": 4685275.0,
+          "p95_ns": 6771971,
+          "max_ns": 7153865
+        },
+        "view_copy_ns": {
+          "p50_ns": 2114207.5,
+          "p95_ns": 2496177,
+          "max_ns": 2515653
+        }
+      }
+    }
+  },
+  "decision": {
+    "idle_serialization_share": "p50 serialize is 0.474 ms of 6.440 ms total in server-thread (7.4%) and 0.529 ms of 7.070 ms in-frame (7.5%). In input-present/no-energy state it is 0.531 ms of 10.021 ms server-thread (5.3%) and 0.544 ms of 9.456 ms in-frame (5.8%).",
+    "dominant_stages": "Idle callbacks and view copies exceed serialization in both modes; input-present/no-energy callback and view-copy stages are larger still.",
+    "guest_contract": "The guest owns private serialized block-entity state; host currently calls save_block_entity every tick and detects change only after serialization. No dirty notification or versioned-state contract is exposed.",
+    "action": "Do not implement dirty tracking. The measured serialization share is small and no clear guest-private change signal contract exists. Reconsider only if a new profile/hypothesis shows material serialization cost and a dirty-state API can be specified without losing saves."
+  },
+  "artifacts": [
+    "l7-idle-profile-after-index.json",
+    "l7-idle-profile-after-index-in-frame-0.log",
+    "l7-idle-profile-after-index-server-thread-0.log"
+  ]
+}

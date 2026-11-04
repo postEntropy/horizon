@@ -1,0 +1,83 @@
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:canola_seeds is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:coffee_beans is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:flax_seeds is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:rice_seeds is not registered in this mod set; ignored
+Horizon: content root ready for 1 mod(s) in 4.3s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-xeh1dy_z/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.15s (39077 block states)
+Horizon: discovered 4618 model files in 0.00s, parsed in 0.02s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.06s (1413 blocks)
+Horizon: bound 39075 model states / 8394 variants in 0.12s, resolved models in 0.01s, baked models and loaded sprites in 0.11s
+Horizon: model-state catalog prepared in 0.24s
+Horizon: blockstate binding and model baking took 0.31s
+Horizon: finalized 1459 sprite layers in 0.04s (asset render stage 0.38s)
+Horizon: gameplay facts read 0.02s, validated 0.17s, decoded 0.15s, projected 39077 states in 0.07s
+load assets: 5.02s
+Horizon: asset load stage took 0.60s
+load facts: 5.02s
+Horizon: facts, biomes and environment stage took 0.43s
+load biomes+env: 5.02s
+load pack tables: 5.35s
+Horizon: pack tables stage took 0.32s
+load collision+motion: 5.53s
+Horizon: collision and motion stage took 0.18s
+Horizon: mob metadata loaded in 0.02s
+load items: 5.61s
+Horizon: resources loaded in 5.6s; 39077 block states, 1884 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.10s
+Horizon: providers and block-entity render tables loaded in 0.16s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.23s
+Horizon: mob types loaded in 0.05s
+Horizon: player model setup took 0.09s
+Horizon: behaviours, mob types and player models loaded in 0.38s
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.04s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-xeh1dy_z/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.06s
+Horizon: game CPU resources ready in 0.06s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: live features ready in 753.239868ms
+[15:58:11] [Server thread/INFO]: Player26313[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
+[15:58:11] [Server thread/INFO]: System chat: Player26313 joined the game
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=4739 serialize_ns=0 total_ns=15450
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=5050 serialize_ns=0 total_ns=12574
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=4689 serialize_ns=0 total_ns=16882
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 4795 ms
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=4439 serialize_ns=0 total_ns=7665
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=4800 serialize_ns=0 total_ns=7475
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=3868 serialize_ns=0 total_ns=6703
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=4489 serialize_ns=0 total_ns=18806
+[chat] The game is frozen
+[15:58:11] [Server thread/INFO]: System chat: [Player26313: Teleported Player26313 to 1.500000, 102.000000, 4.500000]
+[chat] Teleported Player26313 to 1.500000, 102.000000, 4.500000
+[15:58:11] [Server thread/INFO]: System chat: [Player26313: Replaced 1 slot(s) at 0, 100, 0 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 0, 100, 0 with [Iron Ore]
+[15:58:11] [Server thread/INFO]: System chat: [Player26313: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=210 get_slot_calls=1 get_slot_ns=261 get_energy_calls=1 get_energy_ns=40 set_energy_calls=2 set_energy_ns=2084 process_items_calls=1 process_items_ns=2034
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=1693 view_copy_ns=434083 capability_ns=571 callback_ns=95922 serialize_ns=4188 total_ns=560583
+[chat] 0, 100, 0 has the following block data: {max_receive: "100", stored: "0", max_extract: "0", capacity: "60000"}
+[15:58:12] [Server thread/INFO]: System chat: [Player26313: Modified block data of 0, 100, 0]
+[chat] Modified block data of 0, 100, 0
+[chat] 0, 100, 0 has the following block data: {max_receive: "100", stored: "10000", max_extract: "0", capacity: "60000"}
+[15:58:13] [Server thread/INFO]: System chat: [Player26313: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+mod_machine_profile mod=actuallyadditions machines=1 get_position_calls=1 get_position_ns=120 get_slot_calls=1 get_slot_ns=370 get_energy_calls=1 get_energy_ns=140 set_energy_calls=1 set_energy_ns=741 process_items_calls=1 process_items_ns=2324
+mod_tick_profile dimension=minecraft:overworld machines=1 create_ns=22943 view_copy_ns=7905 capability_ns=1783 callback_ns=59152 serialize_ns=5110 total_ns=112884
+[chat] 0, 100, 0 has the following block data: {mod_slots: 3, components: {}, mod_data: [B; -24b, 38b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 1b, 0b, 0b, 0b], x: 0, mod_block: "actuallyadditions:crusher", y: 100, Items: [{count: 1, Slot: 0b, id: "minecraft:iron_ore"}], z: 0, id: "horizon:mod_block_entity", horizon_energy: {max_receive: "100", stored: "9960", max_extract: "0", capacity: "60000"}}

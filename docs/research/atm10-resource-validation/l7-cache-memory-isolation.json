@@ -1,0 +1,139 @@
+{
+  "date": "2026-11-03",
+  "status": "cache RSS attribution remains inconclusive; previous +8.04 MiB delta did not reproduce; cache retained; SIGABRT unresolved",
+  "comparison": {
+    "only_functional_source_difference": "the mod-block property values are recomputed for each block entity vs cached by (block id, property name); profiling instrumentation is identical in both variants",
+    "profile": "fast with mods; integrated server; CPU affinity 0-5; nice 10; RAYON_NUM_THREADS=6; fresh temporary game, launcher, and XDG homes",
+    "scenario": "same hmod/resources/player/world commands in each session; 0 then 1, 100, 1,000 idle crushers (40 ticks at each count), remove all 1,000 and tick 40; five RSS samples per stage; three sessions per variant",
+    "no_cache_binary_sha256": "8a88ea8f5ebafd88f4bb17b5beb76d49e86b36ad7b7bd71240fdd5d11f16b9eb",
+    "cache_binary_sha256": "5af90c66e6f178311a78b08aab90476ef51e3ca2485334a5f2252125ccbeb585",
+    "no_cache": {
+      "rss_by_stage_mib": {
+        "before-machines:0": {
+          "median": 1176.86,
+          "range": [
+            1162.69,
+            1185.81
+          ],
+          "sessions": 3
+        },
+        "after-create:1": {
+          "median": 1180.8,
+          "range": [
+            1166.56,
+            1189.87
+          ],
+          "sessions": 3
+        },
+        "after-create:100": {
+          "median": 1182.03,
+          "range": [
+            1168.0,
+            1191.21
+          ],
+          "sessions": 3
+        },
+        "after-create:1000": {
+          "median": 1191.28,
+          "range": [
+            1176.0,
+            1195.57
+          ],
+          "sessions": 3
+        },
+        "after-remove:0": {
+          "median": 1191.56,
+          "range": [
+            1176.0,
+            1195.57
+          ],
+          "sessions": 3
+        }
+      },
+      "growth_before_to_1000_mib_each_run": [
+        14.42,
+        9.76,
+        13.31
+      ],
+      "median_growth_before_to_1000_mib": 13.31,
+      "growth_before_to_after_removal_mib_each_run": [
+        14.7,
+        9.76,
+        13.31
+      ],
+      "median_growth_before_to_after_removal_mib": 13.31
+    },
+    "cache": {
+      "rss_by_stage_mib": {
+        "before-machines:0": {
+          "median": 1174.91,
+          "range": [
+            1173.14,
+            1176.74
+          ],
+          "sessions": 3
+        },
+        "after-create:1": {
+          "median": 1178.79,
+          "range": [
+            1177.31,
+            1180.61
+          ],
+          "sessions": 3
+        },
+        "after-create:100": {
+          "median": 1179.24,
+          "range": [
+            1178.6,
+            1182.29
+          ],
+          "sessions": 3
+        },
+        "after-create:1000": {
+          "median": 1189.05,
+          "range": [
+            1182.86,
+            1191.58
+          ],
+          "sessions": 3
+        },
+        "after-remove:0": {
+          "median": 1189.24,
+          "range": [
+            1182.86,
+            1191.58
+          ],
+          "sessions": 3
+        }
+      },
+      "growth_before_to_1000_mib_each_run": [
+        14.84,
+        9.72,
+        14.14
+      ],
+      "median_growth_before_to_1000_mib": 14.14,
+      "growth_before_to_after_removal_mib_each_run": [
+        14.84,
+        9.72,
+        14.33
+      ],
+      "median_growth_before_to_after_removal_mib": 14.33
+    },
+    "cache_structure_after_first_machine": {
+      "entries": 2,
+      "map_capacity": 3,
+      "cached_values": 6,
+      "estimated_capacity_bytes": 686,
+      "estimated_total_with_inline_hashmap_header_bytes": 734,
+      "note": "686 B includes entry slots at reported capacity plus key String, Vec and value String capacities; +48 B for the inline HashMap header. Excludes allocator size-class overhead and hash control bytes. Cache persists after all machines are removed."
+    },
+    "normalized_growth_delta_cache_minus_no_cache_mib": 0.83,
+    "previous_reported_delta_mib": 8.04,
+    "interpretation": "In the three matched sessions, median RSS growth from 0 to 1,000 machines was similar with and without caching; after removal RSS remained near the 1,000-machine state. The cache itself is <1 KiB for this block. These measurements do not isolate causality: the +0.83 MiB normalized growth delta neither establishes nor rules out cache attribution of the prior +8.04 MiB whole-process/build delta. No further RSS matrix was run. No memory-leak or corruption cause is established."
+  },
+  "artifacts": [
+    "l7-cache-isolation-before-repeats.json",
+    "l7-cache-isolation-after-repeats.json",
+    "l7-teardown-cleanup-ab.json"
+  ]
+}

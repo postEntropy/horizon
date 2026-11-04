@@ -1,0 +1,608 @@
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:canola_seeds is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:coffee_beans is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:flax_seeds is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:rice_seeds is not registered in this mod set; ignored
+Horizon: content root ready for 1 mod(s) in 4.3s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-kaxqf60n/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.15s (39077 block states)
+Horizon: discovered 4618 model files in 0.01s, parsed in 0.02s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.06s (1413 blocks)
+Horizon: bound 39075 model states / 8394 variants in 0.10s, resolved models in 0.01s, baked models and loaded sprites in 0.11s
+Horizon: model-state catalog prepared in 0.22s
+Horizon: blockstate binding and model baking took 0.29s
+Horizon: finalized 1459 sprite layers in 0.04s (asset render stage 0.36s)
+Horizon: gameplay facts read 0.02s, validated 0.18s, decoded 0.15s, projected 39077 states in 0.07s
+load assets: 5.08s
+Horizon: asset load stage took 0.61s
+load facts: 5.08s
+Horizon: facts, biomes and environment stage took 0.44s
+load biomes+env: 5.08s
+load pack tables: 5.38s
+Horizon: pack tables stage took 0.30s
+load collision+motion: 5.57s
+Horizon: collision and motion stage took 0.18s
+Horizon: mob metadata loaded in 0.02s
+load items: 5.65s
+Horizon: resources loaded in 5.7s; 39077 block states, 1884 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.10s
+Horizon: providers and block-entity render tables loaded in 0.17s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.26s
+Horizon: mob types loaded in 0.05s
+Horizon: player model setup took 0.09s
+Horizon: behaviours, mob types and player models loaded in 0.41s
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.05s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-kaxqf60n/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.02s
+Horizon: game CPU resource bundle ready in 0.07s
+Horizon: game CPU resources ready in 0.07s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: live features ready in 776.339231ms
+[16:09:53] [Server thread/INFO]: Player48437[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
+[16:09:53] [Server thread/INFO]: System chat: Player48437 joined the game
+mod_dispatch_profile machines=0 seed_ns=2665 grouping_ns=0 guest_ns=0 return_views_ns=0 sync_ns=281 total_ns=3257
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=20780 serialize_ns=0 total_ns=30027
+mod_dispatch_profile machines=0 seed_ns=2795 grouping_ns=0 guest_ns=0 return_views_ns=0 sync_ns=611 total_ns=4037
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=25137 serialize_ns=0 total_ns=33985
+mod_dispatch_profile machines=0 seed_ns=4709 grouping_ns=0 guest_ns=0 return_views_ns=0 sync_ns=682 total_ns=6342
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=32942 serialize_ns=0 total_ns=46829
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 4869 ms
+mod_dispatch_profile machines=0 seed_ns=2434 grouping_ns=0 guest_ns=0 return_views_ns=0 sync_ns=281 total_ns=3266
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=23174 serialize_ns=0 total_ns=25419
+mod_dispatch_profile machines=0 seed_ns=3567 grouping_ns=0 guest_ns=0 return_views_ns=0 sync_ns=281 total_ns=4569
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=27392 serialize_ns=0 total_ns=30287
+mod_dispatch_profile machines=0 seed_ns=2845 grouping_ns=0 guest_ns=0 return_views_ns=0 sync_ns=421 total_ns=3797
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=28855 serialize_ns=0 total_ns=31900
+mod_dispatch_profile machines=0 seed_ns=1934 grouping_ns=0 guest_ns=0 return_views_ns=0 sync_ns=632 total_ns=3036
+mod_tick_profile dimension=minecraft:overworld machines=0 create_ns=0 view_copy_ns=0 capability_ns=0 callback_ns=23194 serialize_ns=0 total_ns=25197
+[chat] The game is frozen
+[16:09:53] [Server thread/INFO]: System chat: [Player48437: Teleported Player48437 to 1.500000, 102.000000, 4.500000]
+[chat] Teleported Player48437 to 1.500000, 102.000000, 4.500000
+[16:09:53] [Server thread/INFO]: System chat: [Player48437: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5412 get_slot_calls=100 get_slot_ns=6584 get_energy_calls=100 get_energy_ns=4668 set_energy_calls=200 set_energy_ns=28190 process_items_calls=0 process_items_ns=0
+mod_dispatch_profile machines=100 seed_ns=90632 grouping_ns=7535 guest_ns=233172 return_views_ns=2705 sync_ns=25960 total_ns=381674
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=25987 view_copy_ns=456201 capability_ns=8265 callback_ns=392554 serialize_ns=46730 total_ns=1078546
+[16:09:54] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 0, 100, 0 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 0, 100, 0 with [Iron Ore]
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Modified block data of 0, 100, 0]
+[chat] Modified block data of 0, 100, 0
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 100, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 100, 2 with [Iron Ore]
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 100, 2]
+[chat] Modified block data of 2, 100, 2
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 100, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 100, 3 with [Iron Ore]
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 100, 3]
+[chat] Modified block data of 2, 100, 3
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 100, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 100, 4 with [Iron Ore]
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 100, 4]
+[chat] Modified block data of 2, 100, 4
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 101, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 101, 2 with [Iron Ore]
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 101, 2]
+[chat] Modified block data of 2, 101, 2
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 101, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 101, 3 with [Iron Ore]
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 101, 3]
+[chat] Modified block data of 2, 101, 3
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 101, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 101, 4 with [Iron Ore]
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 101, 4]
+[chat] Modified block data of 2, 101, 4
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 102, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 102, 2 with [Iron Ore]
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 102, 2]
+[chat] Modified block data of 2, 102, 2
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 102, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 102, 3 with [Iron Ore]
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 102, 3]
+[chat] Modified block data of 2, 102, 3
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 102, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 102, 4 with [Iron Ore]
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 102, 4]
+[chat] Modified block data of 2, 102, 4
+[16:09:55] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 103, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 103, 2 with [Iron Ore]
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 103, 2]
+[chat] Modified block data of 2, 103, 2
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 103, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 103, 3 with [Iron Ore]
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 103, 3]
+[chat] Modified block data of 2, 103, 3
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 103, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 103, 4 with [Iron Ore]
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 103, 4]
+[chat] Modified block data of 2, 103, 4
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 104, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 104, 2 with [Iron Ore]
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 104, 2]
+[chat] Modified block data of 2, 104, 2
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 104, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 104, 3 with [Iron Ore]
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 104, 3]
+[chat] Modified block data of 2, 104, 3
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 104, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 104, 4 with [Iron Ore]
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 104, 4]
+[chat] Modified block data of 2, 104, 4
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 105, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 105, 2 with [Iron Ore]
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 105, 2]
+[chat] Modified block data of 2, 105, 2
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 105, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 105, 3 with [Iron Ore]
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 105, 3]
+[chat] Modified block data of 2, 105, 3
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 105, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 105, 4 with [Iron Ore]
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 105, 4]
+[chat] Modified block data of 2, 105, 4
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 106, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 106, 2 with [Iron Ore]
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 106, 2]
+[chat] Modified block data of 2, 106, 2
+[16:09:56] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 106, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 106, 3 with [Iron Ore]
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 106, 3]
+[chat] Modified block data of 2, 106, 3
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 106, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 106, 4 with [Iron Ore]
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 106, 4]
+[chat] Modified block data of 2, 106, 4
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 107, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 107, 2 with [Iron Ore]
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 107, 2]
+[chat] Modified block data of 2, 107, 2
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 107, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 107, 3 with [Iron Ore]
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 107, 3]
+[chat] Modified block data of 2, 107, 3
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 107, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 107, 4 with [Iron Ore]
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 107, 4]
+[chat] Modified block data of 2, 107, 4
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 108, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 108, 2 with [Iron Ore]
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 108, 2]
+[chat] Modified block data of 2, 108, 2
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 108, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 108, 3 with [Iron Ore]
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 108, 3]
+[chat] Modified block data of 2, 108, 3
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 108, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 108, 4 with [Iron Ore]
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 108, 4]
+[chat] Modified block data of 2, 108, 4
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 109, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 109, 2 with [Iron Ore]
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 109, 2]
+[chat] Modified block data of 2, 109, 2
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 109, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 109, 3 with [Iron Ore]
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 109, 3]
+[chat] Modified block data of 2, 109, 3
+[16:09:57] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 109, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 109, 4 with [Iron Ore]
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 109, 4]
+[chat] Modified block data of 2, 109, 4
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 110, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 110, 2 with [Iron Ore]
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 110, 2]
+[chat] Modified block data of 2, 110, 2
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 110, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 110, 3 with [Iron Ore]
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 110, 3]
+[chat] Modified block data of 2, 110, 3
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 2, 110, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 2, 110, 4 with [Iron Ore]
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Modified block data of 2, 110, 4]
+[chat] Modified block data of 2, 110, 4
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 100, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 100, 2 with [Iron Ore]
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 100, 2]
+[chat] Modified block data of 3, 100, 2
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 100, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 100, 3 with [Iron Ore]
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 100, 3]
+[chat] Modified block data of 3, 100, 3
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 100, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 100, 4 with [Iron Ore]
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 100, 4]
+[chat] Modified block data of 3, 100, 4
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 101, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 101, 2 with [Iron Ore]
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 101, 2]
+[chat] Modified block data of 3, 101, 2
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 101, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 101, 3 with [Iron Ore]
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 101, 3]
+[chat] Modified block data of 3, 101, 3
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 101, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 101, 4 with [Iron Ore]
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 101, 4]
+[chat] Modified block data of 3, 101, 4
+[16:09:58] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 102, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 102, 2 with [Iron Ore]
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 102, 2]
+[chat] Modified block data of 3, 102, 2
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 102, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 102, 3 with [Iron Ore]
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 102, 3]
+[chat] Modified block data of 3, 102, 3
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 102, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 102, 4 with [Iron Ore]
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 102, 4]
+[chat] Modified block data of 3, 102, 4
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 103, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 103, 2 with [Iron Ore]
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 103, 2]
+[chat] Modified block data of 3, 103, 2
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 103, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 103, 3 with [Iron Ore]
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 103, 3]
+[chat] Modified block data of 3, 103, 3
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 103, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 103, 4 with [Iron Ore]
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 103, 4]
+[chat] Modified block data of 3, 103, 4
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 104, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 104, 2 with [Iron Ore]
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 104, 2]
+[chat] Modified block data of 3, 104, 2
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 104, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 104, 3 with [Iron Ore]
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 104, 3]
+[chat] Modified block data of 3, 104, 3
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 104, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 104, 4 with [Iron Ore]
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 104, 4]
+[chat] Modified block data of 3, 104, 4
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 105, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 105, 2 with [Iron Ore]
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 105, 2]
+[chat] Modified block data of 3, 105, 2
+[16:09:59] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 105, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 105, 3 with [Iron Ore]
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 105, 3]
+[chat] Modified block data of 3, 105, 3
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 105, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 105, 4 with [Iron Ore]
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 105, 4]
+[chat] Modified block data of 3, 105, 4
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 106, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 106, 2 with [Iron Ore]
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 106, 2]
+[chat] Modified block data of 3, 106, 2
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 106, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 106, 3 with [Iron Ore]
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 106, 3]
+[chat] Modified block data of 3, 106, 3
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 106, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 106, 4 with [Iron Ore]
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 106, 4]
+[chat] Modified block data of 3, 106, 4
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 107, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 107, 2 with [Iron Ore]
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 107, 2]
+[chat] Modified block data of 3, 107, 2
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 107, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 107, 3 with [Iron Ore]
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 107, 3]
+[chat] Modified block data of 3, 107, 3
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 107, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 107, 4 with [Iron Ore]
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 107, 4]
+[chat] Modified block data of 3, 107, 4
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 108, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 108, 2 with [Iron Ore]
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 108, 2]
+[chat] Modified block data of 3, 108, 2
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 108, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 108, 3 with [Iron Ore]
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 108, 3]
+[chat] Modified block data of 3, 108, 3
+[16:10:00] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 108, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 108, 4 with [Iron Ore]
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 108, 4]
+[chat] Modified block data of 3, 108, 4
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 109, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 109, 2 with [Iron Ore]
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 109, 2]
+[chat] Modified block data of 3, 109, 2
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 109, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 109, 3 with [Iron Ore]
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 109, 3]
+[chat] Modified block data of 3, 109, 3
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 109, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 109, 4 with [Iron Ore]
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 109, 4]
+[chat] Modified block data of 3, 109, 4
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 110, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 110, 2 with [Iron Ore]
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 110, 2]
+[chat] Modified block data of 3, 110, 2
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 110, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 110, 3 with [Iron Ore]
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 110, 3]
+[chat] Modified block data of 3, 110, 3
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 3, 110, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 3, 110, 4 with [Iron Ore]
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Modified block data of 3, 110, 4]
+[chat] Modified block data of 3, 110, 4
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 100, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 100, 2 with [Iron Ore]
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 100, 2]
+[chat] Modified block data of 4, 100, 2
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 100, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 100, 3 with [Iron Ore]
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 100, 3]
+[chat] Modified block data of 4, 100, 3
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 100, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 100, 4 with [Iron Ore]
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 100, 4]
+[chat] Modified block data of 4, 100, 4
+[16:10:01] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 101, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 101, 2 with [Iron Ore]
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 101, 2]
+[chat] Modified block data of 4, 101, 2
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 101, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 101, 3 with [Iron Ore]
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 101, 3]
+[chat] Modified block data of 4, 101, 3
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 101, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 101, 4 with [Iron Ore]
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 101, 4]
+[chat] Modified block data of 4, 101, 4
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 102, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 102, 2 with [Iron Ore]
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 102, 2]
+[chat] Modified block data of 4, 102, 2
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 102, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 102, 3 with [Iron Ore]
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 102, 3]
+[chat] Modified block data of 4, 102, 3
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 102, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 102, 4 with [Iron Ore]
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 102, 4]
+[chat] Modified block data of 4, 102, 4
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 103, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 103, 2 with [Iron Ore]
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 103, 2]
+[chat] Modified block data of 4, 103, 2
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 103, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 103, 3 with [Iron Ore]
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 103, 3]
+[chat] Modified block data of 4, 103, 3
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 103, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 103, 4 with [Iron Ore]
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 103, 4]
+[chat] Modified block data of 4, 103, 4
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 104, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 104, 2 with [Iron Ore]
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 104, 2]
+[chat] Modified block data of 4, 104, 2
+[16:10:02] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 104, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 104, 3 with [Iron Ore]
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 104, 3]
+[chat] Modified block data of 4, 104, 3
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 104, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 104, 4 with [Iron Ore]
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 104, 4]
+[chat] Modified block data of 4, 104, 4
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 105, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 105, 2 with [Iron Ore]
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 105, 2]
+[chat] Modified block data of 4, 105, 2
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 105, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 105, 3 with [Iron Ore]
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 105, 3]
+[chat] Modified block data of 4, 105, 3
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 105, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 105, 4 with [Iron Ore]
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 105, 4]
+[chat] Modified block data of 4, 105, 4
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 106, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 106, 2 with [Iron Ore]
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 106, 2]
+[chat] Modified block data of 4, 106, 2
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 106, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 106, 3 with [Iron Ore]
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 106, 3]
+[chat] Modified block data of 4, 106, 3
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 106, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 106, 4 with [Iron Ore]
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 106, 4]
+[chat] Modified block data of 4, 106, 4
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 107, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 107, 2 with [Iron Ore]
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 107, 2]
+[chat] Modified block data of 4, 107, 2
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 107, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 107, 3 with [Iron Ore]
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 107, 3]
+[chat] Modified block data of 4, 107, 3
+[16:10:03] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 107, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 107, 4 with [Iron Ore]
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 107, 4]
+[chat] Modified block data of 4, 107, 4
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 108, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 108, 2 with [Iron Ore]
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 108, 2]
+[chat] Modified block data of 4, 108, 2
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 108, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 108, 3 with [Iron Ore]
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 108, 3]
+[chat] Modified block data of 4, 108, 3
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 108, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 108, 4 with [Iron Ore]
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 108, 4]
+[chat] Modified block data of 4, 108, 4
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 109, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 109, 2 with [Iron Ore]
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 109, 2]
+[chat] Modified block data of 4, 109, 2
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 109, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 109, 3 with [Iron Ore]
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 109, 3]
+[chat] Modified block data of 4, 109, 3
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 109, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 109, 4 with [Iron Ore]
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 109, 4]
+[chat] Modified block data of 4, 109, 4
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 110, 2 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 110, 2 with [Iron Ore]
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 110, 2]
+[chat] Modified block data of 4, 110, 2
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 110, 3 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 110, 3 with [Iron Ore]
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 110, 3]
+[chat] Modified block data of 4, 110, 3
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Replaced 1 slot(s) at 4, 110, 4 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 4, 110, 4 with [Iron Ore]
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Modified block data of 4, 110, 4]
+[chat] Modified block data of 4, 110, 4
+[16:10:04] [Server thread/INFO]: System chat: [Player48437: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5390 get_slot_calls=100 get_slot_ns=7297 get_energy_calls=100 get_energy_ns=6396 set_energy_calls=100 set_energy_ns=9829 process_items_calls=100 process_items_ns=29619
+mod_dispatch_profile machines=100 seed_ns=109749 grouping_ns=7194 guest_ns=251226 return_views_ns=2955 sync_ns=29606 total_ns=422552
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=235354 view_copy_ns=111519 capability_ns=48680 callback_ns=432139 serialize_ns=47017 total_ns=1029452
+[16:10:06] [Server thread/INFO]: System chat: [Player48437: Stepping 40 tick(s)]
+[chat] Stepping 40 tick(s)
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6463 get_slot_calls=100 get_slot_ns=7135 get_energy_calls=100 get_energy_ns=6909 set_energy_calls=100 set_energy_ns=21834 process_items_calls=100 process_items_ns=27194
+mod_dispatch_profile machines=100 seed_ns=116470 grouping_ns=9187 guest_ns=303135 return_views_ns=4278 sync_ns=52239 total_ns=510458
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=30480 view_copy_ns=159710 capability_ns=61035 callback_ns=522922 serialize_ns=84073 total_ns=1207029
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5384 get_slot_calls=100 get_slot_ns=6802 get_energy_calls=100 get_energy_ns=6265 set_energy_calls=100 set_energy_ns=12935 process_items_calls=100 process_items_ns=24461
+mod_dispatch_profile machines=100 seed_ns=114166 grouping_ns=9588 guest_ns=266295 return_views_ns=2655 sync_ns=29075 total_ns=444773
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=17685 view_copy_ns=138332 capability_ns=43194 callback_ns=454271 serialize_ns=57547 total_ns=904606
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=8133 get_slot_calls=100 get_slot_ns=10150 get_energy_calls=100 get_energy_ns=8584 set_energy_calls=100 set_energy_ns=28080 process_items_calls=100 process_items_ns=39205
+mod_dispatch_profile machines=100 seed_ns=179681 grouping_ns=31079 guest_ns=366585 return_views_ns=4408 sync_ns=58400 total_ns=674759
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=36332 view_copy_ns=230342 capability_ns=68989 callback_ns=689167 serialize_ns=79985 total_ns=1624140
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6078 get_slot_calls=100 get_slot_ns=7696 get_energy_calls=100 get_energy_ns=6580 set_energy_calls=100 set_energy_ns=24475 process_items_calls=100 process_items_ns=28454
+mod_dispatch_profile machines=100 seed_ns=114497 grouping_ns=8606 guest_ns=316370 return_views_ns=3527 sync_ns=31790 total_ns=498575
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=22949 view_copy_ns=173693 capability_ns=45876 callback_ns=509446 serialize_ns=51561 total_ns=1052095
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6395 get_slot_calls=100 get_slot_ns=7608 get_energy_calls=100 get_energy_ns=7575 set_energy_calls=100 set_energy_ns=19458 process_items_calls=100 process_items_ns=29155
+mod_dispatch_profile machines=100 seed_ns=141549 grouping_ns=8065 guest_ns=299308 return_views_ns=4689 sync_ns=39104 total_ns=521048
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=28132 view_copy_ns=197187 capability_ns=60705 callback_ns=531648 serialize_ns=61843 total_ns=1209824
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=7811 get_slot_calls=100 get_slot_ns=9699 get_energy_calls=100 get_energy_ns=18354 set_energy_calls=100 set_energy_ns=16890 process_items_calls=100 process_items_ns=36031
+mod_dispatch_profile machines=100 seed_ns=124916 grouping_ns=8456 guest_ns=385311 return_views_ns=4108 sync_ns=49303 total_ns=597954
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=23162 view_copy_ns=177316 capability_ns=49403 callback_ns=609566 serialize_ns=73017 total_ns=1225835
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5785 get_slot_calls=100 get_slot_ns=7486 get_energy_calls=100 get_energy_ns=6694 set_energy_calls=100 set_energy_ns=15993 process_items_calls=100 process_items_ns=27509
+mod_dispatch_profile machines=100 seed_ns=103155 grouping_ns=6853 guest_ns=292284 return_views_ns=4709 sync_ns=45416 total_ns=476333
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=19925 view_copy_ns=147524 capability_ns=48261 callback_ns=487474 serialize_ns=72087 total_ns=1088504
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5261 get_slot_calls=100 get_slot_ns=6821 get_energy_calls=100 get_energy_ns=6227 set_energy_calls=100 set_energy_ns=13256 process_items_calls=100 process_items_ns=28272
+mod_dispatch_profile machines=100 seed_ns=105550 grouping_ns=7314 guest_ns=261235 return_views_ns=2946 sync_ns=29165 total_ns=428512
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=19776 view_copy_ns=159271 capability_ns=43075 callback_ns=437950 serialize_ns=49148 total_ns=913602
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5381 get_slot_calls=100 get_slot_ns=6927 get_energy_calls=100 get_energy_ns=6338 set_energy_calls=100 set_energy_ns=20291 process_items_calls=100 process_items_ns=24000
+mod_dispatch_profile machines=100 seed_ns=114417 grouping_ns=9669 guest_ns=286072 return_views_ns=3196 sync_ns=30568 total_ns=468548
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=35018 view_copy_ns=242228 capability_ns=68827 callback_ns=478117 serialize_ns=49075 total_ns=1089797
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6060 get_slot_calls=100 get_slot_ns=7294 get_energy_calls=100 get_energy_ns=6710 set_energy_calls=100 set_energy_ns=13665 process_items_calls=100 process_items_ns=30428
+mod_dispatch_profile machines=100 seed_ns=102836 grouping_ns=7644 guest_ns=279711 return_views_ns=3095 sync_ns=30488 total_ns=446718
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=18432 view_copy_ns=168407 capability_ns=44616 callback_ns=456195 serialize_ns=49586 total_ns=928671
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=9278 get_slot_calls=100 get_slot_ns=12332 get_energy_calls=100 get_energy_ns=22007 set_energy_calls=100 set_energy_ns=27098 process_items_calls=100 process_items_ns=43488
+mod_dispatch_profile machines=100 seed_ns=172006 grouping_ns=12975 guest_ns=441617 return_views_ns=6493 sync_ns=115128 total_ns=777003
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=37432 view_copy_ns=251953 capability_ns=69255 callback_ns=792343 serialize_ns=82035 total_ns=1707959
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5266 get_slot_calls=100 get_slot_ns=6934 get_energy_calls=100 get_energy_ns=6161 set_energy_calls=100 set_energy_ns=13508 process_items_calls=100 process_items_ns=24102
+mod_dispatch_profile machines=100 seed_ns=121921 grouping_ns=7384 guest_ns=262097 return_views_ns=2655 sync_ns=29105 total_ns=446927
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=20662 view_copy_ns=182416 capability_ns=45086 callback_ns=465893 serialize_ns=49193 total_ns=957085
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6444 get_slot_calls=100 get_slot_ns=8279 get_energy_calls=100 get_energy_ns=7767 set_energy_calls=100 set_energy_ns=23589 process_items_calls=100 process_items_ns=31867
+mod_dispatch_profile machines=100 seed_ns=133393 grouping_ns=8076 guest_ns=354572 return_views_ns=4388 sync_ns=40898 total_ns=570732
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=33994 view_copy_ns=253030 capability_ns=67405 callback_ns=583286 serialize_ns=56690 total_ns=1332958
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=19342 get_slot_calls=100 get_slot_ns=7603 get_energy_calls=100 get_energy_ns=7049 set_energy_calls=100 set_energy_ns=14558 process_items_calls=100 process_items_ns=28674
+mod_dispatch_profile machines=100 seed_ns=128914 grouping_ns=8115 guest_ns=304929 return_views_ns=3597 sync_ns=30097 total_ns=498675
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=23563 view_copy_ns=194145 capability_ns=53819 callback_ns=508294 serialize_ns=49514 total_ns=1037558
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5297 get_slot_calls=100 get_slot_ns=7661 get_energy_calls=100 get_energy_ns=6280 set_energy_calls=100 set_energy_ns=21403 process_items_calls=100 process_items_ns=25629
+mod_dispatch_profile machines=100 seed_ns=118264 grouping_ns=8746 guest_ns=283438 return_views_ns=4128 sync_ns=30808 total_ns=493956
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=27585 view_copy_ns=204157 capability_ns=82218 callback_ns=503485 serialize_ns=51995 total_ns=1142877
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5206 get_slot_calls=100 get_slot_ns=6802 get_energy_calls=100 get_energy_ns=6132 set_energy_calls=100 set_energy_ns=13924 process_items_calls=100 process_items_ns=24992
+mod_dispatch_profile machines=100 seed_ns=104488 grouping_ns=7585 guest_ns=261245 return_views_ns=3216 sync_ns=29706 total_ns=429514
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=19939 view_copy_ns=167800 capability_ns=43088 callback_ns=439123 serialize_ns=50033 total_ns=919714
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=7168 get_slot_calls=100 get_slot_ns=14919 get_energy_calls=100 get_energy_ns=7822 set_energy_calls=100 set_energy_ns=19071 process_items_calls=100 process_items_ns=30560
+mod_dispatch_profile machines=100 seed_ns=135908 grouping_ns=9769 guest_ns=337049 return_views_ns=3126 sync_ns=30678 total_ns=539944
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=26519 view_copy_ns=207335 capability_ns=63480 callback_ns=549862 serialize_ns=51992 total_ns=1147887
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6502 get_slot_calls=100 get_slot_ns=8623 get_energy_calls=100 get_energy_ns=7826 set_energy_calls=100 set_energy_ns=16045 process_items_calls=100 process_items_ns=39900
+mod_dispatch_profile machines=100 seed_ns=127823 grouping_ns=8797 guest_ns=343491 return_views_ns=3587 sync_ns=36790 total_ns=546937
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=23499 view_copy_ns=198063 capability_ns=53835 callback_ns=559280 serialize_ns=55443 total_ns=1126075
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=8005 get_slot_calls=100 get_slot_ns=9061 get_energy_calls=100 get_energy_ns=8975 set_energy_calls=100 set_energy_ns=26943 process_items_calls=100 process_items_ns=40069
+mod_dispatch_profile machines=100 seed_ns=185511 grouping_ns=11262 guest_ns=381774 return_views_ns=4097 sync_ns=34014 total_ns=648399
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=31594 view_copy_ns=248746 capability_ns=71852 callback_ns=659240 serialize_ns=57402 total_ns=1410755
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=7293 get_slot_calls=100 get_slot_ns=8778 get_energy_calls=100 get_energy_ns=7492 set_energy_calls=100 set_energy_ns=15716 process_items_calls=100 process_items_ns=29895
+mod_dispatch_profile machines=100 seed_ns=125658 grouping_ns=8406 guest_ns=316160 return_views_ns=4488 sync_ns=39494 total_ns=520417
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=23929 view_copy_ns=195965 capability_ns=50926 callback_ns=532039 serialize_ns=54761 total_ns=1115064
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6316 get_slot_calls=100 get_slot_ns=7859 get_energy_calls=100 get_energy_ns=6980 set_energy_calls=100 set_energy_ns=20007 process_items_calls=100 process_items_ns=28987
+mod_dispatch_profile machines=100 seed_ns=153621 grouping_ns=9839 guest_ns=306171 return_views_ns=4208 sync_ns=31881 total_ns=532560
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=25252 view_copy_ns=210868 capability_ns=54994 callback_ns=542408 serialize_ns=51175 total_ns=1162685
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6644 get_slot_calls=100 get_slot_ns=8516 get_energy_calls=100 get_energy_ns=7617 set_energy_calls=100 set_energy_ns=16826 process_items_calls=100 process_items_ns=30950
+mod_dispatch_profile machines=100 seed_ns=131189 grouping_ns=8376 guest_ns=313454 return_views_ns=3937 sync_ns=36930 total_ns=554151
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=22217 view_copy_ns=191119 capability_ns=53351 callback_ns=566444 serialize_ns=60272 total_ns=1136365
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6026 get_slot_calls=100 get_slot_ns=8364 get_energy_calls=100 get_energy_ns=7273 set_energy_calls=100 set_energy_ns=24301 process_items_calls=100 process_items_ns=29856
+mod_dispatch_profile machines=100 seed_ns=145887 grouping_ns=10671 guest_ns=325677 return_views_ns=5521 sync_ns=43933 total_ns=569039
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=33043 view_copy_ns=239413 capability_ns=60501 callback_ns=579399 serialize_ns=67243 total_ns=1390567
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5143 get_slot_calls=100 get_slot_ns=6856 get_energy_calls=100 get_energy_ns=6034 set_energy_calls=100 set_energy_ns=13347 process_items_calls=100 process_items_ns=24327
+mod_dispatch_profile machines=100 seed_ns=104749 grouping_ns=7214 guest_ns=259683 return_views_ns=3257 sync_ns=29345 total_ns=437310
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=21591 view_copy_ns=173539 capability_ns=43050 callback_ns=447248 serialize_ns=49043 total_ns=948258
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6364 get_slot_calls=100 get_slot_ns=8061 get_energy_calls=100 get_energy_ns=7278 set_energy_calls=100 set_energy_ns=23887 process_items_calls=100 process_items_ns=35171
+mod_dispatch_profile machines=100 seed_ns=120097 grouping_ns=9388 guest_ns=326379 return_views_ns=5120 sync_ns=40597 total_ns=528983
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=32029 view_copy_ns=242054 capability_ns=85861 callback_ns=544102 serialize_ns=77550 total_ns=1413510
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5169 get_slot_calls=100 get_slot_ns=6718 get_energy_calls=100 get_energy_ns=6173 set_energy_calls=100 set_energy_ns=14888 process_items_calls=100 process_items_ns=25684
+mod_dispatch_profile machines=100 seed_ns=104338 grouping_ns=7384 guest_ns=256456 return_views_ns=4629 sync_ns=30809 total_ns=429455
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=20620 view_copy_ns=178017 capability_ns=45840 callback_ns=439473 serialize_ns=54104 total_ns=1001840
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=12141 get_slot_calls=100 get_slot_ns=12292 get_energy_calls=100 get_energy_ns=12159 set_energy_calls=100 set_energy_ns=30597 process_items_calls=100 process_items_ns=63419
+mod_dispatch_profile machines=100 seed_ns=196693 grouping_ns=27783 guest_ns=505840 return_views_ns=13055 sync_ns=79601 total_ns=866484
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=41355 view_copy_ns=274215 capability_ns=73648 callback_ns=881101 serialize_ns=95715 total_ns=1968863
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5929 get_slot_calls=100 get_slot_ns=7837 get_energy_calls=100 get_energy_ns=6642 set_energy_calls=100 set_energy_ns=15127 process_items_calls=100 process_items_ns=28836
+mod_dispatch_profile machines=100 seed_ns=119828 grouping_ns=7975 guest_ns=279290 return_views_ns=3627 sync_ns=44725 total_ns=482545
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=22995 view_copy_ns=191732 capability_ns=52080 callback_ns=493586 serialize_ns=55193 total_ns=1073035
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6872 get_slot_calls=100 get_slot_ns=8043 get_energy_calls=100 get_energy_ns=7275 set_energy_calls=100 set_energy_ns=25097 process_items_calls=100 process_items_ns=41407
+mod_dispatch_profile machines=100 seed_ns=128764 grouping_ns=8887 guest_ns=328974 return_views_ns=4969 sync_ns=56257 total_ns=561224
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=37607 view_copy_ns=269882 capability_ns=84238 callback_ns=590058 serialize_ns=69091 total_ns=1509082
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=7556 get_slot_calls=100 get_slot_ns=8893 get_energy_calls=100 get_energy_ns=8559 set_energy_calls=100 set_energy_ns=18222 process_items_calls=100 process_items_ns=37791
+mod_dispatch_profile machines=100 seed_ns=147680 grouping_ns=10169 guest_ns=382245 return_views_ns=4048 sync_ns=38884 total_ns=608855
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=23170 view_copy_ns=201233 capability_ns=51923 callback_ns=619595 serialize_ns=50316 total_ns=1188624
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=8166 get_slot_calls=100 get_slot_ns=9740 get_energy_calls=100 get_energy_ns=9124 set_energy_calls=100 set_energy_ns=20943 process_items_calls=100 process_items_ns=37419
+mod_dispatch_profile machines=100 seed_ns=145586 grouping_ns=8336 guest_ns=361816 return_views_ns=3607 sync_ns=35388 total_ns=579209
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=25348 view_copy_ns=198993 capability_ns=55731 callback_ns=589518 serialize_ns=51701 total_ns=1163927
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=9808 get_slot_calls=100 get_slot_ns=11611 get_energy_calls=100 get_energy_ns=10689 set_energy_calls=100 set_energy_ns=21206 process_items_calls=100 process_items_ns=43638
+mod_dispatch_profile machines=100 seed_ns=146978 grouping_ns=10940 guest_ns=460643 return_views_ns=4939 sync_ns=47841 total_ns=699156
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=20152 view_copy_ns=177635 capability_ns=46180 callback_ns=711119 serialize_ns=75498 total_ns=1370158
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=8121 get_slot_calls=100 get_slot_ns=13055 get_energy_calls=100 get_energy_ns=10037 set_energy_calls=100 set_energy_ns=27736 process_items_calls=100 process_items_ns=46607
+mod_dispatch_profile machines=100 seed_ns=153731 grouping_ns=11862 guest_ns=366576 return_views_ns=6993 sync_ns=67738 total_ns=640925
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=35757 view_copy_ns=289003 capability_ns=68921 callback_ns=655163 serialize_ns=64390 total_ns=1508591
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5758 get_slot_calls=100 get_slot_ns=7876 get_energy_calls=100 get_energy_ns=6630 set_energy_calls=100 set_energy_ns=15763 process_items_calls=100 process_items_ns=28247
+mod_dispatch_profile machines=100 seed_ns=102555 grouping_ns=8636 guest_ns=301461 return_views_ns=3857 sync_ns=32902 total_ns=475342
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=19993 view_copy_ns=171832 capability_ns=43642 callback_ns=485090 serialize_ns=68449 total_ns=1059589
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5219 get_slot_calls=100 get_slot_ns=7054 get_energy_calls=100 get_energy_ns=6050 set_energy_calls=100 set_energy_ns=14405 process_items_calls=100 process_items_ns=24068
+mod_dispatch_profile machines=100 seed_ns=104869 grouping_ns=6853 guest_ns=255996 return_views_ns=3757 sync_ns=31340 total_ns=427982
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=24327 view_copy_ns=185337 capability_ns=51821 callback_ns=438100 serialize_ns=51469 total_ns=1007631
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=5993 get_slot_calls=100 get_slot_ns=7663 get_energy_calls=100 get_energy_ns=6514 set_energy_calls=100 set_energy_ns=16083 process_items_calls=100 process_items_ns=27327
+mod_dispatch_profile machines=100 seed_ns=110049 grouping_ns=8116 guest_ns=273619 return_views_ns=3687 sync_ns=32371 total_ns=450895
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=20880 view_copy_ns=181994 capability_ns=67436 callback_ns=460885 serialize_ns=49417 total_ns=1035003
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=8852 get_slot_calls=100 get_slot_ns=11088 get_energy_calls=100 get_energy_ns=8972 set_energy_calls=100 set_energy_ns=24409 process_items_calls=100 process_items_ns=44927
+mod_dispatch_profile machines=100 seed_ns=171575 grouping_ns=10650 guest_ns=376805 return_views_ns=4508 sync_ns=57068 total_ns=653429
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=59666 view_copy_ns=467019 capability_ns=95097 callback_ns=669249 serialize_ns=76545 total_ns=1860709
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=6521 get_slot_calls=100 get_slot_ns=8700 get_energy_calls=100 get_energy_ns=7671 set_energy_calls=100 set_energy_ns=16811 process_items_calls=100 process_items_ns=30634
+mod_dispatch_profile machines=100 seed_ns=126831 grouping_ns=8887 guest_ns=319035 return_views_ns=4138 sync_ns=36960 total_ns=538181
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=21782 view_copy_ns=183846 capability_ns=49708 callback_ns=550153 serialize_ns=51562 total_ns=1080218
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=9749 get_slot_calls=100 get_slot_ns=15012 get_energy_calls=100 get_energy_ns=10589 set_energy_calls=100 set_energy_ns=25926 process_items_calls=100 process_items_ns=48512
+mod_dispatch_profile machines=100 seed_ns=209737 grouping_ns=10480 guest_ns=397484 return_views_ns=4749 sync_ns=62349 total_ns=712962
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=27032 view_copy_ns=522019 capability_ns=55608 callback_ns=730115 serialize_ns=83819 total_ns=1885025
+mod_machine_profile mod=actuallyadditions machines=100 get_position_calls=100 get_position_ns=7724 get_slot_calls=100 get_slot_ns=9993 get_energy_calls=100 get_energy_ns=8739 set_energy_calls=100 set_energy_ns=18325 process_items_calls=100 process_items_ns=41007
+mod_dispatch_profile machines=100 seed_ns=109177 grouping_ns=10340 guest_ns=392555 return_views_ns=3817 sync_ns=36439 total_ns=578948
+mod_tick_profile dimension=minecraft:overworld machines=100 create_ns=18473 view_copy_ns=160149 capability_ns=44177 callback_ns=588486 serialize_ns=56216 total_ns=1127117
+[chat] 0, 100, 0 has the following block data: {mod_slots: 3, components: {}, mod_data: [B; -88b, 32b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 0b, 41b, 0b, 0b, 0b], x: 0, mod_block: "actuallyadditions:crusher", y: 100, Items: [{count: 1, Slot: 0b, id: "minecraft:iron_ore"}], z: 0, id: "horizon:mod_block_entity", horizon_energy: {max_receive: "100", stored: "8360", max_extract: "0", capacity: "60000"}}

@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-03",
+  "scope": "sandbox contract tests for machine.request-item-pickup / take-item-pickup-result",
+  "status": "passed",
+  "focused_command": "taskset -c 0-5 nice -n 10 env CARGO_BUILD_JOBS=6 RAYON_NUM_THREADS=6 cargo test -p horizon-mods --features runtime,pack --test sandbox item_pickup -- --test-threads=1",
+  "focused_result": {
+    "passed": 2,
+    "failed": 0,
+    "elapsed_s": 17.64
+  },
+  "cases": [
+    {
+      "test": "item_pickup_intents_are_confirmed_once_and_invalidated_on_failure_removal_or_trap",
+      "checks": [
+        "request is deferred and does not mutate the guest inventory snapshot",
+        "invalid handle and slot are rejected",
+        "wrong handle cannot complete another handle's request",
+        "first server completion wins; duplicate completion cannot replace the result",
+        "guest consumes the result once",
+        "confirmed zero result remains a failure",
+        "removal revokes only the removed handle's pending pickup",
+        "trap revokes queued pickup authority"
+      ]
+    },
+    {
+      "test": "item_pickup_request_ids_cannot_cross_a_hot_reload_even_when_reused",
+      "checks": [
+        "old guest's pending request is invalid after reload",
+        "new guest reuses the local request id without inheriting old authority",
+        "completion from the old handle cannot complete the new request"
+      ]
+    }
+  ],
+  "full_sandbox_suite": {
+    "command": "taskset -c 0-5 nice -n 10 env CARGO_BUILD_JOBS=6 RAYON_NUM_THREADS=6 cargo test -p horizon-mods --features runtime,pack --test sandbox -- --test-threads=1",
+    "status": "passed",
+    "passed": 38,
+    "failed": 0,
+    "ignored": 1,
+    "harness_elapsed_s": 187.42
+  },
+  "limits": "CPU affinity 0-5, nice 10, Cargo jobs 6, Rayon 6; sandbox-generated hmods remain under target/mods-test."
+}
