@@ -1,0 +1,154 @@
+{
+  "date": "2026-11-03",
+  "scope": "L8 updated after pickup API lifecycle sandbox tests and cross-mod component-preserving save/reopen in addition to the recorded L7 profiles",
+  "plan_status": "incomplete; task 5/L7 partial; measured timing and exact tested conservation, transfer, trap/reload and save/reopen cases pass; memory attribution and historical SIGABRT remain unresolved",
+  "validated_in_game": [
+    {
+      "mod_or_area": "Farmer's Delight L2-L4",
+      "scope": "three imported vanilla foods; 25 Nourishment foods and nine vanilla-effect foods observed in original with representative Horizon cases; four additional foods plus Dog Food consumption/interactions observed and validated in the stated Horizon scenarios",
+      "evidence": "atm10-performance-tracker.md L2-L4 checkpoints"
+    },
+    {
+      "mod_or_area": "Charging Gadgets",
+      "scope": "observed station fuel/processing behavior and battery item handling in stated scenarios; not every energizable item or pack behavior",
+      "evidence": "atm10-performance-tracker.md L5 Charging Gadgets checkpoint"
+    },
+    {
+      "mod_or_area": "Mining Gadgets",
+      "scope": "first battery upgrade determines per-stack 2M/5M/10M FE capacity; 24 upgrade-order cases in both game modes; selected loading, blocked output and save/load cases",
+      "evidence": "atm10-resource-validation/mininggadgets-battery-game.json and charginggadgets-mininggadget-game.json"
+    },
+    {
+      "mod_or_area": "Modular Routers Vacuum",
+      "scope": "vanilla diamond drop collection, measured range/boundary and order, failure conservation, reload and forced chunk unload in both game modes",
+      "evidence": "atm10-resource-validation/modularrouters-vacuum-transaction-l5.json"
+    },
+    {
+      "mod_or_area": "L6 observed interactions",
+      "scope": "AllTheTweaks three air uses PASS; Ars Elemancy three simple focus uses PASS; BlueFlame three placements matched vanilla control; Chisel four measured right-click PASS cases; Macaw lights four measured outcomes; Macaw windows oak shutter; Dyenamics five measured uses PASS.",
+      "evidence": "individual L6 records in atm10-performance-tracker.md"
+    },
+    {
+      "mod_or_area": "Actually Additions",
+      "scope": "Coal Generator with coal for 120 ticks in each game mode; 2380 FE and coal consumption; save/reopen inspection reached expected energy plus startup ticks, but second process aborted at teardown and is not counted as a clean save/reopen validation",
+      "evidence": "atm10-resource-validation/actuallyadditions-generator-l6.json"
+    },
+    {
+      "mod_or_area": "Fuel Goes Here",
+      "scope": "forced_fuels coal/charcoal membership; stick/dirt rejected; no /fuel command; both game modes. Burn duration/processing not validated.",
+      "evidence": "atm10-resource-validation/fuelgoeshere-tag-game-l6.json"
+    },
+    {
+      "mod_or_area": "Macaw's Lights and Lamps",
+      "scope": "two garden_light PASS and two white_paper_lamp CONSUME callbacks with unchanged blocks/stacks in both modes; only these four traces",
+      "evidence": "atm10-resource-validation/mcwlights-interaction-l6.json"
+    },
+    {
+      "mod_or_area": "Chisel Reborn",
+      "scope": "three chisel-tool targets plus empty hand on stone pass unchanged in both game modes; other chisel behavior pending",
+      "evidence": "atm10-resource-validation/chisel-interaction-l6.json"
+    },
+    {
+      "mod_or_area": "Actually Additions crusher active processing",
+      "scope": "100 active ticks in each game mode; 2 iron ore converted to 2 raw iron with 1 ore remaining and exactly 4,000 FE spent; blocked output preserves items/energy; save/load preserves state within measured startup ticks; remove/recreate resets energy",
+      "evidence": "atm10-resource-validation/actuallyadditions-active-crusher-game.json"
+    }
+  ],
+  "observed_only_in_original_or_pack_data": [
+    "L6 exports and registrations for Hey Berry Shut Up, ImFast, JumpBoat, Measurements, More Dragon Eggs, More Red, Not Enough Glyphs, No Villager Death Messages, BiblioCraft, Cosmetic Armor Reworked, Energy Meter, Explorer's Compass, Iron Furnaces, Lootr, Macaw Furniture, Nature's Compass, Pocket Storage, Storage Delight, ToolBelt, Trophy Manager and Entangled do not demonstrate their full gameplay ports.",
+    "InControl default spawn.json rules were inspected; spawn outcomes and rule reload were not observed.",
+    "Other original traces and pack configurations are described per checkpoint; they are not automatically Horizon gameplay evidence.",
+    "Fuel Goes Here original export lists forced_fuels as coal and charcoal; Horizon validated membership but not furnace burn duration or automation."
+  ],
+  "pending": [
+    "L6 gameplay gaps in each per-mod checkpoint; every queued case has a tracker checkpoint, but most remain partial or unvalidated.",
+    "Modern Dynamics, MEGA Cells, Mob Grinding Utils, Productive Metalworks, Pylons, Ranged Pumps, Advanced Peripherals, Ars Technica, BotanyPots, Cable Tiers and Tree Tap remain incomplete or blocked by the exact API/fixture/original-trace gaps recorded in their checkpoints.",
+    "Modular Routers Breaker and Dropper need original traces with configured direction; remote operations need destination, range and blocked-case traces.",
+    "L8 does not mark any mod complete; all completion claims remain scoped to the exact evidenced scenarios.",
+    "Fuel Goes Here is partial after tag membership validation; burn durations and furnace processing lack original traces. Macaw's Lights is partial and covers only four measured interactions.",
+    "L7/task 5 remains partial: profile and test coverage is now recorded for active/idle and the tested transfer/trap/reload scenarios. Memory attribution remains inconclusive; dirty tracking was not justified and no guest-private dirty-state contract exists. Historical SIGABRT remains separate and unresolved. No RSS matrix should be repeated without a new hypothesis."
+  ],
+  "tracker_coverage": "Each remaining L6 case has an individual dated checkpoint; the performance review worklist has no untracked rows per the coverage audit recorded this turn.",
+  "artifacts": [
+    "atm10-resource-validation/l7-controlled-memory.json",
+    "atm10-resource-validation/mod-tick-profile-crash-investigation.json",
+    "atm10-performance-tracker.md",
+    "atm10-resource-validation/l7-memory-before.json",
+    "atm10-resource-validation/l7-memory-before-repeat.json",
+    "atm10-resource-validation/l7-memory-after.json",
+    "atm10-resource-validation/l7-memory-after-repeat.json",
+    "atm10-resource-validation/l7-teardown-one-input.json",
+    "atm10-resource-validation/fuelgoeshere-tag-game-l6.json",
+    "atm10-resource-validation/fuelgoeshere-startup-crash-l6.json",
+    "atm10-resource-validation/mcwlights-interaction-l6.json",
+    "atm10-resource-validation/chisel-interaction-l6.json",
+    "atm10-resource-validation/l7-build-memory-comparison.json",
+    "atm10-resource-validation/l7-cache-memory-isolation.json",
+    "atm10-resource-validation/l7-cache-isolation-before-repeats.json",
+    "atm10-resource-validation/l7-cache-isolation-after-repeats.json",
+    "atm10-resource-validation/l7-teardown-cleanup-ab.json",
+    "atm10-resource-validation/l7-active-callback-optimization.json",
+    "atm10-resource-validation/l7-active-profile-before.json",
+    "atm10-resource-validation/l7-active-profile-after.json",
+    "atm10-resource-validation/actuallyadditions-active-crusher-game.json",
+    "atm10-resource-validation/l7-active-inframe-comparison.json",
+    "atm10-resource-validation/l7-active-profile-inframe-before.json",
+    "atm10-resource-validation/l7-active-profile-inframe-after.json",
+    "atm10-resource-validation/l7-idle-profile-after-index.json",
+    "atm10-resource-validation/l7-idle-dirty-tracking-decision.json",
+    "atm10-resource-validation/l7-cross-mod-transfer.json",
+    "atm10-resource-validation/l7-sandbox-resource-usage.json",
+    "atm10-resource-validation/l7-item-pickup-lifecycle.json",
+    "atm10-resource-validation/l7-cross-mod-transfer-save-reopen.json",
+    "atm10-resource-validation/l7-build-source-diff.json"
+  ],
+  "task5_review": {
+    "overall": "partial; do not mark task 5, L7 or the full plan complete",
+    "instrumented_stages": {
+      "status": "measured",
+      "scope": "1/100/1000 crushers; creation, view copy, capabilities, callbacks, serialization, total tick; active before/after in both modes, idle after-index in both modes, p50/p95/max and memory snapshots",
+      "evidence": "atm10-resource-validation/l7-active-profile-before.json, l7-active-profile-after.json, l7-active-profile-inframe-before.json, l7-active-profile-inframe-after.json, l7-idle-profile-after-index.json"
+    },
+    "measured_optimizations": {
+      "reverse_position_index": "set_energy_buffer host import p50 at 1000 machines 85.913 ms to 0.212 ms; callback 91.289 to 4.619 ms; total tick 97.452 to 10.889 ms. Baseline 33 exact-count samples vs 40 after. In-frame active 1,000-machine p50: callback 100.096 to 4.675 ms; total tick 107.322 to 11.116 ms (40 samples each).",
+      "property_value_cache": "reduces static property domain lookup/view construction costs in idle measurements; cache retained."
+    },
+    "dirty_tracking_and_guest_private_state": {
+      "status": "not implemented; current measurement does not justify it; no explicit guest-private dirty-state contract",
+      "evidence": "At 1,000 idle machines, serialization p50 0.529 ms/7.070 ms total in-frame and 0.474/6.440 ms server-thread. Input-present/no-energy 0.544/9.456 and 0.531/10.021 ms. Guest state is private; host serializes then compares, so skipping without notification risks losing saves."
+    },
+    "both_modes": {
+      "status": "passed for measured scopes",
+      "evidence": "Active before/after profiles in server-thread and in-frame; idle-after-index profiles in both; active crusher conservation/save-load in both. These fixtures do not establish full modpack parity."
+    },
+    "memory": {
+      "status": "measured at comparable stages; causal attribution remains inconclusive",
+      "evidence": "Active in-frame at 1,000: RSS 990.32→995.67 MiB before (+5.35) and 985.08→994.13 after (+9.05); final 995.67 vs 994.13 MiB, HWM 1,079.02 vs 1,075.05, one session/build. Idle at 1,000: RSS 1,006.50 MiB in-frame, 1,191.11 server-thread. Cache comparison remains 3 sessions per variant: +13.31 vs +14.14 MiB growth and +0.83 MiB delta; this neither establishes nor rules out attribution to prior +8.04 MiB. No new RSS matrix. Cross-mod case same-process before/after snapshots were unchanged at 772.22 MiB in-frame and 814.00 MiB server-thread (single run per mode; wall/RSS include fixture overhead)."
+    },
+    "cross_mod_transfer": {
+      "status": "passed in game in both modes",
+      "evidence": "One diamond with custom name, horizon:energy=1234, minecraft:enchantments (unbreaking II) and minecraft:custom_data moved from test_machine guest to test_peer guest; source=0, destination=1, total=1 and components matched. Save/reopen retained exactly one copy at the destination and all components. Fixture wall 51.191 s in-frame / 60.513 s server-thread; transfer timing 1.108 / 1.400 s includes one stepped tick and queries. RSS snapshots unchanged within each process; one run per mode, not an isolated memory measurement. Evidence: atm10-resource-validation/l7-cross-mod-transfer-save-reopen.json."
+    },
+    "pickup_api_lifecycle": {
+      "status": "passed in sandbox",
+      "evidence": "Two focused tests passed in 17.64 s: success completes once; duplicate/wrong-handle completion is ignored; zero is preserved as failure; invalid handle/slot rejected; handle removal and trap revoke pending pickup; old request cannot authorize a new instance after hot reload and local request-id reuse. Evidence: atm10-resource-validation/l7-item-pickup-lifecycle.json."
+    },
+    "trap_reload": {
+      "status": "passed in the full targeted sandbox suite",
+      "evidence": "Queued item-move and item-pickup authority revoked on trap; stale requests before hot reload cannot authorize a new instance after local ID reuse. The latest full sandbox suite passed 38/0/1 ignored in 187.42 s. Previous item_move-only focused cases took 16.321 s, sampled peak cargo/test process-tree RSS 147.78 MiB, largest process 70.32 MiB; those are harness measurements, not in-game RSS. Pickup-specific test time and coverage are in l7-item-pickup-lifecycle.json."
+    },
+    "save_load": "Crusher and Vacuum fixtures passed in their recorded scopes; new cross-mod transfer preserved stack count and components across save/reopen in both modes. This does not validate all guest-private state or remote/world/entity modules; broader mod/runtime coverage remains pending.",
+    "benchmark_build_diff": "Recorded description of the intended source change: runtime.rs replaced the linear positions.values() ownership scan with machine_position_owners membership and reference-counted creation/removal maintenance. The in-frame artifact records both binary hashes and the shared hmod hash. The immutable pre-change source tree/build manifest and server-thread baseline binary hash were not retained, so bit-for-bit build reconstruction and independent exclusion of other build-input differences remain unavailable. See atm10-resource-validation/l7-build-source-diff.json. No profile was repeated.",
+    "sigabrt": "historical teardown abort remains separate, unresolved and without a demonstrated cause",
+    "next_adjustment": "No dirty-tracking change: serialization is not dominant and guest has no explicit dirty-state contract. No other adjustment is selected from the current stage breakdown.",
+    "prioritized_pending": [
+      "Historical SIGABRT teardown cause remains unknown; keep separate and resume only with a discriminating reproduction.",
+      "Memory attribution remains inconclusive; do not repeat RSS matrix without a new isolated hypothesis.",
+      "Do not implement dirty tracking unless a new profile shows material serialization cost and a clear guest-private dirty-state contract is defined."
+    ],
+    "cross_mod_fixture_issues": {
+      "status": "resolved",
+      "evidence": "Old hmod WIT enum mismatch and missing shared_router template fixed in isolated package copies. Peer defaults to zero slots; a test-only one-slot manifest variant enables cross-mod transfer. Full sandbox suite passes after the fixture adjustment."
+    }
+  }
+}
