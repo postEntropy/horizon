@@ -1,0 +1,27 @@
+{
+  "game": "Horizon 26.3",
+  "mod": "Tinkers' Construct 3.6.4.113",
+  "status": "passed",
+  "scope": "Fuel burns in adjacent Heater, grout melts to 500 mB seared stone, fluid survives save/reload, and faucet casts one seared brick.",
+  "known_gaps": [
+    "Only seared stone and seared brick are supported by this first casting path.",
+    "Part Builder and Tinker Station are registered content and recipes, not tool-forging menus.",
+    "Multiblock smeltery, alloys, material tools, modifiers, and TConstruct slime-specific behavior remain incomplete."
+  ],
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "melt_ticks": 85,
+      "world_reloaded_before_casting": true,
+      "output": "tconstruct:seared_brick"
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "melt_ticks": 85,
+      "world_reloaded_before_casting": true,
+      "output": "tconstruct:seared_brick"
+    }
+  ]
+}

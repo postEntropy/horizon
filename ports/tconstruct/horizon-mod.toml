@@ -1,0 +1,9 @@
+id = "tconstruct"
+name = "Tinkers' Construct"
+version = "3.6.4.113"
+description = "StoneBlock early Tinker stations, fuel-driven melting, and casting progression."
+authors = ["SlimeKnights"]
+api = "0.4"
+side = "both"
+capabilities = ["registries", "block-entities", "item-transfer", "capabilities", "server", "world-read", "storage", "chat"]
+ported-from = "Tinkers' Construct 3.6.4.113; MIT"

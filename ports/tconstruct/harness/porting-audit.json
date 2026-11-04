@@ -1,0 +1,55 @@
+{
+  "mod": "Tinkers' Construct 3.6.4.113",
+  "status": "partial; first StoneBlock gameplay slice implemented, gameplay harness pending",
+  "inspection_rules": "Inspected the imported carry report, carried JSON content, StoneBlock quest SNBT, and the local Rust prototype. Did not inspect or decompile Java classes/source from the mod.",
+  "source": {
+    "pack": "FTB StoneBlock 3, Minecraft 1.18.2",
+    "manifest": "mods/tconstruct/carry/horizon-mod.toml",
+    "quest_chapter": "pack-overrides/config/ftbquests/quests/chapters/getting_started.snbt"
+  },
+  "carry_inventory": {
+    "copied_files_reported": 17945,
+    "block_ids": 328,
+    "item_ids": 343,
+    "block_states_without_compatible_template": 54,
+    "recipes": 2619,
+    "tinkering_data_files": 391,
+    "loot_table_files": 305,
+    "locale_files": 12,
+    "extra_namespaces": ["ceramics", "parry"]
+  },
+  "quest_dependencies": [
+    {
+      "quest": "Ticon",
+      "dependency": "26071C048C200393",
+      "tasks": ["tconstruct:part_builder", "tconstruct:tinker_station"],
+      "evidence": "getting_started.snbt, quest id 1FCEEB67F5CC12A0"
+    },
+    {
+      "quest": "Melter",
+      "dependency": "Ticon",
+      "tasks": ["tconstruct:seared_melter", "tconstruct:seared_heater"],
+      "evidence": "getting_started.snbt, quest id 46754FDA15B24279"
+    },
+    {
+      "quest": "Casting",
+      "dependency": "Melter",
+      "tasks": ["tconstruct:seared_faucet", "tconstruct:seared_basin or tconstruct:seared_table", "tconstruct:casts"],
+      "evidence": "getting_started.snbt, quest id 24267A25CE27616C"
+    },
+    {
+      "quest": "Smeltery",
+      "dependency": "Casting",
+      "tasks": ["tconstruct:smeltery_controller", "tconstruct:seared_tanks", "tconstruct:seared_drain", "smeltery multiblock"],
+      "evidence": "getting_started.snbt, quest id 2A227E0C9AD4C3C4"
+    }
+  ],
+  "atm10_reuse": "No ports/tconstruct crate or dedicated TConstruct ATM10 port was found in this repository or available local imports.",
+  "local_prototype_review": "The local on_block prototype unconditionally displays 'Slime block bounced!' and returns Consume; it is not included as evidence. The repository now has a separate Heater -> Melter -> Faucet -> casting-table implementation for grout to seared brick. Its two-mode save/reload gameplay harness is written but has not yet been run against the shared host rebuild.",
+  "host_api_gaps": [
+    "Per-item mutable tool stats/modifiers that affect mining and combat and survive save/load.",
+    "Multiblock structure validation and a TConstruct-specific smeltery controller state.",
+    "Faithful custom collision and sticky/bounce behavior for TConstruct slime variants."
+  ],
+  "gameplay_validation": "Pending: compile and component packaging pass; harness/gameplay-validation.json will record both modes after the shared host rebuild is complete."
+}

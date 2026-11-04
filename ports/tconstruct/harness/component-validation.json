@@ -1,0 +1,11 @@
+{
+  "mod": "tconstruct",
+  "status": "passed",
+  "checks": [
+    "cargo check -p tconstruct",
+    "cargo horizon-mod build --release",
+    "all data JSON files parse"
+  ],
+  "component": "ports/target/horizon-mod/tconstruct.hmod",
+  "gameplay_validation": "pending after shared host rebuild"
+}

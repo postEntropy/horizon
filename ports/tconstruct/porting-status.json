@@ -1,0 +1,24 @@
+{
+  "complete": false,
+  "status": "partial",
+  "implemented": [
+    "Craftable pattern, Part Builder, Tinker Station, grout, seared heater, seared melter, faucet, basin, table, and ingot sand cast content for the opening quest chain.",
+    "Heater consumes vanilla furnace fuel and handles its container remainder.",
+    "Adjacent lit Heater enables an 80-tick grout melt into a persisted 500 mB seared stone tank.",
+    "Faucet transfers 250 mB from the adjacent Melter into a casting table and consumes one ingot sand cast to produce a seared brick.",
+    "Registered the Sky, Earth, and Ender slime crystal items accepted as alternate Session 01 gravel-washing outputs; their washing source is not yet simulated."
+  ],
+  "pending": [
+    "Part Builder and Tinker Station are content/recipe definitions only; tool part menus, material stats, modifiers, durability, mining, combat, and item save data are not implemented.",
+    "Implement remaining TConstruct melting/casting recipes, alloys, tank automation, controller and multiblock smeltery behavior.",
+    "Implement faithful TConstruct slime block variants, entity interactions, and quest-relevant slime behavior.",
+    "Resolve 54 carried block-state definitions without compatible templates and validate the full carried registry/resource set.",
+    "No ATM10 TConstruct port reuse was identified in this repository or the inspected local port inventory."
+  ],
+  "evidence": [
+    "harness/porting-audit.json",
+    "harness/component-validation.json",
+    "harness/test_melting_casting_game.py",
+    "harness/gameplay-validation.json"
+  ]
+}
