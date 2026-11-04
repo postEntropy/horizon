@@ -72,10 +72,22 @@ public final class FactsExporter {
         String machines = System.getProperty("horizon.oracle.machines", "");
         String food = System.getProperty("horizon.oracle.food", "");
         String energy = System.getProperty("horizon.oracle.energy", "");
+        String items = System.getProperty("horizon.oracle.items", "");
+        if (!machines.isEmpty() && Boolean.getBoolean("horizon.oracle.machines.live")) {
+            try {
+                LiveMachineTrace.start(server, Path.of(machines), out);
+            } catch (Throwable e) {
+                e.printStackTrace();
+                System.exit(3);
+            }
+            return;
+        }
         try (Writer w = Files.newBufferedWriter(out, StandardCharsets.UTF_8);
                 JsonWriter json = new JsonWriter(w)) {
             if (!energy.isEmpty()) {
                 EnergyTrace.run(server, Path.of(energy), json);
+            } else if (!items.isEmpty()) {
+                ItemUseTrace.run(server, Path.of(items), json);
             } else if (!food.isEmpty()) {
                 FoodTrace.run(server, Path.of(food), json);
             } else if (machines.isEmpty()) {
@@ -135,6 +147,11 @@ public final class FactsExporter {
             json.name("namespaces");
             json.beginArray();
             for (String n : namespaces) json.value(n);
+            json.endArray();
+            json.name("registered_commands").beginArray();
+            for (var command : server.getCommands().getDispatcher().getRoot().getChildren()) {
+                json.value(command.getName());
+            }
             json.endArray();
             json.name("tools");
             json.beginArray();

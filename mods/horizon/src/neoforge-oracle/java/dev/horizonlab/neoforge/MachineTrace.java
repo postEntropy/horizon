@@ -29,8 +29,12 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ClickType;
 import net.neoforged.neoforge.common.util.FakePlayerFactory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -61,9 +65,30 @@ final class MachineTrace {
         json.endArray();
     }
 
-    private static ItemStack stack(JsonElement v) {
+    static ItemStack stack(JsonElement v) {
         if (v == null || v.isJsonNull()) {
             return ItemStack.EMPTY;
+        }
+        if (v.isJsonObject()) {
+            JsonObject object = v.getAsJsonObject();
+            ItemStack stack = new ItemStack(
+                    BuiltInRegistries.ITEM.get(ResourceLocation.parse(object.get("item").getAsString())),
+                    object.has("count") ? object.get("count").getAsInt() : 1);
+            if (object.has("custom_data")) {
+                CompoundTag tag = new CompoundTag();
+                for (Map.Entry<String, JsonElement> entry : object.getAsJsonObject("custom_data").entrySet()) {
+                    JsonElement value = entry.getValue();
+                    if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+                        tag.putString(entry.getKey(), value.getAsString());
+                    } else if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()) {
+                        tag.putBoolean(entry.getKey(), value.getAsBoolean());
+                    } else if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber()) {
+                        tag.putInt(entry.getKey(), value.getAsInt());
+                    }
+                }
+                stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+            }
+            return stack;
         }
         JsonArray a = v.getAsJsonArray();
         return new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(a.get(0).getAsString())),
@@ -71,7 +96,7 @@ final class MachineTrace {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static BlockState with(BlockState state, String name, String value) {
+    static BlockState with(BlockState state, String name, String value) {
         for (Property<?> p : state.getProperties()) {
             if (p.getName().equals(name)) {
                 Property raw = p;
@@ -94,6 +119,7 @@ final class MachineTrace {
     @SuppressWarnings("unchecked")
     private static void scenario(MinecraftServer server, ServerLevel level, JsonObject s, JsonWriter json)
             throws IOException {
+        if (s.has("world_time")) level.setDayTime(s.get("world_time").getAsLong());
         Block block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(s.get("block").getAsString()));
         BlockState state = block.defaultBlockState();
         JsonObject properties = s.has("properties") ? s.getAsJsonObject("properties") : new JsonObject();
@@ -127,26 +153,34 @@ final class MachineTrace {
             if (entity.has("item")) {
                 ItemEntity item = new ItemEntity(level, x, y, z, stack(entity.get("item")));
                 item.setDefaultPickUpDelay();
+                if (entity.has("stationary") && entity.get("stationary").getAsBoolean()) {
+                    item.setNoGravity(true);
+                    item.setDeltaMovement(Vec3.ZERO);
+                }
                 level.addFreshEntity(item);
             } else if (entity.has("xp")) {
                 ExperienceOrb.award(level, new Vec3(x, y, z), entity.get("xp").getAsInt());
             }
         }
         Container container = null;
+        AbstractContainerMenu menu = null;
+        net.minecraft.server.level.ServerPlayer menuPlayer = null;
         if (be instanceof Container vanilla) {
             container = vanilla;
         } else if (s.has("menu_slots")) {
             var player = FakePlayerFactory.getMinecraft(level);
             var provider = be instanceof MenuProvider direct ? direct : state.getMenuProvider(level, AT);
             if (provider == null) throw new IllegalStateException("machine has no public menu");
-            AbstractContainerMenu menu = provider.createMenu(0, player.getInventory(), player);
+            menu = provider.createMenu(0, player.getInventory(), player);
             if (menu == null) throw new IllegalStateException("machine did not create public menu");
+            menuPlayer = player;
             int count = s.get("menu_slots").getAsInt();
+            AbstractContainerMenu activeMenu = menu;
             container = new SimpleContainer(count) {
-                @Override public ItemStack getItem(int slot) { return menu.getSlot(slot).getItem(); }
-                @Override public void setItem(int slot, ItemStack stack) { menu.getSlot(slot).set(stack); }
+                @Override public ItemStack getItem(int slot) { return activeMenu.getSlot(slot).getItem(); }
+                @Override public void setItem(int slot, ItemStack stack) { activeMenu.getSlot(slot).set(stack); }
                 @Override public void clearContent() {
-                    for (int i = 0; i < getContainerSize(); i++) menu.getSlot(i).set(ItemStack.EMPTY);
+                    for (int i = 0; i < getContainerSize(); i++) activeMenu.getSlot(i).set(ItemStack.EMPTY);
                 }
             };
         }
@@ -156,6 +190,24 @@ final class MachineTrace {
             }
             for (Map.Entry<String, JsonElement> slot : s.getAsJsonObject("slots").entrySet()) {
                 container.setItem(Integer.parseInt(slot.getKey()), stack(slot.getValue()));
+            }
+        }
+        JsonArray menuButtonResults = new JsonArray();
+        if (s.has("menu_buttons")) {
+            if (menu == null || menuPlayer == null) throw new IllegalStateException("menu_buttons requires public menu");
+            for (JsonElement element : s.getAsJsonArray("menu_buttons")) {
+                int button = element.getAsInt();
+                menuButtonResults.add(menu.clickMenuButton(menuPlayer, button));
+            }
+        }
+        if (s.has("menu_clicks")) {
+            if (menu == null || menuPlayer == null) throw new IllegalStateException("menu_clicks requires public menu");
+            for (JsonElement entry : s.getAsJsonArray("menu_clicks")) {
+                JsonObject click = entry.getAsJsonObject();
+                if (click.has("carried")) menu.setCarried(stack(click.get("carried")));
+                ClickType type = ClickType.valueOf(click.has("type") ? click.get("type").getAsString() : "PICKUP");
+                menu.clicked(click.get("slot").getAsInt(), click.has("button") ? click.get("button").getAsInt() : 0,
+                        type, menuPlayer);
             }
         }
         int energyInjected = 0;
@@ -179,22 +231,49 @@ final class MachineTrace {
                 JsonObject use = element.getAsJsonObject();
                 ItemStack held = stack(use.get("item"));
                 player.setItemInHand(InteractionHand.MAIN_HAND, held);
+                if (use.has("offhand")) player.setItemInHand(InteractionHand.OFF_HAND, stack(use.get("offhand")));
                 player.setShiftKeyDown(use.has("sneaking") && use.get("sneaking").getAsBoolean());
                 BlockPos pos = AT.offset(use.has("x") ? use.get("x").getAsInt() : 0,
                         use.has("y") ? use.get("y").getAsInt() : 0,
                         use.has("z") ? use.get("z").getAsInt() : 0);
+                player.setPos(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
                 var hit = new BlockHitResult(
                         new Vec3(pos.getX() + 0.5, pos.getY() + 1.0, pos.getZ() + 0.5),
                         Direction.UP, pos, false);
-                ItemInteractionResult outcome = level.getBlockState(pos).useItemOn(
-                        player.getItemInHand(InteractionHand.MAIN_HAND), level, player,
-                        InteractionHand.MAIN_HAND, hit);
+                String outcome;
+                boolean blockConsumes;
+                if (use.has("without_item") && use.get("without_item").getAsBoolean()) {
+                    var blockResult = level.getBlockState(pos).useWithoutItem(level, player, hit);
+                    outcome = blockResult.toString();
+                    blockConsumes = blockResult.consumesAction();
+                } else {
+                    var blockResult = level.getBlockState(pos).useItemOn(
+                            player.getItemInHand(InteractionHand.MAIN_HAND), level, player,
+                            InteractionHand.MAIN_HAND, hit);
+                    outcome = blockResult.toString();
+                    blockConsumes = blockResult.consumesAction();
+                }
+                String itemFallback = "not_requested";
+                if (use.has("item_use_fallback") && use.get("item_use_fallback").getAsBoolean()) {
+                    if (!blockConsumes) {
+                        itemFallback = player.getItemInHand(InteractionHand.MAIN_HAND)
+                                .useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, hit)).toString();
+                    } else {
+                        itemFallback = "skipped_block_consumed";
+                    }
+                }
                 JsonObject result = new JsonObject();
                 result.addProperty("item", use.get("item").getAsJsonArray().get(0).getAsString());
                 result.addProperty("result", outcome.toString());
+                result.addProperty("item_fallback_result", itemFallback);
                 result.addProperty("held_item", BuiltInRegistries.ITEM
                         .getKey(player.getItemInHand(InteractionHand.MAIN_HAND).getItem()).toString());
                 result.addProperty("held_count", player.getItemInHand(InteractionHand.MAIN_HAND).getCount());
+                result.addProperty("offhand_item", BuiltInRegistries.ITEM
+                        .getKey(player.getItemInHand(InteractionHand.OFF_HAND).getItem()).toString());
+                result.addProperty("offhand_count", player.getItemInHand(InteractionHand.OFF_HAND).getCount());
+                result.addProperty("player_sleeping_after_use", player.isSleeping());
+                result.addProperty("world_day_time_after_use", level.getDayTime());
                 useResults.add(result);
             }
         }
@@ -218,14 +297,15 @@ final class MachineTrace {
                 }
             }
             BlockState now = level.getBlockState(AT);
-            BlockEntityTicker<BlockEntity> ticker =
+            BlockEntityTicker<BlockEntity> ticker = be == null ? null :
                     now.getTicker(level, (BlockEntityType<BlockEntity>) be.getType());
-            if (ticker != null) {
+            if (be != null && ticker != null) {
                 ticker.tick(level, AT, now, be);
             }
             now = level.getBlockState(AT);
-            CompoundTag tag = be.saveWithoutMetadata(server.registryAccess());
+            CompoundTag tag = be == null ? new CompoundTag() : be.saveWithoutMetadata(server.registryAccess());
             json.beginObject();
+            json.name("block_state").value(now.toString());
             json.name("saved_tag").value(tag.toString());
             json.name("use_results").beginArray();
             for (JsonElement resultElement : useResults) {
@@ -233,8 +313,13 @@ final class MachineTrace {
                 json.beginObject();
                 json.name("item").value(result.get("item").getAsString());
                 json.name("result").value(result.get("result").getAsString());
+                json.name("item_fallback_result").value(result.get("item_fallback_result").getAsString());
                 json.name("held_item").value(result.get("held_item").getAsString());
                 json.name("held_count").value(result.get("held_count").getAsInt());
+                json.name("offhand_item").value(result.get("offhand_item").getAsString());
+                json.name("offhand_count").value(result.get("offhand_count").getAsInt());
+                json.name("player_sleeping_after_use").value(result.get("player_sleeping_after_use").getAsBoolean());
+                json.name("world_day_time_after_use").value(result.get("world_day_time_after_use").getAsLong());
                 json.endObject();
             }
             json.endArray();
@@ -261,6 +346,29 @@ final class MachineTrace {
             json.endObject();
             json.name("energy_injected").value(energyInjected);
             json.name("energy_first_receive").value(energyFirstReceive);
+            if (menu != null) {
+                json.name("menu").beginObject();
+                json.name("class").value(menu.getClass().getName());
+                json.name("slots").value(menu.slots.size());
+                json.name("carried_item").value(BuiltInRegistries.ITEM.getKey(menu.getCarried().getItem()).toString());
+                json.name("carried_count").value(menu.getCarried().getCount());
+                json.name("button_results").beginArray();
+                for (JsonElement result : menuButtonResults) json.value(result.getAsBoolean());
+                json.endArray();
+                json.name("slot_checks").beginArray();
+                for (int i = 0; i < menu.slots.size(); i++) {
+                    var slot = menu.getSlot(i);
+                    json.beginObject();
+                    json.name("index").value(i);
+                    json.name("may_place_gadget").value(slot.mayPlace(new ItemStack(
+                            BuiltInRegistries.ITEM.get(ResourceLocation.parse("mininggadgets:mininggadget")))));
+                    json.name("may_place_battery_1").value(slot.mayPlace(new ItemStack(
+                            BuiltInRegistries.ITEM.get(ResourceLocation.parse("mininggadgets:upgrade_battery_1")))));
+                    json.endObject();
+                }
+                json.endArray();
+                json.endObject();
+            }
             IEnergyStorage energy = level.getCapability(Capabilities.EnergyStorage.BLOCK, AT, null);
             if (energy != null) {
                 json.name("energy").beginObject();
@@ -280,6 +388,24 @@ final class MachineTrace {
                             .value(BuiltInRegistries.ITEM.getKey(item.getItem()).toString())
                             .value(item.getCount()).endArray();
                 }
+            }
+            json.endObject();
+            json.name("slot_energy").beginObject();
+            for (int i = 0; container != null && i < container.getContainerSize(); i++) {
+                ItemStack item = container.getItem(i);
+                IEnergyStorage itemEnergy = item.isEmpty() ? null : item.getCapability(Capabilities.EnergyStorage.ITEM);
+                if (itemEnergy != null) {
+                    json.name(Integer.toString(i)).beginObject();
+                    json.name("stored").value(itemEnergy.getEnergyStored());
+                    json.name("capacity").value(itemEnergy.getMaxEnergyStored());
+                    json.endObject();
+                }
+            }
+            json.endObject();
+            json.name("slot_stack_tags").beginObject();
+            for (int i = 0; container != null && i < container.getContainerSize(); i++) {
+                ItemStack item = container.getItem(i);
+                if (!item.isEmpty()) json.name(Integer.toString(i)).value(item.save(server.registryAccess()).toString());
             }
             json.endObject();
             json.name("properties").beginObject();

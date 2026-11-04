@@ -237,13 +237,32 @@ def machines(args):
     home, run = instance('machines', jars, [*deps, exporter])
     out = Path(args.out).resolve()
     out.unlink(missing_ok=True)
-    seconds, log = start(home, run, {'horizon.oracle.out': out,
-                                     'horizon.oracle.machines': Path(args.scenarios).resolve()})
+    properties = {'horizon.oracle.out': out,
+                  'horizon.oracle.machines': Path(args.scenarios).resolve()}
+    if args.live_ticks:
+        properties['horizon.oracle.machines.live'] = 'true'
+    seconds, log = start(home, run, properties, timeout=180)
     if not out.exists():
         tail = '\n'.join(log.splitlines()[-40:])
         sys.exit(f'the oracle wrote nothing; the end of {run / "server.log"}:\n{tail}')
     traces = json.loads(out.read_text())
     print(f'{out}: {len(traces)} scenarios; server ran {seconds:.1f} s')
+
+
+def items(args):
+    jars = sorted(Path(args.jars).glob('*.jar'))
+    deps = sorted(Path(args.deps).glob('*.jar')) if args.deps else []
+    home = install()
+    exporter = build(home)
+    home, run = instance('items', jars, [*deps, exporter])
+    out = Path(args.out).resolve()
+    out.unlink(missing_ok=True)
+    seconds, log = start(home, run, {'horizon.oracle.out': out,
+                                     'horizon.oracle.items': Path(args.scenarios).resolve()}, timeout=180)
+    if not out.exists():
+        tail = '\n'.join(log.splitlines()[-40:])
+        sys.exit(f'the oracle wrote nothing; the end of {run / "server.log"}:\n{tail}')
+    print(f'{out}: {len(json.loads(out.read_text()).get("scenarios", []))} scenarios; server ran {seconds:.1f} s')
 
 
 def main():
@@ -259,8 +278,15 @@ def main():
     m.add_argument('--deps', help='their required libraries')
     m.add_argument('--scenarios', required=True)
     m.add_argument('--out', required=True)
+    m.add_argument('--live-ticks', action='store_true',
+                   help='advance scenarios through actual server ticks instead of calling block tickers directly')
+    i = sub.add_parser('items', help='trace item use with a server FakePlayer')
+    i.add_argument('--jars', required=True)
+    i.add_argument('--deps')
+    i.add_argument('--scenarios', required=True)
+    i.add_argument('--out', required=True)
     args = parser.parse_args()
-    {'export': export, 'machines': machines}[args.command](args)
+    {'export': export, 'machines': machines, 'items': items}[args.command](args)
 
 
 if __name__ == '__main__':
