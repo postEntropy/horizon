@@ -2,8 +2,10 @@ use horizon_mod_sdk::{
     config, game, inventory,
     item_transfer::{self, Face},
     machine::{self, ItemStack, SlotStack},
-    recipes, server, target, vanilla_hooks, BlockEntityType, EventOutcome, ItemAction, ItemEvent,
-    LogicHooks, Mod, Registration,
+    recipes,
+    server::{self, BlockPos, ItemDrop},
+    target, vanilla_hooks, BlockAction, BlockEntityType, BlockEvent, EventOutcome, ItemAction,
+    ItemEvent, LogicHooks, Mod, Registration,
 };
 
 const HAMMERS: &[(&str, u32)] = &[
@@ -580,7 +582,32 @@ impl Mod for FtbStoneBlockCompanionMod {
     }
 
     fn logic_hooks(&mut self) -> LogicHooks {
-        LogicHooks::new().item(FIRE_PLOW)
+        LogicHooks::new().item(FIRE_PLOW).block("minecraft:stone")
+    }
+
+    fn on_block(&mut self, event: BlockEvent) -> EventOutcome {
+        if event.action == BlockAction::Broken
+            && event.state.split('[').next() == Some("minecraft:stone")
+            && event.held_item.is_empty()
+        {
+            // StoneBlock 3's opening quest says that punching stone drops
+            // Stone Pebbles. The quest text doesn't specify a count or chance,
+            // so this provisional port emits one and keeps that fidelity gap
+            // explicit in porting-status.json.
+            server::spawn_drop(
+                &event.dimension,
+                BlockPos {
+                    x: event.x,
+                    y: event.y,
+                    z: event.z,
+                },
+                &ItemDrop {
+                    id: "ftbstoneblock:stonepebble".into(),
+                    count: 1,
+                },
+            );
+        }
+        EventOutcome::Pass
     }
 
     fn on_item(&mut self, event: ItemEvent) -> EventOutcome {

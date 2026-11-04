@@ -1,0 +1,104 @@
+{
+  "status": "partial; opening recipes and personal-grid crafting passed in both game modes",
+  "scope": "registered Stone Pebble item, stone tool recipe IDs, and first two personal-grid crafts",
+  "source": {
+    "quest_text": "pack-overrides/kubejs/assets/ftbstoneblock/lang/en_us.json: stonepebbles and craftingtable entries",
+    "quest_dependencies": "pack-overrides/config/ftbquests/quests/chapters/getting_started.snbt",
+    "definition": "ports/ftbsbc/data/ftbsbc/horizon/item/ftbstoneblock/stonepebble.json"
+  },
+  "known_gaps": [
+    "The quest text does not specify Stone Pebble count or probability; implementation emits one per unarmed stone break, not yet validated in-game.",
+    "The control fixture could look at the test block but rejected its break command as out of reach; drop behavior remains source-verified only.",
+    "The item model reuses vanilla flint and has no custom texture.",
+    "The hammer and crook recipes are confirmed in the live registry but crafting them on a placed crafting table is not yet exercised.",
+    "Crook drop RNG remains a position/tick hash, not the vanilla world loot RNG."
+  ],
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "stonepebble_item_registry": "used as a crafting ingredient",
+      "recipe_registry": [
+        {
+          "id": "minecraft:ftbsbc_stone_rod",
+          "registered": true,
+          "command_response": "Unlocked 1 recipe(s) for Player"
+        },
+        {
+          "id": "minecraft:ftbsbc_stone_hammer",
+          "registered": true,
+          "command_response": "Unlocked 1 recipe(s) for Player"
+        },
+        {
+          "id": "minecraft:ftbsbc_stone_crook",
+          "registered": true,
+          "command_response": "Unlocked 1 recipe(s) for Player"
+        },
+        {
+          "id": "minecraft:ftbsbc_stonepebble_to_cobblestone",
+          "registered": true,
+          "command_response": "Unlocked 1 recipe(s) for Player"
+        },
+        {
+          "id": "minecraft:ftbsbc_cobblestone_to_crafting_table",
+          "registered": true,
+          "command_response": "Unlocked 1 recipe(s) for Player"
+        }
+      ],
+      "crafting_grid_execution": [
+        {
+          "recipe": "minecraft:ftbsbc_stonepebble_to_cobblestone",
+          "result": "minecraft:cobblestone"
+        },
+        {
+          "recipe": "minecraft:ftbsbc_cobblestone_to_crafting_table",
+          "result": "minecraft:crafting_table"
+        }
+      ],
+      "bare_hand_stone_drop": "not validated in-game; the control fixture reports inconsistent reach for break despite look-at-block succeeding"
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "stonepebble_item_registry": "used as a crafting ingredient",
+      "recipe_registry": [
+        {
+          "id": "minecraft:ftbsbc_stone_rod",
+          "registered": true,
+          "command_response": "Unlocked 1 recipe(s) for Player96648"
+        },
+        {
+          "id": "minecraft:ftbsbc_stone_hammer",
+          "registered": true,
+          "command_response": "Unlocked 1 recipe(s) for Player96648"
+        },
+        {
+          "id": "minecraft:ftbsbc_stone_crook",
+          "registered": true,
+          "command_response": "Unlocked 1 recipe(s) for Player96648"
+        },
+        {
+          "id": "minecraft:ftbsbc_stonepebble_to_cobblestone",
+          "registered": true,
+          "command_response": "Unlocked 1 recipe(s) for Player96648"
+        },
+        {
+          "id": "minecraft:ftbsbc_cobblestone_to_crafting_table",
+          "registered": true,
+          "command_response": "Unlocked 1 recipe(s) for Player96648"
+        }
+      ],
+      "crafting_grid_execution": [
+        {
+          "recipe": "minecraft:ftbsbc_stonepebble_to_cobblestone",
+          "result": "minecraft:cobblestone"
+        },
+        {
+          "recipe": "minecraft:ftbsbc_cobblestone_to_crafting_table",
+          "result": "minecraft:crafting_table"
+        }
+      ],
+      "bare_hand_stone_drop": "not validated in-game; the control fixture reports inconsistent reach for break despite look-at-block succeeding"
+    }
+  ]
+}

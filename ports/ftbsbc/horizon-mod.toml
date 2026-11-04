@@ -6,6 +6,7 @@ authors = ["FTB Team"]
 api = "0.5"
 side = "both"
 capabilities = ["registries", "game-read", "target", "inventory-read", "server", "block-entities", "item-transfer", "machine-slot-limits", "recipes", "vanilla-hooks", "config"]
+contributes = ["ftbstoneblock"]
 ported-from = "FTB StoneBlock Companion 1.0.0+mc1.18.2; All rights reserved"
 
 [config.iron_speed_ticks]

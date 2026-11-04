@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "ftbstoneblock:stonepebble" },
+    { "item": "ftbstoneblock:stonepebble" },
+    { "item": "ftbstoneblock:stonepebble" },
+    { "item": "ftbstoneblock:stonepebble" }
+  ],
+  "result": {
+    "item": "minecraft:cobblestone"
+  }
+}

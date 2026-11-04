@@ -1,6 +1,8 @@
 {
   "complete": false,
   "pending": [
+    "Validate the bare-hand Stone Pebble drop in-game; its hook currently emits one per stone break, but the control fixture could not complete mining. The quest text does not establish count or probability.",
+    "Validate the Stone Rod, Stone Hammer, and Stone Crook recipes through a placed crafting table; their recipe IDs register but only the first two opening 2x2 crafts have an in-game harness.",
     "Reproduce vanilla loot RNG for crook outcomes instead of the current position/tick hash",
     "Verify the original crook recipe max semantics and validate every configured block/drop table",
     "Compare FirePlow hold duration, durability, and effects against original gameplay",
@@ -17,6 +19,7 @@
     "harness/auto-hammer-scope.json",
     "harness/crook-gameplay.json",
     "harness/fire-plow-gameplay.json",
-    "harness/manual-hammer-gameplay.json"
+    "harness/manual-hammer-gameplay.json",
+    "harness/opening-loop-compatibility.json"
   ]
 }
