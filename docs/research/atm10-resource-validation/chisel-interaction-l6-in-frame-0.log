@@ -1,0 +1,47 @@
+Horizon: content root ready for 1 mod(s) in 2.6s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-8xzkhmv7/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.14s (35724 block states)
+Horizon: discovered 4192 model files in 0.00s, parsed in 0.01s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.03s (1289 blocks)
+Horizon: bound 35724 model states / 7880 variants in 0.10s, resolved models in 0.00s, baked models and loaded sprites in 0.09s
+Horizon: model-state catalog prepared in 0.19s
+Horizon: blockstate binding and model baking took 0.23s
+Horizon: finalized 1291 sprite layers in 0.04s (asset render stage 0.29s)
+Horizon: gameplay facts read 0.02s, validated 0.17s, decoded 0.15s, projected 35724 states in 0.06s
+load assets: 3.37s
+Horizon: asset load stage took 0.57s
+load facts: 3.37s
+Horizon: facts, biomes and environment stage took 0.41s
+load biomes+env: 3.37s
+load pack tables: 3.65s
+Horizon: pack tables stage took 0.29s
+load collision+motion: 3.83s
+Horizon: collision and motion stage took 0.17s
+Horizon: mob metadata loaded in 0.02s
+load items: 3.90s
+Horizon: resources loaded in 3.9s; 35724 block states, 1660 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.08s
+Horizon: providers and block-entity render tables loaded in 0.18s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.22s
+Horizon: mob types loaded in 0.07s
+Horizon: player model setup took 0.10s
+Horizon: behaviours, mob types and player models loaded in 0.39s
+Horizon: no sounds in /tmp/horizon-port-fixture-8xzkhmv7/.horizon-cache/mod-content/assets: they were not copied from your Minecraft install; prepare the game again in the launcher (or run horizon-prepare sounds)
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.05s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 1 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-8xzkhmv7/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 566 ms
+Horizon: live features ready in 711.0221ms

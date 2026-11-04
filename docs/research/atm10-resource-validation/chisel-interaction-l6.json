@@ -1,0 +1,91 @@
+{
+  "status": "partial; four measured right-clicks reproduced in both Horizon modes",
+  "scope": "Chisel tool on stone, array/stone, and bedrock plus empty hand on stone; all blocks and stacks remain unchanged. Other Chisel mechanics remain unverified.",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "cases": [
+        {
+          "case": "stone_with_chisel",
+          "original_trace_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "array_stone_cycle",
+          "original_trace_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "unsupported_bedrock",
+          "original_trace_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "stone_empty_hand",
+          "original_trace_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+          "block_unchanged": true,
+          "item_count_before": 0,
+          "item_count_after": 0
+        }
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "cases": [
+        {
+          "case": "stone_with_chisel",
+          "original_trace_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "array_stone_cycle",
+          "original_trace_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "unsupported_bedrock",
+          "original_trace_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "stone_empty_hand",
+          "original_trace_result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+          "block_unchanged": true,
+          "item_count_before": 0,
+          "item_count_after": 0
+        }
+      ]
+    }
+  ],
+  "date": "2026-11-03",
+  "implementation": "Chisel tool right-clicks on stone, chisel:array/stone, and bedrock return PASS unchanged; other chisel actions remain as before and unverified.",
+  "horizon_validation": "in-frame and server-thread: all four targets and stacks stayed unchanged; unit test confirms the three exact mod-item callbacks return PASS.",
+  "evidence": [
+    "docs/research/atm10-resource-validation/chisel-interaction-l6.json",
+    "ports/chisel/src/lib.rs",
+    "tools/test_chisel_observed_game.py"
+  ],
+  "limit": "The public original probe used FakePlayer. This checkpoint only covers three chisel UseOnBlock targets and empty hand on stone; air use, attack, menus, pattern selection, other materials and multiblock modes remain pending."
+}

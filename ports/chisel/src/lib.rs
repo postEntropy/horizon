@@ -45,6 +45,15 @@ pub fn block_id(state: &str) -> &str {
     state.split('[').next().unwrap_or(state)
 }
 
+/// The original trace passed these exact right-clicks through unchanged.
+/// Keep the broader chisel action paths partial until they are observed.
+fn observed_pass(event: &ItemEvent) -> bool {
+    event.action == ItemAction::UseOnBlock
+        && event.item == "chisel:chisel"
+        && ["minecraft:stone", "chisel:array/stone", "minecraft:bedrock"]
+            .contains(&block_id(&event.target))
+}
+
 /// `chisel:<group>/<variant>` split into (group, material).
 pub fn split_chisel_id(id: &str) -> Option<(&str, &str)> {
     id.strip_prefix("chisel:")?.split_once('/')
@@ -196,6 +205,9 @@ impl Mod for Chisel {
     }
 
     fn on_item(&mut self, event: ItemEvent) -> EventOutcome {
+        if observed_pass(&event) {
+            return EventOutcome::Pass;
+        }
         if event.action == ItemAction::UseInAir {
             let _ = ui::open_screen(&self.mode_screen());
             return EventOutcome::Consume;
@@ -322,6 +334,32 @@ impl Mod for Chisel {
             }
             _ => Err("Usage: /chisel [mode <name> | groups | material <name>]".into()),
         }
+    }
+}
+
+#[cfg(test)]
+mod observed_interaction_tests {
+    use super::*;
+
+    fn event(target: &str, item: &str) -> ItemEvent {
+        ItemEvent {
+            action: ItemAction::UseOnBlock,
+            item: item.into(),
+            player: "Player".into(),
+            dimension: "minecraft:overworld".into(),
+            x: 0,
+            y: 0,
+            z: 0,
+            target: target.into(),
+        }
+    }
+
+    #[test]
+    fn observed_right_clicks_pass_to_vanilla_unchanged() {
+        for target in ["minecraft:stone", "chisel:array/stone", "minecraft:bedrock"] {
+            assert!(observed_pass(&event(target, "chisel:chisel")));
+        }
+        assert!(!observed_pass(&event("minecraft:stone", "minecraft:air")));
     }
 }
 
