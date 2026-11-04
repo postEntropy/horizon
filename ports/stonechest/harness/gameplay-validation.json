@@ -1,0 +1,32 @@
+{
+  "status": "passed",
+  "content": {
+    "status": "passed",
+    "blocks": 10,
+    "block_items": 10,
+    "part_items": 10,
+    "recipes": 20,
+    "loot_tables": 10
+  },
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "crafted_item": "stonechest:chest_stone",
+      "variants_with_27_slots": 10,
+      "saved_diamonds_after_reopen": 3
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "crafted_item": "stonechest:chest_stone",
+      "variants_with_27_slots": 10,
+      "saved_diamonds_after_reopen": 3
+    }
+  ],
+  "scope": [
+    "all ten chest block registrations",
+    "craft one Stone Chest from the imported recipe",
+    "27-slot inventory, insert/retrieve and save/reopen"
+  ]
+}

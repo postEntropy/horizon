@@ -285,6 +285,7 @@ members = [
     "ftbteams",
     "ftbsbc",
     "jags",
+    "stonechest",
     "thermal",
 ]
 resolver = "2"

@@ -1,0 +1,9 @@
+id = "stonechest"
+name = "Stone Chest"
+version = "1.1.1"
+description = "Stone variations of vanilla chests for FTB StoneBlock 3."
+api = "0.2"
+side = "both"
+capabilities = ["registries"]
+content-only = true
+ported-from = "Stone Chest 1.1.1; MIT; https://github.com/DoctorFTB/StoneChest"

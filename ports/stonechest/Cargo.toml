@@ -1,0 +1,11 @@
+[package]
+name = "stonechest-port"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+horizon-mods = { path = "../../crates/horizon-mods" }
+
+[dev-dependencies]
+serde_json = "1"
+

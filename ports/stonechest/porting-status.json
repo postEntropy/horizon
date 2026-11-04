@@ -1,0 +1,10 @@
+{
+  "complete": false,
+  "pending": [
+    "Horizon does not yet render the Stone Chest material textures with its chest block-entity renderer; third-party texture binaries remain in the local imported carry and are not included in this repository."
+  ],
+  "evidence": [
+    "harness/content-validation.json",
+    "harness/gameplay-validation.json"
+  ]
+}

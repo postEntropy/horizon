@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "blocks": 10,
+  "block_items": 10,
+  "part_items": 10,
+  "recipes": 20,
+  "loot_tables": 10,
+  "capacity_slots": 27,
+  "capacity_source": "Horizon vanilla chest host behavior; no configurable capacity in port manifest",
+  "binary_assets_in_repository": 0
+}
