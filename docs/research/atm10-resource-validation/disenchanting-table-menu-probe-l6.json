@@ -1,0 +1,15 @@
+{
+  "status": "pending-player-menu-and-enchanted-input-trace",
+  "original": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.259",
+    "disenchanting_table": "5.0.2",
+    "dependency": "MonoLib 4.1.2"
+  },
+  "probe": "MachineTrace placed the registered disenchanting_table:disenchanting_table block, ticked once, inspected its block entity, and requested a public menu view.",
+  "observed": "The block state was facing north. The block entity saved {Items:[],Progress:0}. The trace exposed no public menu and no slots; no disenchanting action, output, or experience change was observed.",
+  "missing": "The harness must execute the real player's block-use/open-menu path, then insert an enchanted item with its enchantment component and collect the resulting output/experience. The current MachineTrace only constructs menus for public MenuProvider blocks, and this block's placed block entity did not expose one through that route. An empty inventory tick cannot establish the recipe or costs.",
+  "limit": "No disenchanting semantics are inferred and no port code changed. The mod remains pending until a player interaction trace provides enchanted input, output, and experience evidence.",
+  "raw_staging": ".local/atm10-resource-validation/disenchanting-l6/oracle-trace.json",
+  "facts": ".local/atm10-resource-validation/disenchanting-l6/facts.json"
+}

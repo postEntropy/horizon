@@ -1,0 +1,19 @@
+{
+  "date": "2026-11-03",
+  "mod": "ConstructionSticks 1.21.1-1.5.0",
+  "status": "pending; observed placement needs an inventory mutation the Mod API does not expose",
+  "original": {
+    "facts": "constructionstick-original-facts-l6.json",
+    "counts": {"items": 10, "blocks": 0, "recipes": 35},
+    "trace": "constructionstick-original-trace-l6.json",
+    "cases": [
+      {"name": "wooden-stick-with-stone-offhand", "target": "minecraft:stone top face", "item_use": "SUCCESS", "placed": {"pos": "adjacent above clicked block", "item": "minecraft:stone", "count": 1}, "offhand_before": 64, "offhand_after": 63, "wand_count": 1},
+      {"name": "wooden-stick-empty-offhand", "target": "minecraft:stone top face", "item_use": "FAIL", "placed": 0, "wand_count": 1}
+    ],
+    "scope": "One clicked face, one empty adjacent position, wooden stick, stone or empty offhand; no tier/mode/direction sweep."
+  },
+  "api_gap": "horizon-mod-sdk exposes get-off-hand/get-player-inventory as read-only. The observed operation must atomically place one block and consume the exact offhand stack while preserving components; there is no authoritative inventory-write transaction for that player stack.",
+  "horizon": "No gameplay change or validation. Existing port must not be treated as equivalent; it places the clicked block type in a generated pattern and does not demonstrate offhand conservation.",
+  "next_trace": "After an authoritative player-inventory transaction exists, trace horizontal/vertical faces, connected surfaces, all stick tiers, templates/upgrades, durability, and blocked/invalid placements.",
+  "do_not_mark_complete": true
+}

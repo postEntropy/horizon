@@ -1,0 +1,13 @@
+{
+  "mod": "not_enough_glyphs",
+  "checkpoint": "L6",
+  "status": "pending",
+  "original_probe": "export_passed_with_pack_dependencies",
+  "original_export": ".local/atm10-resource-validation/not_enough_glyphs-original-facts-l6.json",
+  "observed_gameplay": null,
+  "fixture_gap": "incoming damage with glyph equipped, health/absorption/charge before and after; compare glyph disabled",
+  "horizon_validation": null,
+  "decision": "No code change. Export/registration facts do not demonstrate the listed gameplay operation; the existing public oracle is headless FakePlayer and cannot reproduce the specified connected-player/event interaction. Keep partial and continue to the next independent case.",
+  "dependency_gap_resolved_for_export": "ars_nouveau 5.13.3, curios 9.5.1, geckolib 4.9.3",
+  "export_counts": "25 items, 16 recipes"
+}

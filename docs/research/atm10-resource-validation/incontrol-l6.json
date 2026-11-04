@@ -1,0 +1,68 @@
+{
+  "mod": "incontrol",
+  "checkpoint": "L6",
+  "status": "pending",
+  "original_export": "0 blocks, 0 items, 0 recipes",
+  "original_pack_config": "defaultconfigs/incontrol/spawn.json",
+  "observed_config_rules": [
+    {
+      "mob": "minecraft:zombie",
+      "mincount": 15,
+      "result": "deny"
+    },
+    {
+      "mob": "minecraft:bat",
+      "mincount": 5,
+      "result": "deny"
+    },
+    {
+      "mob": "minecraft:skeleton",
+      "mincount": 15,
+      "result": "deny"
+    },
+    {
+      "mob": "minecraft:creeper",
+      "mincount": 15,
+      "result": "deny"
+    },
+    {
+      "mob": "minecraft:spider",
+      "mincount": 15,
+      "result": "deny"
+    },
+    {
+      "mob": "minecraft:enderman",
+      "mincount": 15,
+      "result": "deny"
+    },
+    {
+      "mob": "irons_spellbooks:necromancer",
+      "mincount": 15,
+      "result": "deny"
+    },
+    {
+      "mob": "minecraft:cave_spider",
+      "mincount": 15,
+      "result": "deny"
+    },
+    {
+      "mob": "creeperoverhaul:cave_creeper",
+      "mincount": 15,
+      "result": "deny"
+    },
+    {
+      "mob": "minecraft:drowned",
+      "mincount": 15,
+      "result": "deny"
+    },
+    {
+      "mob": "creeperoverhaul:dripstone_creeper",
+      "mincount": 15,
+      "result": "deny"
+    }
+  ],
+  "behavior_probe": "No spawn-event black-box trace was available. The pack config is evidence of configured rules, not proof of their effect.",
+  "fixture_gap": "Original connected server with exact defaultconfigs loaded; repeatedly spawn each listed mob at counts 14, 15, 16 and compare allow/deny outcomes, then reload altered rules and measure persistence. Horizon fixture needs deterministic natural-spawn event with live rule reload.",
+  "horizon_validation": null,
+  "decision": "No code change; configuration parsing/command-default behavior remains unvalidated."
+}

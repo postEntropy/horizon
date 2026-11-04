@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-03",
+  "mod": "crashutilities 9.0.4",
+  "status": "pending; original behavior is client-facing and not observable in headless server oracle",
+  "original": {
+    "facts": "crashutilities-original-facts-l6.json",
+    "registered_counts": {"blocks": 0, "items": 0, "recipes": 0},
+    "gameplay_trace": null
+  },
+  "fixture_gap": "The headless NeoForge server oracle cannot capture the original client's HUD, keybindings, screen, or client command results. Registry export does not show the utility behavior.",
+  "next_black_box_fixture": "Launch original client in an isolated profile and record key U overlay toggle, key I slot tooltips, /crashutilities check and invsee output with a known position, target block/entity, inventory, and open container.",
+  "horizon": "No change or gameplay validation; current port remains partial and unverified.",
+  "do_not_mark_complete": true
+}

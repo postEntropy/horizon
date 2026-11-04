@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-03",
+  "mod": "Akashic Tome 1.8-30",
+  "status": "partial; original gesture observed, selection behavior unobserved",
+  "original": {
+    "jar": "user ATM10 instance JAR, loaded alone",
+    "facts": "akashictome-original-facts-l6.json",
+    "item": "akashictome:tome",
+    "item_max_stack": 1,
+    "recipe_count": 2,
+    "fake_player_item_use": "akashictome-original-use-l6.json",
+    "cases": [
+      {"scenario": "tome-use-in-air-empty", "result": "CONSUME", "hand_item": "akashictome:tome", "hand_count": 1, "menu": "InventoryMenu"},
+      {"scenario": "vanilla-book-use-in-air-control", "result": "PASS", "hand_item": "minecraft:book", "hand_count": 1, "menu": "InventoryMenu"}
+    ]
+  },
+  "limits": [
+    "FakePlayer did not expose the player-facing guide selection menu.",
+    "Original JAR loaded alone; guide registration from the pack was not exercised.",
+    "No guide selection, cycling, NBT rewrite, or ejection was observed.",
+    "Current Mod API has no item-opened menu or confirmed held-stack rewrite capability.",
+    "No Horizon gameplay change or parity claim was made; mod remains partial."
+  ],
+  "next_evidence_needed": "A connected-player fixture with at least two registered guide books, recording use/cycle/select/eject outcomes and held stack before and after."
+}

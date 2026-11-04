@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-03",
+  "mod": "elevatorid-neoforge 1.21.1-1.11.4",
+  "status": "pending; data export only, activation gesture requires connected-player input",
+  "original": {
+    "facts": "elevatorid-original-facts-l6.json",
+    "counts": {"blocks": 16, "items": 16, "recipes": 32},
+    "gameplay_trace": null
+  },
+  "fixture_gap": "The server FakePlayer/block oracle cannot emit the player's jump/up/down key edge while standing on an elevator, advance the connected player's movement state, or observe authoritative teleport and sound together. Right-clicking the block is not a substitute for the demonstrated key-driven activation path.",
+  "next_black_box_fixture": "Connected original player at matching elevators: test up/down, closest matching color, 32-block boundary, obstructed two-block landing, mismatched colors, no destination, and sound/position after one server tick.",
+  "horizon": "No code change or gameplay validation; current port remains partial.",
+  "do_not_mark_complete": true
+}

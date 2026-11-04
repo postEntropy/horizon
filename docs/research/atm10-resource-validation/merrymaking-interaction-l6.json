@@ -1,0 +1,123 @@
+{
+  "status": "pending-interaction-path-unconfirmed",
+  "original": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.259",
+    "merrymaking": "1.21.1-17",
+    "dependency": "GeckoLib 4.9.3"
+  },
+  "probes": [
+    {
+      "interaction": "empty hand, useWithoutItem",
+      "scenarios": [
+        {
+          "scenario": "present_one_interaction",
+          "block_state": "Block{merrymaking:present}",
+          "result": [
+            {
+              "item": "minecraft:air",
+              "result": "PASS",
+              "held_item": "minecraft:air",
+              "held_count": 0
+            }
+          ],
+          "nearby_items": {},
+          "nearby_xp": 0,
+          "saved_tag": "{}"
+        },
+        {
+          "scenario": "present_two_interactions",
+          "block_state": "Block{merrymaking:present}",
+          "result": [
+            {
+              "item": "minecraft:air",
+              "result": "PASS",
+              "held_item": "minecraft:air",
+              "held_count": 0
+            },
+            {
+              "item": "minecraft:air",
+              "result": "PASS",
+              "held_item": "minecraft:air",
+              "held_count": 0
+            }
+          ],
+          "nearby_items": {},
+          "nearby_xp": 0,
+          "saved_tag": "{}"
+        },
+        {
+          "scenario": "stocking_one_interaction",
+          "block_state": "Block{minecraft:air}",
+          "result": [
+            {
+              "item": "minecraft:air",
+              "result": "PASS",
+              "held_item": "minecraft:air",
+              "held_count": 0
+            }
+          ],
+          "nearby_items": {},
+          "nearby_xp": 0,
+          "saved_tag": "{}"
+        }
+      ]
+    },
+    {
+      "interaction": "useItemOn with stick, gingerbread cookie or diamond",
+      "scenarios": [
+        {
+          "scenario": "present_stick",
+          "block_state": "Block{merrymaking:present}",
+          "result": [
+            {
+              "item": "minecraft:stick",
+              "result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+              "held_item": "minecraft:stick",
+              "held_count": 1
+            }
+          ],
+          "nearby_items": {},
+          "nearby_xp": 0,
+          "saved_tag": "{}"
+        },
+        {
+          "scenario": "present_treat",
+          "block_state": "Block{merrymaking:present}",
+          "result": [
+            {
+              "item": "merrymaking:gingerbread_cookie",
+              "result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+              "held_item": "merrymaking:gingerbread_cookie",
+              "held_count": 1
+            }
+          ],
+          "nearby_items": {},
+          "nearby_xp": 0,
+          "saved_tag": "{}"
+        },
+        {
+          "scenario": "present_diamond",
+          "block_state": "Block{merrymaking:present}",
+          "result": [
+            {
+              "item": "minecraft:diamond",
+              "result": "PASS_TO_DEFAULT_BLOCK_INTERACTION",
+              "held_item": "minecraft:diamond",
+              "held_count": 1
+            }
+          ],
+          "nearby_items": {},
+          "nearby_xp": 0,
+          "saved_tag": "{}"
+        }
+      ]
+    }
+  ],
+  "observed": "The driven public calls returned PASS/PASS_TO_DEFAULT_BLOCK_INTERACTION; no nearby item drops or block-state changes were observed in these harness calls. This does not establish actual player click behavior for the gift block.",
+  "limit": "Keep presents and stocking behavior pending until a real-player interaction trace can determine the trigger and output. No port behavior inferred or changed.",
+  "raw_staging": [
+    ".local/atm10-resource-validation/merrymaking-l6/oracle-trace.json",
+    ".local/atm10-resource-validation/merrymaking-l6/oracle-held-items.json"
+  ]
+}

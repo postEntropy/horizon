@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-03",
+  "mod": "bwncr-neoforge 1.21.1-3.20.4",
+  "status": "pending; original gameplay effect not observable with current server trace fixture",
+  "original": {
+    "facts": "bwncr-original-facts-l6.json",
+    "registered_counts": {"blocks": 0, "items": 0, "recipes": 0},
+    "gameplay_trace": null
+  },
+  "gap": "The current NeoForge oracle is server-side and has no client sound-event capture or paired client observer. It cannot distinguish muted versus delivered audio or associate the event with a connected listener.",
+  "next_black_box_fixture": "Launch original mod with a real client observer; trigger each configured target (Wither, Ender Dragon, lightning, Wandering Trader) and compare emitted/listener audio under silence enabled/disabled and custom sound mute rules.",
+  "horizon": "No code change or gameplay validation; existing port remains partial and unverified.",
+  "do_not_mark_complete": true
+}

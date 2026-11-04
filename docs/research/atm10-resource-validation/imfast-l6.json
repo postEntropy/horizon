@@ -1,0 +1,11 @@
+{
+  "mod": "imfast",
+  "checkpoint": "L6",
+  "status": "pending",
+  "original_probe": "export_passed",
+  "original_export": ".local/atm10-resource-validation/imfast-original-facts-l6.json",
+  "observed_gameplay": null,
+  "fixture_gap": "connected-player key edge while moving, with collision, server authority, and config values measured",
+  "horizon_validation": null,
+  "decision": "No code change. Export/registration facts do not demonstrate the listed gameplay operation; the existing public oracle is headless FakePlayer and cannot reproduce the specified connected-player/event interaction. Keep partial and continue to the next independent case."
+}

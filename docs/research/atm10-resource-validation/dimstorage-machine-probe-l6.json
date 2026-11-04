@@ -1,0 +1,29 @@
+{
+  "status": "pending-cross-chest-channel-interaction",
+  "original": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.259",
+    "dimstorage": "9.1.1",
+    "dependency": "EdivadLib 3.0.0"
+  },
+  "probe": "MachineTrace placed one dimensional chest per scenario, ticked it three times, opened the public DimChestMenu, queried slot acceptance, and saved the block entity.",
+  "scenarios": [
+    {
+      "scenario": "chest_idle",
+      "menu_class": "edivad.dimstorage.menu.DimChestMenu",
+      "menu_slots": 90,
+      "slot_0": "empty",
+      "saved_tag": "{frequency:{channel:1},locked:0b,rot:0b}"
+    },
+    {
+      "scenario": "chest_diamond_slot0",
+      "menu_class": "edivad.dimstorage.menu.DimChestMenu",
+      "menu_slots": 90,
+      "slot_0": ["minecraft:diamond", 1],
+      "saved_tag": "{frequency:{channel:1},locked:0b,rot:0b}"
+    }
+  ],
+  "observed": "With DimStorage and EdivadLib loaded, the public menu opens and exposes 90 slots. An injected diamond remains in slot 0 through three ticks and is present in the saved block entity. The default saved frequency is channel 1; locked is false and rot is false.",
+  "limit": "The harness supports only one machine per scenario and cannot place/configure a second chest or drive the player's channel/frequency controls. It therefore does not show whether two chests share items, how channels are selected, or transfer/extraction behavior. No cross-chest semantics are inferred; DimStorage remains pending until a two-chest public interaction trace is available.",
+  "raw_staging": ".local/atm10-resource-validation/dimstorage-l6/oracle-trace.json"
+}

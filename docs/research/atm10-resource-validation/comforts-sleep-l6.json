@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-03",
+  "mod": "comforts-neoforge 9.0.5+1.21.1",
+  "status": "pending; FakePlayer fixture does not reach sleep behavior",
+  "original": {
+    "facts": "comforts-original-facts-l6.json",
+    "counts": {"blocks": 33, "items": 33, "recipes": 65},
+    "trace": "comforts-original-use-l6.json",
+    "cases": [
+      {"block": "comforts:hammock_cyan", "world_time": 6000, "result": "CONSUME", "player_sleeping": false, "world_time_after": 6000},
+      {"block": "comforts:hammock_cyan", "world_time": 13000, "result": "CONSUME", "player_sleeping": false, "world_time_after": 13000},
+      {"block": "comforts:sleeping_bag_red", "world_time": 13000, "result": "CONSUME", "player_sleeping": false, "world_time_after": 13000},
+      {"block": "minecraft:red_bed", "world_time": 13000, "result": "CONSUME", "player_sleeping": false, "world_time_after": 13000}
+    ]
+  },
+  "fixture_changes": "MachineTrace positions the FakePlayer at the clicked block and can set/capture world day time and post-use sleeping state.",
+  "gap": "Even positioned at the block, FakePlayer does not enter sleep or advance time. The trace cannot establish successful sleep, wake time, spawn-point behavior, or day/night restrictions for a connected player.",
+  "next_black_box_fixture": "Run original with a connected player and record hammock day-sleep until sunset, sleeping bag night use, spawn-point before/after, occupied state, time progression, and blocked/occupied cases.",
+  "horizon": "No gameplay change or validation; existing port remains partial.",
+  "do_not_mark_complete": true
+}

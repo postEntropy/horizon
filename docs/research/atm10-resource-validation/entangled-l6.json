@@ -1,0 +1,13 @@
+{
+  "mod": "entangled",
+  "checkpoint": "L6",
+  "status": "pending",
+  "original_probe": "export_passed_with_pack_dependencies",
+  "original_export": ".local/atm10-resource-validation/entangled-original-facts-l6.json",
+  "observed_gameplay": null,
+  "fixture_gap": "bind two endpoints with player interaction and transfer a concrete inventory/block state through linked proxy",
+  "horizon_validation": null,
+  "decision": "No code change. Export/registration facts do not demonstrate the listed gameplay operation; the existing public oracle is headless FakePlayer and cannot reproduce the specified connected-player/event interaction. Keep partial and continue to the next independent case.",
+  "dependency_gap_resolved_for_export": "SuperMartijn642 ConfigLib 1.1.8 and CoreLib 1.1.25",
+  "export_counts": "2 blocks, 2 items, 3 recipes"
+}

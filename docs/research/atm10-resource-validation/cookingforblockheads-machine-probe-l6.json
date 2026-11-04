@@ -1,0 +1,14 @@
+{
+  "status": "pending-no-gameplay-inference",
+  "mod": "Cooking for Blockheads 21.1.24",
+  "original": "Minecraft 1.21.1 / NeoForge 21.1.259; original JAR and required Balm 21.0.66 staged as read-only symlinks.",
+  "question": "L6 review says the oven tick/cook state is not connected to real recipes, slots, save and remove lifecycle. A black-box tick trace was attempted for idle, beef+coal, blocked output and unsupported input.",
+  "probe": "tools/neoforge_oracle.py machines using dev-only MachineTrace; isolated install under .local/neoforge-oracle-l6-cookingforblockheads/.",
+  "observed": "No furnace behavior established. The harness first refused the oven as having no public inventory; supplying a menu-slot adapter then reported no public menu. The trace writer produced no scenario JSON.",
+  "limitation": "The current machine harness only maps public Container or getMenuProvider interfaces. Cooking for Blockheads oven requires a different actual block-interaction/menu path to observe. This is a harness limitation, not evidence the original oven is inert and not evidence against the port.",
+  "artifacts": [
+    ".local/atm10-resource-validation/cookingforblockheads-l6/scenarios.json",
+    ".local/neoforge-oracle-l6-cookingforblockheads/runs/machines/server.log"
+  ],
+  "next": "Keep this mod pending. A later observation needs a player-level public interaction trace; no gameplay code or completion status changed."
+}

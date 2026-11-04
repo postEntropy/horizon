@@ -1,0 +1,11 @@
+{
+  "mod": "novillagerdm",
+  "checkpoint": "L6",
+  "status": "pending",
+  "original_probe": "export_passed",
+  "original_export": ".local/atm10-resource-validation/novillagerdm-original-facts-l6.json",
+  "observed_gameplay": null,
+  "fixture_gap": "server-side death events for each villager death cause, including player, mob, environmental, and despawn",
+  "horizon_validation": null,
+  "decision": "No code change. Export/registration facts do not demonstrate the listed gameplay operation; the existing public oracle is headless FakePlayer and cannot reproduce the specified connected-player/event interaction. Keep partial and continue to the next independent case."
+}

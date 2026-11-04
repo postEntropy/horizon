@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-03",
+  "mod": "crafting_on_a_stick 1.21.0.6",
+  "status": "pending; item action observed, connected menu behavior unavailable",
+  "original": {
+    "facts": "crafting-on-a-stick-original-facts-l6.json",
+    "counts": {"blocks": 0, "items": 9, "recipes": 18},
+    "use_trace": "crafting-on-a-stick-original-use-l6.json",
+    "cases": [
+      "crafting_table", "loom", "grindstone", "cartography_table", "stonecutter",
+      "smithing_table", "anvil", "chipped_anvil", "damaged_anvil"
+    ],
+    "result": "All nine use-in-air calls returned SUCCESS and preserved the one-item held stack. FakePlayer.containerMenu remained InventoryMenu for each.",
+    "vanilla_control": "minecraft:stick returned PASS and remained unchanged."
+  },
+  "fixture_gap": "The FakePlayer oracle cannot expose a connected player's opened AbstractContainerMenu or its item/result slots. SUCCESS alone does not establish which station menu opened or whether it crafts.",
+  "horizon": "Existing port uses mod-owned placeholder screens without station inventory/recipe transactions. No change or gameplay validation; not equivalent to observed original menu behavior.",
+  "next_black_box_fixture": "Use a connected original client for every station item; record menu type, input/output slots, one valid and invalid recipe, output blocked, item conservation, and closing/reopening behavior.",
+  "do_not_mark_complete": true
+}

@@ -1,0 +1,11 @@
+{
+  "mod": "heyberryshutup",
+  "checkpoint": "L6",
+  "status": "pending",
+  "original_probe": "export_passed",
+  "original_export": ".local/atm10-resource-validation/heyberryshutup-original-facts-l6.json",
+  "observed_gameplay": null,
+  "fixture_gap": "capture player effect and damage cancellation for configurable target/entity and compare enabled/disabled",
+  "horizon_validation": null,
+  "decision": "No code change. Export/registration facts do not demonstrate the listed gameplay operation; the existing public oracle is headless FakePlayer and cannot reproduce the specified connected-player/event interaction. Keep partial and continue to the next independent case."
+}
