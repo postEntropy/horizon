@@ -64,6 +64,7 @@ impl MachineState {
     pub fn new(kind: MachineKind) -> Self {
         let max_energy = kind.default_max_energy();
         let max_progress = match kind {
+            MachineKind::CoalGenerator => 1_600,
             MachineKind::Crusher => 100,
             MachineKind::CanolaPress => 30,
             MachineKind::Empowerer => 100,
@@ -89,14 +90,10 @@ impl MachineState {
     pub fn tick(&mut self) -> bool {
         match self.kind {
             MachineKind::CoalGenerator => {
-                if self.is_active && self.energy < self.max_energy {
-                    self.energy = (self.energy + 40).min(self.max_energy);
-                    if self.progress > 0 {
-                        self.progress -= 1;
-                        if self.progress == 0 {
-                            self.is_active = false;
-                        }
-                    }
+                if self.is_active && self.progress > 0 && self.energy < self.max_energy {
+                    self.progress -= 1;
+                    self.energy = (self.energy + 20).min(self.max_energy);
+                    self.is_active = self.progress > 0;
                     return true;
                 }
             }
@@ -413,6 +410,57 @@ impl Mod for ActuallyAdditions {
     fn tick_block_entities(&mut self, handles: &[u32]) {
         for handle in handles {
             if let Some(m) = self.machines.get_mut(handle) {
+                if m.kind == MachineKind::CoalGenerator {
+                    let Some(position) = machine::get_position(*handle) else {
+                        continue;
+                    };
+                    let key = format!(
+                        "{}:{},{},{}",
+                        position.dimension, position.x, position.y, position.z
+                    );
+                    let mut energy = capabilities::get_energy(&key).unwrap_or_else(|| {
+                        let view = EnergyView {
+                            stored: m.energy.min(60_000),
+                            capacity: 60_000,
+                            max_receive: 0,
+                            max_extract: 80,
+                        };
+                        capabilities::set_energy_buffer(&key, view);
+                        view
+                    });
+                    m.energy = energy.stored.min(60_000);
+
+                    // The original trace demonstrated coal only: it starts a
+                    // 1,600-tick burn without generating FE on that first tick.
+                    // Other fuels and their remainders need separate traces.
+                    if m.progress == 0 && m.energy < 60_000 {
+                        if machine::get_slot(*handle, 0)
+                            .is_some_and(|stack| stack.id == "minecraft:coal")
+                        {
+                            let consumed = [SlotStack {
+                                slot: 0,
+                                stack: ItemStack {
+                                    id: "minecraft:coal".into(),
+                                    count: 1,
+                                },
+                            }];
+                            if machine::process_items(*handle, &consumed, &[], false) {
+                                m.progress = 1_600;
+                                m.max_progress = 1_600;
+                                m.is_active = true;
+                            }
+                        }
+                    } else if m.progress > 0 && m.energy < 60_000 {
+                        m.is_active = true;
+                        m.tick();
+                    }
+                    energy.stored = m.energy;
+                    energy.capacity = 60_000;
+                    energy.max_receive = 0;
+                    energy.max_extract = 80;
+                    capabilities::set_energy_buffer(&key, energy);
+                    continue;
+                }
                 if m.kind != MachineKind::Crusher {
                     m.tick();
                     continue;
@@ -578,12 +626,24 @@ mod tests {
         generator.start_burn(100);
         assert!(generator.is_active);
 
-        // Tick 10 times -> generates 400 FE
+        // The original coal-generator trace showed 20 FE per burn tick.
         for _ in 0..10 {
             assert!(generator.tick());
         }
-        assert_eq!(generator.energy, 400);
+        assert_eq!(generator.energy, 200);
         assert_eq!(generator.progress, 90);
+    }
+
+    #[test]
+    fn coal_generator_resumes_saved_burn_progress() {
+        let mut generator = MachineState::new(MachineKind::CoalGenerator);
+        generator.energy = 20;
+        generator.progress = 1_599;
+        generator.is_active = true;
+        assert!(generator.tick());
+        assert_eq!(generator.energy, 40);
+        assert_eq!(generator.progress, 1_598);
+        assert!(generator.is_active);
     }
 
     #[test]

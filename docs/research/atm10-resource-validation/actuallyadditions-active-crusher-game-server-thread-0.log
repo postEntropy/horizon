@@ -1,0 +1,79 @@
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:canola_seeds is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:coffee_beans is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:flax_seeds is not registered in this mod set; ignored
+Horizon: data/neoforge/data_maps/item/compostables.json: actuallyadditions:rice_seeds is not registered in this mod set; ignored
+Horizon: content root ready for 1 mod(s) in 4.4s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-hbzh6k_3/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.15s (39077 block states)
+Horizon: discovered 4618 model files in 0.00s, parsed in 0.02s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.06s (1413 blocks)
+Horizon: bound 39075 model states / 8394 variants in 0.11s, resolved models in 0.01s, baked models and loaded sprites in 0.11s
+Horizon: model-state catalog prepared in 0.23s
+Horizon: blockstate binding and model baking took 0.31s
+Horizon: finalized 1459 sprite layers in 0.05s (asset render stage 0.38s)
+Horizon: gameplay facts read 0.02s, validated 0.19s, decoded 0.16s, projected 39077 states in 0.07s
+load assets: 5.22s
+Horizon: asset load stage took 0.64s
+load facts: 5.22s
+Horizon: facts, biomes and environment stage took 0.45s
+load biomes+env: 5.22s
+load pack tables: 5.53s
+Horizon: pack tables stage took 0.31s
+load collision+motion: 5.71s
+Horizon: collision and motion stage took 0.18s
+Horizon: mob metadata loaded in 0.02s
+load items: 5.80s
+Horizon: resources loaded in 5.8s; 39077 block states, 1884 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.10s
+Horizon: providers and block-entity render tables loaded in 0.17s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.25s
+Horizon: mob types loaded in 0.07s
+Horizon: player model setup took 0.10s
+Horizon: behaviours, mob types and player models loaded in 0.41s
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.05s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-hbzh6k_3/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.05s
+Horizon: game CPU resources ready in 0.06s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: live features ready in 773.157689ms
+[16:18:10] [Server thread/INFO]: Player07332[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
+[16:18:10] [Server thread/INFO]: System chat: Player07332 joined the game
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 4818 ms
+[chat] The game is frozen
+[16:18:10] [Server thread/INFO]: System chat: [Player07332: Teleported Player07332 to 1.500000, 102.000000, 4.500000]
+[chat] Teleported Player07332 to 1.500000, 102.000000, 4.500000
+[16:18:10] [Server thread/INFO]: System chat: [Player07332: Replaced 1 slot(s) at 0, 100, 0 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 0, 100, 0 with [Iron Ore]
+[16:18:10] [Server thread/INFO]: System chat: [Player07332: Replaced 1 slot(s) at 1, 100, 0 with [Iron Ore]]
+[chat] Replaced 1 slot(s) at 1, 100, 0 with [Iron Ore]
+[16:18:10] [Server thread/INFO]: System chat: [Player07332: Replaced 1 slot(s) at 1, 100, 0 with [Dirt]]
+[chat] Replaced 1 slot(s) at 1, 100, 0 with [Dirt]
+[16:18:11] [Server thread/INFO]: System chat: [Player07332: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+[16:18:12] [Server thread/INFO]: System chat: [Player07332: Modified block data of 0, 100, 0]
+[chat] Modified block data of 0, 100, 0
+[16:18:12] [Server thread/INFO]: System chat: [Player07332: Modified block data of 1, 100, 0]
+[chat] Modified block data of 1, 100, 0
+[16:18:12] [Server thread/INFO]: System chat: [Player07332: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+[16:18:13] [Server thread/INFO]: System chat: [Player07332: Stepping 99 tick(s)]
+[chat] Stepping 99 tick(s)
+[chat] 0, 100, 0 has the following block data: {max_receive: "100", stored: "6000", max_extract: "0", capacity: "60000"}
+[chat] 1, 100, 0 has the following block data: {max_receive: "100", stored: "10000", max_extract: "0", capacity: "60000"}

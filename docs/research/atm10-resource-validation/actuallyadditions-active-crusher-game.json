@@ -1,0 +1,154 @@
+{
+  "status": "passed",
+  "scope": "active crusher conversion, blocked output, energy and save/load; ownership index after break/recreate",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "checks": [
+        {
+          "stage": "after-100-active-ticks",
+          "successful_recipe": {
+            "slots": [
+              {
+                "count": 1,
+                "item": "minecraft:iron_ore"
+              },
+              {
+                "count": 2,
+                "item": "minecraft:raw_iron"
+              },
+              null
+            ],
+            "stored_fe": 6000
+          },
+          "blocked_output": {
+            "slots": [
+              {
+                "count": 1,
+                "item": "minecraft:iron_ore"
+              },
+              {
+                "count": 1,
+                "item": "minecraft:dirt"
+              },
+              null
+            ],
+            "stored_fe": 10000
+          }
+        },
+        {
+          "stage": "after-save-load",
+          "successful_recipe": {
+            "slots": [
+              {
+                "count": 1,
+                "item": "minecraft:iron_ore"
+              },
+              {
+                "count": 2,
+                "item": "minecraft:raw_iron"
+              },
+              null
+            ],
+            "stored_fe": 5920,
+            "startup_ticks_observed": 2
+          },
+          "blocked_output": {
+            "slots": [
+              {
+                "count": 1,
+                "item": "minecraft:iron_ore"
+              },
+              {
+                "count": 1,
+                "item": "minecraft:dirt"
+              },
+              null
+            ],
+            "stored_fe": 10000
+          }
+        },
+        {
+          "stage": "remove-recreate",
+          "energy_before_write": 0,
+          "energy_after_write": 500
+        }
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "checks": [
+        {
+          "stage": "after-100-active-ticks",
+          "successful_recipe": {
+            "slots": [
+              {
+                "count": 1,
+                "item": "minecraft:iron_ore"
+              },
+              {
+                "count": 2,
+                "item": "minecraft:raw_iron"
+              },
+              null
+            ],
+            "stored_fe": 6000
+          },
+          "blocked_output": {
+            "slots": [
+              {
+                "count": 1,
+                "item": "minecraft:iron_ore"
+              },
+              {
+                "count": 1,
+                "item": "minecraft:dirt"
+              },
+              null
+            ],
+            "stored_fe": 10000
+          }
+        },
+        {
+          "stage": "after-save-load",
+          "successful_recipe": {
+            "slots": [
+              {
+                "count": 1,
+                "item": "minecraft:iron_ore"
+              },
+              {
+                "count": 2,
+                "item": "minecraft:raw_iron"
+              },
+              null
+            ],
+            "stored_fe": 5720,
+            "startup_ticks_observed": 7
+          },
+          "blocked_output": {
+            "slots": [
+              {
+                "count": 1,
+                "item": "minecraft:iron_ore"
+              },
+              {
+                "count": 1,
+                "item": "minecraft:dirt"
+              },
+              null
+            ],
+            "stored_fe": 10000
+          }
+        },
+        {
+          "stage": "remove-recreate",
+          "energy_before_write": 0,
+          "energy_after_write": 500
+        }
+      ]
+    }
+  ]
+}
