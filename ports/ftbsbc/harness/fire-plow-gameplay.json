@@ -1,0 +1,23 @@
+{
+  "test": "Fire Plow held on stone creates source lava and release aborts progress",
+  "date": "2026-11-03",
+  "environment": {
+    "world": "FtbSbcFirePlowProbe",
+    "gamemode": "survival",
+    "fresh_profile": "/tmp/horizon-stone-fireplow-retry.dJqUZP",
+    "mod_source": "mods/ftbsbc/carry",
+    "isolation": "fresh HORIZON_HOME, HORIZON_LAUNCHER_HOME, XDG_DATA_HOME, XDG_CONFIG_HOME and XDG_RUNTIME_DIR; audio disabled"
+  },
+  "steps": [
+    "Loaded the rebuilt Horizon host and API 0.5 ftbsbc component; startup reported one running mod and no load error.",
+    "Equipped ftbsbc:fire_plow in survival and aimed at minecraft:stone.",
+    "Held use for a short interval, released, and inspected the target; it remained minecraft:stone.",
+    "Held use on the same stone for a longer interval and inspected the target; it became minecraft:lava[level=0]."
+  ],
+  "observed": {
+    "short_hold_release": "stone unchanged",
+    "long_hold": "source lava created",
+    "result": "pass"
+  },
+  "scope_limit": "The default hold threshold is currently provisional (100 ticks). Control wait timing is not an exact per-tick measurement. Original-game comparison, exact duration, durability, sound/particles, and multiplayer behavior remain unverified."
+}

@@ -1,0 +1,44 @@
+id = "ftbsbc"
+name = "FTB StoneBlock Companion"
+version = "1.0.0+mc1.18.2"
+description = "FTB StoneBlock Companion: auto-hammers, Crook, and Fire Plow; remaining gameplay is partial."
+authors = ["FTB Team"]
+api = "0.5"
+side = "both"
+capabilities = ["registries", "game-read", "target", "inventory-read", "server", "block-entities", "item-transfer", "machine-slot-limits", "recipes", "vanilla-hooks", "config"]
+ported-from = "FTB StoneBlock Companion 1.0.0+mc1.18.2; All rights reserved"
+
+[config.iron_speed_ticks]
+type = "int"
+default = 50
+min = 1
+max = 100000
+description = "Iron auto-hammer ticks per recipe operation (StoneBlock 3 default: 50)"
+
+[config.gold_speed_ticks]
+type = "int"
+default = 40
+min = 1
+max = 100000
+description = "Gold auto-hammer ticks per recipe operation (StoneBlock 3 default: 40)"
+
+[config.diamond_speed_ticks]
+type = "int"
+default = 30
+min = 1
+max = 100000
+description = "Diamond auto-hammer ticks per recipe operation (StoneBlock 3 default: 30)"
+
+[config.netherite_speed_ticks]
+type = "int"
+default = 15
+min = 1
+max = 100000
+description = "Netherite auto-hammer ticks per recipe operation (StoneBlock 3 default: 15)"
+
+[config.fire_plow_ticks]
+type = "int"
+default = 100
+min = 1
+max = 100000
+description = "Ticks to hold the Fire Plow on stone before it becomes lava; default is provisional pending original-game timing validation"

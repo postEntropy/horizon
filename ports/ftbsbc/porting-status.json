@@ -1,0 +1,22 @@
+{
+  "complete": false,
+  "pending": [
+    "Reproduce vanilla loot RNG for crook outcomes instead of the current position/tick hash",
+    "Verify the original crook recipe max semantics and validate every configured block/drop table",
+    "Compare FirePlow hold duration, durability, and effects against original gameplay",
+    "Compare manual hammer mining speed and durability with original gameplay",
+    "Implement and validate tool damage/durability behavior",
+    "Implement StoneBlock portal travel and bits spawner behavior",
+    "Validate gold, diamond, and netherite auto-hammers against their configured speeds",
+    "Validate all tag recipes and compressed outputs up to 729 items, including mixed/full output slots",
+    "Validate sided hopper insertion/extraction and save/reload of in-progress operations",
+    "Compare all carried behavior with the original mod in-game and test full StoneBlock pack integration"
+  ],
+  "evidence": [
+    "harness/auto-hammer-gameplay.json",
+    "harness/auto-hammer-scope.json",
+    "harness/crook-gameplay.json",
+    "harness/fire-plow-gameplay.json",
+    "harness/manual-hammer-gameplay.json"
+  ]
+}

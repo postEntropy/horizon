@@ -1,0 +1,29 @@
+{
+  "evidence_sources": [
+    "../../../pack-overrides/config/ftbsbc-common.toml",
+    "../../../pack-overrides/config/ftbsbtools-common.toml",
+    "../../../pack-overrides/kubejs/server_scripts/_core/ftb/sbtools/recipes.js",
+    "../carry/assets/ftbsbc/lang/en_us.json"
+  ],
+  "verified_configuration": {
+    "ftbsbc-common.toml": {
+      "ironSpeed": 50,
+      "goldSpeed": 40,
+      "diamondSpeed": 30,
+      "netheriteSpeed": 15
+    },
+    "ftbsbtools-common.toml": {
+      "ironSpeed": 50,
+      "goldSpeed": 40,
+      "diamondSpeed": 30,
+      "netheriteSpeed": 15
+    }
+  },
+  "recipe_scope": {
+    "exact_or_tag_base_inputs": 20,
+    "compressed_inputs": 24,
+    "compressed_output_counts": [9, 81, 729],
+    "total_registered_by_port": 44
+  },
+  "caveat": "Recipe definitions are carried from the StoneBlock pack's KubeJS script. Machine timing is sourced from both pack config files. Timing for each input recipe was not black-box compared against the original mod."
+}

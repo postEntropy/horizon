@@ -1,0 +1,24 @@
+{
+  "test": "iron auto-hammer processes one stone into cobblestone in Horizon",
+  "date": "2026-11-03",
+  "environment": {
+    "world": "FtbSbcFinalProbe",
+    "gamemode": "survival",
+    "fresh_profile": "/tmp/horizon-stone-finalprobe.T1yJV2",
+    "mod_source": "mods/ftbsbc/carry",
+    "isolation": "fresh HORIZON_HOME, HORIZON_LAUNCHER_HOME, XDG_DATA_HOME, XDG_CONFIG_HOME and XDG_RUNTIME_DIR; audio disabled"
+  },
+  "steps": [
+    "Loaded the final API 0.5 component with block-entities, item-transfer, machine-slot-limits, recipes, vanilla-hooks, and config capabilities.",
+    "Placed ftbsbc:iron_auto_hammer at 0,65,0; Horizon created its 13-slot container.",
+    "Inserted minecraft:stone in machine slot 0 using the container control command.",
+    "Waited for 60 ticks and inspected the machine container."
+  ],
+  "observed": {
+    "input": "minecraft:stone x1",
+    "output": "minecraft:cobblestone x1",
+    "machine_state_after_completion": "ftbsbc:iron_auto_hammer[facing=north,lit=false]",
+    "result": "pass"
+  },
+  "scope_limit": "Only the iron auto-hammer exact-item stone recipe was exercised. Tag recipes, compressed outputs, other tiers, sided hopper transfer, save/reload progress, and full-pack integration remain unverified."
+}

@@ -1,0 +1,23 @@
+{
+  "test": "Stone Crook adds pack-configured drops when breaking dirt",
+  "date": "2026-11-03",
+  "environment": {
+    "world": "FtbSbcCrookSurvivalProbe",
+    "gamemode": "survival",
+    "fresh_profile": "/tmp/horizon-stone-crook-survival.SUUDgP",
+    "mod_source": "mods/ftbsbc/carry",
+    "isolation": "fresh HORIZON_HOME, HORIZON_LAUNCHER_HOME, XDG_DATA_HOME, XDG_CONFIG_HOME and XDG_RUNTIME_DIR; audio disabled"
+  },
+  "steps": [
+    "Loaded API 0.5 module with vanilla-hooks capability; startup reported one running mod and no load error.",
+    "Placed a stone platform, gave the player ftbsbc:stone_crook, and selected it in survival.",
+    "Broke minecraft:dirt at 0,101,1 with the crook."
+  ],
+  "observed": {
+    "vanilla_drop": "minecraft:dirt x1",
+    "crook_drops": ["minecraft:spruce_sapling x1", "minecraft:birch_sapling x1"],
+    "max_drops": 2,
+    "result": "pass"
+  },
+  "scope_limit": "Only one dirt break was exercised. This validates the hook, tool context, vanilla-drop preservation, and cap of two outputs, but not vanilla RNG parity, every crook recipe, damage/durability, or the original implementation's interpretation of max."
+}

@@ -1,0 +1,48 @@
+{
+  "test": "Stone Hammer converts mined materials; Crook adds pack sapling drops",
+  "date": "2026-11-03",
+  "runs": [
+    {
+      "world": "StoneManualHammerFinal",
+      "gamemode": "survival",
+      "fresh_profile": "/tmp/horizon-stone-hammer-final.Jb77Oa",
+      "mod_source": "mods/ftbsbc/carry",
+      "isolation": "fresh HORIZON_HOME, HORIZON_LAUNCHER_HOME, XDG_DATA_HOME, XDG_CONFIG_HOME and XDG_RUNTIME_DIR; audio disabled",
+      "steps": [
+        "Loaded the rebuilt API 0.5 component and carried item templates; startup reported one running mod without load error.",
+        "Placed minecraft:cobblestone, gave ftbsbc:stone_hammer, selected it, and mined the block in survival."
+      ],
+      "observed": {
+        "block_before": "minecraft:cobblestone",
+        "drops": {
+          "minecraft:gravel": 1
+        },
+        "ticks": 15,
+        "result": "pass"
+      }
+    },
+    {
+      "world": "StoneManualHammerDebug",
+      "gamemode": "survival",
+      "fresh_profile": "/tmp/horizon-stone-hammer-debug.5cko9n",
+      "mod_source": "mods/ftbsbc/carry",
+      "isolation": "fresh HORIZON_HOME, HORIZON_LAUNCHER_HOME, XDG_DATA_HOME, XDG_CONFIG_HOME and XDG_RUNTIME_DIR; audio disabled",
+      "steps": [
+        "Loaded the API 0.5 component after the tool-context hook fix.",
+        "Mined minecraft:dirt with ftbsbc:stone_hammer; then mined another dirt block with ftbsbc:stone_crook."
+      ],
+      "observed": {
+        "stone_hammer_dirt_drops": {
+          "minecraft:sand": 1
+        },
+        "crook_drops": {
+          "minecraft:dirt": 1,
+          "minecraft:jungle_sapling": 1,
+          "minecraft:oak_sapling": 1
+        },
+        "result": "pass"
+      }
+    }
+  ],
+  "scope_limit": "Representative manual hammer and Crook cases pass. Exact original tool durability/attack attributes, vanilla RNG parity for Crook, every configured recipe and block tag, multiplayer, and full StoneBlock pack integration remain unverified."
+}

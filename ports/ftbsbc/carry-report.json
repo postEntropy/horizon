@@ -1,0 +1,56 @@
+{
+  "copied": 104,
+  "namespaces": [],
+  "outside": [
+    "data/forge/loot_modifiers/global_loot_modifiers.json",
+    "data/forge/tags/blocks/needs_wood_tool.json"
+  ],
+  "unreadable": {},
+  "recipes_upgraded": 0,
+  "loot_tables_upgraded": 0,
+  "advancements_upgraded": 0,
+  "loot_tables_added": 0,
+  "worldgen": 3,
+  "recipes_kept": [],
+  "recipes_unregistered": [],
+  "item_definitions_added": 13,
+  "oracle": false,
+  "blocks": {
+    "bits_spawner": "minecraft:stone",
+    "diamond_auto_hammer": "minecraft:furnace",
+    "gold_auto_hammer": "minecraft:furnace",
+    "iron_auto_hammer": "minecraft:furnace",
+    "netherite_auto_hammer": "minecraft:furnace",
+    "stone_block_portal": "minecraft:oak_log"
+  },
+  "differences": {
+    "diamond_auto_hammer": [
+      "mod-specific state properties adapted to a vanilla template"
+    ],
+    "gold_auto_hammer": [
+      "mod-specific state properties adapted to a vanilla template"
+    ],
+    "iron_auto_hammer": [
+      "mod-specific state properties adapted to a vanilla template"
+    ],
+    "netherite_auto_hammer": [
+      "mod-specific state properties adapted to a vanilla template"
+    ]
+  },
+  "blocks_unknown": {},
+  "items": 8,
+  "items_unknown": {},
+  "convention_tags": 0,
+  "worldgen_types": {
+    "mapped": 0,
+    "block_states": 0,
+    "unsupported": {},
+    "rules_lost": {},
+    "processors_dropped": {},
+    "processors_carried": {},
+    "rule_tests_carried": {},
+    "added_to": {},
+    "modifiers_left": {}
+  },
+  "convention_biome_tags": 0
+}
