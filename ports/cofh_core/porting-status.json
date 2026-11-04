@@ -1,0 +1,23 @@
+{
+  "complete": false,
+  "implemented_scope": [
+    "Glossed Magma is registered with the imported age=0..3 state and the vanilla Magma Block gameplay template.",
+    "Random-tick callbacks draw synchronously from the active Level RNG; Glossed Magma consumes nextInt(9) before checking its adjacent-block count.",
+    "Glossed Magma advances ages, schedules its next check after 20–40 ticks, melts age 3 to source lava, and propagates the audited neighbor-melt branch.",
+    "Neighbor changes convert Glossed Magma to lava below the audited two-neighbor threshold.",
+    "Glossed Magma declares hot_floor step damage with the vanilla 1.0 amount and sneak suppression.",
+    "The imported empty Glossed Magma loot table is preserved."
+  ],
+  "pending": [
+    "Implement and validate other CoFH Core gameplay in scope, including its four air blocks, Holding enchantment, status effects, commands and integrations."
+  ],
+  "evidence": [
+    "harness/porting-audit.json records CoFH Core 9.2.3.47 JAR/config findings.",
+    "harness/component-validation.json records the HMOD build; harness/gameplay-validation.json records the isolated age-to-lava path and empty loot in both game modes."
+  ],
+  "sources": [
+    "Imported CoFH Core 9.2.3.47 GlossedMagmaBlock bytecode: extends vanilla MagmaBlock, defines integer age 0..3, advances in randomTick and replaces itself with source lava at age 3.",
+    "Imported assets/cofh_core/blockstates/glossed_magma.json defines age 0..3; imported data/cofh_core/loot_tables/blocks/glossed_magma.json has no pools.",
+    "Imported GlossedMagmaBlock.getDrops returns an empty ItemStack."
+  ]
+}

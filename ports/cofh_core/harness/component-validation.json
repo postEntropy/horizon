@@ -1,0 +1,10 @@
+{
+  "status": "passed",
+  "command": "cargo run --manifest-path Cargo.toml -p cargo-horizon-mod --bin cargo-horizon-mod -- horizon-mod build --release",
+  "component": "ports/target/horizon-mod/cofh_core.hmod",
+  "scope": "CoFH Core 9.2.3 Glossed Magma behavior with active bounded RNG access and data-driven hot_floor step damage",
+  "contracts": [
+    "server.random-int is imported by the component and is called only from random-tick callbacks.",
+    "The content block declares damage_type=minecraft:hot_floor, amount=1.0, suppressed_by_sneak=true."
+  ]
+}

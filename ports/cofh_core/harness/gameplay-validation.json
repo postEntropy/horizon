@@ -1,0 +1,84 @@
+{
+  "game": "Horizon 26.3",
+  "mod": "CoFH Core 9.2.3.47+mc1.18.2",
+  "status": "passed",
+  "scope": "Inline saturated 1-in-9 melt and spread, scheduled age progression, neighbor-change melt, inherited hot_floor damage/sneak suppression, and empty loot.",
+  "source": "Imported CoFH Core 9.2.3.47 behavior audit plus carried age=0..3 block states and empty Glossed Magma loot table.",
+  "known_gaps": [
+    "The other CoFH Core air blocks, Holding enchantment, status effects, commands and helper integrations are not ported."
+  ],
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "initial_state": "cofh_core:glossed_magma[age=0]",
+      "state_after_random_ticks": "minecraft:lava[level=0]",
+      "ticks_advanced": 20,
+      "saturated_spread": {
+        "center": "minecraft:lava[level=0]",
+        "neighbors": [
+          "minecraft:lava[level=0]",
+          "minecraft:lava[level=0]",
+          "minecraft:lava[level=0]",
+          "minecraft:lava[level=0]"
+        ]
+      },
+      "neighbor_change": "minecraft:lava[level=0]",
+      "step_damage": {
+        "magma": [
+          20.0,
+          18.0
+        ],
+        "glossed_magma": [
+          18.33333396911621,
+          15.166666030883787
+        ],
+        "sneaking": [
+          18.0,
+          18.0
+        ]
+      },
+      "mining_loot": {
+        "before": 0,
+        "after": 0,
+        "expected_drop": null
+      }
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "initial_state": "cofh_core:glossed_magma[age=0]",
+      "state_after_random_ticks": "minecraft:lava[level=0]",
+      "ticks_advanced": 20,
+      "saturated_spread": {
+        "center": "minecraft:lava[level=0]",
+        "neighbors": [
+          "minecraft:lava[level=0]",
+          "minecraft:lava[level=0]",
+          "minecraft:lava[level=0]",
+          "minecraft:lava[level=0]"
+        ]
+      },
+      "neighbor_change": "minecraft:lava[level=0]",
+      "step_damage": {
+        "magma": [
+          20.0,
+          18.0
+        ],
+        "glossed_magma": [
+          18.666667938232425,
+          15.166666030883787
+        ],
+        "sneaking": [
+          18.0,
+          18.0
+        ]
+      },
+      "mining_loot": {
+        "before": 0,
+        "after": 0,
+        "expected_drop": null
+      }
+    }
+  ]
+}

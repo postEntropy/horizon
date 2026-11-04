@@ -1,0 +1,9 @@
+id = "cofh_core"
+name = "CoFH Core"
+version = "9.2.3+mc1.18.2"
+description = "CoFH shared gameplay helpers and Glossed Magma block behavior."
+authors = ["Team CoFH"]
+api = "0.3"
+side = "both"
+capabilities = ["registries", "server"]
+ported-from = "CoFH Core 9.2.3.47; CoFH - Don't Be A Jerk (Learn, Don't Steal)"

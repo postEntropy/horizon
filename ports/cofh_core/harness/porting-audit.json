@@ -1,0 +1,26 @@
+{
+  "mod": "cofh_core",
+  "version": "9.2.3",
+  "complete": false,
+  "local_evidence": {
+    "carry_report": "Imported StoneBlock carry report enumerates five blocks: ender_air, glossed_magma, glow_air, lightning_air, signal_air; it maps the first/four air blocks to minecraft:stone and glossed_magma to minecraft:wheat.",
+    "localized_features": "Imported en_us localization lists the Holding enchantment as increasing storage capacity of certain items, Shimmer as a disabled enchantment, and 18 CoFH status-effect names. It includes command feedback strings for heal, ignite, repair, invisibility, invulnerability, recharge, and zap. Localization identifies names but does not specify full mechanics.",
+    "stoneblock_config": "The local common config disables Fishing Exhaustion and Sapling Growth Reduction.",
+    "inventory": "StoneBlock inventory records version 9.2.3, logic tier, 5 blockstates, zero item models, 1 recipe and 1 loot table."
+  },
+  "existing_prototype_assessment": {
+    "location": "Imported pack only; not in the repository.",
+    "finding": "Its `_air` block hook schedules replacement with minecraft:air after a configurable default delay and plays teleport/lightning sounds for entities inside; those semantics are not established by the carry report or public docs consulted, so they cannot be treated as a faithful implementation or evidence. Its `/cofh status` command only reports its own counter and is not a CoFH Core gameplay command."
+  },
+  "api_gap": [
+    "API 0.3 has no server mutation to heal an entity/player, apply a status effect, or set entity invulnerability/invisibility/charge.",
+    "API 0.3 provides no entity-target query/selector or inventory/equipment repair command contract.",
+    "The SDK has no mod-owned enchantment registration or general item capacity callback; a Holding implementation would also need connected Thermal container behavior."
+  ],
+  "reference_docs": [
+    "https://teamcofh.com/docs/1.15/cofh-core/commands/ (cross-version reference; no 1.18 CoFH Core command page was found)",
+    "https://teamcofh.com/docs/1.15/cofh-core/status-effects/ (cross-version reference; not proof of identical 1.18 behavior)",
+    "https://teamcofh.com/docs/1.12/cofh-core/holding/",
+    "https://teamcofh.com/downloads/"
+  ]
+}

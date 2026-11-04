@@ -1,0 +1,179 @@
+Horizon: content root ready for 1 mod(s) in 2.5s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-8m0iuxz3/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.13s (35727 block states)
+Horizon: discovered 4192 model files in 0.01s, parsed in 0.01s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.05s (1289 blocks)
+Horizon: bound 35727 model states / 7880 variants in 0.09s, resolved models in 0.00s, baked models and loaded sprites in 0.09s
+Horizon: model-state catalog prepared in 0.18s
+Horizon: blockstate binding and model baking took 0.24s
+Horizon: finalized 1291 sprite layers in 0.03s (asset render stage 0.30s)
+Horizon: gameplay facts read 0.02s, validated 0.15s, decoded 0.14s, projected 35727 states in 0.06s
+load assets: 3.13s
+Horizon: asset load stage took 0.53s
+load facts: 3.13s
+Horizon: facts, biomes and environment stage took 0.38s
+load biomes+env: 3.13s
+load pack tables: 3.40s
+Horizon: pack tables stage took 0.27s
+load collision+motion: 3.56s
+Horizon: collision and motion stage took 0.16s
+Horizon: mob metadata loaded in 0.02s
+load items: 3.63s
+Horizon: resources loaded in 3.7s; 35727 block states, 1659 items, 67 biomes; 10 worker threads
+Horizon: items and recipes stage took 0.08s
+Horizon: providers and block-entity render tables loaded in 0.15s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.21s
+Horizon: mob types loaded in 0.05s
+Horizon: player model setup took 0.09s
+Horizon: behaviours, mob types and player models loaded in 0.36s
+Horizon: no sounds in /tmp/horizon-port-fixture-8m0iuxz3/.horizon-cache/mod-content/assets: they were not copied from your Minecraft install; prepare the game again in the launcher (or run horizon-prepare sounds)
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.04s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-8m0iuxz3/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.03s
+Horizon: game CPU resources ready in 0.04s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: live features ready in 654.945016ms
+[12:08:49] [Server thread/INFO]: Player90388[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
+[12:08:49] [Server thread/INFO]: System chat: Player90388 joined the game
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 1508 ms
+[chat] The game is frozen
+[12:08:49] [Server thread/INFO]: System chat: [Player90388: Set own game mode to Survival Mode]
+[chat] Set own game mode to Survival Mode
+[12:08:49] [Server thread/INFO]: System chat: [Player90388: Game rule random_tick_speed is now set to 0]
+[chat] Game rule random_tick_speed is now set to 0
+[12:08:49] [Server thread/INFO]: System chat: [Player90388: Changed the block at 0, 101, 3]
+[chat] Changed the block at 0, 101, 3
+[12:08:49] [Server thread/INFO]: System chat: [Player90388: Teleported Player90388 to 0.500000, 102.000000, 3.500000]
+[chat] Teleported Player90388 to 0.500000, 102.000000, 3.500000
+[12:08:49] [Server thread/INFO]: System chat: [Player90388: Changed the block at 5, 101, 2]
+[chat] Changed the block at 5, 101, 2
+[12:08:49] [Server thread/INFO]: System chat: [Player90388: Changed the block at 5, 101, 3]
+[chat] Changed the block at 5, 101, 3
+[12:08:49] [Server thread/INFO]: System chat: [Player90388: Changed the block at 5, 101, 4]
+[chat] Changed the block at 5, 101, 4
+[12:08:49] [Server thread/INFO]: System chat: [Player90388: Changed the block at 6, 101, 2]
+[chat] Changed the block at 6, 101, 2
+[12:08:49] [Server thread/INFO]: System chat: [Player90388: Changed the block at 6, 101, 4]
+[chat] Changed the block at 6, 101, 4
+[12:08:49] [Server thread/INFO]: System chat: [Player90388: Changed the block at 7, 101, 2]
+[chat] Changed the block at 7, 101, 2
+[12:08:50] [Server thread/INFO]: System chat: [Player90388: Changed the block at 7, 101, 3]
+[chat] Changed the block at 7, 101, 3
+[12:08:50] [Server thread/INFO]: System chat: [Player90388: Changed the block at 7, 101, 4]
+[chat] Changed the block at 7, 101, 4
+[12:08:50] [Server thread/INFO]: System chat: [Player90388: Changed the block at 6, 101, 3]
+[chat] Changed the block at 6, 101, 3
+[12:08:50] [Server thread/INFO]: System chat: [Player90388: Game rule random_tick_speed is now set to 1000]
+[chat] Game rule random_tick_speed is now set to 1000
+[12:08:50] [Server thread/INFO]: System chat: [Player90388: Stepping 20 tick(s)]
+[chat] Stepping 20 tick(s)
+[12:08:52] [Server thread/INFO]: System chat: [Player90388: Changed the block at 5, 101, 2]
+[chat] Changed the block at 5, 101, 2
+[12:08:52] [Server thread/INFO]: System chat: [Player90388: Changed the block at 5, 101, 3]
+[chat] Changed the block at 5, 101, 3
+[12:08:52] [Server thread/INFO]: System chat: [Player90388: Changed the block at 5, 101, 4]
+[chat] Changed the block at 5, 101, 4
+[12:08:52] [Server thread/INFO]: System chat: [Player90388: Changed the block at 6, 101, 2]
+[chat] Changed the block at 6, 101, 2
+[12:08:52] [Server thread/INFO]: System chat: [Player90388: Changed the block at 6, 101, 3]
+[chat] Changed the block at 6, 101, 3
+[12:08:52] [Server thread/INFO]: System chat: [Player90388: Changed the block at 6, 101, 4]
+[chat] Changed the block at 6, 101, 4
+[12:08:52] [Server thread/INFO]: System chat: [Player90388: Changed the block at 7, 101, 2]
+[chat] Changed the block at 7, 101, 2
+[12:08:52] [Server thread/INFO]: System chat: [Player90388: Changed the block at 7, 101, 3]
+[chat] Changed the block at 7, 101, 3
+[12:08:52] [Server thread/INFO]: System chat: [Player90388: Changed the block at 7, 101, 4]
+[chat] Changed the block at 7, 101, 4
+[12:08:52] [Server thread/INFO]: System chat: [Player90388: Game rule random_tick_speed is now set to 0]
+[chat] Game rule random_tick_speed is now set to 0
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 11, 101, 2]
+[chat] Changed the block at 11, 101, 2
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 11, 101, 3]
+[chat] Changed the block at 11, 101, 3
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 11, 101, 4]
+[chat] Changed the block at 11, 101, 4
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 12, 101, 2]
+[chat] Changed the block at 12, 101, 2
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 12, 101, 4]
+[chat] Changed the block at 12, 101, 4
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 13, 101, 2]
+[chat] Changed the block at 13, 101, 2
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 13, 101, 3]
+[chat] Changed the block at 13, 101, 3
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 13, 101, 4]
+[chat] Changed the block at 13, 101, 4
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 12, 101, 3]
+[chat] Changed the block at 12, 101, 3
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 13, 101, 3]
+[chat] Changed the block at 13, 101, 3
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 11, 101, 3]
+[chat] Changed the block at 11, 101, 3
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 12, 101, 4]
+[chat] Changed the block at 12, 101, 4
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 11, 101, 2]
+[chat] Changed the block at 11, 101, 2
+[chat] Could not set the block
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 11, 101, 4]
+[chat] Changed the block at 11, 101, 4
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 12, 101, 2]
+[chat] Changed the block at 12, 101, 2
+[chat] Could not set the block
+[12:08:53] [Server thread/INFO]: System chat: [Player90388: Changed the block at 13, 101, 2]
+[chat] Changed the block at 13, 101, 2
+[chat] Could not set the block
+[12:08:54] [Server thread/INFO]: System chat: [Player90388: Changed the block at 13, 101, 4]
+[chat] Changed the block at 13, 101, 4
+[12:08:54] [Server thread/INFO]: System chat: [Player90388: Teleported Player90388 to 0.500000, 102.000000, 3.500000]
+[chat] Teleported Player90388 to 0.500000, 102.000000, 3.500000
+[12:08:54] [Server thread/INFO]: System chat: [Player90388: Changed the block at 0, 101, 3]
+[chat] Changed the block at 0, 101, 3
+[12:08:54] [Server thread/INFO]: System chat: [Player90388: Stepping 15 tick(s)]
+[chat] Stepping 15 tick(s)
+[12:08:55] [Server thread/INFO]: System chat: [Player90388: Applied effect Instant Health to Player90388]
+[chat] Applied effect Instant Health to Player90388
+[12:08:56] [Server thread/INFO]: System chat: [Player90388: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+[12:08:57] [Server thread/INFO]: System chat: [Player90388: Changed the block at 0, 101, 3]
+[chat] Changed the block at 0, 101, 3
+[12:08:57] [Server thread/INFO]: System chat: [Player90388: Stepping 15 tick(s)]
+[chat] Stepping 15 tick(s)
+[12:08:58] [Server thread/INFO]: System chat: [Player90388: Applied effect Instant Health to Player90388]
+[chat] Applied effect Instant Health to Player90388
+[12:08:59] [Server thread/INFO]: System chat: [Player90388: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+[12:09:00] [Server thread/INFO]: System chat: [Player90388: Stepping 15 tick(s)]
+[chat] Stepping 15 tick(s)
+[12:09:01] [Server thread/INFO]: System chat: [Player90388: Changed the block at 2, 101, 3]
+[chat] Changed the block at 2, 101, 3
+[12:09:01] [Server thread/INFO]: System chat: [Player90388: Teleported Player90388 to 2.500000, 102.000000, 3.500000]
+[chat] Teleported Player90388 to 2.500000, 102.000000, 3.500000
+[12:09:02] [Server thread/INFO]: System chat: [Player90388: Game rule random_tick_speed is now set to 1000]
+[chat] Game rule random_tick_speed is now set to 1000
+[chat] Could not set the block
+[12:09:02] [Server thread/INFO]: System chat: [Player90388: Stepping 20 tick(s)]
+[chat] Stepping 20 tick(s)
+Horizon: mod scheduled-tick action requested a ticking ticket for "minecraft:overworld" [0, 0]
+Horizon: mod scheduled random tick for cofh_core:glossed_magma in "minecraft:overworld" at (0, 101, 3) after 25 ticks
+Horizon: mod scheduled random tick for cofh_core:glossed_magma in "minecraft:overworld" at (0, 101, 3) after 23 ticks
+Horizon: mod scheduled random tick for cofh_core:glossed_magma in "minecraft:overworld" at (0, 101, 3) after 36 ticks
+[12:09:04] [Server thread/INFO]: System chat: [Player90388: Changed the block at 0, 101, 3]
+[chat] Changed the block at 0, 101, 3
+[chat] Block cofh_core:glossed_magma has no loot table

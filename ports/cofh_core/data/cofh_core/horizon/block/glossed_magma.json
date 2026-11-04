@@ -1,0 +1,14 @@
+{
+  "template": "minecraft:magma_block",
+  "properties": {
+    "random_ticks": true,
+    "step_damage": {
+      "damage_type": "minecraft:hot_floor",
+      "amount": 1.0,
+      "suppressed_by_sneak": true
+    }
+  },
+  "state_properties": {
+    "age": ["0", "1", "2", "3"]
+  }
+}
