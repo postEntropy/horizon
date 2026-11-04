@@ -5,7 +5,7 @@ description = "Crescent Hammer wrench, metallurgy, ores, alloys, gears and therm
 authors = ["TeamCoFH"]
 api = "0.4"
 side = "both"
-capabilities = ["registries", "chat", "server", "world-read", "storage", "config", "block-entities", "capabilities", "item-transfer", "recipes", "ui"]
+capabilities = ["registries", "chat", "server", "world-read", "storage", "config", "block-entities", "capabilities", "item-transfer", "recipes", "ui", "interaction-context"]
 contributes = ["cofh_core", "curios"]
 ported-from = "Thermal Series 9.2.2; CoFH - Don't Be A Jerk (Learn, Don't Steal)"
 

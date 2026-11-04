@@ -1,0 +1,41 @@
+{
+  "game": "Horizon 26.3",
+  "mod": "Thermal Series 9.2.2",
+  "status": "passed",
+  "scope": "StoneBlock BuddingCrystals small-fluix-bud crystallizer recipe, RF/fluid consumption, output save/reopen",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "recipe": "ftbstoneblock:buddingcrystals/crystallizer/small_fluix_bud",
+      "ticks": 400,
+      "output": {
+        "count": 12,
+        "item": "buddingcrystals:small_fluix_bud"
+      },
+      "energy_spent": 50000,
+      "fluid_spent": 800,
+      "persisted_output": {
+        "count": 12,
+        "item": "buddingcrystals:small_fluix_bud"
+      }
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "recipe": "ftbstoneblock:buddingcrystals/crystallizer/small_fluix_bud",
+      "ticks": 400,
+      "output": {
+        "count": 12,
+        "item": "buddingcrystals:small_fluix_bud"
+      },
+      "energy_spent": 50000,
+      "fluid_spent": 800,
+      "persisted_output": {
+        "count": 12,
+        "item": "buddingcrystals:small_fluix_bud"
+      }
+    }
+  ],
+  "note": "Content HMODs are assembled from the user-local imported pack carry tree; no imported mod files are copied into this repository."
+}

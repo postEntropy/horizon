@@ -1,0 +1,110 @@
+Horizon: content root ready for 2 mod(s) in 10.3s
+Horizon: content from 2 mod(s) in /tmp/horizon-port-fixture-_zyhd8fz/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.15s (36490 block states)
+Horizon: discovered 5004 model files in 0.01s, parsed in 0.01s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.06s (1464 blocks)
+Horizon: block models incomplete (No such file or directory (os error 2)); using the missing model
+Horizon: missing block model thermal:block/potted_rubber_sapling: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/budding/certus_quartz: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/budding/diamond: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/budding/emerald: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/budding/fluix: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/budding/fluorite: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/budding/glowstone: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/budding/lapis_lazuli: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/budding/nether_quartz: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/budding/prismarine: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/budding/redstone: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/budding/salt: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/cluster/certus_quartz: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/cluster/diamond: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/cluster/emerald: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/cluster/fluix: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/cluster/fluorite: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/cluster/glowstone: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/cluster/lapis_lazuli: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/large_bud/certus_quartz: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/large_bud/diamond: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/large_bud/emerald: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/large_bud/fluix: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/large_bud/fluorite: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/large_bud/glowstone: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/large_bud/lapis_lazuli: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/large_bud/nether_quartz: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/large_bud/prismarine: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/large_bud/redstone: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/large_bud/salt: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/medium_bud/certus_quartz: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/medium_bud/diamond: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/medium_bud/emerald: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/medium_bud/fluix: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/medium_bud/fluorite: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/medium_bud/glowstone: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/medium_bud/lapis_lazuli: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/medium_bud/nether_quartz: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/medium_bud/prismarine: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/medium_bud/redstone: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/medium_bud/salt: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/cluster/nether_quartz: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/cluster/prismarine: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/cluster/redstone: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/cluster/salt: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/small_bud/certus_quartz: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/small_bud/diamond: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/small_bud/emerald: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/small_bud/fluix: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/small_bud/fluorite: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/small_bud/glowstone: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/small_bud/lapis_lazuli: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/small_bud/nether_quartz: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/small_bud/prismarine: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/small_bud/redstone: No such file or directory (os error 2)
+Horizon: using the missing texture for buddingcrystals:block/small_bud/salt: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_side: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_bottom: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_top: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_top_active: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_active: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_side_active: No such file or directory (os error 2)
+Horizon: bound 36490 model states / 8381 variants in 0.11s, resolved models in 0.01s, baked models and loaded sprites in 0.11s
+Horizon: model-state catalog prepared in 0.23s
+Horizon: blockstate binding and model baking took 0.30s
+Horizon: finalized 1554 sprite layers in 0.04s (asset render stage 0.37s)
+Horizon: gameplay facts read 0.03s, validated 0.18s, decoded 0.15s, projected 36490 states in 0.05s
+load assets: 11.10s
+Horizon: asset load stage took 0.62s
+load facts: 11.10s
+Horizon: facts, biomes and environment stage took 0.43s
+load biomes+env: 11.10s
+load pack tables: 11.42s
+Horizon: pack tables stage took 0.32s
+load collision+motion: 11.60s
+Horizon: collision and motion stage took 0.17s
+Horizon: mob metadata loaded in 0.02s
+load items: 11.69s
+Horizon: resources loaded in 11.7s; 36490 block states, 2267 items, 67 biomes; 10 worker threads
+Horizon: items and recipes stage took 0.11s
+Horizon: providers and block-entity render tables loaded in 0.21s
+Horizon: music, ambience and dimension tables loaded in 0.01s
+Horizon: behaviour tables loaded in 0.24s
+Horizon: mob types loaded in 0.07s
+Horizon: player model setup took 0.09s
+Horizon: behaviours, mob types and player models loaded in 0.41s
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.05s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 2 running mod(s) with 1 command(s) from 2 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-_zyhd8fz/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 8633 ms
+Horizon: live features ready in 737.134862ms

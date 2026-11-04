@@ -1,0 +1,68 @@
+Horizon: content root ready for 1 mod(s) in 10.0s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-nodjhl67/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.14s (36007 block states)
+Horizon: discovered 4966 model files in 0.01s, parsed in 0.01s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.06s (1416 blocks)
+Horizon: block models incomplete (No such file or directory (os error 2)); using the missing model
+Horizon: missing block model thermal:block/potted_rubber_sapling: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_side: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_bottom: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_top: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_top_active: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_active: No such file or directory (os error 2)
+Horizon: using the missing texture for thermal:block/devices/device_magnet_blocker_side_active: No such file or directory (os error 2)
+Horizon: bound 35951 model states / 8170 variants in 0.10s, resolved models in 0.01s, baked models and loaded sprites in 0.12s
+Horizon: model-state catalog prepared in 0.23s
+Horizon: blockstate binding and model baking took 0.29s
+Horizon: finalized 1518 sprite layers in 0.05s (asset render stage 0.36s)
+Horizon: gameplay facts read 0.02s, validated 0.16s, decoded 0.16s, projected 36007 states in 0.08s
+load assets: 10.78s
+Horizon: asset load stage took 0.60s
+load facts: 10.78s
+Horizon: facts, biomes and environment stage took 0.44s
+load biomes+env: 10.78s
+load pack tables: 11.07s
+Horizon: pack tables stage took 0.29s
+load collision+motion: 11.24s
+Horizon: collision and motion stage took 0.16s
+Horizon: mob metadata loaded in 0.02s
+load items: 11.31s
+Horizon: resources loaded in 11.4s; 36007 block states, 2218 items, 67 biomes; 10 worker threads
+Horizon: items and recipes stage took 0.10s
+Horizon: providers and block-entity render tables loaded in 0.17s
+Horizon: music, ambience and dimension tables loaded in 0.01s
+Horizon: behaviour tables loaded in 0.27s
+Horizon: mob types loaded in 0.06s
+Horizon: player model setup took 0.12s
+Horizon: behaviours, mob types and player models loaded in 0.45s
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.01s
+Horizon: creative inventory prepared in 0.02s
+Horizon: game CPU resource bundle ready in 0.08s
+Horizon: game CPU resources ready in 0.10s
+Horizon: particle resources loaded in 0.01s
+Horizon: loaded 1 running mod(s) with 1 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-nodjhl67/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.05s
+Horizon: game CPU resources ready in 0.06s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 1 command(s) from 1 package(s)
+Horizon: live features ready in 699.003898ms
+[12:27:22] [Server thread/INFO]: Player01431[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
+[12:27:22] [Server thread/INFO]: System chat: Player01431 joined the game
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 18128 ms
+[chat] The game is frozen
+[12:27:23] [Server thread/INFO]: System chat: [Player01431: Teleported Player01431 to 0.500000, 102.000000, 3.500000]
+[chat] Teleported Player01431 to 0.500000, 102.000000, 3.500000
+[12:27:23] [Server thread/INFO]: System chat: [Player01431: Stepping 20 tick(s)]
+[chat] Stepping 20 tick(s)

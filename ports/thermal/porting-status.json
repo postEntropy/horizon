@@ -1,13 +1,33 @@
 {
   "complete": false,
   "pending": [
-    "Only the Crystallizer machine is implemented; other Thermal block behavior and machine recipes remain pending",
-    "In-game end-to-end validation with energy and fluid networks"
+    "Pulverizer, Furnace, Press, Smelter, Crucible and Chiller have recipe-driven execution; only Smelter has earlier live E2E. Rock Gen implementation currently fails live E2E in both modes: slot stayed empty after 20 ticks; server-thread confirmed the adjacent water source was loaded. Likely failure is block-entity dispatch/tick or output-slot insertion. Insolator and Crescent Hammer live cases did not run; final Crystallizer/Smelter rerun also remains pending.",
+    "No primary reference in the imported pack, repository, or Thermal config establishes the machine base behind energy_mod/water_mod. thermal-common.toml only overrides Crystallizer Base Power to 160 RF/t. The parser and Insolator stay fail-closed for recipes lacking explicit energy/fluid costs; do not infer an RF/water baseline from multipliers.",
+    "Most Thermal carry assets, blocks and recipes remain only in the imported pack. This crate carries Rock Gen recipes and its block model/texture set, but other machine assets and recipe coverage remain incomplete.",
+    "Crescent Hammer source implements facing rotation and empty-machine dismantling, but neither interaction has live E2E yet; it refuses nonempty machines because contents are not preserved in the dropped block.",
+    "Replace the per-handle operation hash used for probabilistic outputs with Thermal\u2019s actual machine loot RNG behavior.",
+    "Resolve the potted_rubber_sapling model and audit all registered recipe outputs."
   ],
   "verified": [
     {
       "feature": "Thermal Crystallizer machine behavior",
       "evidence": "harness/component-validation.json; API 0.4 component loads pack recipes, consumes item/fluid/RF inputs, persists progress across reload, and produces the registered output."
+    },
+    {
+      "feature": "Live Thermal Crystallizer gameplay",
+      "evidence": "harness/gameplay-validation.json; the StoneBlock small-fluix-bud recipe consumed 50000 RF, 800 mB, and both inputs, produced 12 buds, and preserved the result after save/reopen in in-frame and server-thread modes."
+    },
+    {
+      "feature": "Thermal recipe parser and Smelter gameplay",
+      "evidence": "Earlier live E2E; rerun required after the latest shared-state, wet-machine and Crescent Hammer changes."
+    },
+    {
+      "feature": "Rock Gen and Insolator implementation source",
+      "evidence": "ports/thermal/src/lib.rs adds Rock Gen adjacency processing and a fail-closed Insolator executor. Not yet gameplay-validated; energy_mod/water_mod baseline remains unresolved."
+    },
+    {
+      "feature": "Thermal Rock Gen E2E diagnostic",
+      "evidence": "harness/device-gameplay-validation.json; HMOD activated and block registered in both modes; in-frame output stayed empty, and server-thread also confirmed loaded adjacent water then output stayed empty. Not a passing gameplay validation."
     }
   ]
 }

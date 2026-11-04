@@ -1,0 +1,39 @@
+{
+  "game": "Horizon 26.3",
+  "mod": "Thermal Series 9.2.2",
+  "status": "passed",
+  "scope": "StoneBlock carried bronze alloy recipe in Thermal Smelter; tag ingredients, RF use and output save/reopen",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "recipe": "thermal:smelter_alloy_bronze",
+      "ticks": 100,
+      "output": {
+        "count": 4,
+        "item": "thermal:bronze_ingot"
+      },
+      "energy_spent": 6400,
+      "persisted_output": {
+        "count": 4,
+        "item": "thermal:bronze_ingot"
+      }
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "recipe": "thermal:smelter_alloy_bronze",
+      "ticks": 100,
+      "output": {
+        "count": 4,
+        "item": "thermal:bronze_ingot"
+      },
+      "energy_spent": 6400,
+      "persisted_output": {
+        "count": 4,
+        "item": "thermal:bronze_ingot"
+      }
+    }
+  ],
+  "note": "The HMOD was assembled from user-local imported carry data; no imported content was copied into the repository."
+}

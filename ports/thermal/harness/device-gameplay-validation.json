@@ -1,0 +1,24 @@
+{
+  "game": "Horizon 26.3",
+  "mod": "Thermal Series 9.2.2",
+  "status": "failed",
+  "scope": "Rock Gen cobblestone recipe in in-frame and server-thread",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "failed",
+      "expected": "minecraft:cobblestone in output slot after 20 ticks beside water",
+      "actual": "output slot remained empty",
+      "evidence_log": "device-gameplay-validation-in-frame-0.log"
+    },
+    {
+      "mode": "server-thread",
+      "status": "failed",
+      "expected": "minecraft:cobblestone in output slot after 20 ticks beside water",
+      "actual": "output slot remained empty; adjacent block query returned loaded minecraft:water[level=0]",
+      "evidence_log": "device-gameplay-validation-server-thread-0.log"
+    }
+  ],
+  "diagnosis": "The HMOD activated and the custom Rock Gen block was recognized. Server-thread confirmed a loaded water source next to the machine, so the failure is after registry/input setup, likely block-entity tick dispatch or output-slot insertion. Insolator and Crescent Hammer cases did not run because the harness stops at the first Rock Gen failure.",
+  "note": "One run per mode only; further gameplay runs were stopped to release the shared fixture queue."
+}

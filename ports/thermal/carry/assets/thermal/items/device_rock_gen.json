@@ -1,0 +1,6 @@
+{
+  "model": {
+    "model": "thermal:item/device_rock_gen",
+    "type": "minecraft:model"
+  }
+}
