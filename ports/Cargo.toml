@@ -285,7 +285,11 @@ members = [
     "ftbteams",
     "ftbsbc",
     "jags",
+    "cobblefordays",
+    "ftbdripper",
     "stonechest",
+    "cofh_core",
     "thermal",
+    "tconstruct",
 ]
 resolver = "2"
