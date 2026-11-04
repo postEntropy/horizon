@@ -1,0 +1,90 @@
+{
+  "status": "passed; exact four observed traces only",
+  "original_trace": "MachineTrace: empty-hand garden_light lit=false/true -> PASS unchanged; red dye/stick on white_paper_lamp -> CONSUME unchanged, held count 1",
+  "scope": "No other colors, lamps, toggles, or item interactions were inferred.",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "cases": [
+        {
+          "case": "garden_off_empty_hand",
+          "original_trace_result": "PASS",
+          "block_unchanged": true,
+          "item_count_before": 0,
+          "item_count_after": 0
+        },
+        {
+          "case": "garden_on_empty_hand",
+          "original_trace_result": "PASS",
+          "block_unchanged": true,
+          "item_count_before": 0,
+          "item_count_after": 0
+        },
+        {
+          "case": "white_lamp_red_dye",
+          "original_trace_result": "CONSUME",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "white_lamp_stick",
+          "original_trace_result": "CONSUME",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        }
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "cases": [
+        {
+          "case": "garden_off_empty_hand",
+          "original_trace_result": "PASS",
+          "block_unchanged": true,
+          "item_count_before": 0,
+          "item_count_after": 0
+        },
+        {
+          "case": "garden_on_empty_hand",
+          "original_trace_result": "PASS",
+          "block_unchanged": true,
+          "item_count_before": 0,
+          "item_count_after": 0
+        },
+        {
+          "case": "white_lamp_red_dye",
+          "original_trace_result": "CONSUME",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "white_lamp_stick",
+          "original_trace_result": "CONSUME",
+          "block_unchanged": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        }
+      ]
+    }
+  ],
+  "implementation": "Removed unsupported automatic recoloring/toggling. Only the two observed white_paper_lamp UseItemOn cases (red dye and stick) return Consume without world or inventory writes.",
+  "limit": "The original MachineTrace uses FakePlayer and does not establish other colors, lamps, toggles, or full connected-player UI behavior. Mod remains partial.",
+  "port_unit_tests": "passed: two measured callbacks Consume; unmeasured action/item passes.",
+  "evidence": [
+    "ports/mcwlights/src/lib.rs",
+    "tools/test_mcwlights_observed_game.py"
+  ]
+}

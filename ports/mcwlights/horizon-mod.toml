@@ -1,0 +1,6 @@
+id = "mcwlights"
+name = "Macaw's Lights and Lamps"
+version = "1.1.5"
+api = "0.3"
+side = "both"
+capabilities = ["registries"]
