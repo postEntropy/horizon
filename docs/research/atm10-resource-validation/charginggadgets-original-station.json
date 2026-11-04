@@ -1,0 +1,60 @@
+{
+  "status": "observed",
+  "date": "2026-11-03",
+  "oracle": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.259",
+    "mods": [
+      "charginggadgets 1.14.1",
+      "mininggadgets 1.18.8"
+    ],
+    "execution": "ServerTickEvent.Post after real server ticks; station chunk forced in isolated oracle world; vanilla furnace control cooked raw iron in 220 ticks"
+  },
+  "station": {
+    "block": "charginggadgets:charging_station",
+    "fuel_slot": 0,
+    "charged_item_slot": 1,
+    "buffer_capacity_fe": 1000000,
+    "full_buffer_pauses_burn": true,
+    "blocked_output": {
+      "output": "minecraft:stone",
+      "fuel": "minecraft:coal",
+      "buffer_after_burn_fe": 20000
+    },
+    "release_after_unblock": {
+      "item": "mininggadgets:mininggadget",
+      "received_fe": 20000
+    }
+  },
+  "fuel": [
+    {"item": "minecraft:coal", "burn_ticks": 32, "generated_fe": 20000, "fe_per_tick": 625},
+    {"item": "minecraft:charcoal", "burn_ticks": 32, "generated_fe": 20000, "fe_per_tick": 625},
+    {"item": "minecraft:blaze_rod", "burn_ticks": 48, "generated_fe": 30000, "fe_per_tick": 625},
+    {"item": "minecraft:lava_bucket", "burn_ticks": 400, "generated_fe": 250000, "fe_per_tick": 625, "remainder": "minecraft:bucket"},
+    {"item": "minecraft:coal_block", "burn_ticks": 320, "generated_fe": 200000, "fe_per_tick": 625}
+  ],
+  "charged_items": [
+    {"item": "mininggadgets:mininggadget_simple", "capacity_fe": 1000000, "received_from_one_coal_fe": 20000},
+    {"item": "mininggadgets:mininggadget", "capacity_fe": 1000000, "received_from_one_coal_fe": 20000},
+    {"item": "mininggadgets:mininggadget_fancy", "capacity_fe": 1000000, "received_from_one_coal_fe": 20000}
+  ],
+  "no_fuel": {
+    "charged_item_slot": 1,
+    "item": "mininggadgets:mininggadget",
+    "ticks": 5,
+    "received_fe": 0
+  },
+  "capacity_probe": {
+    "coal_count": 52,
+    "ticks": 1700,
+    "buffer_fe": 1000000,
+    "coal_remaining": 1,
+    "burn_counter_paused": 32
+  },
+  "raw_local_traces": [
+    ".local/atm10-resource-validation/charginggadgets-original-machine-live-correct-order.json.out",
+    ".local/atm10-resource-validation/charginggadgets-original-fuel-types-trace.json",
+    ".local/atm10-resource-validation/charginggadgets-original-buffer-upper-bound-trace.json",
+    ".local/atm10-resource-validation/charginggadgets-original-no-fuel-correct-order-trace.json"
+  ]
+}

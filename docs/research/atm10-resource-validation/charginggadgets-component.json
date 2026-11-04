@@ -8,16 +8,25 @@
     "empty slot",
     "stacked item refused",
     "no fuel/energy",
-    "real fuel consumed and 120 FE delivered",
+    "real fuel consumed at observed coal rate",
     "mid-burn unload/reload preserves remaining generation",
     "unrelated components preserved",
     "save/reopen",
     "300 FE consumed from transferred stack by another mod"
   ],
+  "original_behavior": {
+    "charged_item_slot": 1,
+    "coal_burn_ticks": 32,
+    "coal_fe": 20000,
+    "fe_per_tick": 625,
+    "fuel_slot": 0,
+    "observed": true,
+    "station_capacity": 1000000
+  },
   "remaining": [
     "register energy support in real tool/battery ports",
     "full game automation and both single-player modes",
-    "verify original mod rates against public config/data"
+    "battery upgrade combinations"
   ],
   "scope": "actual Charging Gadgets WASM + separate test battery provider/consumer WASM; real ItemStack codecs and scratch disk save, not full game",
   "status": "passed"

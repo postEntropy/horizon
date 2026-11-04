@@ -1,0 +1,41 @@
+{
+  "status": "passed",
+  "scope": "real Mining Gadgets mininggadget charged by Charging Gadgets; not battery-upgrade combinations",
+  "original_capacity_fe": 1000000,
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "item": "mininggadgets:mininggadget",
+      "after_80_ticks": 20000,
+      "after_100_ticks": 20000,
+      "buffered_output_released": 20000,
+      "after_reopen": 20000,
+      "capacity_from_original": 1000000,
+      "checks": [
+        "no fuel does not charge",
+        "coal transfers observed 20,000 FE",
+        "blocked output buffers and later releases FE",
+        "item-data capacity registered",
+        "charged ItemStack survives save/load"
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "item": "mininggadgets:mininggadget",
+      "after_80_ticks": 20000,
+      "after_100_ticks": 20000,
+      "buffered_output_released": 20000,
+      "after_reopen": 20000,
+      "capacity_from_original": 1000000,
+      "checks": [
+        "no fuel does not charge",
+        "coal transfers observed 20,000 FE",
+        "blocked output buffers and later releases FE",
+        "item-data capacity registered",
+        "charged ItemStack survives save/load"
+      ]
+    }
+  ]
+}

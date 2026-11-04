@@ -14,12 +14,12 @@ use horizon_mod_sdk::{
     ui::{self, ScreenSpec, Widget, WidgetKind},
 };
 
-/// FE the station makes per burning fuel tick.
-pub const ENERGY_PER_TICK: u32 = 40;
-/// FE per tick it pushes into the item in slot 0.
-pub const CHARGE_PER_TICK: u32 = 1_000;
-/// Buffer size in FE.
-pub const CAPACITY: u32 = 320_000;
+/// Original station output: 20,000 FE from one coal over 32 server ticks.
+pub const ENERGY_PER_TICK: u32 = 625;
+/// Maximum FE transferred from the station buffer to the item each tick.
+pub const CHARGE_PER_TICK: u32 = 625;
+/// Original station buffer capacity observed with a full fuel stack.
+pub const CAPACITY: u32 = 1_000_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct Station {
@@ -49,17 +49,19 @@ impl Station {
 
     /// Ticks one step of fuel burning and energy generation.
     pub fn tick_step(&mut self, has_fuel: bool, fuel_burn_ticks: u32) -> bool {
-        let mut changed = false;
-        if self.burn > 0 {
-            self.burn -= 1;
-            self.energy = self.energy.saturating_add(ENERGY_PER_TICK).min(CAPACITY);
-            changed = true;
-        } else if has_fuel && fuel_burn_ticks > 0 && self.energy < CAPACITY {
+        if self.energy >= CAPACITY {
+            return false;
+        }
+        if self.burn == 0 {
+            if !has_fuel || fuel_burn_ticks == 0 {
+                return false;
+            }
             self.burn = fuel_burn_ticks;
             self.burn_max = fuel_burn_ticks;
-            changed = true;
         }
-        changed
+        self.burn -= 1;
+        self.energy = self.energy.saturating_add(ENERGY_PER_TICK).min(CAPACITY);
+        true
     }
 }
 
@@ -74,10 +76,10 @@ pub fn station_screen() -> ScreenSpec {
                 id: 0,
                 kind: WidgetKind::Slot,
                 x: 44,
-                y: 35,
+                y: 17,
                 width: 18,
                 height: 18,
-                text: "Charge".into(),
+                text: "Fuel".into(),
                 value: 0,
                 max_value: 64,
             },
@@ -85,10 +87,10 @@ pub fn station_screen() -> ScreenSpec {
                 id: 1,
                 kind: WidgetKind::Slot,
                 x: 44,
-                y: 17,
+                y: 35,
                 width: 18,
                 height: 18,
-                text: "Fuel".into(),
+                text: "Charge".into(),
                 value: 0,
                 max_value: 64,
             },
@@ -145,13 +147,16 @@ pub struct ChargingGadgets {
 }
 
 fn burn_fuel(store: &mut Station, handle: u32) {
-    let Some(fuel) = machine::get_slot(handle, 1) else {
+    let Some(fuel) = machine::get_slot(handle, 0) else {
         return;
     };
-    let ticks = machine::burn_time(&fuel.id);
-    if ticks == 0 {
+    let duration = machine::burn_time(&fuel.id);
+    if duration == 0 {
         return;
     }
+    // Charging Gadgets compresses vanilla furnace burn times by 50: coal's
+    // 1,600 ticks becomes the observed 32-tick, 20,000 FE charge cycle.
+    let ticks = (duration / 50).max(1);
     let rest = if fuel.count > 1 {
         Some(ItemStack {
             id: fuel.id.clone(),
@@ -160,7 +165,7 @@ fn burn_fuel(store: &mut Station, handle: u32) {
     } else {
         machine::remainder(&fuel.id).map(|id| ItemStack { id, count: 1 })
     };
-    if machine::set_slot(handle, 1, rest.as_ref()) {
+    if machine::set_slot(handle, 0, rest.as_ref()) {
         store.burn = ticks;
         store.burn_max = ticks;
     }
@@ -192,21 +197,19 @@ impl Mod for ChargingGadgets {
         self.stations.insert(handle, station);
 
         // Configure sided hopper transfer rules
-        // Slot 0 (Charge item): insert/extract top, extract bottom, insert/extract sides
-        let _ = item_transfer::set_slot_access(handle, 0, Face::Up, true, true);
-        let _ = item_transfer::set_slot_access(handle, 0, Face::Down, false, true);
-        let _ = item_transfer::set_slot_access(handle, 0, Face::North, true, true);
-        let _ = item_transfer::set_slot_access(handle, 0, Face::South, true, true);
-        let _ = item_transfer::set_slot_access(handle, 0, Face::West, true, true);
-        let _ = item_transfer::set_slot_access(handle, 0, Face::East, true, true);
-
-        // Slot 1 (Fuel): insert bottom and sides, no extract
-        let _ = item_transfer::set_slot_access(handle, 1, Face::Down, true, false);
-        let _ = item_transfer::set_slot_access(handle, 1, Face::North, true, false);
-        let _ = item_transfer::set_slot_access(handle, 1, Face::South, true, false);
-        let _ = item_transfer::set_slot_access(handle, 1, Face::West, true, false);
-        let _ = item_transfer::set_slot_access(handle, 1, Face::East, true, false);
-        let _ = item_transfer::set_slot_access(handle, 1, Face::Up, false, false);
+        // Slot 0 is fuel; slot 1 is the item being charged.
+        let _ = item_transfer::set_slot_access(handle, 0, Face::Down, true, false);
+        let _ = item_transfer::set_slot_access(handle, 0, Face::North, true, false);
+        let _ = item_transfer::set_slot_access(handle, 0, Face::South, true, false);
+        let _ = item_transfer::set_slot_access(handle, 0, Face::West, true, false);
+        let _ = item_transfer::set_slot_access(handle, 0, Face::East, true, false);
+        let _ = item_transfer::set_slot_access(handle, 0, Face::Up, false, false);
+        let _ = item_transfer::set_slot_access(handle, 1, Face::Up, true, true);
+        let _ = item_transfer::set_slot_access(handle, 1, Face::Down, false, true);
+        let _ = item_transfer::set_slot_access(handle, 1, Face::North, true, true);
+        let _ = item_transfer::set_slot_access(handle, 1, Face::South, true, true);
+        let _ = item_transfer::set_slot_access(handle, 1, Face::West, true, true);
+        let _ = item_transfer::set_slot_access(handle, 1, Face::East, true, true);
     }
 
     fn tick_block_entities(&mut self, handles: &[u32]) {
@@ -216,11 +219,11 @@ impl Mod for ChargingGadgets {
             };
 
             let was_lit = station.burn > 0;
-            if station.burn > 0 {
-                station.burn -= 1;
-                station.energy = station.energy.saturating_add(ENERGY_PER_TICK).min(CAPACITY);
-            } else if station.energy < CAPACITY {
+            if station.energy < CAPACITY && station.burn == 0 {
                 burn_fuel(station, handle);
+            }
+            if station.energy < CAPACITY {
+                station.tick_step(false, 0);
             }
 
             let is_lit = station.burn > 0;
@@ -228,10 +231,10 @@ impl Mod for ChargingGadgets {
                 let _ = machine::set_property(handle, "lit", if is_lit { "true" } else { "false" });
             }
 
-            // Charge item in slot 0 if station has energy
+            // Charge item in slot 1 if station has energy
             if station.energy > 0 {
                 let requested = CHARGE_PER_TICK.min(station.energy);
-                let accepted = item_data::receive_slot_energy(handle, 0, requested as u64, false);
+                let accepted = item_data::receive_slot_energy(handle, 1, requested as u64, false);
                 station.energy -= accepted as u32;
             }
         }
@@ -312,16 +315,32 @@ mod tests {
     #[test]
     fn test_station_burn_and_capacity() {
         let mut station = Station::default();
-        // Start burning fuel with 200 ticks
+        // The original station starts the fuel and generates energy immediately.
         assert!(station.tick_step(true, 200));
-        assert_eq!(station.burn, 200);
+        assert_eq!(station.burn, 199);
         assert_eq!(station.burn_max, 200);
+        assert_eq!(station.energy, ENERGY_PER_TICK);
 
         // Tick 10 times
         for _ in 0..10 {
             station.tick_step(false, 0);
         }
-        assert_eq!(station.burn, 190);
-        assert_eq!(station.energy, 10 * ENERGY_PER_TICK);
+        assert_eq!(station.burn, 189);
+        assert_eq!(station.energy, 11 * ENERGY_PER_TICK);
+    }
+
+    #[test]
+    fn full_buffer_pauses_burn_and_caps_energy() {
+        let mut station = Station {
+            energy: CAPACITY - ENERGY_PER_TICK,
+            burn: 12,
+            burn_max: 32,
+        };
+        assert!(station.tick_step(false, 0));
+        assert_eq!(station.energy, CAPACITY);
+        assert_eq!(station.burn, 11);
+        assert!(!station.tick_step(false, 0));
+        assert_eq!(station.energy, CAPACITY);
+        assert_eq!(station.burn, 11);
     }
 }

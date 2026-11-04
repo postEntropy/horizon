@@ -86,12 +86,12 @@ def run_case(args, mode):
             command('tp @s 1 102 4')
             call('fill', -4, 98, -4, 4, 98, 4, 'minecraft:stone')
             call('setblock', 0, 100, 0, 'charginggadgets:charging_station')
-            command('item replace block 0 100 0 container.0 with test_machine:battery')
+            command('item replace block 0 100 0 container.1 with test_machine:battery')
             # No resources: no charge. Then real vanilla furnace fuel.
             step(5)
             data = command('data get block 0 100 0 Items')
             assert 'horizon:energy' not in data, data
-            command('item replace block 0 100 0 container.1 with minecraft:coal')
+            command('item replace block 0 100 0 container.0 with minecraft:coal')
             step(80)
             assert item_energy('0 100 0') == 2500
             # Item's receive capacity blocks further charging.
