@@ -1,9 +1,9 @@
 {
   "source_reused_from": "ATM10 FTBTeams port in the local imported pack",
-  "source_copied_to": "port/src/lib.rs",
-  "cargo_check": "passed",
-  "component_build": "passed",
-  "component_written_to": "carry/mod.wasm",
+  "source_copied_to": "ports/ftbteams/src/lib.rs",
+  "cargo_check": "passed on 2026-11-04",
+  "component_build": "passed on 2026-11-04",
+  "component_written_to": "ports/target/horizon-mod/ftbteams.hmod (ignored build output)",
   "gameplay_validation": "not run",
   "known_missing": [
     "per-player identity and membership/invites",

@@ -1,0 +1,43 @@
+{
+  "mod": "FTB Teams 1802.2.11-build.107",
+  "status": "partial",
+  "carry_report": {
+    "copied_files": 16,
+    "blocks": 0,
+    "items": 0,
+    "recipes": 0,
+    "loot_tables": 0,
+    "worldgen": 0,
+    "notes": "The carried files are UI/config metadata and language resources; they do not implement server team behavior."
+  },
+  "implemented": [
+    "Authenticated mod command context exposes the command player's stable UUID and name only during dispatch; console commands expose None.",
+    "Parties persist owner/member identity, invitations and team names through mod-scoped storage; each player's current team is stored under a UUID-derived key.",
+    "Creation, listing, member listing, UUID-target invitations, invitation acceptance, leave and owner succession/disband are implemented.",
+    "The `max_party_size` config limits invitation acceptance."
+  ],
+  "known_inaccuracies": [
+    "The `msg` command calls `chat::show`; it is explicitly local-only and cannot deliver party chat to teammates.",
+    "Invite targets must be entered as UUID strings because there is no online-player lookup/completion API.",
+    "Storage keys team data in one mod-scoped data folder; there is no cross-server synchronization or transactional player storage."
+  ],
+  "api_evidence": {
+    "command_callback": "crates/horizon-mod-sdk/wit/horizon.wit: game.get-command-player() returns the authenticated UUID/name only during mod command dispatch; legacy components that do not import it continue to instantiate.",
+    "chat_callback": "crates/horizon-mod-sdk/wit/horizon.wit: chat.show is documented as local-player-only.",
+    "storage": "The storage interface exposes mod-scoped string/byte keys and no player key or namespace.",
+    "server_events": "Player join/leave provide a subject name, but they do not identify the caller of a later command.",
+    "claims": "The server API exposes rules, block changes, events and drops, but no chunk claim ownership/protection contract."
+  },
+  "minimum_host_contract_for_full_port": [
+    "Provide online-player lookup by name/UUID for invitation target completion.",
+    "Provide targeted and party-broadcast chat delivery on the authoritative server.",
+    "Provide transactional per-player storage or a synchronized team data service for multiple servers.",
+    "Expose claim ownership, protected-action checks and ally access to those checks."
+  ],
+  "validation": {
+    "cargo_check": "cargo check --manifest-path ports/Cargo.toml -p ftbteams passed",
+    "component_build": "cargo-horizon-mod build passed; artifact ports/target/horizon-mod/ftbteams.hmod",
+    "api_runtime_test": "cargo test -p horizon-mods --features runtime,pack --test sandbox: 39 passed, 1 ignored; command_player_identity_is_scoped_to_authenticated_dispatch verifies UUID/name delivery and context clearing.",
+    "gameplay": "harness/gameplay-validation.json; local party create/list/members/info/invite/self-accept rejection/leave passed in-frame and server-thread. Positive invite acceptance with a second authenticated player remains unvalidated."
+  }
+}

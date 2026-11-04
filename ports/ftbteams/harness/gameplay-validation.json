@@ -1,0 +1,88 @@
+{
+  "game": "Horizon 26.3",
+  "mod": "FTB Teams 1802.2.11-build.107",
+  "status": "partial",
+  "scope": "local identity, persistent party creation/list/member listing/invite storage/self-accept rejection/leave in both local execution paths",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "authenticated_owner_uuid": "a01e3843-e521-3998-958a-f459800e4d11",
+      "commands": [
+        {
+          "command": "ftbteams create Alpha",
+          "response": "Created party 'Alpha'"
+        },
+        {
+          "command": "ftbteams list",
+          "response": "FTB Teams (1): [Alpha]"
+        },
+        {
+          "command": "ftbteams members",
+          "response": "Party 'Alpha': Player"
+        },
+        {
+          "command": "ftbteams info",
+          "response": "Party 'Alpha' owner=a01e3843-e521-3998-958a-f459800e4d11 members=1"
+        },
+        {
+          "command": "ftbteams invite a01e3843-e521-3998-958a-f459800e4d11",
+          "response": "Invited player a01e3843-e521-3998-958a-f459800e4d11 to 'Alpha'"
+        },
+        {
+          "command": "ftbteams accept Alpha",
+          "response": "You are already in a party!"
+        },
+        {
+          "command": "ftbteams leave",
+          "response": "Disbanded party 'Alpha'"
+        },
+        {
+          "command": "ftbteams list",
+          "response": "FTB Teams (0): []"
+        }
+      ],
+      "limitation": "Cannot authenticate a second player in this local fixture; positive invite acceptance and guest identity need a LAN multiplayer fixture."
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "authenticated_owner_uuid": "b05eefd5-8047-372b-8d96-1f43a62766ce",
+      "commands": [
+        {
+          "command": "ftbteams create Alpha",
+          "response": "Created party 'Alpha'"
+        },
+        {
+          "command": "ftbteams list",
+          "response": "FTB Teams (1): [Alpha]"
+        },
+        {
+          "command": "ftbteams members",
+          "response": "Party 'Alpha': Player20587"
+        },
+        {
+          "command": "ftbteams info",
+          "response": "Party 'Alpha' owner=b05eefd5-8047-372b-8d96-1f43a62766ce members=1"
+        },
+        {
+          "command": "ftbteams invite b05eefd5-8047-372b-8d96-1f43a62766ce",
+          "response": "Invited player b05eefd5-8047-372b-8d96-1f43a62766ce to 'Alpha'"
+        },
+        {
+          "command": "ftbteams accept Alpha",
+          "response": "You are already in a party!"
+        },
+        {
+          "command": "ftbteams leave",
+          "response": "Disbanded party 'Alpha'"
+        },
+        {
+          "command": "ftbteams list",
+          "response": "FTB Teams (0): []"
+        }
+      ],
+      "limitation": "Cannot authenticate a second player in this local fixture; positive invite acceptance and guest identity need a LAN multiplayer fixture."
+    }
+  ]
+}

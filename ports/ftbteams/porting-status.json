@@ -1,11 +1,15 @@
 {
   "complete": false,
   "pending": [
-    "Implement player-aware team membership and invitations.",
-    "Validate party behavior in multiplayer.",
-    "Implement alliances and claims required for full FTB Teams parity."
+    "The new command-player context identifies the authenticated sender, but this port accepts invitation targets as UUID text because Horizon has no online-player lookup or tab completion API for target resolution.",
+    "The chat capability only shows a message to the local player; there is no party-targeted or server-broadcast chat operation.",
+    "Membership is keyed by player UUID inside mod-scoped storage; there is no transactional per-player storage namespace or cross-server team model.",
+    "FTB Teams alliances and chunk claims are not implemented; Horizon has no claim ownership, protection, or ally-access API for this port.",
+    "Positive invitation acceptance by a second authenticated player and guest identity are not validated in multiplayer."
   ],
   "evidence": [
-    "harness/build-validation.json"
+    "harness/build-validation.json",
+    "harness/porting-audit.json",
+    "harness/gameplay-validation.json"
   ]
 }

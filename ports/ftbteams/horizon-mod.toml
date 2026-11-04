@@ -5,7 +5,7 @@ description = "FTB Teams party management, team alliance and shared claims."
 authors = ["FTB Team"]
 api = "0.3"
 side = "both"
-capabilities = ["registries", "chat", "server", "world-read", "storage", "config"]
+capabilities = ["registries", "game-read", "chat", "server", "world-read", "storage", "config"]
 ported-from = "FTB Teams 1802.2.11-build.107; All Rights Reserved"
 
 [config.max_party_size]
