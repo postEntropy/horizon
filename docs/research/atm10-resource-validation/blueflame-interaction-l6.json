@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-03",
+  "mod": "blueflame 1.21.1-1.1.1",
+  "status": "partial; measured scenarios match vanilla and do not isolate mod behavior",
+  "original": {
+    "method": "MachineTrace public BlockState.useItemOn then ItemStack.useOn fallback using FakePlayer",
+    "with_mod": "blueflame-original-player-use-l6.json",
+    "vanilla_control": "blueflame-vanilla-control-l6.json",
+    "cases": [
+      {"support": "minecraft:soul_sand", "result": "minecraft:soul_fire", "same_with_vanilla": true},
+      {"support": "minecraft:soul_soil", "result": "minecraft:soul_fire", "same_with_vanilla": true},
+      {"support": "minecraft:netherrack", "result": "minecraft:fire", "same_with_vanilla": true}
+    ],
+    "excluded_probe": "Direct setBlock fire-on-soul-sand kept minecraft:fire; this did not perform player item use and is not treated as conclusive."
+  },
+  "horizon": {
+    "with_port": "blueflame-game-l6.json",
+    "without_mod": "blueflame-game-no-mod-control-l6.json",
+    "modes_with_port": ["in-frame", "server-thread"],
+    "result": "same three expected block states"
+  },
+  "pending": ["Trace real player placement and fire spread/neighbor event delivery to isolate BlueFlame-specific behavior."],
+  "checks": {"native_tests": "1 passed", "clippy": "passed (-D warnings)", "rustfmt": "passed", "wasm_build": "passed"},
+  "do_not_mark_complete": true
+}

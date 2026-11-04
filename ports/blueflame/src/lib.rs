@@ -30,16 +30,16 @@ impl Mod for BlueFlame {
                 y: event.y - 1,
                 z: event.z,
             };
-            if let Some(ground) = server::get_block(&event.dimension, below) {
-                if should_convert_to_soul_fire(&event.state, &ground) {
-                    let cur = BlockPos {
-                        x: event.x,
-                        y: event.y,
-                        z: event.z,
-                    };
-                    let _ = server::set_block(&event.dimension, cur, "minecraft:soul_fire");
-                    return EventOutcome::Consume;
-                }
+            if let Some(ground) = server::get_block(&event.dimension, below)
+                && should_convert_to_soul_fire(&event.state, &ground)
+            {
+                let cur = BlockPos {
+                    x: event.x,
+                    y: event.y,
+                    z: event.z,
+                };
+                let _ = server::set_block(&event.dimension, cur, "minecraft:soul_fire");
+                return EventOutcome::Consume;
             }
         }
         EventOutcome::Pass

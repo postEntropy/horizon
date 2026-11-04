@@ -1,0 +1,38 @@
+{
+  "status": "control_observed",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "scope": "flint-and-steel on soul sand, soul soil, and netherrack",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "cases": [
+        {
+          "ground": "minecraft:soul_sand",
+          "soul_fire": true,
+          "ordinary_fire": false,
+          "note": null
+        },
+        {
+          "ground": "minecraft:soul_soil",
+          "soul_fire": true,
+          "ordinary_fire": false,
+          "note": null
+        },
+        {
+          "ground": "minecraft:netherrack",
+          "soul_fire": false,
+          "ordinary_fire": true,
+          "note": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+Horizon: content root ready for 0 mod(s) in 0.0s
+Horizon: registry and terrain facts loaded in 0.15s (35723 block states)
+Horizon: discovered 4192 model files in 0.00s, parsed in 0.02s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.05s (1288 blocks)
+Horizon: bound 35723 model states / 7880 variants in 0.10s, resolved models in 0.00s, baked models and loaded sprites in 0.10s
+Horizon: model-state catalog prepared in 0.20s
+Horizon: blockstate binding and model baking took 0.26s
+Horizon: finalized 1291 sprite layers in 0.04s (asset render stage 0.33s)
+Horizon: gameplay facts read 0.03s, validated 0.16s, decoded 0.14s, projected 35723 states in 0.06s
+load assets: 0.76s
+Horizon: asset load stage took 0.59s
+load facts: 0.76s
+Horizon: facts, biomes and environment stage took 0.40s
+load biomes+env: 0.76s
+load pack tables: 1.07s
+Horizon: pack tables stage took 0.31s
+load collision+motion: 1.24s
+Horizon: collision and motion stage took 0.17s
+Horizon: mob metadata loaded in 0.01s
+load items: 1.31s
+Horizon: resources loaded in 1.3s; 35723 block states, 1658 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.08s
+Horizon: providers and block-entity render tables loaded in 0.18s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.22s
+Horizon: mob types loaded in 0.06s
+Horizon: player model setup took 0.09s
+Horizon: behaviours, mob types and player models loaded in 0.37s
+Horizon: no sounds in /home/leonardo/Documents/horizon-fork/.local/horizon-client/26.3/assets: they were not copied from your Minecraft install; prepare the game again in the launcher (or run horizon-prepare sounds)
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.04s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 0 running mod(s) with 0 command(s) from 0 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-r0jqk8jf/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.05s
+Horizon: game CPU resources ready in 0.06s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 0 running mod(s) with 0 command(s) from 0 package(s)
+Horizon: live features ready in 693.882056ms
+[13:52:21] [Server thread/INFO]: Player09016[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
+[13:52:21] [Server thread/INFO]: System chat: Player09016 joined the game
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 1438 ms
+[chat] The game is frozen
+[13:52:21] [Server thread/INFO]: System chat: [Player09016: Teleported Player09016 to 0.500000, 103.000000, 3.500000]
+[chat] Teleported Player09016 to 0.500000, 103.000000, 3.500000
+[13:52:21] [Server thread/INFO]: System chat: [Player09016: Replaced 1 slot(s) on Player09016 with [Flint and Steel]]
+[chat] Replaced 1 slot(s) on Player09016 with [Flint and Steel]
+[13:52:21] [Server thread/INFO]: System chat: [Player09016: Replaced 1 slot(s) on Player09016 with [Flint and Steel]]
+[chat] Replaced 1 slot(s) on Player09016 with [Flint and Steel]
