@@ -1,7 +1,8 @@
 use horizon_mod_sdk::{
+    EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod, Registration, VanillaHookEvent,
+    VanillaHookKind,
     server::{self, BlockPos},
-    storage, vanilla_hooks, EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod, Registration,
-    VanillaHookEvent, VanillaHookKind,
+    storage, vanilla_hooks,
 };
 
 pub struct JagsMod {
@@ -45,7 +46,14 @@ impl Mod for JagsMod {
             y: event.y,
             z: event.z,
         };
-        if server::set_block(&event.dimension, pos, "minecraft:grass_block").is_err() {
+        // The host validates and applies the block replacement before consuming
+        // the seed, as one authoritative operation.
+        if !server::replace_block_and_consume_active_item(
+            &event.dimension,
+            pos,
+            "minecraft:dirt",
+            "minecraft:grass_block",
+        ) {
             return EventOutcome::Pass;
         }
 
