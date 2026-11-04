@@ -57,7 +57,11 @@ name = "Test Machine Peer"
 version = "0.1.0"
 api = "0.4"
 side = "both"
-capabilities = ["server", "capabilities", "block-entities", "registries"]
+capabilities = ["server", "capabilities", "block-entities", "registries", "config"]
+
+[config.one_slot]
+type = "bool"
+default = false
 "#;
 
 const EFFECTS_MANIFEST: &str = r#"
@@ -893,6 +897,193 @@ fn item_move_request_ids_cannot_cross_a_hot_reload_even_when_reused() {
 }
 
 #[test]
+fn item_pickup_intents_are_confirmed_once_and_invalidated_on_failure_removal_or_trap() {
+    let mut mods = machines();
+    let (a, _) = mods
+        .create_block_entity("test_machine:smelter", &[])
+        .unwrap();
+    let (b, _) = mods
+        .create_block_entity("test_machine:smelter", &[])
+        .unwrap();
+    let mut views = [
+        smelter(a, Some(stack("minecraft:diamond", 3))),
+        smelter(b, None),
+    ];
+
+    assert!(mods.command("machine_api pickup_request"));
+    mods.tick_block_entities(&mut views);
+    let requests: Vec<_> = mods
+        .drain()
+        .into_iter()
+        .filter_map(|output| match output {
+            Output::Server(ServerAction::PickupItem {
+                handle,
+                request,
+                slot,
+                ..
+            }) => {
+                assert_eq!(slot, 0);
+                Some((handle, request))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(requests.len(), 2);
+    for &(handle, request) in &requests {
+        assert!(mods.item_pickup_pending(handle, request));
+        let wrong = if handle == a { b } else { a };
+        assert!(!mods.item_pickup_pending(wrong, request));
+        mods.complete_item_pickup(wrong, request, 99);
+        assert!(mods.item_pickup_pending(handle, request));
+        mods.complete_item_pickup(handle, request, 1);
+        mods.complete_item_pickup(handle, request, 9);
+        assert!(!mods.item_pickup_pending(handle, request));
+    }
+
+    assert!(mods.command("machine_api pickup_stop"));
+    mods.tick_block_entities(&mut views);
+    assert_eq!(mods.block_entity_data(a), [1]);
+    assert_eq!(mods.block_entity_data(b), [1]);
+    assert!(
+        mods.entries()
+            .iter()
+            .all(|entry| entry.status == Status::Running)
+    );
+
+    // A zero result is a confirmed failure and a duplicate completion cannot
+    // turn it into a successful pickup.
+    assert!(mods.command("machine_api pickup_request"));
+    mods.tick_block_entities(&mut views[..1]);
+    let (handle, request) = mods
+        .drain()
+        .into_iter()
+        .find_map(|output| match output {
+            Output::Server(ServerAction::PickupItem {
+                handle, request, ..
+            }) => Some((handle, request)),
+            _ => None,
+        })
+        .unwrap();
+    mods.complete_item_pickup(handle, request, 0);
+    mods.complete_item_pickup(handle, request, 1);
+    assert!(!mods.item_pickup_pending(handle, request));
+    assert!(mods.command("machine_api pickup_stop"));
+    mods.tick_block_entities(&mut views);
+    assert_eq!(mods.block_entity_data(handle), [1]);
+
+    // Removal revokes only that machine's request; the peer request remains valid.
+    assert!(mods.command("machine_api pickup_request"));
+    mods.tick_block_entities(&mut views);
+    let pending: Vec<_> = mods
+        .drain()
+        .into_iter()
+        .filter_map(|output| match output {
+            Output::Server(ServerAction::PickupItem {
+                handle, request, ..
+            }) => Some((handle, request)),
+            _ => None,
+        })
+        .collect();
+    mods.remove_block_entity(a);
+    for &(handle, request) in &pending {
+        assert_eq!(mods.item_pickup_pending(handle, request), handle == b);
+    }
+    for &(handle, request) in &pending {
+        if handle == b {
+            mods.complete_item_pickup(handle, request, 0);
+        }
+    }
+    assert!(mods.command("machine_api pickup_stop"));
+    mods.tick_block_entities(&mut views[1..]);
+
+    assert!(mods.command("machine_api pickup_trap"));
+    mods.tick_block_entities(&mut views[1..]);
+    assert!(
+        matches!(&mods.entries()[0].status, Status::Failed(reason) if reason.contains("panic"))
+    );
+    let trap_requests: Vec<_> = mods
+        .drain()
+        .into_iter()
+        .filter_map(|output| match output {
+            Output::Server(ServerAction::PickupItem { handle, request, .. }) => {
+                Some((handle, request))
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(!trap_requests.is_empty(), "trap must follow an emitted pickup request");
+    for (handle, request) in trap_requests {
+        assert!(
+            !mods.item_pickup_pending(handle, request),
+            "trap must revoke queued pickup authority"
+        );
+    }
+}
+
+#[test]
+fn item_pickup_request_ids_cannot_cross_a_hot_reload_even_when_reused() {
+    let dir = mods_dir().join("item_pickup_reload");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("machine.hmod");
+    std::fs::copy(mods_dir().join("horizon_mods_test_machine.hmod"), &path).unwrap();
+    let mut mods = Mods::load(std::slice::from_ref(&path), |_| true, |_| false);
+    let (old, _) = mods
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
+        .unwrap();
+    assert!(mods.command("machine_api pickup_request"));
+    let mut views = [smelter(old, None)];
+    mods.tick_block_entities(&mut views);
+    let old_request = mods
+        .drain()
+        .into_iter()
+        .find_map(|output| match output {
+            Output::Server(ServerAction::PickupItem { request, .. }) => Some(request),
+            _ => None,
+        })
+        .unwrap();
+    assert!(mods.item_pickup_pending(old, old_request));
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(5))
+        .unwrap();
+    assert!(mods.reload_changed(|_| false));
+    let (new, _) = mods
+        .create_block_entity_at(
+            "test_machine:smelter",
+            &[],
+            Some(("minecraft:overworld".into(), 0, 64, 0)),
+        )
+        .unwrap();
+    assert_ne!(old, new);
+    views[0].handle = new;
+    mods.tick_block_entities(&mut views);
+    let new_request = mods
+        .drain()
+        .into_iter()
+        .find_map(|output| match output {
+            Output::Server(ServerAction::PickupItem { request, .. }) => Some(request),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        old_request, new_request,
+        "exercise a reused per-instance request id"
+    );
+    assert!(!mods.item_pickup_pending(old, old_request));
+    mods.complete_item_pickup(old, old_request, 7);
+    assert!(mods.item_pickup_pending(new, new_request));
+    mods.complete_item_pickup(new, new_request, 0);
+    assert!(!mods.item_pickup_pending(new, new_request));
+    assert_eq!(mods.entries()[0].status, Status::Running);
+}
+
+#[test]
 fn item_energy_transfers_preserve_components_and_refuse_invalid_slots_and_stacks() {
     use horizon_world::nbt::{Limits, Tag, read_network, write_network};
     let mut mods = machines();
@@ -958,6 +1149,67 @@ fn item_energy_transfers_preserve_components_and_refuse_invalid_slots_and_stacks
     assert!(mods.command("machine_api item_energy_receive"));
     mods.tick_block_entities(&mut views);
     assert_eq!(views[0].slot_components[0], bytes);
+    assert_eq!(mods.entries()[0].status, Status::Running);
+}
+
+#[test]
+fn stack_energy_capacity_uses_owner_registered_component_and_preserves_charge() {
+    use horizon_world::nbt::{Limits, Tag, read_network, write_network};
+    let mut mods = machines();
+    let (handle, _) = mods
+        .create_block_entity("test_machine:smelter", &[])
+        .unwrap();
+    let mut view = smelter(handle, Some(stack("test_machine:capacity_battery", 1)));
+    let name = Tag::String("capacity test battery".into());
+    view.slot_components[0] = write_network(
+        &Tag::compound([
+            ("test_machine:capacity", Tag::Int(5000)),
+            ("horizon:energy", Tag::Long(4200)),
+            ("minecraft:custom_name", name.clone()),
+        ]),
+        Limits::default(),
+    )
+    .unwrap();
+    assert!(mods.command("machine_api item_energy_dynamic_capacity"));
+    mods.tick_block_entities(std::slice::from_mut(&mut view));
+    let (updated, _) = read_network(&view.slot_components[0], Limits::default()).unwrap();
+    assert_eq!(updated.get("test_machine:capacity"), Some(&Tag::Int(6000)));
+    assert_eq!(updated.get("horizon:energy"), Some(&Tag::Long(5000)));
+    assert_eq!(updated.get("minecraft:custom_name"), Some(&name));
+
+    for invalid_capacity in [
+        Tag::Int(0),
+        Tag::Int(-1),
+        Tag::Long(-1),
+        Tag::String("5000".into()),
+    ] {
+        view.slot_components[0] = write_network(
+            &Tag::compound([
+                ("test_machine:capacity", invalid_capacity),
+                ("horizon:energy", Tag::Long(0)),
+            ]),
+            Limits::default(),
+        )
+        .unwrap();
+        let before = view.slot_components[0].clone();
+        assert!(mods.command("machine_api item_energy_receive"));
+        mods.tick_block_entities(std::slice::from_mut(&mut view));
+        assert_eq!(view.slot_components[0], before);
+    }
+
+    view.slot_components[0] = write_network(
+        &Tag::compound([
+            ("test_machine:capacity", Tag::Int(4000)),
+            ("horizon:energy", Tag::Long(4001)),
+        ]),
+        Limits::default(),
+    )
+    .unwrap();
+    let before = view.slot_components[0].clone();
+    assert!(mods.command("machine_api item_energy_receive"));
+    mods.tick_block_entities(std::slice::from_mut(&mut view));
+    assert_eq!(view.slot_components[0], before);
+
     assert_eq!(mods.entries()[0].status, Status::Running);
 }
 

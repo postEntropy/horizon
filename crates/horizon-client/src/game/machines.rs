@@ -583,6 +583,74 @@ impl Game<'_> {
         }
         moved
     }
+
+    /// Atomically transfers one eligible dropped stack into a mod machine slot.
+    /// The drop is changed only after the real container insertion succeeds.
+    #[cfg(feature = "mods")]
+    pub(super) fn mod_pickup_item(&mut self, pos: Pos, handle: u32, slot: u32) -> u32 {
+        if !self.world.loaded(pos.0, pos.2)
+            || !matches!(self.world.block_entities.get(&pos), Some(BlockEntity::Mod { handle: live, .. }) if *live == handle)
+        {
+            return 0;
+        }
+        let c = self.containers();
+        let Some(buffer) = c.view(pos, false) else {
+            return 0;
+        };
+        if slot as usize >= buffer.len() {
+            return 0;
+        }
+        // The original queries the machine's 1x1x1 box inflated by six blocks.
+        // This yields a centered 6.5-block box; item bounds touching its faces
+        // do not overlap, while the observed 6.5-center boundary does.
+        let min = [
+            f64::from(pos.0) - 6.0,
+            f64::from(pos.1) - 6.0,
+            f64::from(pos.2) - 6.0,
+        ];
+        let max = [
+            f64::from(pos.0) + 7.0,
+            f64::from(pos.1) + 7.0,
+            f64::from(pos.2) + 7.0,
+        ];
+        let mut index = 0;
+        while index < self.dropped.len() {
+            let item = &self.dropped[index];
+            let bounds = item.bounds();
+            let lo = bounds.min_position();
+            let hi = bounds.max_position();
+            let overlaps = lo.x < max[0]
+                && hi.x > min[0]
+                && lo.y < max[1]
+                && hi.y > min[1]
+                && lo.z < max[2]
+                && hi.z > min[2];
+            if overlaps && item.pickup_delay == 0 {
+                let before = item.stack.count;
+                let rest =
+                    self.try_move_in_item(None, &buffer, item.stack.clone(), slot as usize, None);
+                let remaining = rest.as_ref().map_or(0, |s| s.count);
+                let moved = before.saturating_sub(remaining);
+                if moved > 0 {
+                    if let Some(rest) = rest {
+                        self.dropped[index].stack = rest;
+                    } else {
+                        let item = self.dropped.remove(index);
+                        self.mod_entity_death(
+                            item.id,
+                            "minecraft:item",
+                            [item.position.x, item.position.y, item.position.z],
+                        );
+                    }
+                    self.view_changed(&buffer);
+                    self.mod_publish_item_inventory(pos);
+                    return moved;
+                }
+            }
+            index += 1;
+        }
+        0
+    }
     /// `BlockEntity.setChanged` for every block entity of a container.
     fn view_changed(&mut self, view: &View) {
         // A composter's containers change its block state instead.

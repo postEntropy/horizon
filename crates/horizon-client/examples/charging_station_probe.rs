@@ -18,7 +18,7 @@ impl ItemFacts for Facts {
         64
     }
     fn burn_time(&self, id: &str) -> u32 {
-        if id == "minecraft:coal" { 3 } else { 0 }
+        if id == "minecraft:coal" { 1600 } else { 0 }
     }
     fn remainder(&self, _: &str) -> Option<String> {
         None
@@ -64,10 +64,13 @@ fn energy(mods: &mut Mods, handle: u32) -> u32 {
     u32::from_le_bytes(state[..4].try_into().unwrap())
 }
 fn stored(view: &BlockEntityView) -> i64 {
-    if view.slot_components[0].is_empty() {
+    stored_at(view, 1)
+}
+fn stored_at(view: &BlockEntityView, slot: usize) -> i64 {
+    if view.slot_components[slot].is_empty() {
         return 0;
     }
-    let (tag, _) = read_network(&view.slot_components[0], Limits::default()).unwrap();
+    let (tag, _) = read_network(&view.slot_components[slot], Limits::default()).unwrap();
     match tag.get("horizon:energy") {
         Some(Tag::Long(v)) => *v,
         None => 0,
@@ -104,15 +107,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let mut mods = load(&root);
     let mut station = view(&mut mods, &seed(3000));
-    station.slots[0] = Some(Stack {
+    station.slots[1] = Some(Stack {
         id: "test_machine:battery".into(),
         count: 1,
     });
-    station.slot_components[0] = write_network(
+    station.slot_components[1] = write_network(
         &Tag::compound([("minecraft:custom_name", Tag::String("Battery A".into()))]),
         Limits::default(),
     )?;
-    for expected in [800, 1600, 2400, 2500, 2500] {
+    for expected in [625, 1250, 1875, 2500, 2500] {
         tick(&mut mods, &mut station);
         assert_eq!(stored(&station), expected);
         assert_eq!(
@@ -121,7 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     // Real item codecs and an on-disk snapshot, followed by a fresh WASM runtime.
-    let (components, _) = read_network(&station.slot_components[0], Limits::default())?;
+    let (components, _) = read_network(&station.slot_components[1], Limits::default())?;
     let mut battery = ItemStack::new("test_machine:battery", 1);
     (battery.damage, battery.extra) = item_data::decode_components(Some(&components));
     let snapshot = Tag::compound([
@@ -148,11 +151,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let mut mods = load(&root);
     let mut station = view(&mut mods, saved);
-    station.slots[0] = Some(Stack {
+    station.slots[1] = Some(Stack {
         id: battery.item.to_string(),
         count: battery.count,
     });
-    station.slot_components[0] = write_network(&components, Limits::default())?;
+    station.slot_components[1] = write_network(&components, Limits::default())?;
     tick(&mut mods, &mut station);
     assert_eq!(
         (energy(&mut mods, station.handle), stored(&station)),
@@ -167,15 +170,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         dimension: "minecraft:overworld".into(),
         x: 1,
         y: 64,
-        slots: vec![station.slots[0].take(), None],
-        slot_components: vec![std::mem::take(&mut station.slot_components[0]), Vec::new()],
+        slots: vec![station.slots[1].take(), None],
+        slot_components: vec![std::mem::take(&mut station.slot_components[1]), Vec::new()],
         ..Default::default()
     };
     assert!(mods.command("machine_api item_energy_extract"));
     tick(&mut mods, &mut consumer);
-    assert_eq!(stored(&consumer), 2200);
+    assert_eq!(stored_at(&consumer, 0), 2200);
     assert_eq!(
-        energy(&mut mods, station.handle) as i64 + stored(&consumer) + 300,
+        energy(&mut mods, station.handle) as i64 + stored_at(&consumer, 0) + 300,
         3000
     );
     // Full/unsupported/empty/stacked slots cannot drain the station.
@@ -190,27 +193,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             count: 2,
         }),
     ] {
-        station.slots[0] = stack;
-        station.slot_components[0].clear();
+        station.slots[1] = stack;
+        station.slot_components[1].clear();
         tick(&mut mods, &mut station);
         assert_eq!(energy(&mut mods, station.handle), 500);
     }
     let mut empty = view(&mut mods, &seed(0));
-    empty.slots[0] = Some(Stack {
+    empty.slots[1] = Some(Stack {
         id: "test_machine:battery".into(),
         count: 1,
     });
     tick(&mut mods, &mut empty);
     assert_eq!(stored(&empty), 0);
-    empty.slots[1] = Some(Stack {
+    empty.slots[0] = Some(Stack {
         id: "minecraft:coal".into(),
         count: 1,
     });
     for _ in 0..2 {
         tick(&mut mods, &mut empty);
     }
-    assert!(empty.slots[1].is_none());
-    assert_eq!(stored(&empty), 40);
+    assert!(empty.slots[0].is_none());
+    assert_eq!(stored(&empty), 1250);
     let saved_burn = mods.save_block_entity(empty.handle).unwrap();
     mods.remove_block_entity(empty.handle);
     let mut resumed = view(&mut mods, &saved_burn);
@@ -221,13 +224,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     assert_eq!(
         stored(&resumed),
-        120,
-        "three burning ticks generate 3 x 40 FE"
+        2500,
+        "four burning ticks after reload generate 4 x 625 FE"
     );
     assert_eq!(energy(&mut mods, resumed.handle), 0);
     let report = serde_json::json!({"status":"passed", "scope":"actual Charging Gadgets WASM + separate test battery provider/consumer WASM; real ItemStack codecs and scratch disk save, not full game",
-        "checks":["charge equals station debit", "item receive limit", "partial final charge", "full item", "unsupported item", "empty slot", "stacked item refused", "no fuel/energy", "real fuel consumed and 120 FE delivered", "mid-burn unload/reload preserves remaining generation", "unrelated components preserved", "save/reopen", "300 FE consumed from transferred stack by another mod"],
-        "remaining":["register energy support in real tool/battery ports", "full game automation and both single-player modes", "verify original mod rates against public config/data"]});
+        "original_behavior":{"observed":true,"fuel_slot":0,"charged_item_slot":1,"coal_burn_ticks":32,"coal_fe":20000,"fe_per_tick":625,"station_capacity":1000000},
+        "checks":["charge equals station debit", "item receive limit", "partial final charge", "full item", "unsupported item", "empty slot", "stacked item refused", "no fuel/energy", "real fuel consumed at observed coal rate", "mid-burn unload/reload preserves remaining generation", "unrelated components preserved", "save/reopen", "300 FE consumed from transferred stack by another mod"],
+        "remaining":["register energy support in real tool/battery ports", "full game automation and both single-player modes", "battery upgrade combinations"]});
     fs::write(&args[3], serde_json::to_vec_pretty(&report)?)?;
     if args.len() == 5 {
         fs::copy(root.join("charger.hmod"), &args[4])?;

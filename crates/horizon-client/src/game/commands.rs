@@ -87,6 +87,7 @@ impl Game<'_> {
         if self.mod_command(command) {
             return;
         }
+        self.refresh_dynamic_registries();
         let d = vanilla::game_dispatcher();
         let parse = d.parse(command, &self.ui.registries);
         let result = match parse.executable() {

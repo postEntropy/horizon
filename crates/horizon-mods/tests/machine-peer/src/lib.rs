@@ -2,15 +2,18 @@
 use horizon_mod_sdk::{
     BlockEntityType, Mod, Registration,
     capabilities::{self, EnergyView, FluidView},
-    machine,
+    config, machine,
     server::{self, BlockPos},
 };
 
-struct Peer;
+struct Peer {
+    slots: u32,
+}
 
 impl Mod for Peer {
     fn init() -> Result<(Self, Registration), String> {
-        Ok((Self, Registration::new().command("peer_api")))
+        let slots = u32::from(config::get_bool("one_slot").unwrap_or(false));
+        Ok((Self { slots }, Registration::new().command("peer_api")))
     }
 
     fn command(&mut self, _name: &str, args: &str) -> Result<Option<String>, String> {
@@ -32,7 +35,7 @@ impl Mod for Peer {
     fn block_entity_types(&mut self) -> Vec<BlockEntityType> {
         vec![BlockEntityType {
             block: "test_peer:cell".into(),
-            slots: 0,
+            slots: self.slots,
             ticks: true,
         }]
     }

@@ -394,6 +394,15 @@ pub enum ServerAction {
         kind: ItemMoveKind,
         count: u32,
     },
+    PickupItem {
+        dimension: String,
+        x: i32,
+        y: i32,
+        z: i32,
+        handle: u32,
+        request: u64,
+        slot: u32,
+    },
     SetBlock {
         dimension: String,
         x: i32,
@@ -534,6 +543,7 @@ struct SharedWorld {
     rules: HashMap<String, String>,
     target_block: Option<BlockHit>,
     target_entity: Option<EntityHit>,
+    use_button_down: bool,
     main_hand: Option<StackView>,
     off_hand: Option<StackView>,
     player_inventory: Vec<StackView>,
@@ -546,7 +556,7 @@ struct SharedWorld {
     item_slots: HashMap<String, BTreeMap<u32, (String, u32)>>,
     item_aliases: HashMap<String, String>,
     /// Item energy declarations, keyed by item id with the declaring mod id.
-    item_energy_specs: HashMap<String, (String, EnergyView)>,
+    item_energy_specs: HashMap<String, ItemEnergySpec>,
     item_slot_limits: HashMap<String, BTreeMap<u32, u32>>,
     dirty_item_slots: HashSet<String>,
     attachments: HashMap<(String, String), Vec<u8>>,
@@ -574,6 +584,13 @@ struct SharedWorld {
     crop_growth_multiplier: f32,
     enchantment_bonus: i32,
     extra_loot: Vec<ItemDrop>,
+}
+
+#[derive(Clone)]
+struct ItemEnergySpec {
+    owner: String,
+    view: EnergyView,
+    capacity_component: Option<String>,
 }
 
 /// One installed mod, for the Mods page.
@@ -642,6 +659,11 @@ struct State {
     inventory_view_indices: HashMap<String, usize>,
     /// Position retained between callbacks so create/save hooks can address capabilities.
     positions: HashMap<u32, (String, i32, i32, i32)>,
+    /// Reverse position index for capability ownership checks. Keeping this
+    /// indexed avoids formatting every handle position on every capability write.
+    machine_position_owners: HashMap<String, usize>,
+    /// Opt-in timing for machine imports, enabled only by the L7 profiler.
+    machine_profile: Option<MachineCallProfile>,
     block_entity_slots: HashMap<u32, u32>,
     shared_inventory_channels: HashMap<u32, String>,
     shared_inventory_sizes: HashMap<String, u32>,
@@ -650,6 +672,7 @@ struct State {
     player_slot_access: HashMap<(u32, u32), (bool, bool)>,
     next_item_move: u64,
     item_moves: HashMap<u64, (u32, Option<u32>)>,
+    item_pickups: HashMap<u64, (u32, Option<u32>)>,
     /// Capability `config`: typed schema, values, and persistence path.
     config_file: PathBuf,
     config_schemas: BTreeMap<String, ConfigSchema>,
@@ -674,6 +697,36 @@ struct State {
     /// Fast prefilter shared by the mod runner; bits are hints backed by the
     /// per-mod subscriptions above and are rebuilt when a mod stops/reloads.
     vanilla_hook_mask: Arc<AtomicU8>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct MachineCallProfile {
+    calls: [u64; 5],
+    nanos: [u128; 5],
+}
+
+impl MachineCallProfile {
+    const GET_POSITION: usize = 0;
+    const GET_SLOT: usize = 1;
+    const GET_ENERGY: usize = 2;
+    const SET_ENERGY: usize = 3;
+    const PROCESS_ITEMS: usize = 4;
+}
+
+fn retain_machine_position_owner(owners: &mut HashMap<String, usize>, pos: String) {
+    *owners.entry(pos).or_default() += 1;
+}
+
+fn release_machine_position_owner(owners: &mut HashMap<String, usize>, pos: &str) {
+    let remove = if let Some(count) = owners.get_mut(pos) {
+        *count -= 1;
+        *count == 0
+    } else {
+        false
+    };
+    if remove {
+        owners.remove(pos);
+    }
 }
 
 /// The installed mods and the engine running them. `Mods::default()` is
@@ -1006,6 +1059,10 @@ impl Mods {
             view_indices: HashMap::new(),
             inventory_view_indices: HashMap::new(),
             positions: HashMap::new(),
+            machine_position_owners: HashMap::new(),
+            machine_profile: std::env::var_os("HORIZON_MOD_MACHINE_PROFILE")
+                .is_some()
+                .then(MachineCallProfile::default),
             block_entity_slots: HashMap::new(),
             shared_inventory_channels: HashMap::new(),
             shared_inventory_sizes: HashMap::new(),
@@ -1014,6 +1071,7 @@ impl Mods {
             player_slot_access: HashMap::new(),
             next_item_move: 0,
             item_moves: HashMap::new(),
+            item_pickups: HashMap::new(),
             config_file,
             config_schemas: m.config.clone(),
             configs,
@@ -1158,6 +1216,13 @@ impl Mods {
         if let Ok(mut sh) = self.shared.lock() {
             sh.target_block = block;
             sh.target_entity = entity;
+        }
+    }
+
+    /// Updates the local use-button state exposed through `game-read`.
+    pub fn set_use_button_down(&mut self, down: bool) {
+        if let Ok(mut sh) = self.shared.lock() {
+            sh.use_button_down = down;
         }
     }
 
@@ -1880,7 +1945,11 @@ impl Mods {
         self.next_handle = self.next_handle.wrapping_add(1);
         if let Some(position) = position {
             if let Some(run) = self.entries[i].run.as_mut() {
-                run.store.data_mut().positions.insert(handle, position);
+                let state = run.store.data_mut();
+                let (dimension, x, y, z) = &position;
+                let key = format!("{dimension}:{x},{y},{z}");
+                retain_machine_position_owner(&mut state.machine_position_owners, key);
+                state.positions.insert(handle, position);
             }
         }
         if let Some((dimension, x, y, z)) = self.entries[i]
@@ -1916,9 +1985,17 @@ impl Mods {
     /// mutations are written back to all owning views after every callback.
     /// Views of unknown handles or stopped mods are left alone.
     pub fn tick_block_entities(&mut self, views: &mut [BlockEntityView]) {
+        let profile = std::env::var_os("HORIZON_MOD_MACHINE_PROFILE").is_some();
+        let total_started = profile.then(Instant::now);
+        let mut seed_ns = 0u128;
+        let mut grouping_ns = 0u128;
+        let mut guest_ns = 0u128;
+        let mut return_views_ns = 0u128;
+        let mut sync_ns = 0u128;
         // Seed the shared capability registry before any mod runs. Seeding only
         // the current mod's machines makes cross-mod transfer depend on load
         // order and can expose stale values for a neighbor that ticks later.
+        let seed_started = profile.then(Instant::now);
         if let Ok(mut shared) = self.shared.lock() {
             for view in views.iter() {
                 if let Some((owner, channel)) = self.shared_inventory_channel(view.handle) {
@@ -1931,6 +2008,9 @@ impl Mods {
             let known_handles: HashSet<u32> = self.handles.keys().copied().collect();
             seed_block_entity_capabilities(&mut shared, views, &known_handles);
         }
+        if let Some(started) = seed_started {
+            seed_ns = started.elapsed().as_nanos();
+        }
 
         for i in 0..self.entries.len() {
             let Some(run) = self.entries[i].run.as_ref() else {
@@ -1940,6 +2020,7 @@ impl Mods {
             if !run.types.iter().any(|t| t.ticks) || !views.iter().any(ticking) {
                 continue;
             }
+            let grouping_started = profile.then(Instant::now);
             let mine: Vec<usize> = (0..views.len()).filter(|&v| ticking(&views[v])).collect();
             let lent: Vec<BlockEntityView> = mine
                 .iter()
@@ -1948,14 +2029,42 @@ impl Mods {
             let handles: Vec<u32> = lent.iter().map(|v| v.handle).collect();
             if let Some(run) = self.entries[i].run.as_mut() {
                 run.store.data_mut().lend_views(lent);
+                run.store.data_mut().reset_machine_profile();
             }
+            if let Some(started) = grouping_started {
+                grouping_ns += started.elapsed().as_nanos();
+            }
+            let guest_started = profile.then(Instant::now);
             self.call(i, FUEL_TICK, |m, s| {
                 machine_of(m)?
                     .horizon_mods_block_entities()
                     .call_tick(s, &handles)
             });
+            if let Some(started) = guest_started {
+                guest_ns += started.elapsed().as_nanos();
+            }
+            if let Some(run) = self.entries[i].run.as_ref()
+                && let Some(profile) = run.store.data().machine_profile
+            {
+                eprintln!(
+                    "mod_machine_profile mod={} machines={} get_position_calls={} get_position_ns={} get_slot_calls={} get_slot_ns={} get_energy_calls={} get_energy_ns={} set_energy_calls={} set_energy_ns={} process_items_calls={} process_items_ns={}",
+                    run.store.data().id,
+                    handles.len(),
+                    profile.calls[MachineCallProfile::GET_POSITION],
+                    profile.nanos[MachineCallProfile::GET_POSITION],
+                    profile.calls[MachineCallProfile::GET_SLOT],
+                    profile.nanos[MachineCallProfile::GET_SLOT],
+                    profile.calls[MachineCallProfile::GET_ENERGY],
+                    profile.nanos[MachineCallProfile::GET_ENERGY],
+                    profile.calls[MachineCallProfile::SET_ENERGY],
+                    profile.nanos[MachineCallProfile::SET_ENERGY],
+                    profile.calls[MachineCallProfile::PROCESS_ITEMS],
+                    profile.nanos[MachineCallProfile::PROCESS_ITEMS],
+                );
+            }
             // A mod that stopped in the call left its views in `stranded`,
             // with what it wrote before it stopped.
+            let returned_started = profile.then(Instant::now);
             let returned = match self.entries[i].run.as_mut() {
                 Some(run) => run.store.data_mut().take_views(),
                 None => std::mem::take(&mut self.stranded),
@@ -1963,14 +2072,33 @@ impl Mods {
             for (&slot, view) in mine.iter().zip(returned) {
                 views[slot] = view;
             }
+            if let Some(started) = returned_started {
+                return_views_ns += started.elapsed().as_nanos();
+            }
         }
 
         // Any callback can transfer into or out of another mod's block entity.
         // Reconcile all loaded views once after callbacks finish so the owning
         // mod entity gets marked dirty and its new capability contents persist.
+        let sync_started = profile.then(Instant::now);
         if let Ok(shared) = self.shared.lock() {
             let known_handles: HashSet<u32> = self.handles.keys().copied().collect();
             sync_block_entity_capabilities(&shared, views, &known_handles);
+        }
+        if let Some(started) = sync_started {
+            sync_ns = started.elapsed().as_nanos();
+        }
+        if let Some(started) = total_started {
+            eprintln!(
+                "mod_dispatch_profile machines={} seed_ns={} grouping_ns={} guest_ns={} return_views_ns={} sync_ns={} total_ns={}",
+                views.len(),
+                seed_ns,
+                grouping_ns,
+                guest_ns,
+                return_views_ns,
+                sync_ns,
+                started.elapsed().as_nanos(),
+            );
         }
     }
 
@@ -2004,6 +2132,27 @@ impl Mods {
             return;
         };
         if let Some((h, result)) = run.store.data_mut().item_moves.get_mut(&request)
+            && *h == handle
+            && result.is_none()
+        {
+            *result = Some(moved);
+        }
+    }
+    pub fn item_pickup_pending(&self, handle: u32, request: u64) -> bool {
+        self.handles
+            .get(&handle)
+            .and_then(|&owner| self.entries[owner].run.as_ref())
+            .and_then(|run| run.store.data().item_pickups.get(&request))
+            .is_some_and(|&(h, result)| h == handle && result.is_none())
+    }
+    pub fn complete_item_pickup(&mut self, handle: u32, request: u64, moved: u32) {
+        let Some(&owner) = self.handles.get(&handle) else {
+            return;
+        };
+        let Some(run) = self.entries[owner].run.as_mut() else {
+            return;
+        };
+        if let Some((h, result)) = run.store.data_mut().item_pickups.get_mut(&request)
             && *h == handle
             && result.is_none()
         {
@@ -2050,8 +2199,10 @@ impl Mods {
                 state.player_slot_access.retain(|(h, _), _| *h != handle);
                 state.slot_access.retain(|(h, _, _), _| *h != handle);
                 state.item_moves.retain(|_, (h, _)| *h != handle);
+                state.item_pickups.retain(|_, (h, _)| *h != handle);
                 if let Some((dimension, x, y, z)) = state.positions.remove(&handle) {
                     let pos = format!("{dimension}:{x},{y},{z}");
+                    release_machine_position_owner(&mut state.machine_position_owners, &pos);
                     let block_target = format!("block:{pos}");
                     let short_block_target = format!("block:{x},{y},{z}");
                     self.reloaded_saves.remove(&(dimension, x, y, z));
@@ -2546,7 +2697,7 @@ impl Mods {
             {
                 shared
                     .item_energy_specs
-                    .retain(|_, (owner, _)| owner != &manifest.id);
+                    .retain(|_, spec| spec.owner != manifest.id);
             }
             // The new instance knows none of the old one's block entities:
             // the game creates them again from their saves.
@@ -2886,6 +3037,12 @@ impl game::Host for State {
     fn get_clock(&mut self) -> Option<Clock> {
         self.snapshot.clock
     }
+    fn is_use_button_down(&mut self) -> bool {
+        self.shared
+            .lock()
+            .map(|shared| shared.use_button_down)
+            .unwrap_or(false)
+    }
 }
 impl chat::Host for State {
     fn show(&mut self, text: String) {
@@ -3038,6 +3195,24 @@ fn load_persisted_configs(
 }
 
 impl State {
+    fn machine_profile_started(&self) -> Option<Instant> {
+        self.machine_profile.map(|_| Instant::now())
+    }
+
+    fn machine_profile_finished(&mut self, index: usize, started: Option<Instant>) {
+        let (Some(profile), Some(started)) = (&mut self.machine_profile, started) else {
+            return;
+        };
+        profile.calls[index] += 1;
+        profile.nanos[index] += started.elapsed().as_nanos();
+    }
+
+    fn reset_machine_profile(&mut self) {
+        if let Some(profile) = &mut self.machine_profile {
+            *profile = MachineCallProfile::default();
+        }
+    }
+
     fn lend_views(&mut self, views: Vec<BlockEntityView>) {
         self.view_indices.clear();
         self.inventory_view_indices.clear();
@@ -3108,9 +3283,7 @@ impl State {
     /// entity at this position. Other mods can transfer resources through the
     /// shared capability operations, but cannot rewrite its capacity or rate.
     fn owns_machine_position(&self, pos: &str) -> bool {
-        self.positions
-            .values()
-            .any(|(dimension, x, y, z)| pos == format!("{dimension}:{x},{y},{z}"))
+        self.machine_position_owners.contains_key(pos)
     }
     fn machine_position_string(&self, handle: u32) -> Option<String> {
         if let Some(view) = self
@@ -3239,84 +3412,93 @@ impl machine::Host for State {
         outputs: Vec<machine::SlotStack>,
         simulate: bool,
     ) -> bool {
-        if inputs.len() > 64 || outputs.len() > 64 || (inputs.is_empty() && outputs.is_empty()) {
-            return false;
-        }
-        let Some(view) = self.inventory_view(handle) else {
-            return false;
-        };
-        let (mut slots, mut components) = (view.slots.clone(), view.slot_components.clone());
-        let mut consumed = HashSet::new();
-        for input in &inputs {
-            if input.stack.count == 0 || !consumed.insert(input.slot) {
+        let started = self.machine_profile_started();
+        let result = (|| -> bool {
+            if inputs.len() > 64 || outputs.len() > 64 || (inputs.is_empty() && outputs.is_empty())
+            {
                 return false;
             }
-            let Some(cell) = slots.get_mut(input.slot as usize) else {
+            let Some(view) = self.inventory_view(handle) else {
                 return false;
             };
-            let Some(current) = cell else {
-                return false;
-            };
-            if current.id != input.stack.id || current.count < input.stack.count {
-                return false;
-            }
-            current.count -= input.stack.count;
-            if current.count == 0 {
-                *cell = None;
-                let Some(data) = components.get_mut(input.slot as usize) else {
+            let (mut slots, mut components) = (view.slots.clone(), view.slot_components.clone());
+            let mut consumed = HashSet::new();
+            for input in &inputs {
+                if input.stack.count == 0 || !consumed.insert(input.slot) {
+                    return false;
+                }
+                let Some(cell) = slots.get_mut(input.slot as usize) else {
                     return false;
                 };
-                data.clear();
-            }
-        }
-        for output in &outputs {
-            let stack = &output.stack;
-            let max = self.machine_slot_max(handle, output.slot, &stack.id);
-            if stack.count == 0
-                || stack.count > max
-                || self
-                    .facts
-                    .as_ref()
-                    .is_some_and(|f| f.max_stack_size(&stack.id) == 0)
-            {
-                return false;
-            }
-            let Some(cell) = slots.get_mut(output.slot as usize) else {
-                return false;
-            };
-            if components
-                .get(output.slot as usize)
-                .is_none_or(|data| !data.is_empty())
-            {
-                return false;
-            }
-            match cell {
-                Some(current) if current.id == stack.id => {
-                    let Some(total) = current.count.checked_add(stack.count).filter(|n| *n <= max)
-                    else {
+                let Some(current) = cell else {
+                    return false;
+                };
+                if current.id != input.stack.id || current.count < input.stack.count {
+                    return false;
+                }
+                current.count -= input.stack.count;
+                if current.count == 0 {
+                    *cell = None;
+                    let Some(data) = components.get_mut(input.slot as usize) else {
                         return false;
                     };
-                    current.count = total;
+                    data.clear();
                 }
-                None => *cell = Some(stack.clone()),
-                _ => return false,
             }
-        }
-        if simulate {
-            return true;
-        }
-        let Some(view) = self.inventory_view(handle) else {
-            return false;
-        };
-        if view.slots != slots || view.slot_components != components {
-            view.slots = slots.clone();
-            view.slot_components = components;
-            view.changed = true;
-        }
-        for (slot, stack) in slots.iter().enumerate() {
-            self.sync_shared_item_slot(handle, slot as u32, stack.as_ref());
-        }
-        true
+            for output in &outputs {
+                let stack = &output.stack;
+                let max = self.machine_slot_max(handle, output.slot, &stack.id);
+                if stack.count == 0
+                    || stack.count > max
+                    || self
+                        .facts
+                        .as_ref()
+                        .is_some_and(|f| f.max_stack_size(&stack.id) == 0)
+                {
+                    return false;
+                }
+                let Some(cell) = slots.get_mut(output.slot as usize) else {
+                    return false;
+                };
+                if components
+                    .get(output.slot as usize)
+                    .is_none_or(|data| !data.is_empty())
+                {
+                    return false;
+                }
+                match cell {
+                    Some(current) if current.id == stack.id => {
+                        let Some(total) =
+                            current.count.checked_add(stack.count).filter(|n| *n <= max)
+                        else {
+                            return false;
+                        };
+                        current.count = total;
+                    }
+                    None => *cell = Some(stack.clone()),
+                    _ => {
+                        return false;
+                    }
+                }
+            }
+            if simulate {
+                return true;
+            }
+            let Some(view) = self.inventory_view(handle) else {
+                return false;
+            };
+            if view.slots != slots || view.slot_components != components {
+                view.slots = slots.clone();
+                view.slot_components = components;
+                view.changed = true;
+            }
+            for (slot, stack) in slots.iter().enumerate() {
+                self.sync_shared_item_slot(handle, slot as u32, stack.as_ref());
+            }
+            true
+        })();
+        self.machine_profile_finished(MachineCallProfile::PROCESS_ITEMS, started);
+        result
     }
     fn block_in_tag(&mut self, id: String, tag: String) -> bool {
         self.facts
@@ -3368,6 +3550,32 @@ impl machine::Host for State {
         self.item_moves.remove(&request);
         Some(result)
     }
+    fn request_item_pickup(&mut self, handle: u32, slot: u32) -> Option<u64> {
+        if self.item_pickups.len() >= 4096 {
+            return None;
+        }
+        let view = self.view(handle)?;
+        view.slots.get(slot as usize)?;
+        let (dimension, x, y, z) = (view.dimension.clone(), view.x, view.y, view.z);
+        self.next_item_move = self.next_item_move.checked_add(1)?;
+        let request = self.next_item_move;
+        self.item_pickups.insert(request, (handle, None));
+        self.out.push(Output::Server(ServerAction::PickupItem {
+            dimension,
+            x,
+            y,
+            z,
+            handle,
+            request,
+            slot,
+        }));
+        Some(request)
+    }
+    fn take_item_pickup_result(&mut self, request: u64) -> Option<u32> {
+        let result = self.item_pickups.get(&request)?.1?;
+        self.item_pickups.remove(&request);
+        Some(result)
+    }
     fn bind_shared_inventory(&mut self, handle: u32, channel: String) -> bool {
         if !self.views.is_empty()
             || !self.block_entity_slots.contains_key(&handle)
@@ -3399,16 +3607,26 @@ impl machine::Host for State {
     }
 
     fn get_position(&mut self, handle: u32) -> Option<machine::BlockEntityPosition> {
-        if let Some(view) = self.view(handle) {
-            return Some(machine::BlockEntityPosition {
+        let started = self.machine_profile_started();
+        let result = if let Some(view) = self.view(handle) {
+            Some(machine::BlockEntityPosition {
                 dimension: view.dimension.clone(),
                 x: view.x,
                 y: view.y,
                 z: view.z,
-            });
-        }
-        let (dimension, x, y, z) = self.positions.get(&handle)?.clone();
-        Some(machine::BlockEntityPosition { dimension, x, y, z })
+            })
+        } else {
+            self.positions
+                .get(&handle)
+                .map(|(dimension, x, y, z)| machine::BlockEntityPosition {
+                    dimension: dimension.clone(),
+                    x: *x,
+                    y: *y,
+                    z: *z,
+                })
+        };
+        self.machine_profile_finished(MachineCallProfile::GET_POSITION, started);
+        result
     }
     fn get_world_rule(&mut self, name: String) -> Option<String> {
         self.shared.lock().ok()?.rules.get(&name).cloned()
@@ -3424,11 +3642,12 @@ impl machine::Host for State {
         Ok(())
     }
     fn get_slot(&mut self, handle: u32, slot: u32) -> Option<Stack> {
-        self.inventory_view(handle)?
-            .slots
-            .get(slot as usize)
-            .cloned()
-            .flatten()
+        let started = self.machine_profile_started();
+        let result = self
+            .inventory_view(handle)
+            .and_then(|view| view.slots.get(slot as usize).cloned().flatten());
+        self.machine_profile_finished(MachineCallProfile::GET_SLOT, started);
+        result
     }
     fn smithing_result(
         &mut self,
@@ -3652,6 +3871,29 @@ fn item_components(bytes: &[u8]) -> Option<horizon_world::nbt::Compound> {
     (used == bytes.len()).then_some(compound)
 }
 
+fn valid_energy_declaration(
+    id: &str,
+    capacity_component: Option<&str>,
+    spec: EnergyView,
+    owned_namespaces: &[String],
+) -> bool {
+    let owned_namespaced_id = |value: &str| {
+        value.len() <= 256
+            && value.matches(':').count() == 1
+            && value
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_./-:".contains(&b))
+            && value.split_once(':').is_some_and(|(namespace, path)| {
+                !path.is_empty() && owned_namespaces.iter().any(|owned| owned == namespace)
+            })
+    };
+    owned_namespaced_id(id)
+        && capacity_component.is_none_or(owned_namespaced_id)
+        && spec.stored == 0
+        && spec.capacity > 0
+        && spec.capacity <= i64::MAX as u64
+}
+
 fn item_stored_energy(bytes: &[u8], capacity: u64) -> Option<u64> {
     let components = item_components(bytes)?;
     let stored = match components.get(&"horizon:energy".into()) {
@@ -3660,6 +3902,35 @@ fn item_stored_energy(bytes: &[u8], capacity: u64) -> Option<u64> {
         _ => return None,
     };
     (stored <= capacity).then_some(stored)
+}
+
+fn item_energy_capacity(bytes: &[u8], component: &str, fallback: u64) -> Option<u64> {
+    let components = item_components(bytes)?;
+    let capacity = match components.get(&component.into()) {
+        None => fallback,
+        Some(NbtTag::Byte(value)) => u64::try_from(*value).ok()?,
+        Some(NbtTag::Short(value)) => u64::try_from(*value).ok()?,
+        Some(NbtTag::Int(value)) => u64::try_from(*value).ok()?,
+        Some(NbtTag::Long(value)) => u64::try_from(*value).ok()?,
+        _ => return None,
+    };
+    (capacity > 0 && capacity <= i64::MAX as u64).then_some(capacity)
+}
+
+#[cfg(test)]
+mod item_energy_capacity_tests {
+    use super::*;
+    use horizon_world::nbt::write_network;
+
+    #[test]
+    fn missing_component_uses_declared_fallback() {
+        let bytes =
+            write_network(&NbtTag::Compound(BTreeMap::new()), NbtLimits::default()).unwrap();
+        assert_eq!(
+            item_energy_capacity(&bytes, "mininggadgets:forge_energy_max_energy", 1_000_000),
+            Some(1_000_000)
+        );
+    }
 }
 
 impl State {
@@ -3734,16 +4005,7 @@ impl item_data::Host for State {
         value.to_string().ok()
     }
     fn register_energy_item(&mut self, id: String, spec: EnergyView) -> bool {
-        if !self.owns_id(&id)
-            || id.matches(':').count() != 1
-            || !id
-                .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_./-:".contains(&b))
-            || spec.stored != 0
-            || spec.capacity == 0
-            || spec.capacity > i64::MAX as u64
-            || id.len() > 256
-        {
+        if !valid_energy_declaration(&id, None, spec, &self.owned_namespaces) {
             return false;
         }
         let Ok(mut shared) = self.shared.lock() else {
@@ -3753,13 +4015,53 @@ impl item_data::Host for State {
             && shared
                 .item_energy_specs
                 .values()
-                .filter(|(owner, _)| owner == &self.id)
+                .filter(|entry| entry.owner == self.id)
                 .count()
                 >= 4096
         {
             return false;
         }
-        shared.item_energy_specs.insert(id, (self.id.clone(), spec));
+        shared.item_energy_specs.insert(
+            id,
+            ItemEnergySpec {
+                owner: self.id.clone(),
+                view: spec,
+                capacity_component: None,
+            },
+        );
+        true
+    }
+
+    fn register_energy_item_capacity_component(
+        &mut self,
+        id: String,
+        spec: EnergyView,
+        component: String,
+    ) -> bool {
+        if !valid_energy_declaration(&id, Some(&component), spec, &self.owned_namespaces) {
+            return false;
+        }
+        let Ok(mut shared) = self.shared.lock() else {
+            return false;
+        };
+        if !shared.item_energy_specs.contains_key(&id)
+            && shared
+                .item_energy_specs
+                .values()
+                .filter(|entry| entry.owner == self.id)
+                .count()
+                >= 4096
+        {
+            return false;
+        }
+        shared.item_energy_specs.insert(
+            id,
+            ItemEnergySpec {
+                owner: self.id.clone(),
+                view: spec,
+                capacity_component: Some(component),
+            },
+        );
         true
     }
 
@@ -3773,10 +4075,80 @@ impl item_data::Host for State {
         if stack.count != 1 {
             return None;
         }
-        let mut energy = self.shared.lock().ok()?.item_energy_specs.get(&stack.id)?.1;
+        let spec = self
+            .shared
+            .lock()
+            .ok()?
+            .item_energy_specs
+            .get(&stack.id)?
+            .clone();
         let bytes = self.get_slot_components(handle, slot);
+        let mut energy = spec.view;
+        if let Some(component) = spec.capacity_component {
+            energy.capacity = item_energy_capacity(&bytes, &component, energy.capacity)?;
+        }
         energy.stored = item_stored_energy(&bytes, energy.capacity)?;
         Some(energy)
+    }
+
+    fn set_slot_energy_capacity(&mut self, handle: u32, slot: u32, capacity: u64) -> bool {
+        if capacity == 0 || capacity > i64::MAX as u64 {
+            return false;
+        }
+        let Some(stack) = self
+            .inventory_view(handle)
+            .and_then(|view| view.slots.get(slot as usize))
+            .and_then(Option::as_ref)
+            .cloned()
+        else {
+            return false;
+        };
+        if stack.count != 1 {
+            return false;
+        }
+        let Some(spec) = self
+            .shared
+            .lock()
+            .ok()
+            .and_then(|shared| shared.item_energy_specs.get(&stack.id).cloned())
+        else {
+            return false;
+        };
+        if spec.owner != self.id {
+            return false;
+        }
+        let Some(component) = spec.capacity_component else {
+            return false;
+        };
+        let bytes = self.get_slot_components(handle, slot);
+        let Some(current_capacity) = item_energy_capacity(&bytes, &component, spec.view.capacity)
+        else {
+            return false;
+        };
+        let Some(stored) = item_stored_energy(&bytes, current_capacity) else {
+            return false;
+        };
+        if stored > capacity {
+            return false;
+        }
+        let Some(mut components) = item_components(&bytes) else {
+            return false;
+        };
+        let tag = if capacity <= i32::MAX as u64 {
+            NbtTag::Int(capacity as i32)
+        } else {
+            NbtTag::Long(capacity as i64)
+        };
+        components.insert(component.as_str().into(), tag);
+        let Ok(updated) =
+            horizon_world::nbt::write_network(&NbtTag::Compound(components), NbtLimits::default())
+        else {
+            return false;
+        };
+        if updated.len() > MAX_ITEM_COMPONENT_BYTES {
+            return false;
+        }
+        self.set_slot_components(handle, slot, updated)
     }
 
     fn receive_slot_energy(&mut self, handle: u32, slot: u32, amount: u64, simulate: bool) -> u64 {
@@ -4111,16 +4483,26 @@ impl inventory::Host for State {
 
 impl capabilities::Host for State {
     fn set_energy_buffer(&mut self, pos: String, mut view: EnergyView) {
+        let started = self.machine_profile_started();
         if !self.owns_machine_position(&pos) {
+            self.machine_profile_finished(MachineCallProfile::SET_ENERGY, started);
             return;
         }
         view.stored = view.stored.min(view.capacity);
         if let Ok(mut sh) = self.shared.lock() {
             sh.energy.insert(pos, view);
         }
+        self.machine_profile_finished(MachineCallProfile::SET_ENERGY, started);
     }
     fn get_energy(&mut self, pos: String) -> Option<EnergyView> {
-        self.shared.lock().ok()?.energy.get(&pos).copied()
+        let started = self.machine_profile_started();
+        let result = self
+            .shared
+            .lock()
+            .ok()
+            .and_then(|sh| sh.energy.get(&pos).copied());
+        self.machine_profile_finished(MachineCallProfile::GET_ENERGY, started);
+        result
     }
     fn receive_energy(&mut self, pos: String, amount: u64, simulate: bool) -> u64 {
         let Ok(mut sh) = self.shared.lock() else {
@@ -5291,5 +5673,33 @@ mod capability_sync_tests {
         assert_eq!(views[1].fluids[&0].amount, 350);
         assert!(views[1].changed);
         assert!(!views[0].changed);
+    }
+}
+
+#[cfg(test)]
+mod machine_position_owner_tests {
+    use super::{release_machine_position_owner, retain_machine_position_owner};
+    use std::collections::HashMap;
+
+    #[test]
+    fn position_index_tracks_creation_removal_and_duplicate_owners() {
+        let pos = "minecraft:overworld:1,2,3";
+        let mut owners = HashMap::new();
+
+        // A handle without a coordinate never enters the ownership index.
+        assert!(!owners.contains_key(pos));
+
+        retain_machine_position_owner(&mut owners, pos.into());
+        retain_machine_position_owner(&mut owners, pos.into());
+        assert_eq!(owners.get(pos), Some(&2));
+
+        release_machine_position_owner(&mut owners, pos);
+        assert_eq!(owners.get(pos), Some(&1));
+
+        release_machine_position_owner(&mut owners, pos);
+        assert!(!owners.contains_key(pos));
+        // Stale removal is idempotent and cannot underflow the reference count.
+        release_machine_position_owner(&mut owners, pos);
+        assert!(!owners.contains_key(pos));
     }
 }

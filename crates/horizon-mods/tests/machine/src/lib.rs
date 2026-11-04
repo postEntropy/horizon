@@ -34,6 +34,7 @@ struct Machines {
     progress: HashMap<u32, u32>,
     shared_crates: Vec<u32>,
     item_move_requests: HashMap<u32, Vec<u64>>,
+    item_pickup_requests: HashMap<u32, Vec<u64>>,
     /// Each custom entity's age in ticks.
     entity_ticks: HashMap<u32, u32>,
     last_packet: String,
@@ -57,6 +58,23 @@ impl Mod for Machines {
         };
         // A namespace-mismatch fixture reuses this WASM under another mod id.
         let _ = item_data::register_energy_item("test_machine:battery", spec);
+        let dynamic_spec = EnergyView {
+            capacity: 2500,
+            ..spec
+        };
+        // A test below reuses this WASM with a different owner id to verify
+        // manifest block ownership; that fixture must reach manifest checks
+        // instead of panicking on this deliberately foreign registration.
+        let _ = item_data::register_energy_item_capacity_component(
+            "test_machine:capacity_battery",
+            dynamic_spec,
+            "test_machine:capacity".into(),
+        );
+        assert!(!item_data::register_energy_item_capacity_component(
+            "test_machine:invalid_capacity_path",
+            dynamic_spec,
+            "test_peer:capacity".into(),
+        ));
         assert!(!item_data::register_energy_item("minecraft:stick", spec));
         assert!(!item_data::register_energy_item("test_peer:battery", spec));
         assert!(!item_data::register_energy_item(
@@ -122,6 +140,7 @@ impl Mod for Machines {
                 progress,
                 shared_crates: Vec::new(),
                 item_move_requests: HashMap::new(),
+                item_pickup_requests: HashMap::new(),
                 entity_ticks: HashMap::new(),
                 last_packet: String::new(),
                 last_server_event: String::new(),
@@ -477,7 +496,19 @@ impl Mod for Machines {
                 }
                 Ok(None)
             }
+            "pickup_request" | "pickup_trap" | "pickup_stop" => {
+                machine::set_world_rule("test_machine:item_pickup_operation", args)?;
+                Ok(None)
+            }
             "item_energy_receive" | "item_energy_extract" => {
+                machine::set_world_rule("test_machine:item_energy_operation", args)?;
+                for &handle in self.progress.keys() {
+                    assert!(item_data::get_slot_energy(handle, 0).is_none());
+                    assert_eq!(item_data::receive_slot_energy(handle, 0, 10, false), 0);
+                }
+                Ok(None)
+            }
+            "item_energy_dynamic_capacity" => {
                 machine::set_world_rule("test_machine:item_energy_operation", args)?;
                 for &handle in self.progress.keys() {
                     assert!(item_data::get_slot_energy(handle, 0).is_none());
@@ -1396,7 +1427,24 @@ impl Mod for Machines {
             }
             if let Some(operation) = machine::get_world_rule("test_machine:item_energy_operation") {
                 let before = item_data::get_slot_components(h, 0);
-                if operation == "item_energy_extract" {
+                if operation == "item_energy_dynamic_capacity" {
+                    let energy =
+                        item_data::get_slot_energy(h, 0).expect("dynamic battery capability");
+                    assert_eq!(energy.capacity, 5000);
+                    assert_eq!(energy.stored, 4200);
+                    assert_eq!(item_data::receive_slot_energy(h, 0, 2000, true), 800);
+                    assert_eq!(item_data::get_slot_components(h, 0), before);
+                    assert_eq!(item_data::receive_slot_energy(h, 0, 2000, false), 800);
+                    assert_eq!(item_data::get_slot_energy(h, 0).unwrap().stored, 5000);
+                    let charged = item_data::get_slot_components(h, 0);
+                    assert!(item_data::set_slot_energy_capacity(h, 0, 6000));
+                    assert_eq!(item_data::get_slot_energy(h, 0).unwrap().capacity, 6000);
+                    assert_eq!(item_data::get_slot_energy(h, 0).unwrap().stored, 5000);
+                    let expanded = item_data::get_slot_components(h, 0);
+                    assert_ne!(expanded, charged);
+                    assert!(!item_data::set_slot_energy_capacity(h, 0, 4500));
+                    assert_eq!(item_data::get_slot_components(h, 0), expanded);
+                } else if operation == "item_energy_extract" {
                     let expected = item_data::extract_slot_energy(h, 0, 1000, true);
                     assert_eq!(item_data::get_slot_components(h, 0), before);
                     assert_eq!(item_data::extract_slot_energy(h, 0, 1000, false), expected);
@@ -1404,6 +1452,35 @@ impl Mod for Machines {
                     let expected = item_data::receive_slot_energy(h, 0, 1000, true);
                     assert_eq!(item_data::get_slot_components(h, 0), before);
                     assert_eq!(item_data::receive_slot_energy(h, 0, 1000, false), expected);
+                }
+                continue;
+            }
+            if let Some(operation) = machine::get_world_rule("test_machine:item_pickup_operation") {
+                let requests = self.item_pickup_requests.entry(h).or_default();
+                let mut completed = false;
+                requests.retain(|request| {
+                    if let Some(moved) = machine::take_item_pickup_result(*request) {
+                        *self.progress.entry(h).or_default() += moved;
+                        assert!(machine::take_item_pickup_result(*request).is_none());
+                        completed = true;
+                        false
+                    } else {
+                        true
+                    }
+                });
+                if operation == "pickup_request" || operation == "pickup_trap" {
+                    for (handle, slot) in [(h.wrapping_add(100000), 0), (h, u32::MAX)] {
+                        assert!(machine::request_item_pickup(handle, slot).is_none());
+                    }
+                    if !completed && requests.is_empty() {
+                        let before = machine::get_slot(h, 0).map(|s| (s.id, s.count));
+                        let request = machine::request_item_pickup(h, 0).unwrap();
+                        assert_eq!(machine::get_slot(h, 0).map(|s| (s.id, s.count)), before);
+                        requests.push(request);
+                        if operation == "pickup_trap" {
+                            panic!("pickup intent before trap");
+                        }
+                    }
                 }
                 continue;
             }
@@ -1639,6 +1716,7 @@ impl Mod for Machines {
     }
     fn remove_block_entity(&mut self, handle: u32) {
         self.item_move_requests.remove(&handle);
+        self.item_pickup_requests.remove(&handle);
         self.progress.remove(&handle);
         self.shared_crates.retain(|h| *h != handle);
     }

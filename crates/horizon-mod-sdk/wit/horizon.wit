@@ -18,7 +18,7 @@ interface log {
     write: func(level: level, message: string);
 }
 
-/// Capability `game-read`: the local player and the world clock.
+/// Capability `game-read`: the local player, world clock, and use-button state.
 interface game {
     record player {
         /// Feet position, in blocks.
@@ -46,6 +46,9 @@ interface game {
     get-player: func() -> option<player>;
     /// None on the title screen.
     get-clock: func() -> option<clock>;
+    /// Whether the local player's use button (normally right mouse) is held.
+    /// Toggle-use settings count as held until toggled off.
+    is-use-button-down: func() -> bool;
 }
 
 /// Capability `chat`: messages only the local player sees.
@@ -170,6 +173,12 @@ interface machine {
     /// None for unknown or pending requests. Requests are transient: do not save
     /// their ids; removal/reload discards them without modifying inventories.
     take-item-move-result: func(request: u64) -> option<u32>;
+    /// Queue a server pickup for one eligible vanilla item entity near this machine.
+    /// Returns a request id; the result is the server-confirmed count collected.
+    request-item-pickup: func(handle: u32, slot: u32) -> option<u64>;
+    /// Consume the confirmed count (zero means failure); None means pending/unknown.
+    /// Requests are transient and are invalidated when their machine handle is removed.
+    take-item-pickup-result: func(request: u64) -> option<u32>;
     record block-entity-position {
         dimension: string,
         x: s32,
@@ -295,6 +304,11 @@ interface item-data {
     /// must be zero; capacity must be positive and fit in s64. Limits apply per
     /// transfer call. At most 4096 items per mod. Register again after reload.
     register-energy-item: func(id: string, spec: energy-view) -> bool;
+    /// Like register-energy-item, but resolves capacity from one namespaced
+    /// integer data component on each stack. The component must use this mod's
+    /// namespace; when absent, `spec.capacity` is used. Invalid values make
+    /// that stack unsupported. Only the owner of `id` can register the path.
+    register-energy-item-capacity-component: func(id: string, spec: energy-view, component: string) -> bool;
     /// Queries an owned machine slot during its tick. None for unsupported
     /// items, counts other than one, or malformed/out-of-capacity energy data.
     /// Stored energy is the stack's Long `horizon:energy` component (default 0).
@@ -306,6 +320,10 @@ interface item-data {
     /// Removes at most the request, stored energy and max-extract. Same slot
     /// isolation, simulation and atomic-write rules as receive-slot-energy.
     extract-slot-energy: func(handle: u32, slot: u32, amount: u64, simulate: bool) -> u64;
+    /// Writes the registered capacity component on an owned item slot without
+    /// changing stored energy or any other component. Refuses a value outside
+    /// 1..=s64::MAX or below the current stored energy.
+    set-slot-energy-capacity: func(handle: u32, slot: u32, capacity: u64) -> bool;
     /// Reads a String through 1..8 compound keys in an owned slot's components.
     /// The first key is a component id; remaining keys may address custom-data.
     /// None for a missing path, other tag type, malformed data or unloaned slot.

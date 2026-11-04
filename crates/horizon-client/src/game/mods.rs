@@ -3313,6 +3313,7 @@ impl Game<'_> {
             .map(|p| p.dimension.clone())
             .unwrap_or_else(|| self.dim.id().to_owned());
         self.mods.mods.set_snapshot(snapshot);
+        self.mods.mods.set_use_button_down(self.right);
         if self.dim.id() == player_dim {
             if self.mods.mods.wants_world_read() {
                 let cells = self.mod_world_view();
@@ -6121,6 +6122,25 @@ impl Game<'_> {
                 started.elapsed().as_nanos(),
             );
         }
+        if std::env::var_os("HORIZON_MOD_PROPERTY_CACHE_PROFILE").is_some() {
+            let mut payload_bytes = self.mods.property_values.capacity()
+                * std::mem::size_of::<((String, String), Vec<String>)>();
+            let mut value_count = 0usize;
+            for ((block, property), values) in &self.mods.property_values {
+                payload_bytes += block.capacity() + property.capacity();
+                payload_bytes += values.capacity() * std::mem::size_of::<String>();
+                value_count += values.len();
+                payload_bytes += values.iter().map(String::capacity).sum::<usize>();
+            }
+            eprintln!(
+                "mod_property_cache machines={} entries={} map_capacity={} values={} estimated_capacity_bytes={}",
+                positions.len(),
+                self.mods.property_values.len(),
+                self.mods.property_values.capacity(),
+                value_count,
+                payload_bytes,
+            );
+        }
     }
     /// Run a server action in its requested level, returning to the level that
     /// emitted it. In-frame mode has only its current dimension loaded.
@@ -6249,6 +6269,14 @@ impl Game<'_> {
                                         kind == horizon_mods::ItemMoveKind::Pull, count)
                                 }).unwrap_or(0);
                                 self.mods.mods.complete_item_move(handle, request, moved);
+                            }
+                        }
+                        ServerAction::PickupItem { dimension, x, y, z, handle, request, slot } => {
+                            if self.mods.mods.item_pickup_pending(handle, request) {
+                                let moved = self.with_mod_dimension(&dimension, |game| {
+                                    game.mod_pickup_item((x, y, z), handle, slot)
+                                }).unwrap_or(0);
+                                self.mods.mods.complete_item_pickup(handle, request, moved);
                             }
                         }
                         ServerAction::SetBlock {
@@ -7196,6 +7224,9 @@ fn mod_action_chunk(action: &ServerAction) -> Option<(&str, i32, i32)> {
             dimension, x, z, ..
         }
         | ServerAction::SpawnMob {
+            dimension, x, z, ..
+        }
+        | ServerAction::PickupItem {
             dimension, x, z, ..
         } => Some((dimension, *x, *z)),
         // Inventory intents never load chunks or wait: a missing endpoint

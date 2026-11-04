@@ -436,6 +436,16 @@ saves carry it with the item. Unsupported items, counts other than one, invalid
 components and refused writes transfer zero. Re-register declarations on reload;
 an item ID alone does not imply energy support.
 
+For items whose capacity changes through components, the owning mod can instead
+use `register-energy-item-capacity-component` and name one integer component in
+its own namespace. The host resolves that value on each stack; a missing value
+uses the declared fallback capacity, while zero, negative, non-integer,
+overflowing or below-stored values make the stack unsupported. Only the owner of
+the item ID may declare this path. `set-slot-energy-capacity` lets that owner
+write a validated capacity during its server tick while preserving stored energy
+and every other component. This keeps capacity and charge attached to the stack
+through transfers and saves.
+
 `machine::request-item-move` queues a bounded pull/push between a loaned machine
 slot and an adjacent inventory. It does not edit the guest's snapshot. After all
 views return, the game revalidates the live handle and loaded endpoints, applies

@@ -404,8 +404,33 @@ impl Game<'_> {
         self.sync_mod_entity_registries();
     }
     /// The block the player is looking at, for coordinate suggestions.
-    fn refresh_dynamic_registries(&mut self) {
+    pub(super) fn refresh_dynamic_registries(&mut self) {
         self.ui.registries.target_block = self.pick().map(|h| h.pos);
+        // Item tags are data-pack registries. The exported command registry
+        // only contains vanilla tags, so include the tags from the resource
+        // tree loaded for this game (including content mods) before parsing
+        // predicates such as `execute if items ... #mod:tag`.
+        let item_tags = self
+            .res
+            .items()
+            .item_tags
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        self.ui
+            .registries
+            .item_tags
+            .extend(item_tags.iter().cloned());
+        if let Some(registry) = self
+            .ui
+            .registries
+            .by_registry
+            .get_mut("minecraft:item")
+        {
+            registry.tags.extend(item_tags);
+            registry.tags.sort();
+            registry.tags.dedup();
+        }
         // ClientPacketListener.getOnlinePlayerNames on a server.
         if let Some(names) = self.remote_online_names() {
             self.ui.registries.players = names;
