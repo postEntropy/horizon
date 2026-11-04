@@ -403,6 +403,16 @@ pub enum ServerAction {
         request: u64,
         slot: u32,
     },
+    ReplaceBlockAndConsumeHeldItem {
+        player: String,
+        dimension: String,
+        item: String,
+        x: i32,
+        y: i32,
+        z: i32,
+        expected_block: String,
+        replacement: String,
+    },
     SetBlock {
         dimension: String,
         x: i32,
@@ -689,6 +699,10 @@ struct State {
     active_block_face: Option<String>,
     /// Sneaking input exposed only while dispatching a block callback.
     active_sneaking: bool,
+    /// The exact held stack context exposed only during one item-use callback.
+    active_item_use: Option<ActiveItemUse>,
+    /// At most one matching stack-consumption request per item callback.
+    active_item_transaction_requested: bool,
     /// Capability `render`: declarative 3D boxes and ghost blocks.
     shapes: Vec<BoxShape>,
     ghost_blocks: Vec<GhostBlock>,
@@ -703,6 +717,13 @@ struct State {
 struct MachineCallProfile {
     calls: [u64; 5],
     nanos: [u128; 5],
+}
+
+#[derive(Clone)]
+struct ActiveItemUse {
+    player: String,
+    dimension: String,
+    item: String,
 }
 
 impl MachineCallProfile {
@@ -1083,6 +1104,8 @@ impl Mods {
             screen_slots: BTreeMap::new(),
             active_block_face: None,
             active_sneaking: false,
+            active_item_use: None,
+            active_item_transaction_requested: false,
             shapes: Vec::new(),
             ghost_blocks: Vec::new(),
             vanilla_hooks: Vec::new(),
@@ -1636,10 +1659,27 @@ impl Mods {
         }) else {
             return EventOutcome::Pass;
         };
-        self.call(i, FUEL_EVENT, |m, s| {
-            logic_of(m)?.horizon_mods_logic().call_on_item(s, &event)
-        })
-        .unwrap_or(EventOutcome::Pass)
+        let active_item_use = (event.action == ItemAction::UseOnBlock).then(|| ActiveItemUse {
+            player: event.player.clone(),
+            dimension: event.dimension.clone(),
+            item: event.item.clone(),
+        });
+        if let Some(run) = self.entries[i].run.as_mut() {
+            let state = run.store.data_mut();
+            state.active_item_use = active_item_use;
+            state.active_item_transaction_requested = false;
+        }
+        let outcome = self
+            .call(i, FUEL_EVENT, |m, s| {
+                logic_of(m)?.horizon_mods_logic().call_on_item(s, &event)
+            })
+            .unwrap_or(EventOutcome::Pass);
+        if let Some(run) = self.entries[i].run.as_mut() {
+            let state = run.store.data_mut();
+            state.active_item_use = None;
+            state.active_item_transaction_requested = false;
+        }
+        outcome
     }
 
     /// Dispatches a right-click item/entity event only to its registered item
@@ -4305,6 +4345,37 @@ impl config::Host for State {
 impl server::Host for State {
     fn get_block_face(&mut self) -> Option<String> {
         self.active_block_face.clone()
+    }
+    fn replace_block_and_consume_active_item(
+        &mut self,
+        dimension: String,
+        pos: BlockPos,
+        expected_block: String,
+        replacement: String,
+    ) -> bool {
+        if self.active_item_transaction_requested {
+            return false;
+        }
+        let Some(context) = self.active_item_use.as_ref() else {
+            return false;
+        };
+        if context.dimension != dimension || expected_block.is_empty() || replacement.is_empty() {
+            return false;
+        }
+        self.out.push(Output::Server(
+            ServerAction::ReplaceBlockAndConsumeHeldItem {
+                player: context.player.clone(),
+                dimension: context.dimension.clone(),
+                item: context.item.clone(),
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+                expected_block,
+                replacement,
+            },
+        ));
+        self.active_item_transaction_requested = true;
+        true
     }
     fn get_block(&mut self, dimension: String, pos: BlockPos) -> Option<String> {
         self.shared

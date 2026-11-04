@@ -1005,13 +1005,16 @@ fn item_pickup_intents_are_confirmed_once_and_invalidated_on_failure_removal_or_
         .drain()
         .into_iter()
         .filter_map(|output| match output {
-            Output::Server(ServerAction::PickupItem { handle, request, .. }) => {
-                Some((handle, request))
-            }
+            Output::Server(ServerAction::PickupItem {
+                handle, request, ..
+            }) => Some((handle, request)),
             _ => None,
         })
         .collect();
-    assert!(!trap_requests.is_empty(), "trap must follow an emitted pickup request");
+    assert!(
+        !trap_requests.is_empty(),
+        "trap must follow an emitted pickup request"
+    );
     for (handle, request) in trap_requests {
         assert!(
             !mods.item_pickup_pending(handle, request),
@@ -1896,12 +1899,15 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
     assert_eq!(
         mods.drain(),
         [
-            Output::Server(ServerAction::SetBlock {
+            Output::Server(ServerAction::ReplaceBlockAndConsumeHeldItem {
+                player: "Player".into(),
                 dimension: "minecraft:overworld".into(),
+                item: "test_machine:wrench".into(),
                 x: 0,
                 y: 64,
                 z: 0,
-                state: "test_machine:smelter[lit=true]".into(),
+                expected_block: "test_machine:smelter".into(),
+                replacement: "test_machine:smelter[lit=true]".into(),
             }),
             Output::Server(ServerAction::SpawnDrop {
                 dimension: "minecraft:overworld".into(),
@@ -1919,6 +1925,15 @@ fn api_0_3_and_0_4_logic_and_machine_hooks_run() {
                 entity: "minecraft:iron_golem".into(),
             }),
         ]
+    );
+    assert!(mods.command("machine_api logic_events"));
+    let consume_feedback = mods.drain();
+    let [Output::Feedback { text, error: false }] = consume_feedback.as_slice() else {
+        panic!("expected item-consumption feedback, got {consume_feedback:?}");
+    };
+    assert!(
+        text.contains("item=use-on-block:test_machine:wrench:minecraft:overworld:0,64,0:test_machine:smelter:consume=true/false"),
+        "{text}"
     );
     assert!(mods.has_any_block_hooks());
     assert!(!Mods::default().has_any_block_hooks());

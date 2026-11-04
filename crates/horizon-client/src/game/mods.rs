@@ -2548,6 +2548,49 @@ impl Game<'_> {
         outcome != EventOutcome::Pass
     }
 
+    /// Applies the server action queued by a mod during this player's active
+    /// `UseOnBlock` callback. The action is bound to the callback's player,
+    /// dimension and item id; creative mode keeps the vanilla unlimited stack.
+    pub(super) fn mod_replace_block_and_consume_held_item(
+        &mut self,
+        player: &str,
+        dimension: &str,
+        item: &str,
+        pos: [i32; 3],
+        expected_block: &str,
+        replacement: &str,
+    ) -> bool {
+        if self.remote.is_some()
+            || self.dim.id() != dimension
+            || self.acting_player_name() != player
+        {
+            return false;
+        }
+        if self.mod_block_state_at(pos).split('[').next() != Some(expected_block) {
+            return false;
+        }
+        let Some(replacement) = mod_block_state(replacement)
+            .and_then(|state| self.pack.assets.registry.resolve(&state).ok())
+        else {
+            return false;
+        };
+        let has_item = self
+            .held_mut()
+            .as_ref()
+            .is_some_and(|stack| &*stack.item == item && stack.count > 0);
+        if !has_item || self.level_set(pos, replacement).is_err() {
+            return false;
+        }
+        if !self.creative && !consume_active_stack(self.held_mut(), item) {
+            return false;
+        }
+        let actual = self.mod_block_state_at(pos);
+        self.mods
+            .mods
+            .set_world_block(dimension, pos[0], pos[1], pos[2], &actual);
+        true
+    }
+
     /// Dispatches the held item's callback before a player damages a mob.
     pub(super) fn mod_attack_entity(&mut self, item: &str, target: &str, pos: [i32; 3]) -> bool {
         if self.remote.is_some() || !self.mods.mods.is_running() {
@@ -6279,6 +6322,27 @@ impl Game<'_> {
                                 self.mods.mods.complete_item_pickup(handle, request, moved);
                             }
                         }
+                        ServerAction::ReplaceBlockAndConsumeHeldItem {
+                            player,
+                            dimension,
+                            item,
+                            x,
+                            y,
+                            z,
+                            expected_block,
+                            replacement,
+                        } => {
+                            self.with_mod_dimension(&dimension, |game| {
+                                game.mod_replace_block_and_consume_held_item(
+                                    &player,
+                                    &dimension,
+                                    &item,
+                                    [x, y, z],
+                                    &expected_block,
+                                    &replacement,
+                                );
+                            });
+                        }
                         ServerAction::SetBlock {
                             dimension,
                             x,
@@ -7232,9 +7296,30 @@ fn mod_action_chunk(action: &ServerAction) -> Option<(&str, i32, i32)> {
         // Inventory intents never load chunks or wait: a missing endpoint
         // completes with zero rather than moving items later into another block.
         ServerAction::MoveItem { .. }
+        | ServerAction::ReplaceBlockAndConsumeHeldItem { .. }
         | ServerAction::PlaySound { .. }
         | ServerAction::SetRule { .. } => None,
     }
+}
+
+#[cfg(feature = "mods")]
+fn consume_active_stack(slot: &mut Option<ItemStack>, expected_item: &str) -> bool {
+    let Some(count) = slot
+        .as_ref()
+        .filter(|stack| &*stack.item == expected_item)
+        .map(|stack| stack.count)
+    else {
+        return false;
+    };
+    if count == 0 {
+        return false;
+    }
+    if count == 1 {
+        *slot = None;
+    } else {
+        slot.as_mut().expect("the stack was checked").count -= 1;
+    }
+    true
 }
 
 #[cfg(feature = "mods")]
@@ -7299,5 +7384,20 @@ mod loot_tests {
 
         let cancel = apply_loot_drop_result(ModHookOutcome::Cancel, vanilla(), extra());
         assert!(cancel.is_empty());
+    }
+
+    #[cfg(feature = "mods")]
+    #[test]
+    fn active_item_consumption_only_shrinks_a_matching_nonempty_stack() {
+        let mut stack = Some(ItemStack::new("jags:jags", 2));
+        assert!(super::consume_active_stack(&mut stack, "jags:jags"));
+        assert_eq!(stack.as_ref().map(|stack| stack.count), Some(1));
+        assert!(super::consume_active_stack(&mut stack, "jags:jags"));
+        assert!(stack.is_none());
+        assert!(!super::consume_active_stack(&mut stack, "jags:jags"));
+
+        let mut other = Some(ItemStack::new("minecraft:diamond", 3));
+        assert!(!super::consume_active_stack(&mut other, "jags:jags"));
+        assert_eq!(other.as_ref().map(|stack| stack.count), Some(3));
     }
 }

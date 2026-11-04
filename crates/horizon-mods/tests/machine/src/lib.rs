@@ -283,6 +283,30 @@ impl Mod for Machines {
         EventOutcome::Pass
     }
     fn on_item(&mut self, event: ItemEvent) -> EventOutcome {
+        let (consume_first, consume_second) =
+            if event.action == ItemAction::UseOnBlock && event.item == "test_machine:wrench" {
+                let pos = BlockPos {
+                    x: event.x,
+                    y: event.y,
+                    z: event.z,
+                };
+                (
+                    server::replace_block_and_consume_active_item(
+                        &event.dimension,
+                        pos,
+                        "test_machine:smelter",
+                        "test_machine:smelter[lit=true]",
+                    ),
+                    server::replace_block_and_consume_active_item(
+                        &event.dimension,
+                        pos,
+                        "test_machine:smelter",
+                        "test_machine:smelter[lit=true]",
+                    ),
+                )
+            } else {
+                (false, false)
+            };
         let action_name = match event.action {
             ItemAction::UseInAir => "use-in-air",
             ItemAction::UseOnBlock => "use-on-block",
@@ -291,7 +315,7 @@ impl Mod for Machines {
             ItemAction::InteractEntity => "interact-entity",
         };
         self.last_item_event = format!(
-            "{action_name}:{}:{}:{},{},{}:{}",
+            "{action_name}:{}:{}:{},{},{}:{}:consume={consume_first}/{consume_second}",
             event.item, event.dimension, event.x, event.y, event.z, event.target
         );
         if event.item == "minecraft:spyglass" {
@@ -314,7 +338,6 @@ impl Mod for Machines {
                 y: event.y,
                 z: event.z,
             };
-            let _ = server::set_block(&event.dimension, pos, "test_machine:smelter[lit=true]");
             server::spawn_drop(
                 &event.dimension,
                 pos,

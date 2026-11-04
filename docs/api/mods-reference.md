@@ -76,7 +76,7 @@ The mod's log, in the game's log under the mod's id. Always granted.
 
 Access: capability `game-read`.
 
-Capability `game-read`: the local player and the world clock.
+Capability `game-read`: the local player, world clock, and use-button state.
 
 ### record `player`
 
@@ -102,6 +102,7 @@ Capability `game-read`: the local player and the world clock.
 | --- | --- | --- |
 | `get-player` | `func() -> option<player>` | None on the title screen. |
 | `get-clock` | `func() -> option<clock>` | None on the title screen. |
+| `is-use-button-down` | `func() -> bool` | Whether the local player's use button (normally right mouse) is held. Toggle-use settings count as held until toggled off. |
 
 ## `chat`
 
@@ -306,6 +307,8 @@ A smithing result computed from the active data pack, including the output's opa
 | --- | --- | --- |
 | `request-item-move` | `func(handle: u32, slot: u32, face: face, kind: item-move-kind, count: u32) -> option<u64>` | Queues an atomic transfer between this machine slot and an adjacent inventory. Only callable for a handle/slot lent to this tick. Count is 1..64; at most 4096 outstanding requests per mod. No slots change here. The game revalidates the live handle and loaded containers after all views return, applies sided automation rules, and moves full components. None means refused. A request id means queued, not successful movement. |
 | `take-item-move-result` | `func(request: u64) -> option<u32>` | Consumes a completed request's actual moved count (possibly zero). None for unknown or pending requests. Requests are transient: do not save their ids; removal/reload discards them without modifying inventories. |
+| `request-item-pickup` | `func(handle: u32, slot: u32) -> option<u64>` | Queue a server pickup for one eligible vanilla item entity near this machine. Returns a request id; the result is the server-confirmed count collected. |
+| `take-item-pickup-result` | `func(request: u64) -> option<u32>` | Consume the confirmed count (zero means failure); None means pending/unknown. Requests are transient and are invalidated when their machine handle is removed. |
 | `process-items` | `func(handle: u32, inputs: list<slot-stack>, outputs: list<slot-stack>, simulate: bool) -> bool` | Atomically consumes inputs and inserts default-component outputs in one owned, loaned inventory. Inputs must match id/count and use distinct slots; remaining input components are preserved. Outputs must all fit without truncation or merging into custom components. At most 64 inputs and 64 outputs. Invalid/empty requests return false without changes. Simulation validates the same operation without writing slots or dirty flags. Input/output overlap is allowed; outputs see consumed inputs. |
 | `set-player-slot-access` | `func(handle: u32, slot: u32, insert: bool, extract: bool) -> bool` | Restricts player menu insertion/extraction for an owned live slot. Unconfigured slots allow both. This is separate from hopper face rules; it never changes guest access to its own processing inventory. |
 | `get-slot` | `func(handle: u32, slot: u32) -> option<item-stack>` | The block entity's slot, none when empty or out of range. |
@@ -389,6 +392,7 @@ Capability `server` (API 0.3): server-side world queries and mutations during bl
 | --- | --- | --- |
 | `get-block` | `func(dimension: string, pos: block-pos) -> option<string>` | Block state string at `pos` in `dimension`, or none if unloaded. |
 | `set-block` | `func(dimension: string, pos: block-pos, state: string) -> result<_, string>` | Replaces the block at `pos` in `dimension` with `state`. |
+| `replace-block-and-consume-active-item` | `func(dimension: string, pos: block-pos, expected-block: string, replacement: string) -> bool` | During the active `use-on-block` callback, queues one atomic attempt to replace the expected block and consume one item from that event's active hand. Creative players keep their stack. Returns false outside that callback or if a request was already queued. The host validates the player, hand, item, block, and replacement after the callback; true means queued, not applied. |
 | `schedule-tick` | `func(dimension: string, pos: block-pos, block: string, delay: u32)` | Schedules a block tick for `block` at `pos` after `delay` ticks. |
 | `schedule-random-tick` | `func(dimension: string, pos: block-pos, block: string, delay: u32)` | Schedules a vanilla random tick for `block` at `pos` after `delay` ticks. |
 | `spawn-drop` | `func(dimension: string, pos: block-pos, drop: item-drop)` | Spawns an item stack drop at `pos` in `dimension`. |
@@ -546,9 +550,11 @@ Capability `item-data` (API 0.4): opaque data components on machine slots.
 | Function | Signature | What it does |
 | --- | --- | --- |
 | `register-energy-item` | `func(id: string, spec: energy-view) -> bool` | Declares energy support for an item in this mod's namespace. `stored` must be zero; capacity must be positive and fit in s64. Limits apply per transfer call. At most 4096 items per mod. Register again after reload. |
+| `register-energy-item-capacity-component` | `func(id: string, spec: energy-view, component: string) -> bool` | Like register-energy-item, but resolves capacity from one namespaced integer data component on each stack. The component must use this mod's namespace; when absent, `spec.capacity` is used. Invalid values make that stack unsupported. Only the owner of `id` can register the path. |
 | `get-slot-energy` | `func(handle: u32, slot: u32) -> option<energy-view>` | Queries an owned machine slot during its tick. None for unsupported items, counts other than one, or malformed/out-of-capacity energy data. Stored energy is the stack's Long `horizon:energy` component (default 0). |
 | `receive-slot-energy` | `func(handle: u32, slot: u32, amount: u64, simulate: bool) -> u64` | Adds at most the requested amount, available capacity and max-receive. Returns the actual amount. Simulation does not change components. A refused write returns zero; all unrelated stack components are preserved. |
 | `extract-slot-energy` | `func(handle: u32, slot: u32, amount: u64, simulate: bool) -> u64` | Removes at most the request, stored energy and max-extract. Same slot isolation, simulation and atomic-write rules as receive-slot-energy. |
+| `set-slot-energy-capacity` | `func(handle: u32, slot: u32, capacity: u64) -> bool` | Writes the registered capacity component on an owned item slot without changing stored energy or any other component. Refuses a value outside 1..=s64::MAX or below the current stored energy. |
 | `get-slot-string-component` | `func(handle: u32, slot: u32, path: list<string>) -> option<string>` | Reads a String through 1..8 compound keys in an owned slot's components. The first key is a component id; remaining keys may address custom-data. None for a missing path, other tag type, malformed data or unloaned slot. |
 | `get-slot-components` | `func(handle: u32, slot: u32) -> list<u8>` | Returns the stack's `minecraft:components` compound as binary network NBT (empty when the stack has only defaults, or the slot is empty). |
 | `set-slot-components` | `func(handle: u32, slot: u32, components: list<u8>) -> bool` | Replaces the compound with binary network NBT; empty clears it. The value must be a compound root and at most 64 KiB. False for an invalid value, empty slot, or out-of-range slot. |
@@ -745,7 +751,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `use-in-air` |  |
 | `use-on-block` |  |
 | `attack-entity` |  |
-| `interact-entity` | Server-side right-click with the held item. `target` is the namespaced entity id; wolf targets include `tamed` and `owner_is_player` booleans. An explicit `PASS` stops this item/entity route without generic animal feeding. |
+| `interact-entity` | A server-authoritative right-click interaction between the item and a living entity. |
 | `finish-using` |  |
 
 ### record `item-event`
@@ -759,7 +765,7 @@ What the game calls for API 0.3 and 0.4 block, item, server, UI and network hook
 | `x` | `s32` | Target X coordinate (block or entity). |
 | `y` | `s32` | Target Y coordinate. |
 | `z` | `s32` | Target Z coordinate. |
-| `target` | `string` | Target entity or block state, if any. |
+| `target` | `string` | Target entity or block state. For a wolf interaction this is minecraft:wolf;tamed=<bool>;owner_is_player=<bool>; other entity interactions carry their namespaced entity id. |
 
 ### enum `server-event-kind`
 
