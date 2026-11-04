@@ -1,0 +1,117 @@
+{
+  "status": "passed",
+  "original": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.259",
+    "mcwwindows": "2.4.2",
+    "artifact": "Original ATM10 installed pack JAR"
+  },
+  "scope": "Oak shutter only; empty hand, hammer and key; one opening and one closing interaction; no claims about reshaping, locking or other window blocks.",
+  "original_blackbox": [
+    {
+      "scenario": "empty_hand_from_closed",
+      "open_state_after": "true",
+      "result": "SUCCESS",
+      "held_item": "minecraft:air",
+      "held_count_after": 0
+    },
+    {
+      "scenario": "empty_hand_from_open",
+      "open_state_after": "false",
+      "result": "SUCCESS",
+      "held_item": "minecraft:air",
+      "held_count_after": 0
+    },
+    {
+      "scenario": "hammer_from_closed",
+      "open_state_after": "true",
+      "result": "SUCCESS",
+      "held_item": "mcwwindows:hammer",
+      "held_count_after": 1
+    },
+    {
+      "scenario": "hammer_from_open",
+      "open_state_after": "false",
+      "result": "SUCCESS",
+      "held_item": "mcwwindows:hammer",
+      "held_count_after": 1
+    },
+    {
+      "scenario": "key_from_closed",
+      "open_state_after": "true",
+      "result": "SUCCESS",
+      "held_item": "mcwwindows:key",
+      "held_count_after": 1
+    },
+    {
+      "scenario": "key_from_open",
+      "open_state_after": "false",
+      "result": "SUCCESS",
+      "held_item": "mcwwindows:key",
+      "held_count_after": 1
+    }
+  ],
+  "horizon": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "cases": [
+        {
+          "case": "empty_hand",
+          "item": "minecraft:air",
+          "opened": true,
+          "closed_again": true,
+          "item_count_before": 0,
+          "item_count_after": 0
+        },
+        {
+          "case": "hammer",
+          "item": "mcwwindows:hammer",
+          "opened": true,
+          "closed_again": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "key",
+          "item": "mcwwindows:key",
+          "opened": true,
+          "closed_again": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        }
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "cases": [
+        {
+          "case": "empty_hand",
+          "item": "minecraft:air",
+          "opened": true,
+          "closed_again": true,
+          "item_count_before": 0,
+          "item_count_after": 0
+        },
+        {
+          "case": "hammer",
+          "item": "mcwwindows:hammer",
+          "opened": true,
+          "closed_again": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        },
+        {
+          "case": "key",
+          "item": "mcwwindows:key",
+          "opened": true,
+          "closed_again": true,
+          "item_count_before": 1,
+          "item_count_after": 1
+        }
+      ]
+    }
+  ],
+  "validation": "Real player interaction in Horizon, in-frame and integrated server thread. Hammer and key stacks remained at count 1."
+}

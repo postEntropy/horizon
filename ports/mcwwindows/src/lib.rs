@@ -2,7 +2,6 @@
 //! and key that reshape and lock window blocks.
 use horizon_mod_sdk::{
     BlockAction, BlockEvent, EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod, Registration,
-    chat,
     server::{self, BlockPos},
 };
 
@@ -128,13 +127,10 @@ impl Mod for McwWindows {
             return EventOutcome::Pass;
         }
         let path = event.item.split([':', '[']).nth(1).unwrap_or(&event.item);
-        if path == "hammer" {
-            chat::show("🔨 Window reshaped: the block cycles to its next frame.");
-            return EventOutcome::Consume;
-        }
-        if path == "key" {
-            chat::show("🔑 Window locked. Right-click again with the key to unlock it.");
-            return EventOutcome::Consume;
+        if path == "hammer" || path == "key" {
+            // The original allows the block interaction to handle these tools:
+            // on the measured shutter they open/close it without consuming them.
+            return EventOutcome::Pass;
         }
         EventOutcome::Pass
     }

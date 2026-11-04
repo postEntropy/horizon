@@ -1,0 +1,75 @@
+Horizon: content root ready for 1 mod(s) in 6.7s
+Horizon: content from 1 mod(s) in /tmp/horizon-port-fixture-kw81pgdf/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.17s (50075 block states)
+Horizon: discovered 6079 model files in 0.01s, parsed in 0.02s (total 0.02s)
+Horizon: parsed model resources in 0.02s
+Horizon: decoded model-state table in 0.07s (1616 blocks)
+Horizon: bound 48507 model states / 13842 variants in 0.13s, resolved models in 0.01s, baked models and loaded sprites in 0.16s
+Horizon: model-state catalog prepared in 0.30s
+Horizon: blockstate binding and model baking took 0.39s
+Horizon: finalized 1446 sprite layers in 0.04s (asset render stage 0.46s)
+Horizon: gameplay facts read 0.02s, validated 0.20s, decoded 0.18s, projected 50075 states in 0.08s
+load assets: 7.60s
+Horizon: asset load stage took 0.72s
+load facts: 7.60s
+Horizon: facts, biomes and environment stage took 0.51s
+load biomes+env: 7.60s
+load pack tables: 7.91s
+Horizon: pack tables stage took 0.32s
+load collision+motion: 8.13s
+Horizon: collision and motion stage took 0.21s
+Horizon: mob metadata loaded in 0.02s
+load items: 8.21s
+Horizon: resources loaded in 8.2s; 50075 block states, 2002 items, 67 biomes; 4 worker threads
+Horizon: items and recipes stage took 0.09s
+Horizon: providers and block-entity render tables loaded in 0.18s
+Horizon: music, ambience and dimension tables loaded in 0.00s
+Horizon: behaviour tables loaded in 0.24s
+Horizon: mob types loaded in 0.05s
+Horizon: player model setup took 0.09s
+Horizon: behaviours, mob types and player models loaded in 0.38s
+Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.04s
+Horizon: game CPU resources ready in 0.04s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: control socket /tmp/horizon-port-fixture-kw81pgdf/ctl.sock
+Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
+Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
+Horizon renderer: creating the pipelines
+Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
+Horizon: entity and display models prepared in 0.00s
+Horizon: creative inventory prepared in 0.01s
+Horizon: game CPU resource bundle ready in 0.05s
+Horizon: game CPU resources ready in 0.06s
+Horizon: particle resources loaded in 0.00s
+Horizon: loaded 1 running mod(s) with 0 command(s) from 1 package(s)
+Horizon: live features ready in 843.051826ms
+[12:37:57] [Server thread/INFO]: Player81283[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
+[12:37:57] [Server thread/INFO]: System chat: Player81283 joined the game
+Horizon renderer: acquiring the first frame
+Horizon renderer: submitting the first frame
+Horizon: first frame after 8996 ms
+[chat] The game is frozen
+[12:37:57] [Server thread/INFO]: System chat: [Player81283: Teleported Player81283 to 0.500000, 102.000000, 1.500000]
+[chat] Teleported Player81283 to 0.500000, 102.000000, 1.500000
+[12:37:57] [Server thread/INFO]: System chat: [Player81283: Replaced 1 slot(s) on Player81283 with [Air]]
+[chat] Replaced 1 slot(s) on Player81283 with [Air]
+[chat] [Player81283] MCW_STATE_TRUE
+[12:37:57] [Server thread/INFO]: System chat: [Player81283: Stepping 5 tick(s)]
+[chat] Stepping 5 tick(s)
+[chat] [Player81283] MCW_STATE_FALSE
+[12:37:59] [Server thread/INFO]: System chat: [Player81283: Replaced 1 slot(s) on Player81283 with [Window Hammer]]
+[chat] Replaced 1 slot(s) on Player81283 with [Window Hammer]
+[chat] [Player81283] MCW_STATE_TRUE
+[12:37:59] [Server thread/INFO]: System chat: [Player81283: Stepping 5 tick(s)]
+[chat] Stepping 5 tick(s)
+[chat] [Player81283] MCW_STATE_FALSE
+[12:38:01] [Server thread/INFO]: System chat: [Player81283: Replaced 1 slot(s) on Player81283 with [Window Key]]
+[chat] Replaced 1 slot(s) on Player81283 with [Window Key]
+[chat] [Player81283] MCW_STATE_TRUE
+[12:38:01] [Server thread/INFO]: System chat: [Player81283: Stepping 5 tick(s)]
+[chat] Stepping 5 tick(s)
+[chat] [Player81283] MCW_STATE_FALSE
