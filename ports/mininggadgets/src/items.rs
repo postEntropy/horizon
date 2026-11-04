@@ -34,4 +34,4 @@ pub const ITEMS: &[&str] = &[
 ];
 
 #[allow(dead_code)]
-pub const BLOCK_ENTITIES: &[&str] = &[];
+pub const BLOCK_ENTITIES: &[&str] = &["mininggadgets:modificationtable"];

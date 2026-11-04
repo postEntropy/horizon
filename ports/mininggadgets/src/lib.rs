@@ -7,10 +7,13 @@ use horizon_mod_sdk::{
     Registration, chat,
     capabilities::EnergyView,
     item_data,
+    machine,
     ui::{self, ScreenSpec, Widget, WidgetKind},
 };
 
 const TABLE_SCREEN: &str = "screen:mininggadgets:table";
+const BASE_BATTERY_CAPACITY: u64 = 1_000_000;
+const BATTERY_CAPACITY_COMPONENT: &str = "mininggadgets:forge_energy_max_energy";
 
 const GADGETS: [(&str, &str); 3] = [
     ("mininggadget_simple", "Simple"),
@@ -63,17 +66,30 @@ fn path_of(value: &str) -> &str {
     value.split([':', '[']).nth(1).unwrap_or(value)
 }
 
+fn battery_capacity(item: &str) -> Option<u64> {
+    match item {
+        "mininggadgets:upgrade_battery_1" => Some(2_000_000),
+        "mininggadgets:upgrade_battery_2" => Some(5_000_000),
+        "mininggadgets:upgrade_battery_3" => Some(10_000_000),
+        _ => None,
+    }
+}
+
 impl Mod for MiningGadgets {
     fn init() -> Result<(Self, Registration), String> {
         let energy = EnergyView {
             stored: 0,
-            capacity: 1_000_000,
-            max_receive: 1_000_000,
-            max_extract: 1_000_000,
+            capacity: BASE_BATTERY_CAPACITY,
+            max_receive: 10_000_000,
+            max_extract: 10_000_000,
         };
         for (gadget, _) in GADGETS {
             let id = format!("mininggadgets:{gadget}");
-            let _ = item_data::register_energy_item(&id, energy);
+            let _ = item_data::register_energy_item_capacity_component(
+                &id,
+                energy,
+                BATTERY_CAPACITY_COMPONENT,
+            );
         }
         Ok((MiningGadgets, Registration::new().command("mininggadgets")))
     }
@@ -83,7 +99,7 @@ impl Mod for MiningGadgets {
             .iter()
             .map(|b| BlockEntityType {
                 block: (*b).into(),
-                slots: 4,
+                slots: 9,
                 ticks: true,
             })
             .collect()
@@ -160,6 +176,50 @@ impl Mod for MiningGadgets {
         EventOutcome::Consume
     }
 
+    fn tick_block_entities(&mut self, handles: &[u32]) {
+        for &handle in handles {
+            let Some(gadget) = machine::get_slot(handle, 0) else {
+                continue;
+            };
+            if !GADGETS.iter().any(|(id, _)| path_of(&gadget.id) == *id)
+                || gadget.count != 1
+            {
+                continue;
+            }
+            let Some(current) = item_data::get_slot_energy(handle, 0) else {
+                // Invalid capacity or stored-energy data cannot be upgraded or
+                // mutated by this tick.
+                continue;
+            };
+            if current.capacity != BASE_BATTERY_CAPACITY {
+                // The first installed battery tier stays authoritative. Any
+                // later upgrades remain in the table's inventory slots.
+                continue;
+            }
+            for slot in 1..9 {
+                let Some(upgrade) = machine::get_slot(handle, slot) else {
+                    continue;
+                };
+                if upgrade.count != 1 {
+                    continue;
+                }
+                let Some(capacity) = battery_capacity(&upgrade.id) else {
+                    continue;
+                };
+                if !item_data::set_slot_energy_capacity(handle, 0, capacity) {
+                    break;
+                }
+                // The original installation exposes one FE on the upgraded
+                // item. Keep that observed initial state; all existing energy
+                // remains untouched by the capacity write.
+                if item_data::receive_slot_energy(handle, 0, 1, false) == 1 {
+                    let _ = machine::set_slot(handle, slot, None);
+                }
+                break;
+            }
+        }
+    }
+
     fn command(&mut self, name: &str, _args: &str) -> Result<Option<String>, String> {
         if name != "mininggadgets" {
             return Err(format!("Unknown command /{name}"));
@@ -172,3 +232,16 @@ impl Mod for MiningGadgets {
 }
 
 horizon_mod_sdk::export_mod!(MiningGadgets);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn battery_upgrades_declare_observed_capacities() {
+        assert_eq!(battery_capacity("mininggadgets:upgrade_battery_1"), Some(2_000_000));
+        assert_eq!(battery_capacity("mininggadgets:upgrade_battery_2"), Some(5_000_000));
+        assert_eq!(battery_capacity("mininggadgets:upgrade_battery_3"), Some(10_000_000));
+        assert_eq!(battery_capacity("mininggadgets:upgrade_battery_creative"), None);
+    }
+}

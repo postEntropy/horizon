@@ -1,0 +1,1023 @@
+{
+  "status": "passed",
+  "original_scenario_count": 24,
+  "scope": "first battery tier, capacities, initial 1 FE and later-upgrade retention",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "scenario_count": 24,
+      "cases": [
+        {
+          "name": "mininggadget_simple_single_1",
+          "pos": [
+            0,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget_simple",
+          "tiers": [
+            1
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_simple_single_2",
+          "pos": [
+            3,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget_simple",
+          "tiers": [
+            2
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_simple_single_3",
+          "pos": [
+            6,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget_simple",
+          "tiers": [
+            3
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_single_1",
+          "pos": [
+            9,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_single_2",
+          "pos": [
+            12,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_single_3",
+          "pos": [
+            15,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_fancy_single_1",
+          "pos": [
+            0,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget_fancy",
+          "tiers": [
+            1
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_fancy_single_2",
+          "pos": [
+            3,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget_fancy",
+          "tiers": [
+            2
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_fancy_single_3",
+          "pos": [
+            6,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget_fancy",
+          "tiers": [
+            3
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "pair_1_2",
+          "pos": [
+            9,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1,
+            2
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ]
+        },
+        {
+          "name": "pair_1_3",
+          "pos": [
+            12,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1,
+            3
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ]
+        },
+        {
+          "name": "pair_2_1",
+          "pos": [
+            15,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2,
+            1
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ]
+        },
+        {
+          "name": "pair_2_3",
+          "pos": [
+            0,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2,
+            3
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ]
+        },
+        {
+          "name": "pair_3_1",
+          "pos": [
+            3,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3,
+            1
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ]
+        },
+        {
+          "name": "pair_3_2",
+          "pos": [
+            6,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3,
+            2
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ]
+        },
+        {
+          "name": "triple_1_2_3",
+          "pos": [
+            9,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1,
+            2,
+            3
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_2",
+            "mininggadgets:upgrade_battery_3"
+          ],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_2",
+            "mininggadgets:upgrade_battery_3"
+          ]
+        },
+        {
+          "name": "triple_1_3_2",
+          "pos": [
+            12,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1,
+            3,
+            2
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_3",
+            "mininggadgets:upgrade_battery_2"
+          ],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_3",
+            "mininggadgets:upgrade_battery_2"
+          ]
+        },
+        {
+          "name": "triple_2_1_3",
+          "pos": [
+            15,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2,
+            1,
+            3
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_1",
+            "mininggadgets:upgrade_battery_3"
+          ],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_1",
+            "mininggadgets:upgrade_battery_3"
+          ]
+        },
+        {
+          "name": "triple_2_3_1",
+          "pos": [
+            0,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2,
+            3,
+            1
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_3",
+            "mininggadgets:upgrade_battery_1"
+          ],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_3",
+            "mininggadgets:upgrade_battery_1"
+          ]
+        },
+        {
+          "name": "triple_3_1_2",
+          "pos": [
+            3,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3,
+            1,
+            2
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_1",
+            "mininggadgets:upgrade_battery_2"
+          ],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_1",
+            "mininggadgets:upgrade_battery_2"
+          ]
+        },
+        {
+          "name": "triple_3_2_1",
+          "pos": [
+            6,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3,
+            2,
+            1
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_2",
+            "mininggadgets:upgrade_battery_1"
+          ],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_2",
+            "mininggadgets:upgrade_battery_1"
+          ]
+        },
+        {
+          "name": "duplicate_1",
+          "pos": [
+            9,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1,
+            1
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ]
+        },
+        {
+          "name": "duplicate_2",
+          "pos": [
+            12,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2,
+            2
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ]
+        },
+        {
+          "name": "duplicate_3",
+          "pos": [
+            15,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3,
+            3
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "scenario_count": 24,
+      "cases": [
+        {
+          "name": "mininggadget_simple_single_1",
+          "pos": [
+            0,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget_simple",
+          "tiers": [
+            1
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_simple_single_2",
+          "pos": [
+            3,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget_simple",
+          "tiers": [
+            2
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_simple_single_3",
+          "pos": [
+            6,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget_simple",
+          "tiers": [
+            3
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_single_1",
+          "pos": [
+            9,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_single_2",
+          "pos": [
+            12,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_single_3",
+          "pos": [
+            15,
+            100,
+            0
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_fancy_single_1",
+          "pos": [
+            0,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget_fancy",
+          "tiers": [
+            1
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_fancy_single_2",
+          "pos": [
+            3,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget_fancy",
+          "tiers": [
+            2
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "mininggadget_fancy_single_3",
+          "pos": [
+            6,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget_fancy",
+          "tiers": [
+            3
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": []
+        },
+        {
+          "name": "pair_1_2",
+          "pos": [
+            9,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1,
+            2
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ]
+        },
+        {
+          "name": "pair_1_3",
+          "pos": [
+            12,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1,
+            3
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ]
+        },
+        {
+          "name": "pair_2_1",
+          "pos": [
+            15,
+            100,
+            3
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2,
+            1
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ]
+        },
+        {
+          "name": "pair_2_3",
+          "pos": [
+            0,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2,
+            3
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ]
+        },
+        {
+          "name": "pair_3_1",
+          "pos": [
+            3,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3,
+            1
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ]
+        },
+        {
+          "name": "pair_3_2",
+          "pos": [
+            6,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3,
+            2
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ]
+        },
+        {
+          "name": "triple_1_2_3",
+          "pos": [
+            9,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1,
+            2,
+            3
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_2",
+            "mininggadgets:upgrade_battery_3"
+          ],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_2",
+            "mininggadgets:upgrade_battery_3"
+          ]
+        },
+        {
+          "name": "triple_1_3_2",
+          "pos": [
+            12,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1,
+            3,
+            2
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_3",
+            "mininggadgets:upgrade_battery_2"
+          ],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_3",
+            "mininggadgets:upgrade_battery_2"
+          ]
+        },
+        {
+          "name": "triple_2_1_3",
+          "pos": [
+            15,
+            100,
+            6
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2,
+            1,
+            3
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_1",
+            "mininggadgets:upgrade_battery_3"
+          ],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_1",
+            "mininggadgets:upgrade_battery_3"
+          ]
+        },
+        {
+          "name": "triple_2_3_1",
+          "pos": [
+            0,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2,
+            3,
+            1
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_3",
+            "mininggadgets:upgrade_battery_1"
+          ],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_3",
+            "mininggadgets:upgrade_battery_1"
+          ]
+        },
+        {
+          "name": "triple_3_1_2",
+          "pos": [
+            3,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3,
+            1,
+            2
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_1",
+            "mininggadgets:upgrade_battery_2"
+          ],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_1",
+            "mininggadgets:upgrade_battery_2"
+          ]
+        },
+        {
+          "name": "triple_3_2_1",
+          "pos": [
+            6,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3,
+            2,
+            1
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_2",
+            "mininggadgets:upgrade_battery_1"
+          ],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_2",
+            "mininggadgets:upgrade_battery_1"
+          ]
+        },
+        {
+          "name": "duplicate_1",
+          "pos": [
+            9,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            1,
+            1
+          ],
+          "expected_capacity": 2000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ],
+          "observed_capacity": 2000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_1"
+          ]
+        },
+        {
+          "name": "duplicate_2",
+          "pos": [
+            12,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            2,
+            2
+          ],
+          "expected_capacity": 5000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ],
+          "observed_capacity": 5000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_2"
+          ]
+        },
+        {
+          "name": "duplicate_3",
+          "pos": [
+            15,
+            100,
+            9
+          ],
+          "gadget": "mininggadgets:mininggadget",
+          "tiers": [
+            3,
+            3
+          ],
+          "expected_capacity": 10000000,
+          "expected_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ],
+          "observed_capacity": 10000000,
+          "observed_stored": 1,
+          "observed_remaining": [
+            "mininggadgets:upgrade_battery_3"
+          ]
+        }
+      ]
+    }
+  ]
+}

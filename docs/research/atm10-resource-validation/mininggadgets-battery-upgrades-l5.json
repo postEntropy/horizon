@@ -1,0 +1,160 @@
+{
+  "date": "2026-11-03",
+  "status": "original-observed; Horizon implementation validated for 24 combinations in both modes",
+  "scope": "Battery upgrade application and FE capacity of all Mining Gadgets item tiers",
+  "original": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.259",
+    "mininggadgets": "1.18.8",
+    "jar_sha256": "01e1b6064959074388485e03828cffaec3f9a702436efe66c0faa296dde54f91",
+    "method": "Public ModificationTable menu. Insert gadget, shift-click battery upgrade from player inventory using AbstractContainerMenu ClickType.QUICK_MOVE, then read ItemStack components and Capabilities.EnergyStorage.ITEM; no mod source/classes read.",
+    "scenario_count": 24,
+    "scenario_sha256": "988b431c1d01bf233c710d8b0f59436f284f1829110b552e53f6cd038d1d400a",
+    "raw_path": ".local/atm10-resource-validation/mininggadgets-battery-combinations.json.out",
+    "raw_sha256": "08e711c88f3635cdca50adfc62c9a257a3da7cee205959d777213cba5cbce35a",
+    "single_upgrade_by_gadget": [
+      {
+        "gadget": "mininggadgets:mininggadget_simple",
+        "capacities_fe": {
+          "1": 2000000,
+          "2": 5000000,
+          "3": 10000000
+        },
+        "stored_after_install_fe": {
+          "1": 1,
+          "2": 1,
+          "3": 1
+        }
+      },
+      {
+        "gadget": "mininggadgets:mininggadget",
+        "capacities_fe": {
+          "1": 2000000,
+          "2": 5000000,
+          "3": 10000000
+        },
+        "stored_after_install_fe": {
+          "1": 1,
+          "2": 1,
+          "3": 1
+        }
+      },
+      {
+        "gadget": "mininggadgets:mininggadget_fancy",
+        "capacities_fe": {
+          "1": 2000000,
+          "2": 5000000,
+          "3": 10000000
+        },
+        "stored_after_install_fe": {
+          "1": 1,
+          "2": 1,
+          "3": 1
+        }
+      }
+    ],
+    "order_pairs": {
+      "1,2": {
+        "capacity_fe": 2000000,
+        "remaining_upgrade_slots": [
+          2
+        ]
+      },
+      "1,3": {
+        "capacity_fe": 2000000,
+        "remaining_upgrade_slots": [
+          2
+        ]
+      },
+      "2,1": {
+        "capacity_fe": 5000000,
+        "remaining_upgrade_slots": [
+          2
+        ]
+      },
+      "2,3": {
+        "capacity_fe": 5000000,
+        "remaining_upgrade_slots": [
+          2
+        ]
+      },
+      "3,1": {
+        "capacity_fe": 10000000,
+        "remaining_upgrade_slots": [
+          2
+        ]
+      },
+      "3,2": {
+        "capacity_fe": 10000000,
+        "remaining_upgrade_slots": [
+          2
+        ]
+      }
+    },
+    "all_three_orders": {
+      "1>2>3": {
+        "capacity_fe": 2000000,
+        "remaining_upgrades": [
+          "mininggadgets:upgrade_battery_2",
+          "mininggadgets:upgrade_battery_3"
+        ]
+      },
+      "1>3>2": {
+        "capacity_fe": 2000000,
+        "remaining_upgrades": [
+          "mininggadgets:upgrade_battery_3",
+          "mininggadgets:upgrade_battery_2"
+        ]
+      },
+      "2>1>3": {
+        "capacity_fe": 5000000,
+        "remaining_upgrades": [
+          "mininggadgets:upgrade_battery_1",
+          "mininggadgets:upgrade_battery_3"
+        ]
+      },
+      "2>3>1": {
+        "capacity_fe": 5000000,
+        "remaining_upgrades": [
+          "mininggadgets:upgrade_battery_3",
+          "mininggadgets:upgrade_battery_1"
+        ]
+      },
+      "3>1>2": {
+        "capacity_fe": 10000000,
+        "remaining_upgrades": [
+          "mininggadgets:upgrade_battery_1",
+          "mininggadgets:upgrade_battery_2"
+        ]
+      },
+      "3>2>1": {
+        "capacity_fe": 10000000,
+        "remaining_upgrades": [
+          "mininggadgets:upgrade_battery_2",
+          "mininggadgets:upgrade_battery_1"
+        ]
+      }
+    },
+    "observed_components": [
+      "mininggadgets:battery_tier",
+      "mininggadgets:forge_energy",
+      "mininggadgets:forge_energy_max_energy",
+      "mininggadgets:upgrade_data"
+    ],
+    "combination_rule": "First battery upgrade successfully shift-clicked onto a gadget determines the tier/capacity. Later battery upgrades remain in player inventory; levels do not add. Tested both pair orders, all six 1/2/3 permutations, and duplicate levels.",
+    "initial_stored_fe_after_install": 1
+  },
+  "horizon": {
+    "validated": "SDK/WIT owner-only namespaced per-stack capacity registration; host fallback 1,000,000 FE; invalid component values refused without mutation; first battery wins; 2M/5M/10M FE and 1 FE initial; 24 scenarios in both in-frame and server-thread modes; battery 3 dynamic charging, blocked output and save/load in both modes.",
+    "evidence": "mininggadgets-battery-game.json and charginggadgets-mininggadget-game.json",
+    "remaining": "Other Mining Gadgets upgrades and mining behavior remain incomplete; this does not mark the mod complete."
+  },
+  "artifacts": {
+    "scenario": ".local/atm10-resource-validation/mininggadgets-battery-combinations.json",
+    "raw": ".local/atm10-resource-validation/mininggadgets-battery-combinations.json.out",
+    "menu_probe": ".local/atm10-resource-validation/mininggadgets-modificationtable-probe.json.out",
+    "menu_click_probe": ".local/atm10-resource-validation/mininggadgets-battery-buttons-probe.json.out",
+    "pair_and_order_probe": ".local/atm10-resource-validation/mininggadgets-battery-combinations.json.out",
+    "reinsert_probe": ".local/atm10-resource-validation/mininggadgets-battery-reinsert.json.out"
+  }
+}
