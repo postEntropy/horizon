@@ -4,10 +4,20 @@ import argparse
 import json
 import os
 from pathlib import Path
+import time
 from mod_port_game_fixture import Fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 ROUTER = 'modularrouters:modular_router'
+
+
+def process_memory_mib(pid):
+    values = {}
+    for line in Path(f'/proc/{pid}/status').read_text().splitlines():
+        if line.startswith(('VmRSS:', 'VmHWM:')):
+            name, value, *_ = line.split()
+            values[name[:-1].lower()] = round(int(value) / 1024, 2)
+    return values
 
 
 def router(game, pos, modules):
@@ -18,8 +28,13 @@ def router(game, pos, modules):
 
 
 def run(args, mode):
-    with Fixture(args, mode, [args.hmod, args.reader]) as game:
+    started = time.perf_counter()
+    mods = [args.hmod, args.reader]
+    if args.peer:
+        mods.append(args.peer)
+    with Fixture(args, mode, mods) as game:
         game.start()
+        memory_started = process_memory_mib(game.process.pid)
         game.command('tp @s 0 102 4')
         game.call('fill', -8, 98, -4, 8, 98, 4, 'minecraft:stone')
         source, left, right = (0, 100, 0), (-1, 100, 0), (1, 100, 0)
@@ -101,6 +116,41 @@ def run(args, mode):
         game.step(40)
         assert game.total([protected], 'minecraft:diamond') == 1
         assert game.total([puller], 'minecraft:diamond') == 0
+        # A machine guest issues a push request into a block entity owned by a
+        # separately loaded guest. The host must conserve the stack and retain
+        # its component data across the ownership boundary.
+        transfer_elapsed = None
+        transfer_memory_before = None
+        transfer_memory_after = None
+        if args.peer:
+            cross_source, cross_peer = (10, 100, 0), (11, 100, 0)
+            game.call('setblock', *cross_source, 'test_machine:smelter')
+            game.call('setblock', *cross_peer, 'test_peer:cell')
+            cross_stack = 'minecraft:diamond[minecraft:custom_name="Cross-owner transfer"]'
+            game.replace(cross_source, 0, cross_stack)
+            game.command('data modify block 10 100 0 Items[0].components."horizon:energy" set value 1234L')
+            game.command('data modify block 10 100 0 Items[0].components."minecraft:custom_data" set value {atm10:{owner:"test_machine",sequence:17}}')
+            game.command('data modify block 10 100 0 Items[0].components."minecraft:enchantments" set value {levels:{"minecraft:unbreaking":2}}')
+            game.step(1)
+            cross_components = game.components(cross_source)
+            assert '1234' in cross_components and 'unbreaking' in cross_components and 'test_machine' in cross_components
+            transfer_started = time.perf_counter()
+            transfer_memory_before = process_memory_mib(game.process.pid)
+            game.command('machine_api move_push')
+            game.step(1)
+            assert game.total([cross_source, cross_peer], 'minecraft:diamond') == 1
+            assert game.total([cross_source], 'minecraft:diamond') == 0
+            assert game.total([cross_peer], 'minecraft:diamond') == 1
+            assert game.components(cross_peer) == cross_components
+            transfer_elapsed = round(time.perf_counter() - transfer_started, 3)
+            transfer_memory_after = process_memory_mib(game.process.pid)
+            game.call('save')
+            game.stop()
+            game.start()
+            assert game.total([cross_source], 'minecraft:diamond') == 0
+            assert game.total([cross_peer], 'minecraft:diamond') == 1
+            assert game.total([cross_source, cross_peer], 'minecraft:diamond') == 1
+            assert game.components(cross_peer) == cross_components
         # Two endpoints of one canonical inventory must not route to themselves.
         a, b = (0, 100, 3), (1, 100, 3)
         for pos in [a, b]:
@@ -126,7 +176,16 @@ def run(args, mode):
             'name, energy and enchantments preserved', 'full output retains buffer', 'save/reopen with blocked output',
             'direction components persist', 'unsupported modules do not create/delete buffer items',
             'foreign capability snapshot refreshed immediately', 'foreign sided extraction honored',
+            *(['cross-mod guest-to-guest transfer conserves stack, custom name, energy, enchantment and custom data',
+               'cross-mod transferred stack survives save/reopen exactly once with all components'] if args.peer else []),
             'same canonical inventory cannot route into itself', 'destination removed before application leaves source intact'],
+            'runtime_measurement': {
+                'whole_fixture_wall_s': round(time.perf_counter() - started, 3),
+                'game_memory_started_mib': memory_started,
+                'cross_mod_transfer_wall_s_including_one_controlled_tick_and_queries': transfer_elapsed,
+                'cross_mod_transfer_memory_before_mib': transfer_memory_before,
+                'cross_mod_transfer_memory_after_mib': transfer_memory_after,
+                'limitation': 'single run per mode; wall time includes command/control overhead and one stepped game tick; cross-transfer RSS snapshots are from the same process, but game_memory_started_mib belongs to the pre-save/reopen process; snapshots are not an isolated operation cost'},
             'remaining': ['remote/world/entity modules', 'filters/augments/config UI', 'redstone and configurable energy costs']}
 
 
@@ -134,6 +193,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--hmod', type=Path, required=True)
     parser.add_argument('--reader', type=Path, required=True, help='test_machine fixture hmod with smelter/shared_router content templates')
+    parser.add_argument('--peer', type=Path, help='second mod with a one-slot test_peer:cell target')
     parser.add_argument('--bin-dir', type=Path, default=ROOT / 'target/fast')
     parser.add_argument('--resources', type=Path, default=ROOT / '.local/horizon-client/26.3')
     parser.add_argument('--out', type=Path, required=True)
@@ -141,6 +201,8 @@ def main():
     args = parser.parse_args()
     for field in ['hmod', 'reader', 'bin_dir', 'resources', 'out']:
         setattr(args, field, getattr(args, field).resolve())
+    if args.peer:
+        args.peer = args.peer.resolve()
     os.sched_setaffinity(0, sorted(os.sched_getaffinity(0))[:6])
     os.nice(max(0, 10 - os.getpriority(os.PRIO_PROCESS, 0)))
     modes = ['in-frame', 'server-thread'] if args.mode == 'both' else [args.mode]

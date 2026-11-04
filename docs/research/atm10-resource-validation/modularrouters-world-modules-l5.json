@@ -1,0 +1,52 @@
+{
+  "status": "partial",
+  "date": "2026-11-03",
+  "original": {
+    "mod": "modularrouters 13.2.7",
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.259",
+    "facts": {"blocks": 2, "items": 52, "recipes": 57}
+  },
+  "observed": {
+    "vacuum_module": {
+      "result": "passed",
+      "setup": "one dropped minecraft:diamond; module in the first module slot; default centered pickup range; no energy upgrade",
+      "result_tick": 20,
+      "buffer_after": {"item": "minecraft:diamond", "count": 1},
+      "dropped_entity_after": 0,
+      "energy_capacity_fe": 0,
+      "energy_stored_fe": 0
+    }
+  },
+  "inconclusive": {
+    "breaker_module": "The default module did not change adjacent stone or iron ore. The module has no direction configured by default; the fixture did not reproduce the original in-game module configuration screen, so this is not treated as a behavioral failure or parity evidence.",
+    "dropper_module": "A diamond remained in the buffer after 60 ticks. The fixture's custom-data direction did not establish that it matched the original module GUI configuration, so this is not treated as a behavioral failure or parity evidence."
+  },
+  "api_gaps": [
+    {
+      "operation": "breaker: break a target block and atomically put its actual drops into the router buffer",
+      "available_but_insufficient": ["server.get-block", "server.set-block", "server.spawn-drop"],
+      "missing": "A server-authoritative transaction that checks protection/tool/loot, blocks removal if the output cannot fit, then commits block removal and complete drops together."
+    },
+    {
+      "operation": "vacuum: atomically collect an existing item entity into the router buffer",
+      "available_but_insufficient": ["entities.nearby returns entity-state without its item stack", "entities.despawn only removes mod-owned entities"],
+      "missing": "A transaction that reads the authoritative ItemStack, inserts it with components/stack limits, and only then consumes or reduces the world entity."
+    },
+    {
+      "operation": "dropper: spawn the buffer ItemStack as a world item entity",
+      "available_but_insufficient": ["server.spawn-drop is queued separately from machine slot writes"],
+      "missing": "An exactly-once operation coupling ItemStack removal to successful entity creation and preserving components."
+    },
+    {
+      "operation": "remote Puller/Sender modules",
+      "available_but_insufficient": ["machine.request-item-move only addresses an adjacent face inventory"],
+      "missing": "A server-resolved target inventory reference and atomic move transaction for configured, loaded remote targets."
+    }
+  ],
+  "raw_local_traces": [
+    ".local/atm10-resource-validation/modularrouters-original-world-modules-correct-menu.trace.json",
+    ".local/atm10-resource-validation/modularrouters-original-configured-modules.trace.json"
+  ],
+  "scope_limit": "No Breaker, Dropper, or remote module is claimed complete. The L5 package remains open pending an architecture decision for authoritative world/entity/remote item transactions and a valid black-box configuration setup for directional modules."
+}

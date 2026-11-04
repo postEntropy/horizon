@@ -1,0 +1,68 @@
+{
+  "scope": "Vacuum only; authoritative vanilla item-entity to mod-buffer transaction",
+  "results": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "checks": [
+        "observed diamond at fixture offset (0.5, 0.3, -2.5) collected with custom_name preserved",
+        "AABB range: axis center offsets through 6.5 collect on all four signs; 6.625 and 6.75 do not; diagonal offsets of 6.5 per axis collect although Euclidean distance is about 9.19",
+        "first world-query candidate wins over a nearer later candidate; reversing spawn order reverses the winner",
+        "full buffer leaves drop untouched",
+        "successful retry conserves count",
+        "save/reopen retains custom components and collected count without a duplicate",
+        "drop survives forced chunk unload/reload and is collected once"
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "checks": [
+        "observed diamond at fixture offset (0.5, 0.3, -2.5) collected with custom_name preserved",
+        "AABB range: axis center offsets through 6.5 collect on all four signs; 6.625 and 6.75 do not; diagonal offsets of 6.5 per axis collect although Euclidean distance is about 9.19",
+        "first world-query candidate wins over a nearer later candidate; reversing spawn order reverses the winner",
+        "full buffer leaves drop untouched",
+        "successful retry conserves count",
+        "save/reopen retains custom components and collected count without a duplicate",
+        "drop survives forced chunk unload/reload and is collected once"
+      ]
+    }
+  ],
+  "date": "2026-11-03",
+  "original_trace": [
+    ".local/atm10-resource-validation/modularrouters-vacuum-stationary-original.json",
+    ".local/atm10-resource-validation/modularrouters-vacuum-inclusive-edge-original.json",
+    "modularrouters-world-modules-l5.json (initial Vacuum tick 20 case)"
+  ],
+  "implementation": {
+    "operation": "machine.request-item-pickup / take-item-pickup-result",
+    "transaction": "server validates the live mod block handle and loaded chunk, inserts the real ItemStack into the requested buffer slot, then reduces/removes the vanilla dropped entity; zero confirms failure",
+    "components": "moved by cloning the complete ItemStack into container insertion; remainder stays on the original entity",
+    "range": "Original collection matches the router block AABB inflated by 6: item centers through 6.5 blocks on each axis collect; centers at 6.625 or 6.75 do not. Diagonal center offset 6.5 on each of two axes collects, distinguishing the box from a 6.5-radius sphere. Touching the inflated face is excluded by entity-box overlap.",
+    "priority": "When two eligible drops are present, the first entity in the original world query wins even when the later entity is nearer; reversing spawn/query order reverses the winner. Horizon's server vector traversal matches the measured cases.",
+    "unload": "With the buffer full, a drop leaves the active entity set while the source chunk is unloaded, reappears after reloading, and is collected once after space is freed. Pending requests remain transient and the server revalidates the live handle before mutation.",
+    "remaining_limit": "Eligibility filters beyond the tested vanilla diamond and emerald Item entities, additional box faces/corners, and larger candidate sets remain unverified. Vacuum is not declared complete."
+  },
+  "validation": {
+    "cpu_limit": 6,
+    "command": "python3 tools/test_router_vacuum.py --hmod <staged modularrouters-vacuum.hmod> --out <report> --mode both",
+    "modes": [
+      "in-frame",
+      "server-thread"
+    ],
+    "scenarios": [
+      "observed diamond collected at original oracle fixture offset (0.5, 0.3, -2.5)",
+      "custom_name component preserved",
+      "incompatible full buffer leaves entity and buffer intact",
+      "retry after space frees conserves count",
+      "save/reopen preserves buffer components and absence of duplicate entity",
+      "forced chunk unload/reload retains the full-buffer drop, then a retry collects exactly once"
+    ]
+  },
+  "pending": [
+    "Vacuum eligibility filters beyond measured diamond/emerald cases and expanded candidate ordering",
+    "Breaker configured-direction trace and transaction",
+    "Dropper configured-direction trace and transaction",
+    "remote target/range/blocked traces and transaction"
+  ]
+}

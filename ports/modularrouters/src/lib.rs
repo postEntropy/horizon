@@ -1,6 +1,5 @@
-//! Modular Routers: real adjacent Mk1 puller/sender transfers through the host.
-//! Remote/world/entity modules, filters, augments and configuration UI remain
-//! incomplete; unsupported modules never fabricate or delete buffer contents.
+//! Modular Routers: Vacuum pickup and adjacent Mk1 puller/sender through
+//! authoritative host transactions; other world/remote modules remain pending.
 mod items;
 use std::collections::HashMap;
 
@@ -118,6 +117,7 @@ pub fn router_screen() -> ScreenSpec {
 pub struct ModularRouters {
     pub routers: HashMap<u32, RouterState>,
     pending: HashMap<u32, Vec<u64>>,
+    pending_pickups: HashMap<u32, Vec<u64>>,
 }
 
 impl Mod for ModularRouters {
@@ -126,6 +126,7 @@ impl Mod for ModularRouters {
             ModularRouters {
                 routers: HashMap::new(),
                 pending: HashMap::new(),
+                pending_pickups: HashMap::new(),
             },
             Registration::new().command("modularrouters"),
         ))
@@ -175,6 +176,9 @@ impl Mod for ModularRouters {
             if let Some(requests) = self.pending.get_mut(&handle) {
                 requests.retain(|request| machine::take_item_move_result(*request).is_none());
             }
+            if let Some(requests) = self.pending_pickups.get_mut(&handle) {
+                requests.retain(|request| machine::take_item_pickup_result(*request).is_none());
+            }
             let Some(state) = self.routers.get_mut(&handle) else {
                 continue;
             };
@@ -194,9 +198,17 @@ impl Mod for ModularRouters {
                     let kind = match module.id.as_str() {
                         "modularrouters:puller_module_1" => ItemMoveKind::Pull,
                         "modularrouters:sender_module_1" => ItemMoveKind::Push,
-                        // World/entity actions and remote modules still need
-                        // their own atomic host operations. Never fake them by
-                        // creating cobblestone or deleting the buffer.
+                        "modularrouters:vacuum_module" => {
+                            if let Some(request) = machine::request_item_pickup(handle, BUFFER_SLOT)
+                            {
+                                self.pending_pickups
+                                    .entry(handle)
+                                    .or_default()
+                                    .push(request);
+                            }
+                            continue;
+                        }
+                        // Unsupported modules never fabricate or delete items.
                         _ => continue,
                     };
                     let direction = item_data::get_slot_string_component(
@@ -238,6 +250,7 @@ impl Mod for ModularRouters {
     fn remove_block_entity(&mut self, handle: u32) {
         self.routers.remove(&handle);
         self.pending.remove(&handle);
+        self.pending_pickups.remove(&handle);
     }
 
     fn logic_hooks(&mut self) -> LogicHooks {
