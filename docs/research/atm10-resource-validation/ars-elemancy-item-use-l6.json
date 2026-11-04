@@ -1,0 +1,56 @@
+{
+  "status": "passed",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "scope": "three original-observed air-use PASS cases; held stack preserved",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "cases": [
+        {
+          "item": "ars_elemancy:tempest_focus",
+          "count_before": 1,
+          "count_after": 1
+        },
+        {
+          "item": "ars_elemancy:elemancer_focus",
+          "count_before": 1,
+          "count_after": 1
+        },
+        {
+          "item": "ars_elemancy:tempest_bangle",
+          "count_before": 1,
+          "count_after": 1
+        }
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "cases": [
+        {
+          "item": "ars_elemancy:tempest_focus",
+          "count_before": 1,
+          "count_after": 1
+        },
+        {
+          "item": "ars_elemancy:elemancer_focus",
+          "count_before": 1,
+          "count_after": 1
+        },
+        {
+          "item": "ars_elemancy:tempest_bangle",
+          "count_before": 1,
+          "count_after": 1
+        }
+      ]
+    }
+  ]
+}

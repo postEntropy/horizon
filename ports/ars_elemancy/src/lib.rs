@@ -26,8 +26,8 @@ mod items;
 mod sets;
 
 use horizon_mod_sdk::{
-    EventOutcome, ItemAction, ItemEvent, LogicHooks, Mod, Registration, VanillaHookEvent,
-    VanillaHookKind, chat, game, hud,
+    EventOutcome, ItemEvent, LogicHooks, Mod, Registration, VanillaHookEvent,
+    VanillaHookKind, game, hud,
     hud::{Corner, Line},
     inventory, server,
     server::BlockPos,
@@ -136,13 +136,6 @@ impl ArsElemancy {
         }
     }
 
-    /// The school a used item attunes to.
-    fn attunement_of(item: &str) -> Option<School> {
-        if !items::FOCI.contains(&item) {
-            return None;
-        }
-        School::of_item(item)
-    }
 }
 
 fn element_list(school: School) -> String {
@@ -176,23 +169,11 @@ impl Mod for ArsElemancy {
         hooks
     }
 
-    fn on_item(&mut self, event: ItemEvent) -> EventOutcome {
-        if !matches!(event.action, ItemAction::UseInAir | ItemAction::UseOnBlock) {
-            return EventOutcome::Pass;
-        }
-        let Some(school) = Self::attunement_of(&event.item) else {
-            return EventOutcome::Pass;
-        };
-        self.attuned = Some(school);
-        self.save();
-        let loadout = self.loadout();
-        self.refresh_hud(&loadout);
-        chat::show(&format!(
-            "Attuned to {} ({}). Hold it to amplify those schools.",
-            school.set_name(),
-            element_list(school)
-        ));
-        EventOutcome::Consume
+    fn on_item(&mut self, _event: ItemEvent) -> EventOutcome {
+        // Original public item-use traces returned PASS for the observed focus
+        // and bangle air-use cases. Casting/equipment attunement needs a real
+        // player, mana, and Curios fixture; do not invent it here.
+        EventOutcome::Pass
     }
 
     fn tick(&mut self, _tick: u64) {

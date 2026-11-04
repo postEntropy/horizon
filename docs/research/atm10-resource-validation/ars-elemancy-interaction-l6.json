@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-03",
+  "mod": "ars_elemancy 1.21.1-1.18.3",
+  "status": "partial",
+  "original": {
+    "loaded_jars": ["ars_elemancy", "ars_nouveau", "ars_elemental", "curios", "geckolib"],
+    "facts": "ars_elemancy-original-facts-l6.json",
+    "counts": {"items": 105, "recipes": 250},
+    "use_trace": "ars_elemancy-original-use-l6.json",
+    "observed": [
+      {"item": "ars_elemancy:tempest_focus", "action": "use_in_air", "result": "PASS", "count": 1},
+      {"item": "ars_elemancy:elemancer_focus", "action": "use_in_air", "result": "PASS", "count": 1},
+      {"item": "ars_elemancy:tempest_bangle", "action": "use_in_air", "result": "PASS", "count": 1}
+    ]
+  },
+  "horizon": {
+    "change": "Removed unsupported automatic attunement on plain air-use.",
+    "validation": "ars-elemancy-item-use-l6.json",
+    "modes": ["in-frame", "server-thread"],
+    "status": "passed"
+  },
+  "pending": [
+    "Observe player spell casting with mana, focus, and glyph state.",
+    "Observe damage with each worn set and family-size threshold.",
+    "Observe bangle behavior in the actual Curios slot as well as both hands.",
+    "Observe attunement persistence and player-visible feedback.",
+    "Horizon currently lacks Ars Nouveau runtime/mana and Curios accessory APIs."
+  ],
+  "checks": {"native_tests": "19 passed", "clippy": "passed (-D warnings)", "rustfmt": "passed", "wasm_build": "passed"},
+  "do_not_mark_complete": true
+}
