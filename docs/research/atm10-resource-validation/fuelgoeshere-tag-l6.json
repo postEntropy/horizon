@@ -1,0 +1,25 @@
+{
+  "mod": "fuelgoeshere",
+  "checkpoint": "L6",
+  "status": "partial; forced_fuels membership behavior passed in both Horizon modes",
+  "original_observation": {
+    "registered_commands": "fuel absent",
+    "forced_fuels": [
+      "minecraft:charcoal",
+      "minecraft:coal"
+    ]
+  },
+  "horizon_observation": {
+    "root_file_present": true,
+    "registry_failure_cause": "Items loaded the mod tag, but command parsing preferred by_registry[\"minecraft:item\"], whose tags only came from the vanilla command-registry export; the fallback item_tags list was already populated and did not repair the authoritative registry entry.",
+    "fix": "Before parsing commands, merge loaded item-tag IDs into both Registries.item_tags and by_registry[\"minecraft:item\"].tags, then sort/deduplicate the authoritative tag list.",
+    "validation": "passed in-frame and server-thread: coal and charcoal match; stick and dirt do not.",
+    "runtime_port": "inert module; no /fuel command, matching original export"
+  },
+  "interpretation": "The original forced_fuels membership is now reproduced in game in both single-player modes, with the actual port module and tag. The invented /fuel command and burn-time table were removed because the original export has no command and no burn-duration behavior was observed. This validates tag membership only; furnace behavior remains unobserved and the mod remains partial.",
+  "next_evidence_needed": "Original gameplay trace for furnace acceptance and burn duration, if those are in scope. Do not infer /fuel, tooltips, or automation.",
+  "evidence": [
+    "fuelgoeshere-tag-game-l6.json",
+    "fuelgoeshere-startup-crash-l6.json"
+  ]
+}

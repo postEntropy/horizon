@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-03",
+  "scope": "Incidental SIGABRT during one Fuel Goes Here fixture launch; isolated evidence only",
+  "status": "intermittent; one startup SIGABRT, not reproduced by subsequent starts of the same fixture configuration",
+  "scenario": "In-frame client startup with test terrain, one content-only Fuel Goes Here hmod containing data/fuelgoeshere/tags/item/forced_fuels.json, fresh temporary HORIZON_HOME/launcher/XDG homes, taskset CPU 0-5, nice 10, RAYON_NUM_THREADS=6.",
+  "event": {
+    "signal": "SIGABRT",
+    "message": "free(): invalid pointer",
+    "phase": "startup while content_root builds merged content, before resources and gameplay loaded",
+    "pid": 316712,
+    "core": "systemd-coredump PID 316712; /var/lib/systemd/coredump/core.horizon-client.1000.f6553ebd0f754786a40a42d62dc9f5ec.316712.1793728120000000.zst"
+  },
+  "all_threads": {
+    "main": "allocator detected invalid pointer while dropping nested Vec<String> values in horizon_client::mod_content::build -> resource_root -> content_root",
+    "other_threads": "one logging worker parked receiving log messages; no gameplay, machine, worker pool, or teardown had started"
+  },
+  "causality_limit": "These frames and the deallocation location show where the allocator detected corruption, not which operation introduced it. Four later starts of the same fixture configuration (on rebuilt binaries) completed startup; the gameplay assertions reached the tag lookup. This is not a consistent reproduction and does not localize the earlier teardown corruption.",
+  "gdb": "coredumpctl info and gdb thread apply all bt 30; two threads in the preserved core. Extracted inspection copy: /tmp/horizon-core-316712.",
+  "impact": "The test fixture used temporary homes. No repository data was deleted or reset."
+}

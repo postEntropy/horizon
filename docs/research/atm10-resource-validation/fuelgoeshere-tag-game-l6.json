@@ -1,0 +1,60 @@
+{
+  "status": "passed",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "scope": "forced_fuels membership only; not burn-duration parity",
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "cases": [
+        {
+          "item": "minecraft:coal",
+          "tag_member": true
+        },
+        {
+          "item": "minecraft:charcoal",
+          "tag_member": true
+        },
+        {
+          "item": "minecraft:stick",
+          "tag_member": false
+        },
+        {
+          "item": "minecraft:dirt",
+          "tag_member": false
+        }
+      ]
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "cases": [
+        {
+          "item": "minecraft:coal",
+          "tag_member": true
+        },
+        {
+          "item": "minecraft:charcoal",
+          "tag_member": true
+        },
+        {
+          "item": "minecraft:stick",
+          "tag_member": false
+        },
+        {
+          "item": "minecraft:dirt",
+          "tag_member": false
+        }
+      ]
+    }
+  ],
+  "no_fuel_command_validated": true,
+  "hmod_scope": "Actual Fuel Goes Here port module plus the observed carried forced_fuels tag; /fuel is not registered."
+}

@@ -1,0 +1,6 @@
+id = "fuelgoeshere"
+name = "Fuel Goes Here"
+version = "1.2.0"
+api = "0.3"
+side = "both"
+capabilities = ["registries"]
