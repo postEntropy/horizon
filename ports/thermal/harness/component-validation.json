@@ -1,0 +1,23 @@
+{
+  "component": "thermal",
+  "machine": "thermal:machine_crystallizer",
+  "api": "0.4",
+  "result": "pass",
+  "evidence": "harness/crystallizer-scenarios.json and harness/crystallizer-trace.json",
+  "scenario": "BuddingCrystals small_fluix_bud recipe; 400-tick probe, block-entity reload at tick 200.",
+  "input_items": {
+    "buddingcrystals:budding_fluix": 1,
+    "buddingcrystals:crystal_catalyst": 1
+  },
+  "input_fluid": {
+    "tconstruct:molten_amethyst": 800
+  },
+  "energy_consumed_rf": 50000,
+  "output": {
+    "buddingcrystals:small_fluix_bud": 12
+  },
+  "final_fluids": {
+    "tank_0": 0
+  },
+  "limitation": "Machine-component probe only; not yet validated with a live FE/fluid network in-game."
+}

@@ -1,0 +1,13 @@
+{
+  "complete": false,
+  "pending": [
+    "Only the Crystallizer machine is implemented; other Thermal block behavior and machine recipes remain pending",
+    "In-game end-to-end validation with energy and fluid networks"
+  ],
+  "verified": [
+    {
+      "feature": "Thermal Crystallizer machine behavior",
+      "evidence": "harness/component-validation.json; API 0.4 component loads pack recipes, consumes item/fluid/RF inputs, persists progress across reload, and produces the registered output."
+    }
+  ]
+}

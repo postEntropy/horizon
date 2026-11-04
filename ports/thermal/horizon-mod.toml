@@ -1,0 +1,36 @@
+id = "thermal"
+name = "Thermal Series"
+version = "9.2.2"
+description = "Crescent Hammer wrench, metallurgy, ores, alloys, gears and thermal elemental mechanics."
+authors = ["TeamCoFH"]
+api = "0.4"
+side = "both"
+capabilities = ["registries", "chat", "server", "world-read", "storage", "config", "block-entities", "capabilities", "item-transfer", "recipes", "ui"]
+contributes = ["cofh_core", "curios"]
+ported-from = "Thermal Series 9.2.2; CoFH - Don't Be A Jerk (Learn, Don't Steal)"
+
+[config.wrench_dismantle_sneak]
+type = "bool"
+default = true
+description = "Require sneaking to instantly dismantle Thermal machines with Crescent Hammer"
+
+[config.machine_rf_capacity]
+type = "int"
+default = 50000
+min = 1000
+max = 10000000
+description = "RF capacity of Thermal machines represented by Horizon block entities"
+
+[config.machine_rf_rate]
+type = "int"
+default = 128
+min = 1
+max = 16384
+description = "Maximum RF consumed per machine tick"
+
+[config.ticks_per_recipe]
+type = "int"
+default = 100
+min = 1
+max = 2048
+description = "Ticks for crystallizer recipes without an explicit energy cost"

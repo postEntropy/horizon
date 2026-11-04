@@ -1,0 +1,54 @@
+[
+  {
+    "name": "budding_fluix_small_bud_from_pack_recipe",
+    "block": "thermal:machine_crystallizer",
+    "ticks": 400,
+    "slots": {
+      "0": [
+        "buddingcrystals:budding_fluix",
+        1
+      ],
+      "1": [
+        "buddingcrystals:crystal_catalyst",
+        1
+      ]
+    },
+    "fluids": [
+      {
+        "tank": 0,
+        "fluid": "tconstruct:molten_amethyst",
+        "amount": 800,
+        "capacity": 8000
+      }
+    ],
+    "energy": {
+      "stored": 50000,
+      "capacity": 50000,
+      "max_receive": 128,
+      "max_extract": 128
+    },
+    "expect_final": {
+      "slots": {
+        "2": [
+          "buddingcrystals:small_fluix_bud",
+          12
+        ]
+      },
+      "energy": {
+        "stored": 0,
+        "capacity": 50000
+      },
+      "fluids": {
+        "0": {
+          "fluid": "",
+          "amount": 0,
+          "capacity": 8000
+        }
+      }
+    },
+    "reload_at": [
+      200
+    ],
+    "preserve_capabilities_on_reload": true
+  }
+]
