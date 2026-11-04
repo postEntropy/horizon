@@ -1,74 +1,85 @@
-Horizon: content root ready for 2 mod(s) in 2.6s
-Horizon: content from 2 mod(s) in /tmp/horizon-port-fixture-ddv2o3mi/.horizon-cache/mod-content
-Horizon: registry and terrain facts loaded in 0.14s (35723 block states)
-Horizon: discovered 4192 model files in 0.00s, parsed in 0.01s (total 0.01s)
-Horizon: parsed model resources in 0.01s
-Horizon: decoded model-state table in 0.03s (1288 blocks)
-Horizon: bound 35723 model states / 7880 variants in 0.09s, resolved models in 0.00s, baked models and loaded sprites in 0.08s
-Horizon: model-state catalog prepared in 0.18s
-Horizon: blockstate binding and model baking took 0.22s
-Horizon: finalized 1291 sprite layers in 0.04s (asset render stage 0.28s)
-Horizon: gameplay facts read 0.02s, validated 0.17s, decoded 0.15s, projected 35723 states in 0.06s
-load assets: 3.38s
-Horizon: asset load stage took 0.57s
-load facts: 3.38s
-Horizon: facts, biomes and environment stage took 0.41s
-load biomes+env: 3.38s
-load pack tables: 3.65s
-Horizon: pack tables stage took 0.27s
-load collision+motion: 3.82s
-Horizon: collision and motion stage took 0.16s
-Horizon: mob metadata loaded in 0.02s
-load items: 3.89s
-Horizon: resources loaded in 3.9s; 35723 block states, 1663 items, 67 biomes; 10 worker threads
-Horizon: items and recipes stage took 0.09s
-Horizon: providers and block-entity render tables loaded in 0.21s
+Horizon: content root ready for 2 mod(s) in 4.0s
+Horizon: content from 2 mod(s) in /tmp/horizon-port-fixture-6_mosv4i/.horizon-cache/mod-content
+Horizon: registry and terrain facts loaded in 0.27s (35723 block states)
+Horizon: discovered 4192 model files in 0.01s, parsed in 0.01s (total 0.03s)
+Horizon: parsed model resources in 0.03s
+Horizon: decoded model-state table in 0.10s (1288 blocks)
+Horizon: bound 35723 model states / 7880 variants in 0.27s, resolved models in 0.01s, baked models and loaded sprites in 0.23s
+Horizon: model-state catalog prepared in 0.51s
+Horizon: gameplay facts read 0.08s, validated 0.25s, decoded 0.22s, projected 35723 states in 0.10s
+Horizon: blockstate binding and model baking took 0.62s
+Horizon: finalized 1291 sprite layers in 0.05s (asset render stage 0.70s)
+load assets: 5.27s
+Horizon: asset load stage took 1.02s
+load facts: 5.27s
+Horizon: facts, biomes and environment stage took 0.71s
+load biomes+env: 5.27s
+load pack tables: 5.87s
+Horizon: pack tables stage took 0.59s
+load collision+motion: 6.16s
+Horizon: collision and motion stage took 0.28s
+Horizon: mob metadata loaded in 0.03s
+load items: 6.28s
+Horizon: resources loaded in 6.4s; 35723 block states, 1663 items, 67 biomes; 10 worker threads
+Horizon: items and recipes stage took 0.21s
+Horizon: providers and block-entity render tables loaded in 0.27s
 Horizon: music, ambience and dimension tables loaded in 0.01s
-Horizon: behaviour tables loaded in 0.24s
-Horizon: mob types loaded in 0.06s
-Horizon: player model setup took 0.10s
-Horizon: behaviours, mob types and player models loaded in 0.40s
-Horizon: no sounds in /tmp/horizon-port-fixture-ddv2o3mi/.horizon-cache/mod-content/assets: they were not copied from your Minecraft install; prepare the game again in the launcher (or run horizon-prepare sounds)
+Horizon: behaviour tables loaded in 0.34s
+Horizon: mob types loaded in 0.09s
+Horizon: player model setup took 0.17s
+Horizon: behaviours, mob types and player models loaded in 0.60s
+Horizon: no sounds in /tmp/horizon-port-fixture-6_mosv4i/.horizon-cache/mod-content/assets: they were not copied from your Minecraft install; prepare the game again in the launcher (or run horizon-prepare sounds)
 Horizon: no sound: audio off: HORIZON_NO_AUDIO is set
-Horizon: entity and display models prepared in 0.00s
-Horizon: creative inventory prepared in 0.01s
-Horizon: game CPU resource bundle ready in 0.04s
-Horizon: game CPU resources ready in 0.05s
+Horizon: entity and display models prepared in 0.01s
+Horizon: creative inventory prepared in 0.02s
+Horizon: game CPU resource bundle ready in 0.06s
+Horizon: game CPU resources ready in 0.07s
 Horizon: particle resources loaded in 0.00s
 Horizon: loaded 2 running mod(s) with 2 command(s) from 2 package(s)
-Horizon: control socket /tmp/horizon-port-fixture-ddv2o3mi/ctl.sock
+Horizon: control socket /tmp/horizon-port-fixture-6_mosv4i/ctl.sock
 Horizon renderer: NVIDIA GeForce GTX 1660 Ti (Vulkan, DiscreteGpu)
 Horizon renderer: requesting the device (driver NVIDIA 615.78.08) with features [TIMESTAMP_QUERY_INSIDE_ENCODERS | MAPPABLE_PRIMARY_BUFFERS | SHADER_EARLY_DEPTH_TEST | TIMESTAMP_QUERY | INDIRECT_FIRST_INSTANCE] and the adapter's limits (buffers up to 1099511627776 bytes, storage bindings up to 2147483644 bytes, 2048 texture layers)
 Horizon renderer: creating the pipelines
 Horizon renderer: pipelines ready (multi-draw on, occlusion culling on, GPU timer on)
 Horizon: entity and display models prepared in 0.00s
 Horizon: creative inventory prepared in 0.01s
-Horizon: game CPU resource bundle ready in 0.05s
-Horizon: game CPU resources ready in 0.06s
+Horizon: game CPU resource bundle ready in 0.06s
+Horizon: game CPU resources ready in 0.07s
 Horizon: particle resources loaded in 0.00s
 Horizon: loaded 2 running mod(s) with 2 command(s) from 2 package(s)
-Horizon: live features ready in 700.260011ms
-[09:59:52] [Server thread/INFO]: Player96648[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
-[09:59:52] [Server thread/INFO]: System chat: Player96648 joined the game
+Horizon: live features ready in 1.183144542s
+[11:25:18] [Server thread/INFO]: Player70033[/127.0.0.1:0] logged in with entity id 2 at (0.5, 69.0, 0.5)
+[11:25:18] [Server thread/INFO]: System chat: Player70033 joined the game
 Horizon renderer: acquiring the first frame
 Horizon renderer: submitting the first frame
-Horizon: first frame after 1882 ms
+Horizon: first frame after 3407 ms
 [chat] The game is frozen
-[09:59:52] [Server thread/INFO]: System chat: [Player96648: Set own game mode to Survival Mode]
+[11:25:18] [Server thread/INFO]: System chat: [Player70033: Set own game mode to Survival Mode]
 [chat] Set own game mode to Survival Mode
-[chat] No items were found on player Player96648
-[09:59:52] [Server thread/INFO]: System chat: [Player96648: Unlocked 1 recipe(s) for Player96648]
-[chat] Unlocked 1 recipe(s) for Player96648
-[09:59:52] [Server thread/INFO]: System chat: [Player96648: Unlocked 1 recipe(s) for Player96648]
-[chat] Unlocked 1 recipe(s) for Player96648
-[09:59:52] [Server thread/INFO]: System chat: [Player96648: Unlocked 1 recipe(s) for Player96648]
-[chat] Unlocked 1 recipe(s) for Player96648
-[09:59:52] [Server thread/INFO]: System chat: [Player96648: Unlocked 1 recipe(s) for Player96648]
-[chat] Unlocked 1 recipe(s) for Player96648
-[09:59:52] [Server thread/INFO]: System chat: [Player96648: Unlocked 1 recipe(s) for Player96648]
-[chat] Unlocked 1 recipe(s) for Player96648
-[09:59:52] [Server thread/INFO]: System chat: [Player96648: Gave 4 [block.ftbstoneblock.stonepebble] to Player96648]
-[chat] Gave 4 [block.ftbstoneblock.stonepebble] to Player96648
-[09:59:53] [Server thread/INFO]: System chat: [Player96648: Gave 3 [Cobblestone] to Player96648]
-[chat] Player96648 has made the advancement [Stone Age]
-[chat] Gave 3 [Cobblestone] to Player96648
+[chat] No items were found on player Player70033
+[11:25:18] [Server thread/INFO]: System chat: [Player70033: Unlocked 1 recipe(s) for Player70033]
+[chat] Unlocked 1 recipe(s) for Player70033
+[11:25:19] [Server thread/INFO]: System chat: [Player70033: Unlocked 1 recipe(s) for Player70033]
+[chat] Unlocked 1 recipe(s) for Player70033
+[11:25:19] [Server thread/INFO]: System chat: [Player70033: Unlocked 1 recipe(s) for Player70033]
+[chat] Unlocked 1 recipe(s) for Player70033
+[11:25:19] [Server thread/INFO]: System chat: [Player70033: Unlocked 1 recipe(s) for Player70033]
+[chat] Unlocked 1 recipe(s) for Player70033
+[11:25:19] [Server thread/INFO]: System chat: [Player70033: Unlocked 1 recipe(s) for Player70033]
+[chat] Unlocked 1 recipe(s) for Player70033
+[chat] No items were found on player Player70033
+[11:25:19] [Server thread/INFO]: System chat: [Player70033: Replaced 1 slot(s) on Player70033 with [Air]]
+[chat] Replaced 1 slot(s) on Player70033 with [Air]
+[11:25:19] [Server thread/INFO]: System chat: [Player70033: Changed the block at 0, 70, 3]
+[chat] Changed the block at 0, 70, 3
+[11:25:19] [Server thread/INFO]: System chat: [Player70033: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+[11:25:29] [Server thread/INFO]: System chat: [Player70033: Gave 4 [block.ftbstoneblock.stonepebble] to Player70033]
+[chat] Gave 4 [block.ftbstoneblock.stonepebble] to Player70033
+[11:25:29] [Server thread/INFO]: System chat: [Player70033: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
+[chat] Player70033 has made the advancement [Stone Age]
+[11:25:30] [Server thread/INFO]: System chat: [Player70033: Gave 3 [Cobblestone] to Player70033]
+[chat] Gave 3 [Cobblestone] to Player70033
+[11:25:30] [Server thread/INFO]: System chat: [Player70033: Stepping 1 tick(s)]
+[chat] Stepping 1 tick(s)
