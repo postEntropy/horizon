@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "command": "cargo run --manifest-path ../../Cargo.toml --bin cargo-horizon-mod -- build (run from ports/ftbdripper)",
+  "native_tests": { "passed": 3, "failed": 0 },
+  "component_build": "passed",
+  "declared_capabilities": [
+    "block-entities",
+    "capabilities",
+    "recipes",
+    "server",
+    "storage"
+  ],
+  "evidence_scope": "the Wasm component builds and its imported capabilities are declared by horizon-mod.toml"
+}

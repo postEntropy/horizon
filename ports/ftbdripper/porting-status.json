@@ -1,0 +1,16 @@
+{
+  "complete": false,
+  "pending": [
+    "The 1802.1.3 build's fluid amount consumed per drop and timing are not documented; the current 250 mB and default 100-tick interval are Horizon tuning pending direct comparison.",
+    "Chance rolls use a persisted per-Dripper generator, not the vanilla world RNG; the host API has no general server-side random sample for machine ticks.",
+    "A source fluid block directly above the Dripper fills the tank; other fluids can enter through Horizon's machine fluid capability. The 1.18.2 bucket/bowl interaction and exact fluid input behavior have not been confirmed against the original mod.",
+    "The pack's nine probabilistic recipes are simulated but are not exposed to recipe viewers because the current machine recipe API rejects its documented chance output syntax.",
+    "Pack recipes use compressed StoneBlock blocks and oil-sand outputs from other mods; those dependencies are not all ported or available in the isolated FTB Dripper fixture.",
+    "The original custom textures are excluded under the source mod's All Rights Reserved license; current models use vanilla stone and stick textures. Redistribution permission is not recorded."
+  ],
+  "evidence": [
+    "harness/component-validation.json",
+    "harness/gameplay-validation.json",
+    "harness/recipe-parity.json"
+  ]
+}

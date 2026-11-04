@@ -1,0 +1,33 @@
+{
+  "status": "passed",
+  "content": {
+    "status": "passed",
+    "pack_recipe_count": 10,
+    "dripper_block_item": "registered",
+    "crafting_recipe": "registered",
+    "third_party_binary_assets": 0
+  },
+  "cases": [
+    {
+      "mode": "in-frame",
+      "status": "passed",
+      "case": "water-filled dripper converts dirt to clay after saved interval",
+      "ticks_before_first_save": 50,
+      "ticks_after_first_reopen": 51,
+      "second_conversion_after_fluid_save_reopen_without_source": true
+    },
+    {
+      "mode": "server-thread",
+      "status": "passed",
+      "case": "water-filled dripper converts dirt to clay after saved interval",
+      "ticks_before_first_save": 50,
+      "ticks_after_first_reopen": 51,
+      "second_conversion_after_fluid_save_reopen_without_source": true
+    }
+  ],
+  "scope": [
+    "recipe source copied and counted",
+    "custom Dripper block loads and ticks",
+    "water supply, dirt-to-clay conversion, timer save/reopen"
+  ]
+}

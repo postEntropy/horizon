@@ -1,0 +1,24 @@
+{
+  "status": "passed",
+  "pack_source": "FTB StoneBlock 3 home/kubejs/server_scripts/mods/ftbdripper.js",
+  "official_recipe_semantics": "inputBlock can be a block state; outputBlock is a block; fluid defaults to minecraft:water; chance defaults to 1.0 and is in [0, 1]",
+  "recipes_in_pack_script": 10,
+  "recipes_in_port": 10,
+  "recipes": [
+    { "input": "minecraft:dirt", "output": "minecraft:clay", "fluid": "minecraft:water", "chance": 1.0 },
+    { "input": "ftbstoneblock:1x_compressed_stone", "output": "minecraft:iron_ore", "fluid": "minecraft:water", "chance": 0.15 },
+    { "input": "ftbstoneblock:2x_compressed_stone", "output": "minecraft:gold_ore", "fluid": "minecraft:water", "chance": 0.1 },
+    { "input": "ftbstoneblock:3x_compressed_stone", "output": "minecraft:diamond_ore", "fluid": "minecraft:water", "chance": 0.03 },
+    { "input": "ftbstoneblock:1x_compressed_cobblestone", "output": "minecraft:magma_block", "fluid": "minecraft:lava", "chance": 0.6 },
+    { "input": "ftbstoneblock:1x_compressed_cobblestone", "output": "ftbstoneblock:1x_compressed_gravel", "fluid": "minecraft:water", "chance": 0.15 },
+    { "input": "ftbstoneblock:1x_compressed_gravel", "output": "ftbstoneblock:1x_compressed_dirt", "fluid": "minecraft:water", "chance": 0.32 },
+    { "input": "ftbstoneblock:1x_compressed_dirt", "output": "ftbstoneblock:1x_compressed_sand", "fluid": "minecraft:water", "chance": 0.43 },
+    { "input": "minecraft:sand", "output": "thermal:oil_sand", "fluid": "immersiveengineering:creosote", "chance": 0.8 },
+    { "input": "minecraft:red_sand", "output": "thermal:oil_red_sand", "fluid": "immersiveengineering:creosote", "chance": 0.8 }
+  ],
+  "notes": [
+    "The port preserves all ten input/output/fluid/chance tuples from the pack script.",
+    "Only the guaranteed dirt-to-clay recipe is registered with Horizon's current recipe display API; probability-bearing recipes are simulated but not displayed because the host rejects its documented chance notation.",
+    "The imported pack script stays in the local pack directory; this file records its recipe values without copying the script."
+  ]
+}

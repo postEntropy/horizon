@@ -1,0 +1,21 @@
+{
+	"type": "minecraft:crafting_shaped",
+	"pattern": [
+		"SPS",
+		"SBS"
+	],
+	"key": {
+		"S": {
+			"tag": "forge:rods/wooden"
+		},
+		"B": {
+			"tag": "minecraft:wooden_buttons"
+		},
+		"P": {
+			"tag": "minecraft:wooden_slabs"
+		}
+	},
+	"result": {
+		"item": "ftbdripper:dripper"
+	}
+}
