@@ -1,0 +1,10 @@
+{
+  "complete": false,
+  "pending": [
+    "Confirm and implement the original held-seed consumption behavior; the current ItemEvent API cannot shrink the active player's stack.",
+    "Use the world's vanilla loot RNG for the 10% grass-seed drop chance; current API exposes no loot RNG to the hook."
+  ],
+  "evidence": [
+    "harness/gameplay-validation.json"
+  ]
+}

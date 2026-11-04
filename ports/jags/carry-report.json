@@ -1,0 +1,35 @@
+{
+  "copied": 6,
+  "namespaces": [],
+  "outside": [
+    "data/forge/loot_modifiers/global_loot_modifiers.json"
+  ],
+  "unreadable": {},
+  "recipes_upgraded": 0,
+  "loot_tables_upgraded": 0,
+  "advancements_upgraded": 0,
+  "loot_tables_added": 0,
+  "worldgen": 0,
+  "recipes_kept": [],
+  "recipes_unregistered": [],
+  "item_definitions_added": 1,
+  "oracle": false,
+  "blocks": {},
+  "differences": {},
+  "blocks_unknown": {},
+  "items": 1,
+  "items_unknown": {},
+  "convention_tags": 0,
+  "worldgen_types": {
+    "mapped": 0,
+    "block_states": 0,
+    "unsupported": {},
+    "rules_lost": {},
+    "processors_dropped": {},
+    "processors_carried": {},
+    "rule_tests_carried": {},
+    "added_to": {},
+    "modifiers_left": {}
+  },
+  "convention_biome_tags": 0
+}
